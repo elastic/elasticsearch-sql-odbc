@@ -1,0 +1,4 @@
+cbuild/*
+lib/*
+*.swp
+driver/*.swp
