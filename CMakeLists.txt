@@ -4,6 +4,23 @@ cmake_minimum_required(VERSION 2.8.6 FATAL_ERROR)
 
 #include(GenerateExportHeader)
 
+# https://cmake.org/cmake/help/latest/variable/CMAKE_GENERATOR_PLATFORM.html :
+# "The value of this variable should never be modified by project code."
+# , BUT:
+# https://cmake.org/cmake/help/latest/generator/Visual%20Studio%2015%202017.html :
+# "The CMAKE_GENERATOR_PLATFORM variable may be set to specify a target
+# platform name (architecture)."
+
+if (${WIN32})
+	if ($ENV{VSCMD_ARG_TGT_ARCH} MATCHES x64)
+		set(CMAKE_GENERATOR_PLATFORM x64)
+		set(TARCH x64)
+	else ($ENV{VSCMD_ARG_TGT_ARCH} MATCHES x64)
+		set(TARCH x86)
+	endif ($ENV{VSCMD_ARG_TGT_ARCH} MATCHES x64)
+	message("Building on Windows, ${TARCH}.")
+endif (${WIN32})
+
 # explicit languages support (Cs are defaults)
 project(elasticodbc CXX C)
 
@@ -22,14 +39,17 @@ set(DRV_NAME "elasticodbc")
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
  
 # Set compiler flags and options. 
-# Here it is setting the Visual Studio warning level to 4
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /W4")
-##set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /W3")
-# TODO: review@alpha
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /D_CRT_SECURE_NO_WARNINGS")
+if (${WIN32})
+	# Here it is setting the Visual Studio warning level to 4
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /W4")
+	##set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /W3")
+	# TODO: review@alpha
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /D_CRT_SECURE_NO_WARNINGS")
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DUNICODE")
-#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DUNICODE")
+else (${WIN32})
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
+endif (${WIN32})
 message("C flags:" ${CMAKE_C_FLAGS})
 
 set(DRV_SRC_DIR driver)
