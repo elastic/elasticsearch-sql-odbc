@@ -24,6 +24,8 @@
 							  (void *)(uintptr_t)val); break; \
 			case 'D': _n = snprintf(_bf + _ps, _AVAIL, "%d", \
 							  val ? *(int *)(uintptr_t)val : 0); break; \
+			case 'U': _n = snprintf(_bf + _ps, _AVAIL, "%d", \
+							  val ? *(unsigned *)(uintptr_t)val : 0); break; \
 			case 'W': _n = snprintf(_bf + _ps, _AVAIL, "'"LTPD"'", \
 							  val ? (wchar_t *)(uintptr_t)val : \
 							  MK_WSTR("<null>")); \
@@ -46,8 +48,8 @@
 
 
 #define _IN			0
-#define _OUT		1
 #define _TRACE_IN	"ENTER: "
+#define _OUT		1
 #define _TRACE_OUT	"EXIT: "
 
 #define _TRACE_DECLARATION(end) \

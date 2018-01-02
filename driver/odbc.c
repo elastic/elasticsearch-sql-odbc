@@ -14,7 +14,7 @@
 //#include "elasticodbc_export.h"
 //#define SQL_API	ELASTICODBC_EXPORT SQL_API
 
-
+// compile in empty functions (less unref'd params when leaving them out)
 #define WITH_EMPTY	10
 
 #if WITH_EMPTY
@@ -50,7 +50,7 @@ BOOL WINAPI DllMain(
 	TRACE4(_OUT, "updp", ret, hinstDLL, fdwReason, lpReserved);
 	return ret;
 }
-#endif
+#endif /* WITH_EMPTY */
 
 /*
  * Connecting to a data source
@@ -107,7 +107,7 @@ SQLRETURN SQL_API SQLDriverConnectW
 			szConnStrOut, cchConnStrOutMax, pcchConnStrOut, fDriverCompletion);
 	ret = EsSQLDriverConnectW(hdbc, hwnd, szConnStrIn, cchConnStrIn, 
 			szConnStrOut, cchConnStrOutMax, pcchConnStrOut, fDriverCompletion);
-	TRACE9(_OUT, "dppWdpdpd", ret, hdbc, hwnd, szConnStrIn, cchConnStrIn, 
+	TRACE9(_OUT, "dppWdWdpd", ret, hdbc, hwnd, szConnStrIn, cchConnStrIn, 
 			szConnStrOut, cchConnStrOutMax, pcchConnStrOut, fDriverCompletion);
 	return ret;
 }
@@ -179,25 +179,27 @@ SQLRETURN  SQL_API SQLGetInfoW(SQLHDBC ConnectionHandle,
 		_Out_opt_ SQLSMALLINT *StringLengthPtr)
 {
 	SQLRETURN ret;
-	TRACE5(_IN, "pupdp", ConnectionHandle, InfoType, InfoValue, BufferLength, 
-			StringLengthPtr);
+	TRACE6(_IN, "pupUdp", ConnectionHandle, InfoType, InfoValue, InfoValue, 
+			BufferLength, StringLengthPtr);
 	ret = EsSQLGetInfoW(ConnectionHandle, InfoType, InfoValue, BufferLength, 
 			StringLengthPtr);
-	TRACE6(_OUT, "dpupdD", ret, ConnectionHandle, InfoType, InfoValue, 
-			BufferLength, StringLengthPtr);
+	TRACE6(_OUT, "dpupUdD", ret, ConnectionHandle, InfoType, 
+			InfoValue, InfoValue, BufferLength, StringLengthPtr);
+	return ret;
+}
+
+SQLRETURN  SQL_API SQLGetFunctions(SQLHDBC ConnectionHandle,
+		SQLUSMALLINT FunctionId, 
+		_Out_writes_opt_(_Inexpressible_("Buffer length pfExists points to depends on fFunction value.")) SQLUSMALLINT *Supported)
+{
+	SQLRETURN ret;
+	TRACE3(_IN, "pdU", ConnectionHandle, FunctionId, Supported);
+	ret = EsSQLGetFunctions(ConnectionHandle, FunctionId, Supported);
+	TRACE4(_IN, "dpdU", ret, ConnectionHandle, FunctionId, Supported);
 	return ret;
 }
 
 #if WITH_EMPTY
-//#if 1
-SQLRETURN  SQL_API SQLGetFunctions(SQLHDBC ConnectionHandle,
-           SQLUSMALLINT FunctionId, 
-           _Out_writes_opt_(_Inexpressible_("Buffer length pfExists points to depends on fFunction value.")) 
-           SQLUSMALLINT *Supported)
-{
-	RET_NOT_IMPLEMENTED;
-}
-
 SQLRETURN SQL_API   SQLGetTypeInfoW(
     SQLHSTMT            StatementHandle,
     SQLSMALLINT         DataType)
