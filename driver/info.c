@@ -52,6 +52,78 @@
 	} while(0)
 
 
+/* List of supported functions in the driver */
+// FIXME: review at alpha what's implemented
+static SQLUSMALLINT esodbc_functions[] = {
+	SQL_API_SQLALLOCHANDLE,
+	SQL_API_SQLBINDCOL,
+	SQL_API_SQLCANCEL,
+	SQL_API_SQLCLOSECURSOR,
+	SQL_API_SQLCOLATTRIBUTE,
+	SQL_API_SQLCONNECT,
+	SQL_API_SQLCOPYDESC,
+	SQL_API_SQLDATASOURCES,
+	SQL_API_SQLDESCRIBECOL,
+	SQL_API_SQLDISCONNECT,
+	SQL_API_SQLDRIVERS,
+	SQL_API_SQLENDTRAN,
+	SQL_API_SQLEXECDIRECT,
+	SQL_API_SQLEXECUTE,
+	SQL_API_SQLFETCH,
+	SQL_API_SQLFETCHSCROLL,
+	SQL_API_SQLFREEHANDLE,
+	SQL_API_SQLFREESTMT,
+	SQL_API_SQLGETCONNECTATTR,
+	SQL_API_SQLGETCURSORNAME,
+	SQL_API_SQLGETDATA,
+	SQL_API_SQLGETDESCFIELD,
+	SQL_API_SQLGETDESCREC,
+	SQL_API_SQLGETDIAGFIELD,
+	SQL_API_SQLGETDIAGREC,
+	SQL_API_SQLGETENVATTR,
+	SQL_API_SQLGETFUNCTIONS,
+	SQL_API_SQLGETINFO,
+	SQL_API_SQLGETSTMTATTR,
+	SQL_API_SQLGETTYPEINFO,
+	SQL_API_SQLNUMRESULTCOLS,
+	SQL_API_SQLPARAMDATA,
+	SQL_API_SQLPREPARE,
+	SQL_API_SQLPUTDATA,
+	SQL_API_SQLROWCOUNT,
+	SQL_API_SQLSETCONNECTATTR,
+	SQL_API_SQLSETCURSORNAME,
+	SQL_API_SQLSETDESCFIELD,
+	SQL_API_SQLSETDESCREC,
+	SQL_API_SQLSETENVATTR,
+	SQL_API_SQLSETSTMTATTR,
+	SQL_API_SQLCOLUMNS,
+	SQL_API_SQLSPECIALCOLUMNS,
+	SQL_API_SQLSTATISTICS,
+	SQL_API_SQLTABLES,
+	SQL_API_SQLBINDPARAMETER,
+	SQL_API_SQLBROWSECONNECT,
+	SQL_API_SQLBULKOPERATIONS,
+	SQL_API_SQLCOLUMNPRIVILEGES,
+	SQL_API_SQLDESCRIBEPARAM,
+	SQL_API_SQLDRIVERCONNECT,
+	SQL_API_SQLFOREIGNKEYS,
+	SQL_API_SQLMORERESULTS,
+	SQL_API_SQLNATIVESQL,
+	SQL_API_SQLNUMPARAMS,
+	SQL_API_SQLPRIMARYKEYS,
+	SQL_API_SQLPROCEDURECOLUMNS,
+	SQL_API_SQLPROCEDURES,
+	SQL_API_SQLSETPOS,
+	SQL_API_SQLTABLEPRIVILEGES,
+};
+
+#define ESODBC_FUNC_SIZE \
+	(sizeof(esodbc_functions)/sizeof(esodbc_functions[0]))
+// TODO: are these def'd in sql.h??
+#define SQL_FUNC_SET(pfExists, uwAPI) \
+	*(((UWORD*) (pfExists)) + ((uwAPI) >> 4)) |= (1 << ((uwAPI) & 0x000F))
+#define SQL_API_ODBC2_ALL_FUNCTIONS_SIZE	100
+
 /*
  * """
  * The SQL_MAX_DRIVER_CONNECTIONS option in SQLGetInfo specifies how many
@@ -137,6 +209,24 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			*(SQLUSMALLINT *)InfoValue = ESODBC_MAX_CONCURRENT_ACTIVITIES;
 			DBG("max active statements per connection: %d.", 
 					*(SQLUSMALLINT *)InfoValue);
+			state = SQL_STATE_00000;
+			break;
+
+		case SQL_CURSOR_COMMIT_BEHAVIOR:
+		case SQL_CURSOR_ROLLBACK_BEHAVIOR:
+			DBG("DM asking for cursor %s behavior.", 
+					InfoType == SQL_CURSOR_COMMIT_BEHAVIOR ? 
+					"commit" : "rollback");
+			/* assume this is the  of equivalent of
+			 * JDBC's HOLD_CURSORS_OVER_COMMIT */
+			*(SQLUSMALLINT *)InfoValue = SQL_CB_PRESERVE;
+			state = SQL_STATE_00000;
+			break;
+
+		case SQL_GETDATA_EXTENSIONS:
+			DBG("DM asking for GetData extentions.");
+			// FIXME: review@alpha
+			*(SQLUINTEGER *)InfoValue = 0;
 			state = SQL_STATE_00000;
 			break;
 
@@ -359,6 +449,41 @@ SQLRETURN EsSQLGetDiagRecW
 
 	assert(0); /* shouldn't get here */
 	return SQL_ERROR;
+}
+
+
+SQLRETURN EsSQLGetFunctions(SQLHDBC ConnectionHandle,
+		SQLUSMALLINT FunctionId, 
+		_Out_writes_opt_(_Inexpressible_("Buffer length pfExists points to depends on fFunction value.")) SQLUSMALLINT *Supported)
+{
+	esodbc_state_et state = SQL_STATE_00000;
+	int i;
+
+	if (FunctionId == SQL_API_ODBC3_ALL_FUNCTIONS) {
+		DBG("ODBC 3.x application asking for supported function set.");
+		memset(Supported, 0,
+				SQL_API_ODBC3_ALL_FUNCTIONS_SIZE * sizeof(SQLSMALLINT));
+		for (i = 0; i < ESODBC_FUNC_SIZE; i++)
+			SQL_FUNC_SET(Supported, esodbc_functions[i]);
+	} else if (FunctionId == SQL_API_ALL_FUNCTIONS) {
+		DBG("ODBC 2.x application asking for supported function set.");
+		memset(Supported, SQL_FALSE,
+				SQL_API_ODBC2_ALL_FUNCTIONS_SIZE * sizeof(SQLUSMALLINT));
+		for (i = 0; i < ESODBC_FUNC_SIZE; i++)
+			if (esodbc_functions[i] < SQL_API_ODBC2_ALL_FUNCTIONS_SIZE)
+				Supported[esodbc_functions[i]] = SQL_TRUE;
+	} else {
+		DBG("application asking for support of function #%d.", FunctionId);
+		*Supported = SQL_FALSE;
+		for (i = 0; i < ESODBC_FUNC_SIZE; i++)
+			if (esodbc_functions[i] == FunctionId) {
+				*Supported = SQL_TRUE;
+				break;
+			}
+	}
+
+	// TODO: does this require connecting to the server?
+	return SQLRET4STATE(state);
 }
 
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */
