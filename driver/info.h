@@ -47,6 +47,11 @@ SQLRETURN EsSQLGetDiagRecW(
 		SQLSMALLINT BufferLength,
 		_Out_opt_ SQLSMALLINT *TextLength);
 
+SQLRETURN EsSQLGetFunctions(SQLHDBC ConnectionHandle,
+		SQLUSMALLINT FunctionId, 
+		_Out_writes_opt_(_Inexpressible_("Buffer length pfExists points to depends on fFunction value.")) SQLUSMALLINT *Supported);
+
+
 #endif /* __INFO_H__ */
 
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */
