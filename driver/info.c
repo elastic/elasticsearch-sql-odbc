@@ -136,7 +136,6 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		SQLSMALLINT BufferLength,
 		_Out_opt_ SQLSMALLINT *StringLengthPtr)
 {
-	esodbc_state_et state = SQL_STATE_HY000;
 	int len;
 
 	switch (InfoType) {
@@ -148,13 +147,13 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			if (BufferLength % 2) {
 				ERR("invalid (odd) buffer length provided: %d.", BufferLength);
 				// FIXME: "post" this states to the environment
-				state = SQL_STATE_HY090;
-				break;
+				RET_HDIAG(DBCH(ConnectionHandle), SQL_STATE_HY090, 
+						"invalid (odd) buffer length provided", 0);
 			}
 			if (! StringLengthPtr) {
-				state = SQL_STATE_HY013;
 				ERR("invalid StringLengthPtr provided (NULL).");
-				break;
+				RET_HDIAG(DBCH(ConnectionHandle), SQL_STATE_HY013, 
+						"invalid StringLengthPtr provided (NULL)", 0);
 			}
 			/* return value always set to what it needs to be written. */
 			*StringLengthPtr = sizeof(ESODBC_SQL_SPEC_STRING) - /*\0*/1;
@@ -170,19 +169,16 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			if (len < 0) {
 				ERRN("failed to print the driver version with InfoValue: 0x%p,"
 						" BufferLength: %d.", InfoValue, BufferLength);
-				state = SQL_STATE_HY000;
-				break;
+				RET_HDIAGS(DBCH(ConnectionHandle), SQL_STATE_HY000);
 			}
+			DBG("returning driver version string: "LTPD", len: %d.", 
+					InfoValue, *StringLengthPtr);
 			/* has the string been trucated? */
 			if (len + /*\0*/1 < sizeof(ESODBC_SQL_SPEC_STRING)) {
 				INFO("not enough buffer size to write the driver version "
 						"(provided: %d).", BufferLength);
-				state = SQL_STATE_01004;
-			} else {
-				state = SQL_STATE_00000;
+				RET_HDIAGS(DBCH(ConnectionHandle), SQL_STATE_01004);
 			}
-			DBG("returning driver version string: "LTPD", len: %d.", 
-					InfoValue ? InfoValue : "", *StringLengthPtr);
 			break;
 
 		/* "if the driver can execute functions asynchronously on the
@@ -191,15 +187,13 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			/* TODO: review@alpha */
 			*(SQLUSMALLINT *)InfoValue = SQL_FALSE;
 			DBG("driver does not support async fuctions (currently).");
-			state = SQL_STATE_00000;
 			break;
 
 		/* "if the driver supports asynchronous notification" */
 		case SQL_ASYNC_NOTIFICATION:
-			/* TODO: review@alpha */
+			// FIXME: review@alpha */
 			*(SQLUINTEGER *)InfoValue = SQL_ASYNC_NOTIFICATION_NOT_CAPABLE;
 			DBG("driver does not support async notifications (currently).");
-			state = SQL_STATE_00000;
 			break;
 
 		/* "the maximum number of active statements that the driver can
@@ -209,7 +203,6 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			*(SQLUSMALLINT *)InfoValue = ESODBC_MAX_CONCURRENT_ACTIVITIES;
 			DBG("max active statements per connection: %d.", 
 					*(SQLUSMALLINT *)InfoValue);
-			state = SQL_STATE_00000;
 			break;
 
 		case SQL_CURSOR_COMMIT_BEHAVIOR:
@@ -220,23 +213,20 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			/* assume this is the  of equivalent of
 			 * JDBC's HOLD_CURSORS_OVER_COMMIT */
 			*(SQLUSMALLINT *)InfoValue = SQL_CB_PRESERVE;
-			state = SQL_STATE_00000;
 			break;
 
 		case SQL_GETDATA_EXTENSIONS:
 			DBG("DM asking for GetData extentions.");
 			// FIXME: review@alpha
 			*(SQLUINTEGER *)InfoValue = 0;
-			state = SQL_STATE_00000;
 			break;
 
 		default:
 			ERR("unknown InfoType: %u.", InfoType);
-			state = SQL_STATE_HYC00; //096
-			break;
+			RET_HDIAGS(DBCH(ConnectionHandle), SQL_STATE_HYC00/*096?*/);
 	}
 
-	return SQLRET4STATE(state);
+	RET_STATE(SQL_STATE_00000);
 }
 
 /* TODO: see error.h: esodbc_errors definition note (2.x apps support) */
@@ -412,16 +402,19 @@ SQLRETURN EsSQLGetDiagRecW
 		return SQL_NO_DATA;
 	}
 
+	/* not documented in API, but both below can be null. */
 	/* API assumes there's always enough buffer here.. */
 	/* no err indicator */
-	wcsncpy(Sqlstate, esodbc_errors[diag->state].code, SQL_SQLSTATE_SIZE);
-	*NativeError = diag->native_code;
+	if (Sqlstate)
+		wcsncpy(Sqlstate, esodbc_errors[diag->state].code, SQL_SQLSTATE_SIZE);
+	if (NativeError)
+		*NativeError = diag->native_code;
 
 	/* always return how many we would need, or have used */
-	*TextLength = diag->native_len; /* count needed in characters */
+	*TextLength = diag->text_len; /* count needed in characters */
 
-	if (MessageText && diag->native_text) {
-		if (diag->native_len < BufferLength) {
+	if (MessageText && diag->text_len) {
+		if (diag->text_len < BufferLength) {
 			if ((BufferLength % 2) && (1 < sizeof(SQLTCHAR))) {
 				/* not specified in API for this function, but pretty much for
 				 * any other wide-char using ones */
@@ -429,9 +422,8 @@ SQLRETURN EsSQLGetDiagRecW
 				return SQL_ERROR;
 			}
 			/* no error indication exists */
-			wcsncpy(MessageText, diag->native_text, diag->native_len);
-			DBG("native diagnostic text: '"LTPD"' (%d).", MessageText, 
-					diag->native_len);
+			wcsncpy(MessageText, diag->text, diag->text_len);
+			DBG("diagnostic text: '"LTPD"' (%d).", MessageText,diag->text_len);
 			return SQL_SUCCESS;
 		} else {
 			if (BufferLength  < 0) {
@@ -440,15 +432,16 @@ SQLRETURN EsSQLGetDiagRecW
 				return SQL_ERROR;
 			}
 			/* no error indication exists */
-			wcsncpy(MessageText, diag->native_text, BufferLength);
-			INFO("not enough space to copy native message; "
+			wcsncpy(MessageText, diag->text, BufferLength);
+			INFO("not enough space to copy diagnostic message; "
 					"have: %d, need: %d.", BufferLength, *TextLength);
 			return SQL_SUCCESS_WITH_INFO;
 		}
 	}
 
-	assert(0); /* shouldn't get here */
-	return SQL_ERROR;
+	DBG("call only asking for available diagnostic characters to return (%d).",
+			*TextLength);
+	return SQL_SUCCESS;
 }
 
 
@@ -456,7 +449,6 @@ SQLRETURN EsSQLGetFunctions(SQLHDBC ConnectionHandle,
 		SQLUSMALLINT FunctionId, 
 		_Out_writes_opt_(_Inexpressible_("Buffer length pfExists points to depends on fFunction value.")) SQLUSMALLINT *Supported)
 {
-	esodbc_state_et state = SQL_STATE_00000;
 	int i;
 
 	if (FunctionId == SQL_API_ODBC3_ALL_FUNCTIONS) {
@@ -483,7 +475,7 @@ SQLRETURN EsSQLGetFunctions(SQLHDBC ConnectionHandle,
 	}
 
 	// TODO: does this require connecting to the server?
-	return SQLRET4STATE(state);
+	RET_STATE(SQL_STATE_00000);
 }
 
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */

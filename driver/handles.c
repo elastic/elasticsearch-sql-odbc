@@ -36,9 +36,8 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 	SQLHANDLE InputHandle, _Out_ SQLHANDLE *OutputHandle)
 {
 	//SQLHANDLE *out_handle = SQL_NULL_HANDLE;
-	esodbc_env_st *env_h = SQL_NULL_HANDLE;
-	esodbc_dbc_st *dbc_h = SQL_NULL_HANDLE;
-	esodbc_state_et state = SQL_STATE_HY000;
+	esodbc_env_st *env_h;
+	esodbc_dbc_st *dbc_h;
 
 	switch(HandleType) {
 		/* 
@@ -56,22 +55,20 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 		case SQL_HANDLE_ENV: /* Environment Handle */
 			if (InputHandle != SQL_NULL_HANDLE) {
 				WARN("passed InputHandle not null (=0x%p).", InputHandle);
-				state = SQL_STATE_01000;
+				/* not fatal a.t.p. */
 			}
 			if (! OutputHandle) {
 				ERR("null output handle provided.");
-				state = SQL_STATE_HY009;
-				break;
+				RET_STATE(SQL_STATE_HY009);
 			}
 			env_h = (esodbc_env_st *)calloc(1, sizeof(esodbc_env_st));
 			if (! env_h) {
 				ERRN("failed to callocate env handle.");
 				*OutputHandle = SQL_NULL_HENV;
-				state = SQL_STATE_HY001;
+				RET_STATE(SQL_STATE_HY001);
 			} else {
-				env_h->diag = NULL_DIAG;
+				/* formal, heap chunk is 0'd */
 				*OutputHandle = (SQLHANDLE *)env_h;
-				state = SQL_STATE_00000;
 			}
 			// TODO: PROTO
 			break;
@@ -84,20 +81,19 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			 * return SQLSTATE HY010 (Function sequence error).
 			 * """
 			 */
-			if (! ((esodbc_env_st *)InputHandle)->version) {
-				state = SQL_STATE_HY010;
-				((esodbc_env_st *)InputHandle)->diag.state = state;
-				break;
+			if (! ENVH(InputHandle)->version) {
+				ERR("environment has not version set when allocating DBC.");
+				RET_HDIAG(ENVH(InputHandle), SQL_STATE_HY010, 
+						"enviornment has no version set yet", 0);
 			}
 			dbc_h = (esodbc_dbc_st *)calloc(1, sizeof(esodbc_dbc_st));
 			if (! dbc_h) {
 				ERRN("failed to callocate connection handle.");
 				*OutputHandle = SQL_NULL_HDBC;
-				state = SQL_STATE_HY001;
+				RET_HDIAG(ENVH(InputHandle), SQL_STATE_HY001, 
+						"failed to callocate connection handle", 0);
 			} else {
-				dbc_h->diag = NULL_DIAG;
 				*OutputHandle = (SQLHANDLE *)dbc_h;
-				state = SQL_STATE_00000;
 			}
 			break;
 		case SQL_HANDLE_DESC:
@@ -105,7 +101,8 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 		case SQL_HANDLE_STMT:
 			//break;
 		case SQL_HANDLE_SENV: /* Shared Environment Handle */
-			break;
+			RET_NOT_IMPLEMENTED;
+			//break;
 #if 0
 		case SQL_HANDLE_DBC_INFO_TOKEN:
 			//break;
@@ -115,41 +112,35 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			return SQL_INVALID_HANDLE;
 	}
 
-	return SQLRET4STATE(state);
+	RET_STATE(SQL_STATE_00000);
 }
 
 SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 {
-	esodbc_state_et state;
-	
+	if (! Handle) {
+		ERR("provided null Handle.");
+		RET_STATE(SQL_STATE_HY009);
+	}
+
 	switch(HandleType) {
 		case SQL_HANDLE_ENV: /* Environment Handle */
-			if (! Handle) {
-				ERR("provided null Handle.");
-				state = SQL_STATE_HY009;
-			} else {
-				/* TODO: check if there are connections (_DBC) */
-				free(Handle);
-				state = SQL_STATE_00000;
-			}
+			// TODO: check if there are connections (_DBC)
+			free(Handle);
 			break;
 		case SQL_HANDLE_DBC: /* Connection Handle */
-			if (! Handle) {
-				ERR("provided null Handle.");
-				state = SQL_STATE_HY009;
-			} else {
-				/* TODO: remove from (potential) list? */
-				free(Handle);
-				state = SQL_STATE_00000;
-			}
+			// TODO: remove from (potential) list?
+			free(Handle);
 			break;
+
 		case SQL_HANDLE_DESC:
 			//break;
 		case SQL_HANDLE_STMT:
 			//break;
+			RET_NOT_IMPLEMENTED;
+
 		case SQL_HANDLE_SENV: /* Shared Environment Handle */
-			state = SQL_STATE_HYC00;
-			break;
+			// TODO: do I need to set the state into the Handle?
+			RET_STATE(SQL_STATE_HYC00);
 #if 0
 		case SQL_HANDLE_DBC_INFO_TOKEN:
 			//break;
@@ -159,7 +150,7 @@ SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 			return SQL_INVALID_HANDLE;
 	}
 
-	return SQLRET4STATE(state);
+	RET_STATE(SQL_STATE_00000);
 }
 
 
@@ -174,8 +165,6 @@ SQLRETURN EsSQLSetEnvAttr(SQLHENV EnvironmentHandle,
 		_In_reads_bytes_opt_(StringLength) SQLPOINTER Value,
 		SQLINTEGER StringLength)
 {
-	esodbc_state_et state = SQL_STATE_HY000;
-	
 	/*
 	 * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetenvattr-function :
 	 * """
@@ -188,35 +177,40 @@ SQLRETURN EsSQLSetEnvAttr(SQLHENV EnvironmentHandle,
 	assert(sizeof(SQLINTEGER) == 4);
 
 	switch (Attribute) {
+		/* TODO: connection pooling? */
 		case SQL_ATTR_CONNECTION_POOLING:
 		case SQL_ATTR_CP_MATCH:
-			/* TODO: connection pooling */
-			state = SQL_STATE_HYC00;
-			break;
+			RET_HDIAG(ENVH(EnvironmentHandle), SQL_STATE_HYC00, 
+					"Connection pooling not yet supported", 0);
+
 		case SQL_ATTR_ODBC_VERSION:
 			if ((intptr_t)Value != SQL_OV_ODBC3_80) {
-				state = SQL_STATE_HYC00;
+				INFO("application version %zd not supported.", 
+						(intptr_t)Value);
+				RET_HDIAG(ENVH(EnvironmentHandle), SQL_STATE_HYC00, 
+						"application version not supported", 0);
 			} else {
 				assert(0 < (intptr_t)Value);
-				((esodbc_env_st *)EnvironmentHandle)->version = 
+				ENVH(EnvironmentHandle)->version = 
 					(SQLUINTEGER)(uintptr_t)Value;
-				DBG("set version to %u.", 
-						((esodbc_env_st *)EnvironmentHandle)->version);
-				state = SQL_STATE_00000;
+				DBG("set version to %u.", ENVH(EnvironmentHandle)->version);
 			}
 			break;
+
+		/* "If SQL_TRUE, the driver returns string data null-terminated" */
 		case SQL_ATTR_OUTPUT_NTS:
-			if ((intptr_t)Value == SQL_TRUE)
-				state = SQL_STATE_00000;
-			else
-				state = SQL_STATE_HYC00;
+			if ((intptr_t)Value != SQL_TRUE)
+				RET_HDIAG(ENVH(EnvironmentHandle), SQL_STATE_HYC00, 
+						"Driver always returns null terminated strings", 0);
 			break;
+
 		default:
-			state = SQL_STATE_HY024;
-			break;
+			ERR("unsupported Attribute value: %d.", Attribute);
+			RET_HDIAG(ENVH(EnvironmentHandle), SQL_STATE_HY024, 
+					"Unsupported attribute value", 0);
 	}
 
-	return SQLRET4STATE(state);
+	RET_STATE(SQL_STATE_00000);
 }
 
 SQLRETURN SQL_API EsSQLGetEnvAttr(SQLHENV EnvironmentHandle,
@@ -224,29 +218,27 @@ SQLRETURN SQL_API EsSQLGetEnvAttr(SQLHENV EnvironmentHandle,
 		_Out_writes_(_Inexpressible_(BufferLength)) SQLPOINTER Value,
 		SQLINTEGER BufferLength, _Out_opt_ SQLINTEGER *StringLength)
 {
-	esodbc_state_et state = SQL_STATE_HY000;
-	
 	switch (Attribute) {
+		/* TODO: connection pooling? */
 		case SQL_ATTR_CONNECTION_POOLING:
 		case SQL_ATTR_CP_MATCH:
-			/* TODO: connection pooling */
-			state = SQL_STATE_HYC00;
-			break;
+			RET_HDIAG(ENVH(EnvironmentHandle), SQL_STATE_HYC00, 
+					"Connection pooling not yet supported", 0);
+
 		case SQL_ATTR_ODBC_VERSION:
-			*((SQLUINTEGER *)Value) = 
-				((esodbc_env_st *)EnvironmentHandle)->version;
-			state = SQL_STATE_00000;
+			*((SQLUINTEGER *)Value) = ENVH(EnvironmentHandle)->version;
 			break;
 		case SQL_ATTR_OUTPUT_NTS:
 			*((SQLUINTEGER *)Value) = SQL_TRUE;
-			state = SQL_STATE_00000;
 			break;
+
 		default:
-			state = SQL_STATE_HY024;
-			break;
+			ERR("unsupported Attribute value: %d.", Attribute);
+			RET_HDIAG(ENVH(EnvironmentHandle), SQL_STATE_HY024, 
+					"Unsupported attribute value", 0);
 	}
 
-	return SQLRET4STATE(state);
+	RET_STATE(SQL_STATE_00000);
 }
 
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */

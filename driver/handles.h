@@ -79,6 +79,31 @@ SQLRETURN SQL_API EsSQLGetEnvAttr(SQLHENV EnvironmentHandle,
 		_Out_writes_(_Inexpressible_(BufferLength)) SQLPOINTER Value,
 		SQLINTEGER BufferLength, _Out_opt_ SQLINTEGER *StringLength);
 
+#define ENVH(_h)	((esodbc_env_st *)(_h))
+#define DBCH(_h)	((esodbc_dbc_st *)(_h))
+#define STMH(_h)	((esodbc_stmt_st *)(_h))
+#define DSCH(_h)	((esodbc_desc_st *)(_h))
+
+/* wraper of RET_CDIAG, compatible with any defined handle */
+#define RET_HDIAG(_hp/*handle ptr*/, _s/*tate*/, _t/*char text*/, _c/*ode*/) \
+	RET_CDIAG(&(_hp)->diag, _s, _t, _c)
+/* similar to RET_HDIAG, but only post the state */
+#define RET_HDIAGS(_hp/*handle ptr*/, _s/*tate*/) \
+	RET_DIAG(&(_hp)->diag, _s, NULL, 0)
+
+/* return the code associated with the given state (and debug-log) */
+#define RET_STATE(_s)	\
+	do { \
+		SQLRETURN _r = esodbc_errors[_s].retcode; \
+		DBG("returning state " STR(_s) ", code %d.", _r); \
+		return _r; \
+	} while (0)
+
+#define RET_NOT_IMPLEMENTED	\
+	do { \
+		BUG("not implemented.");\
+		return SQL_ERROR; \
+	} while (0)
 
 #endif /* __HANDLES_H__ */
 

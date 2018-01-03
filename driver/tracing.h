@@ -28,10 +28,10 @@
 #define _PRINT_PARAM_VAL(type, val) \
 	do { \
 		switch(type) { \
-			case 'd': _n = snprintf(_bf + _ps, _AVAIL, "%d", \
-							  (int)(intptr_t)val); break;\
-			case 'u': _n = snprintf(_bf + _ps, _AVAIL, "%u", \
-							  (int)(uintptr_t)val); break;\
+			case 'd': _n = snprintf(_bf + _ps, _AVAIL, "%zd", \
+							  (intptr_t)val); break;\
+			case 'u': _n = snprintf(_bf + _ps, _AVAIL, "%zu", \
+							  (uintptr_t)val); break;\
 			case 'p': _n = snprintf(_bf + _ps, _AVAIL, "0x%p", \
 							  (void *)(uintptr_t)val); break; \
 			case 'D': _n = snprintf(_bf + _ps, _AVAIL, "%d", \
