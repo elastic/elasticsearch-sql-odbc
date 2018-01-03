@@ -8,6 +8,7 @@
 
 #include "connect.h"
 #include "log.h"
+#include "handles.h"
 
 SQLRETURN EsSQLDriverConnectW
 (
@@ -40,7 +41,7 @@ SQLRETURN EsSQLDriverConnectW
 	DBG("Input connection string: '"LTPD"' (%d).", szConnStrIn, cchConnStrIn);
 	if (! pcchConnStrOut) {
 		ERR("null pcchConnStrOut parameter");
-		return SQLRET4STATE(state);
+		RET_STATE(state);
 	}
 
 	//
@@ -52,7 +53,7 @@ SQLRETURN EsSQLDriverConnectW
 				szConnStrIn);
 		if (n < 0) {
 			ERRN("failed to outprint connection string.");
-			return SQLRET4STATE(state);
+			RET_STATE(state);
 		} else {
 			*pcchConnStrOut = (SQLSMALLINT)n;
 			state = SQL_STATE_00000;
@@ -64,7 +65,7 @@ SQLRETURN EsSQLDriverConnectW
 	// TODO: PROTO
 	//
 
-	return SQLRET4STATE(state);
+	RET_STATE(state);
 	//RET_NOT_IMPLEMENTED;
 #if 0
 /* Options for SQLDriverConnect */
@@ -79,7 +80,7 @@ SQLRETURN EsSQLDisconnect(SQLHDBC ConnectionHandle)
 {
 	// FIXME: disconnect
 	DBG("disconnecting from 0x%p", ConnectionHandle);
-	return SQLRET4STATE(SQL_STATE_00000);
+	RET_STATE(SQL_STATE_00000);
 }
 
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */

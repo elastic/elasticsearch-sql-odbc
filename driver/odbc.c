@@ -15,7 +15,7 @@
 //#define SQL_API	ELASTICODBC_EXPORT SQL_API
 
 // compile in empty functions (less unref'd params when leaving them out)
-#define WITH_EMPTY	10
+#define WITH_EMPTY	1
 
 #if WITH_EMPTY
 BOOL WINAPI DllMain(
@@ -28,22 +28,26 @@ BOOL WINAPI DllMain(
 	TRACE3(_IN, "pdp", hinstDLL, fdwReason, lpReserved);
 
 	// Perform actions based on the reason for calling.
-	switch( fdwReason ) { 
+	switch (fdwReason) { 
+		// Initialize once for each new process.
+		// Return FALSE to fail DLL load.
 		case DLL_PROCESS_ATTACH:
-		 // Initialize once for each new process.
-		 // Return FALSE to fail DLL load.
+			DBG("process attach.");
 			break;
 
+		// Do thread-specific initialization.
 		case DLL_THREAD_ATTACH:
-		 // Do thread-specific initialization.
+			DBG("thread attach.");
 			break;
 
+		// Do thread-specific cleanup.
 		case DLL_THREAD_DETACH:
-		 // Do thread-specific cleanup.
+			DBG("thread dettach.");
 			break;
 
+		// Perform any necessary cleanup.
 		case DLL_PROCESS_DETACH:
-		 // Perform any necessary cleanup.
+			DBG("process dettach.");
 			break;
 	}
 
@@ -183,7 +187,7 @@ SQLRETURN  SQL_API SQLGetInfoW(SQLHDBC ConnectionHandle,
 			BufferLength, StringLengthPtr);
 	ret = EsSQLGetInfoW(ConnectionHandle, InfoType, InfoValue, BufferLength, 
 			StringLengthPtr);
-	TRACE6(_OUT, "dpupUdD", ret, ConnectionHandle, InfoType, 
+	TRACE7(_OUT, "dpupUdD", ret, ConnectionHandle, InfoType, 
 			InfoValue, InfoValue, BufferLength, StringLengthPtr);
 	return ret;
 }
@@ -678,7 +682,7 @@ SQLRETURN  SQL_API SQLGetDiagRecW
 			NativeError, MessageText, BufferLength, TextLength);
 	ret = EsSQLGetDiagRecW(HandleType, Handle, RecNumber, Sqlstate, 
 			NativeError, MessageText, BufferLength, TextLength);
-	TRACE9(_OUT, "ddpdpppdp", ret, HandleType, Handle, RecNumber, Sqlstate, 
+	TRACE9(_OUT, "ddpdWDWdD", ret, HandleType, Handle, RecNumber, Sqlstate, 
 			NativeError, MessageText, BufferLength, TextLength);
 	return ret;
 }

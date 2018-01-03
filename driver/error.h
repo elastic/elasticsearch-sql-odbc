@@ -28,7 +28,7 @@ typedef struct {
 typedef enum {
 	/* non-standard, must be 0/first position (calloc'ing) */
 	/* diagnostic meaning: no diag posted */
-	SQL_STATE_00000,
+	SQL_STATE_00000 = 0,
 
 	SQL_STATE_01000,
 	SQL_STATE_01001,
@@ -435,30 +435,42 @@ static esodbc_errors_st esodbc_errors[] = {
 		SQL_ERROR},
 };
 
-#define SQLRET4STATE(_s)	esodbc_errors[_s].retcode;
 
-#define ESODBC_VENDOR_ID	MK_TSTR("Elastic")
-#define ESODBC_COMPONENT_ID	MK_TSTR("driver")
+/* stringifying in two preproc. passes */
+#define _STR(_x)	# _x
+#define STR(_x)		_STR(_x)
+
+#ifdef UNICODE
+#define ESODBC_DRIVER_STD	"u"
+#else /* UNICODE */
+#define ESODBC_DRIVER_STD	"a"
+#endif /* UNICODE */
+/* driver version ex. 1.2(u) */
+#define ESODBC_DRIVER_VER	\
+	STR(DRV_VER_MAJOR) "." STR(DRV_VER_MINOR) "(" ESODBC_DRIVER_STD ")"
+
+#define ESODBC_DIAG_PREFIX	"[Elastic][EsODBC " ESODBC_DRIVER_VER " Driver]"
 
 typedef struct {
 	esodbc_state_et state;
 	/* [vendor-identifier][ODBC-component-identifier]component-supplied-text */
-	SQLTCHAR *text;
-	// TODO: next two: both needed? in all/"most" handles?
+	SQLTCHAR text[SQL_MAX_MESSAGE_LENGTH];
+	/* lenght of characters in the buffer */
+	SQLUSMALLINT text_len; /* in characters, not bytes, w/o the 0-term */
+							/* (SQLSMALLINT)wcslen(native_text) */
 	/* returned in SQLGetDiagField()/SQL_DIAG_NATIVE, SQLGetDiagRecW() */
 	SQLINTEGER native_code;
-	SQLTCHAR *native_text;
-	SQLUSMALLINT native_len; /* in characters, not bytes, w/o the 0-term */
-							/* (SQLSMALLINT)wcslen(native_text) */
 } esodbc_diag_st;
 
-#define NULL_DIAG (esodbc_diag_st){SQL_STATE_00000, NULL, 0, NULL, 0}
 
-#define RET_NOT_IMPLEMENTED	\
-	do { \
-		BUG("not implemented.");\
-		return SQL_ERROR; \
-	} while (0)
+SQLRETURN post_diagnostic(esodbc_diag_st *dest, esodbc_state_et state, 
+		SQLTCHAR *text, SQLINTEGER code);
+/* post state into the diagnostic and return state's return code */
+#define RET_DIAG(_d/*est*/, _s/*tate*/, _t/*ext*/, _c/*ode*/) \
+		return post_diagnostic(_d, _s, _t, _c)
+/* same as above, but take C-strings as messages */
+#define RET_CDIAG(_d/*est*/, _s/*tate*/, _t/*char text*/, _c/*ode*/) \
+		RET_DIAG(_d, _s, MK_TSTR(_t), _c)
 
 #endif /* __ERROR_H__ */
 
