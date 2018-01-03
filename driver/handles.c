@@ -184,17 +184,22 @@ SQLRETURN EsSQLSetEnvAttr(SQLHENV EnvironmentHandle,
 					"Connection pooling not yet supported", 0);
 
 		case SQL_ATTR_ODBC_VERSION:
-			if ((intptr_t)Value != SQL_OV_ODBC3_80) {
-				INFO("application version %zd not supported.", 
-						(intptr_t)Value);
-				RET_HDIAG(ENVH(EnvironmentHandle), SQL_STATE_HYC00, 
-						"application version not supported", 0);
-			} else {
-				assert(0 < (intptr_t)Value);
-				ENVH(EnvironmentHandle)->version = 
-					(SQLUINTEGER)(uintptr_t)Value;
-				DBG("set version to %u.", ENVH(EnvironmentHandle)->version);
+			switch ((intptr_t)Value) {
+				// FIXME: review@alpha
+				// supporting applications of 2.x and 3.x<3.8 needs extensive
+				// review of the options.
+				case SQL_OV_ODBC2:
+				case SQL_OV_ODBC3:
+				case SQL_OV_ODBC3_80:
+					break;
+				default:
+					INFO("application version %zd not supported.", 
+							(intptr_t)Value);
+					RET_HDIAG(ENVH(EnvironmentHandle), SQL_STATE_HYC00, 
+							"application version not supported", 0);
 			}
+			ENVH(EnvironmentHandle)->version = (SQLUINTEGER)(uintptr_t)Value;
+			DBG("set version to %u.", ENVH(EnvironmentHandle)->version);
 			break;
 
 		/* "If SQL_TRUE, the driver returns string data null-terminated" */
