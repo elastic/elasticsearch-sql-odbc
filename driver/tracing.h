@@ -17,9 +17,10 @@
 #define _PRINT_PARAM_VAL(type, val) \
 	do { \
 		switch(type) { \
-			case 'd': _n = snprintf(_bf + _ps, _AVAIL, "%d", (int)val); break;\
-			case 'u': _n = snprintf(_bf + _ps, _AVAIL, "%u", (unsigned)val); \
-						break;\
+			case 'd': _n = snprintf(_bf + _ps, _AVAIL, "%d", \
+							  (int)(intptr_t)val); break;\
+			case 'u': _n = snprintf(_bf + _ps, _AVAIL, "%u", \
+							  (int)(uintptr_t)val); break;\
 			case 'p': _n = snprintf(_bf + _ps, _AVAIL, "0x%p", \
 							  (void *)(uintptr_t)val); break; \
 			case 'D': _n = snprintf(_bf + _ps, _AVAIL, "%d", \
@@ -28,8 +29,7 @@
 							  val ? *(unsigned *)(uintptr_t)val : 0); break; \
 			case 'W': _n = snprintf(_bf + _ps, _AVAIL, "'"LTPD"'", \
 							  val ? (wchar_t *)(uintptr_t)val : \
-							  MK_WSTR("<null>")); \
-						break; \
+							  MK_WSTR("<null>")); break; \
 			default: _n = snprintf(_bf + _ps, _AVAIL, "BUG! unknown type: %d",\
 							 type); break; \
 		} \
