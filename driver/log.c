@@ -101,7 +101,8 @@ static inline void log_file(int level, int werrno, const char *func,
 		const char *srcfile, int lineno, const char *fmt, va_list args)
 {
 	time_t now = time(NULL);
-	int ret, pos;
+	int ret;
+	size_t pos;
 	char buff[LOG_BUF_LEN];
 	char ebuff[LOG_EBUF_LEN];
 	/* keep in sync with esodbc_log_levels */

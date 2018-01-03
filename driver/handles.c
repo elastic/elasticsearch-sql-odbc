@@ -194,19 +194,19 @@ SQLRETURN EsSQLSetEnvAttr(SQLHENV EnvironmentHandle,
 			state = SQL_STATE_HYC00;
 			break;
 		case SQL_ATTR_ODBC_VERSION:
-			if ((SQLINTEGER)Value != SQL_OV_ODBC3_80) {
+			if ((intptr_t)Value != SQL_OV_ODBC3_80) {
 				state = SQL_STATE_HYC00;
 			} else {
-				assert(0 < (SQLINTEGER)Value);
+				assert(0 < (intptr_t)Value);
 				((esodbc_env_st *)EnvironmentHandle)->version = 
-					(SQLUINTEGER)Value;
+					(SQLUINTEGER)(uintptr_t)Value;
 				DBG("set version to %u.", 
 						((esodbc_env_st *)EnvironmentHandle)->version);
 				state = SQL_STATE_00000;
 			}
 			break;
 		case SQL_ATTR_OUTPUT_NTS:
-			if ((SQLINTEGER)Value == SQL_TRUE)
+			if ((intptr_t)Value == SQL_TRUE)
 				state = SQL_STATE_00000;
 			else
 				state = SQL_STATE_HYC00;

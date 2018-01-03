@@ -29,7 +29,12 @@ cmake ..
 MSBuild .\ALL_BUILD.vcxproj /t:rebuild
 
 dumpbin /exports .\Debug\elasticodbc.dll
-copy .\Debug\elasticodbc.dll %INSTALL_DIR%
+if "%VSCMD_ARG_TGT_ARCH%" == "x64" (
+	SET PSIZE=
+) else (
+	SET PSIZE=32
+)
+copy .\Debug\elasticodbc.dll %INSTALL_DIR%\elasticodbc%PSIZE%.dll
 
 REM clear logs
 echo.>%LOGGING_DIR%\mylog.txt
