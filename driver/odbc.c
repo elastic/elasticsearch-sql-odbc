@@ -218,44 +218,19 @@ SQLRETURN SQL_API   SQLGetTypeInfoW(
  *
  */
 
-/*
- * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/unicode-drivers :
- * """
- * When determining the driver type, the Driver Manager will call
- * SQLSetConnectAttr and set the SQL_ATTR_ANSI_APP attribute at connection
- * time. If the application is using ANSI APIs, SQL_ATTR_ANSI_APP will be set
- * to SQL_AA_TRUE, and if it is using Unicode, it will be set to a value of
- * SQL_AA_FALSE.  If a driver exhibits the same behavior for both ANSI and
- * Unicode applications, it should return SQL_ERROR for this attribute. If the
- * driver returns SQL_SUCCESS, the Driver Manager will separate ANSI and
- * Unicode connections when Connection Pooling is used.
- * """
- */
 SQLRETURN  SQL_API SQLSetConnectAttrW(
 		SQLHDBC ConnectionHandle,
 		SQLINTEGER Attribute,
 		_In_reads_bytes_opt_(StringLength) SQLPOINTER Value,
 		SQLINTEGER StringLength)
 {
-	esodbc_state_et state = SQL_STATE_HY000;
-
+	SQLRETURN ret;
 	TRACE4(_IN, "pdpd", ConnectionHandle, Attribute, Value, StringLength);
-
-	switch(Attribute) {
-		case SQL_ATTR_ANSI_APP:
-			/* this driver doesn't behave differently based on app being ANSI
-			 * or Unicode. */
-			DBG("no ANSI/Unicode specific behaviour.");
-			state = SQL_STATE_IM001;
-			break;
-		default:
-			ERR("unknown Attribute: %d.", Attribute);
-			state = SQL_STATE_HY092;
-	}
-
-	TRACE4(_OUT, "dpdpd", state, ConnectionHandle, Attribute, Value,
+	ret = EsSQLSetConnectAttrW(ConnectionHandle, Attribute, Value,
 			StringLength);
-	return esodbc_errors[state].retcode;
+	TRACE5(_OUT, "dpdpd", ret, ConnectionHandle, Attribute, Value,
+			StringLength);
+	return ret;
 }
 
 SQLRETURN SQL_API SQLGetConnectAttrW
@@ -303,26 +278,34 @@ SQLRETURN  SQL_API SQLGetEnvAttr(SQLHENV EnvironmentHandle,
 }
 
 #if WITH_EMPTY
-
 SQLRETURN SQL_API SQLSetStmtAttrW(
-    SQLHSTMT           hstmt,
-    SQLINTEGER         fAttribute,
-    SQLPOINTER         rgbValue,
-    SQLINTEGER         cbValueMax)
+		SQLHSTMT           StatementHandle,
+    SQLINTEGER         Attribute,
+    SQLPOINTER         ValuePtr,
+    SQLINTEGER         BufferLength)
 {
 	RET_NOT_IMPLEMENTED;
 }
+#endif /* WITH_EMPTY */
 
 SQLRETURN SQL_API SQLGetStmtAttrW(
-    SQLHSTMT           hstmt,
-    SQLINTEGER         fAttribute,
-    SQLPOINTER         rgbValue,
-    SQLINTEGER         cbValueMax,
-    SQLINTEGER     *pcbValue)
+		SQLHSTMT           StatementHandle,
+		SQLINTEGER         Attribute,
+		SQLPOINTER         ValuePtr,
+		SQLINTEGER         BufferLength,
+		SQLINTEGER     *StringLengthPtr)
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE5(_IN, "pdpdp", StatementHandle, Attribute, ValuePtr, BufferLength, 
+			StringLengthPtr);
+	ret = EsSQLGetStmtAttrW(StatementHandle, Attribute, ValuePtr, BufferLength,
+			StringLengthPtr);
+	TRACE6(_OUT, "dpdpdD", ret, StatementHandle, Attribute, ValuePtr, 
+			BufferLength, StringLengthPtr);
+	return ret;
 }
 
+#if WITH_EMPTY
 
 /*
  *
@@ -859,6 +842,12 @@ SQLRETURN SQL_API SQLTablesW
  *
  */
 
+/*
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetstmtattr-function :
+ * """
+ * Calling SQLFreeStmt with the SQL_CLOSE, SQL_UNBIND, or SQL_RESET_PARAMS option does not reset statement attributes
+ * """
+ * */
 SQLRETURN  SQL_API SQLFreeStmt(SQLHSTMT StatementHandle,
            SQLUSMALLINT Option)
 {

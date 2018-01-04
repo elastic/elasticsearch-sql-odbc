@@ -40,20 +40,38 @@ typedef struct struct_dbc {
 	esodbc_env_st *env;
 	/* diagnostic/state keeping */
 	esodbc_diag_st diag;
-	// TODO: statements
+	SQLTCHAR *connstr;
+	SQLUINTEGER timeout;
+	// FIXME: placeholder; used if connection has been established or not
+	// TODO: PROTO
+	void *conn;
+	// TODO: statements?
 } esodbc_dbc_st;
+
+typedef struct struct_desc {
+	//esodbc_stmt_st *stmt;
+	esodbc_diag_st diag;
+} esodbc_desc_st;
 
 typedef struct struct_stmt {
 	esodbc_dbc_st *dbc;
 	esodbc_diag_st diag;
 	// TODO: descriptors
+	/* pointers to the current descriptors */
+	esodbc_desc_st *ard;
+	esodbc_desc_st *ird;
+	esodbc_desc_st *apd;
+	esodbc_desc_st *ipd;
+	/* initial implicit descriptors allocated with the statement */
+	esodbc_desc_st i_ard;
+	esodbc_desc_st i_ird;
+	esodbc_desc_st i_apd;
+	esodbc_desc_st i_ipd;
 } esodbc_stmt_st;
 
-typedef struct struct_desc {
-	esodbc_stmt_st *stmt;
-	esodbc_diag_st diag;
-} esodbc_desc_st;
 
+// FIXME: review@alpha
+#define ESODBC_DBC_CONN_TIMEOUT	120
 
 SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 	SQLHANDLE InputHandle, _Out_ SQLHANDLE *OutputHandle);
@@ -67,6 +85,20 @@ SQLRETURN SQL_API EsSQLGetEnvAttr(SQLHENV EnvironmentHandle,
 		SQLINTEGER Attribute, 
 		_Out_writes_(_Inexpressible_(BufferLength)) SQLPOINTER Value,
 		SQLINTEGER BufferLength, _Out_opt_ SQLINTEGER *StringLength);
+
+SQLRETURN EsSQLSetConnectAttrW(
+		SQLHDBC ConnectionHandle,
+		SQLINTEGER Attribute,
+		_In_reads_bytes_opt_(StringLength) SQLPOINTER Value,
+		SQLINTEGER StringLength);
+
+
+SQLRETURN EsSQLGetStmtAttrW(
+		SQLHSTMT     StatementHandle,
+		SQLINTEGER   Attribute,
+		SQLPOINTER   ValuePtr,
+		SQLINTEGER   BufferLength,
+		SQLINTEGER  *StringLengthPtr);
 
 #define ENVH(_h)	((esodbc_env_st *)(_h))
 #define DBCH(_h)	((esodbc_dbc_st *)(_h))
@@ -84,7 +116,8 @@ SQLRETURN SQL_API EsSQLGetEnvAttr(SQLHENV EnvironmentHandle,
 #define RET_STATE(_s)	\
 	do { \
 		SQLRETURN _r = esodbc_errors[_s].retcode; \
-		DBG("returning state " STR(_s) ", code %d.", _r); \
+		SQLTCHAR *_c = esodbc_errors[_s].code; \
+		DBG("returning state "LTPD", code %d.", _c, _r); \
 		return _r; \
 	} while (0)
 

@@ -14,8 +14,8 @@ SQLRETURN EsSQLDriverConnectW
 (
 		SQLHDBC             hdbc,
 		SQLHWND             hwnd,
-		/* "A full connection string (see the syntax in "Comments"), a partial
-		 * connection string, or an empty string" */
+		/* "A full connection string, a partial connection string, or an empty
+		 * string" */
 		_In_reads_(cchConnStrIn) SQLWCHAR* szConnStrIn,
 		/* "Length of *InConnectionString, in characters if the string is
 		 * Unicode, or bytes if string is ANSI or DBCS." */
@@ -48,6 +48,9 @@ SQLRETURN EsSQLDriverConnectW
 	// FIXME: parse the connection string.
 	//
 	
+	// FIXME: set the proper connection string;
+	DBCH(hdbc)->connstr = MK_TSTR("");
+
 	if (szConnStrOut) {
 		n = swprintf(szConnStrOut, cchConnStrOutMax, L"%s;keyword=value",
 				szConnStrIn);
