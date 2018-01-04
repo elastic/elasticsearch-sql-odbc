@@ -451,15 +451,9 @@ static esodbc_errors_st esodbc_errors[] = {
 #define _STR(_x)	# _x
 #define STR(_x)		_STR(_x)
 
-#ifdef UNICODE
-#define ESODBC_DRIVER_STD	"u"
-#else /* UNICODE */
-#define ESODBC_DRIVER_STD	"a"
-#endif /* UNICODE */
 /* driver version ex. 1.2(u) */
 #define ESODBC_DRIVER_VER	\
-	STR(DRV_VER_MAJOR) "." STR(DRV_VER_MINOR) "(" ESODBC_DRIVER_STD ")"
-
+	STR(DRV_VER_MAJOR) "." STR(DRV_VER_MINOR) "(" STR(DRV_ENCODING) ")"
 #define ESODBC_DIAG_PREFIX	"[Elastic][EsODBC " ESODBC_DRIVER_VER " Driver]"
 
 typedef struct {

@@ -2,6 +2,14 @@
 # 2.8.6: to generate the _EXPORTS define
 cmake_minimum_required(VERSION 2.8.6 FATAL_ERROR)
 
+# driver's version
+set(DRV_VER_MAJOR 0)
+set(DRV_VER_MINOR 1)
+set(BASE_NAME elasticodbc)
+
+# build a UNICODE driver? (currently only supported way)
+set(IS_UNICODE 1)
+
 #include(GenerateExportHeader)
 
 # https://cmake.org/cmake/help/latest/variable/CMAKE_GENERATOR_PLATFORM.html :
@@ -10,28 +18,30 @@ cmake_minimum_required(VERSION 2.8.6 FATAL_ERROR)
 # https://cmake.org/cmake/help/latest/generator/Visual%20Studio%2015%202017.html :
 # "The CMAKE_GENERATOR_PLATFORM variable may be set to specify a target
 # platform name (architecture)."
-
 if (${WIN32})
 	if ($ENV{VSCMD_ARG_TGT_ARCH} MATCHES x64)
 		set(CMAKE_GENERATOR_PLATFORM x64)
-		set(TARCH x64)
+		set(TARCH x64) # target arch
+		set(BARCH ) # bits architecture (64 is the default, silent)
 	else ($ENV{VSCMD_ARG_TGT_ARCH} MATCHES x64)
 		set(TARCH x86)
+		set(BARCH 32)
 	endif ($ENV{VSCMD_ARG_TGT_ARCH} MATCHES x64)
 	message("Building on Windows, ${TARCH}.")
 endif (${WIN32})
 
 # explicit languages support (Cs are defaults)
-project(elasticodbc CXX C)
+project(${BASE_NAME} CXX C)
 
-# driver's version
-# TODO: use it
-set(DRV_VER_MAJOR 0)
-set(DRV_VER_MINOR 1)
+if (${IS_UNICODE})
+	set(ENCODING u) # Unicode
+else (${IS_UNICODE})
+	set(ENCODING a) # ANSI
+endif (${IS_UNICODE})
 
 # driver name
 # XXX: ANSI/Unicode/32/64
-set(DRV_NAME "elasticodbc")
+set(DRV_NAME "${BASE_NAME}${DRV_VER_MAJOR}${ENCODING}${BARCH}")
 
 # Turn on the ability to create folders to organize projects (.vcproj)
 # It creates "CMakePredefinedTargets" folder by default and adds CMake
@@ -46,10 +56,14 @@ if (${WIN32})
 	# TODO: review@alpha
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /D_CRT_SECURE_NO_WARNINGS")
 
-	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DUNICODE")
+	if (${IS_UNICODE})
+		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DUNICODE")
+	endif (${IS_UNICODE})
 	# set the version
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_VER_MAJOR=${DRV_VER_MAJOR}")
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_VER_MINOR=${DRV_VER_MINOR}")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_ENCODING=${ENCODING}")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_NAME=${DRV_NAME}")
 else (${WIN32})
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
 endif (${WIN32})

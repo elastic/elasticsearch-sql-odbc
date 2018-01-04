@@ -23,12 +23,18 @@
 #include "handles.h"
 
 
-#if ODBCVER == 0X0380
+#if ODBCVER == 0x0380
 /* String constant for supported ODBC version */
 #define ESODBC_SQL_SPEC_STRING	"03.80"
 #else /* ver==3.8 */
 #error "unsupported ODBC version"
 #endif /* ver==3.8 */
+
+#if defined(_WIN32) || defined (WIN32)
+/* DRV_NAME is a define */
+#define DRIVER_NAME	STR(DRV_NAME) ".dll"
+#else /* win32 */
+#endif /* win32 */
 
 
 
@@ -124,6 +130,46 @@ static SQLUSMALLINT esodbc_functions[] = {
 	*(((UWORD*) (pfExists)) + ((uwAPI) >> 4)) |= (1 << ((uwAPI) & 0x000F))
 #define SQL_API_ODBC2_ALL_FUNCTIONS_SIZE	100
 
+static SQLRETURN write_tstr(esodbc_dbc_st *hdbc, SQLTCHAR *dest, SQLTCHAR *src,
+		SQLSMALLINT avail, SQLSMALLINT *used)
+{
+	size_t src_len, len;
+
+	if (! dest)
+		avail = 0;
+	/* needs to be multiple of SQLTCHAR units (2 on Win) */
+	if (avail % sizeof(SQLTCHAR)) {
+		ERR("invalid buffer length provided: %d.", avail);
+		RET_HDIAG(hdbc, SQL_STATE_HY090, "invalid buffer length provided", 0);
+	}
+	if (! used) {
+		ERR("invalid used provided (NULL).");
+		RET_HDIAG(hdbc, SQL_STATE_HY013, "invalid used provided (NULL)", 0);
+	}
+	src_len = wcslen(src);
+	/* return value always set to what it needs to be written. */
+	*used = (SQLSMALLINT)src_len * sizeof(SQLTCHAR);
+	if (! dest) {
+		/* only return how large of a buffer we need */
+		INFO("NULL out buff: returning needed buffer size only (%d).", *used);
+	} else {
+		len = swprintf(dest, avail/sizeof(SQLTCHAR), WPFWP_DESC, src);
+		if (len < 0) {
+			ERRN("failed to print `"LTPD"` in dest: 0x%p, avail: %d.", 
+					src, dest, avail);
+			RET_HDIAGS(hdbc, SQL_STATE_HY000);
+		}
+		DBG("written: `"LTPD"` (%d).", dest, *used);
+		/* has the string been trucated? */
+		if (len + /*\0*/1 < src_len) {
+			INFO("not enough buffer size to write required string `"LTPD"`; "
+					"available: %d.", src, avail);
+			RET_HDIAGS(hdbc, SQL_STATE_01004);
+		}
+	}
+	RET_STATE(SQL_STATE_00000);
+}
+
 /*
  * """
  * The SQL_MAX_DRIVER_CONNECTIONS option in SQLGetInfo specifies how many
@@ -136,64 +182,27 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		SQLSMALLINT BufferLength,
 		_Out_opt_ SQLSMALLINT *StringLengthPtr)
 {
-	int len;
-
 	switch (InfoType) {
 		/* Driver Information */
 		/* "what version of odbc a driver complies with" */
 		case SQL_DRIVER_ODBC_VER:
-			if (! InfoValue)
-				BufferLength = 0;
-			if (BufferLength % 2) {
-				ERR("invalid (odd) buffer length provided: %d.", BufferLength);
-				// FIXME: "post" this states to the environment
-				RET_HDIAG(DBCH(ConnectionHandle), SQL_STATE_HY090, 
-						"invalid (odd) buffer length provided", 0);
-			}
-			if (! StringLengthPtr) {
-				ERR("invalid StringLengthPtr provided (NULL).");
-				RET_HDIAG(DBCH(ConnectionHandle), SQL_STATE_HY013, 
-						"invalid StringLengthPtr provided (NULL)", 0);
-			}
-			/* return value always set to what it needs to be written. */
-			*StringLengthPtr = sizeof(ESODBC_SQL_SPEC_STRING) - /*\0*/1;
-			*StringLengthPtr *= sizeof(SQLTCHAR);
-			if (! InfoValue) {
-				/* only return how large of a buffer we need */
-				INFO("NULL InfoValue buffer: returning needed buffer size "
-						"only (%d).", *StringLengthPtr);
-				break;
-			}
-			len = swprintf(InfoValue, BufferLength/sizeof(SQLTCHAR), 
-					WPFCP_DESC, ESODBC_SQL_SPEC_STRING);
-			if (len < 0) {
-				ERRN("failed to print the driver version with InfoValue: 0x%p,"
-						" BufferLength: %d.", InfoValue, BufferLength);
-				RET_HDIAGS(DBCH(ConnectionHandle), SQL_STATE_HY000);
-			}
-			DBG("returning driver version string: "LTPD", len: %d.", 
-					InfoValue, *StringLengthPtr);
-			/* has the string been trucated? */
-			if (len + /*\0*/1 < sizeof(ESODBC_SQL_SPEC_STRING)) {
-				INFO("not enough buffer size to write the driver version "
-						"(provided: %d).", BufferLength);
-				RET_HDIAGS(DBCH(ConnectionHandle), SQL_STATE_01004);
-			}
-			break;
+			return write_tstr(DBCH(ConnectionHandle), InfoValue, 
+					MK_TSTR(ESODBC_SQL_SPEC_STRING), 
+					BufferLength, StringLengthPtr);
 
 		/* "if the driver can execute functions asynchronously on the
 		 * connection handle" */
 		case SQL_ASYNC_DBC_FUNCTIONS:
 			/* TODO: review@alpha */
 			*(SQLUSMALLINT *)InfoValue = SQL_FALSE;
-			DBG("driver does not support async fuctions (currently).");
+			DBG("requested: support for async fuctions: no (currently).");
 			break;
 
 		/* "if the driver supports asynchronous notification" */
 		case SQL_ASYNC_NOTIFICATION:
 			// FIXME: review@alpha */
 			*(SQLUINTEGER *)InfoValue = SQL_ASYNC_NOTIFICATION_NOT_CAPABLE;
-			DBG("driver does not support async notifications (currently).");
+			DBG("requested: support for async notifications: no (currently).");
 			break;
 
 		/* "the maximum number of active statements that the driver can
@@ -201,13 +210,13 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		//case SQL_ACTIVE_STATEMENTS:
 		case SQL_MAX_CONCURRENT_ACTIVITIES:
 			*(SQLUSMALLINT *)InfoValue = ESODBC_MAX_CONCURRENT_ACTIVITIES;
-			DBG("max active statements per connection: %d.", 
+			DBG("requested: max active statements per connection: %d.", 
 					*(SQLUSMALLINT *)InfoValue);
 			break;
 
 		case SQL_CURSOR_COMMIT_BEHAVIOR:
 		case SQL_CURSOR_ROLLBACK_BEHAVIOR:
-			DBG("DM asking for cursor %s behavior.", 
+			DBG("requested: cursor %s behavior.", 
 					InfoType == SQL_CURSOR_COMMIT_BEHAVIOR ? 
 					"commit" : "rollback");
 			/* assume this is the  of equivalent of
@@ -216,10 +225,28 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			break;
 
 		case SQL_GETDATA_EXTENSIONS:
-			DBG("DM asking for GetData extentions.");
+			DBG("requested: GetData extentions.");
 			// FIXME: review@alpha
 			*(SQLUINTEGER *)InfoValue = 0;
 			break;
+
+		case SQL_DATA_SOURCE_NAME:
+			DBG("requested: data source name: `"LTPD"`.", 
+					DBCH(ConnectionHandle)->connstr);
+			return write_tstr(DBCH(ConnectionHandle), InfoValue, 
+					DBCH(ConnectionHandle)->connstr,
+					BufferLength, StringLengthPtr);
+
+		case SQL_DRIVER_NAME:
+			DBG("requested: driver (file) name: %s.", DRIVER_NAME);
+			return write_tstr(DBCH(ConnectionHandle), InfoValue, 
+					MK_TSTR(DRIVER_NAME), BufferLength, StringLengthPtr);
+			break;
+
+		case SQL_DATA_SOURCE_READ_ONLY:
+			DBG("requested: if data source is read only (`Y`es, it is).");
+			return write_tstr(DBCH(ConnectionHandle), InfoValue, 
+					MK_TSTR("Y"), BufferLength, StringLengthPtr);
 
 		default:
 			ERR("unknown InfoType: %u.", InfoType);
@@ -279,7 +306,7 @@ SQLRETURN EsSQLGetDiagFieldW(
 				return SQL_ERROR;
 			}
 			RET_NOT_IMPLEMENTED;
-			break;
+			//break;
 		/* case SQL_DIAG_RETURNCODE: break; -- DM only */
 
 		/* Record Fields */
@@ -291,6 +318,7 @@ SQLRETURN EsSQLGetDiagFieldW(
 		case SQL_DIAG_ROW_NUMBER: //break;
 		case SQL_DIAG_SERVER_NAME: //break;
 			RET_NOT_IMPLEMENTED;
+
 		case SQL_DIAG_SQLSTATE: 
 			GET_DIAG(Handle, HandleType, diag);
 			if (diag->state == SQL_STATE_00000) {
@@ -376,7 +404,7 @@ SQLRETURN EsSQLGetDiagRecW
 	}
 	if (1 < RecNumber) {
 		/* XXX: does it make sense to have error FIFOs? (mysql doesn't) */
-		ERR("no error lists supported (yet).");
+		WARN("no error lists supported (yet).");
 		return SQL_NO_DATA;
 	}
 
