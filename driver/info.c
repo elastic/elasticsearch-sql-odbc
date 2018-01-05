@@ -25,7 +25,11 @@
 #else /* win32 */
 #endif /* win32 */
 
-
+#define ESODBC_PATTERN_ESCAPE		"\\"
+#define ESODBC_CATALOG_SEPARATOR	"."
+#define ESODBC_CATALOG_TERM			"clusterName"
+#define ESODBC_MAX_SCHEMA_LEN		0
+#define ESODBC_QUOTE_CHAR			"\""
 
 /* max # of active statements for a connection" */
 /* TODO: review@alpha */
@@ -159,6 +163,7 @@ static SQLRETURN write_tstr(esodbc_dbc_st *hdbc, SQLTCHAR *dest, SQLTCHAR *src,
 	RET_STATE(SQL_STATE_00000);
 }
 
+// [0] x-p-es/sql/jdbc/src/main/java/org/elasticsearch/xpack/sql/jdbc/jdbc/JdbcDatabaseMetaData.java
 /*
  * """
  * The SQL_MAX_DRIVER_CONNECTIONS option in SQLGetInfo specifies how many
@@ -216,6 +221,7 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		case SQL_GETDATA_EXTENSIONS:
 			DBG("requested: GetData extentions.");
 			// FIXME: review@alpha
+			// TODO: GetData review
 			*(SQLUINTEGER *)InfoValue = 0;
 			break;
 
@@ -236,6 +242,63 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			DBG("requested: if data source is read only (`Y`es, it is).");
 			return write_tstr(DBCH(ConnectionHandle), InfoValue, 
 					MK_TSTR("Y"), BufferLength, StringLengthPtr);
+
+		case SQL_SEARCH_PATTERN_ESCAPE:
+			DBG("requested: escape character (`%s`).", ESODBC_PATTERN_ESCAPE);
+			return write_tstr(DBCH(ConnectionHandle), InfoValue, 
+					MK_TSTR(ESODBC_PATTERN_ESCAPE), BufferLength, 
+					StringLengthPtr);
+
+		case SQL_CORRELATION_NAME:
+			// JDBC[0]: supportsDifferentTableCorrelationNames()
+			DBG("requested: table correlation names (any).");
+			/* TODO: JDBC returns true for correlation, but false for
+			 * difference. How to signal that in ODBC?? (with no bit mask) */
+			*(SQLUSMALLINT *)InfoValue = SQL_CN_ANY;
+			break;
+
+		case SQL_NON_NULLABLE_COLUMNS:
+			/* JDBC[0]: supportsNonNullableColumns() */
+			DBG("requested: nullable columns (true).");
+			*(SQLUSMALLINT *)InfoValue = SQL_NNC_NULL;
+			break;
+
+		case SQL_CATALOG_NAME_SEPARATOR: /* SQL_QUALIFIER_NAME_SEPARATOR */
+			/* JDBC[0]: getCatalogSeparator() */
+			DBG("requested: catalogue separator (`%s`).", 
+					ESODBC_CATALOG_SEPARATOR);
+			return write_tstr(DBCH(ConnectionHandle), InfoValue, 
+					MK_TSTR(ESODBC_CATALOG_SEPARATOR), BufferLength, 
+					StringLengthPtr);
+
+		case SQL_FILE_USAGE:
+			/* JDBC[0]: usesLocalFilePerTable() */
+			DBG("requested: file usage (file).");
+			/* TODO: JDBC indicates true for file per table; howerver, this
+			 * can be apparently used to ask GUI user to ask 'file' or
+			 * 'table'; elastic uses index => files? */
+			*(SQLUSMALLINT *)InfoValue = SQL_FILE_TABLE;
+			break;
+
+		case SQL_CATALOG_TERM: /* SQL_QUALIFIER_TERM */
+			/* JDBC[0]: getCatalogSeparator() */
+			DBG("requested: catalogue term (`%s`).", ESODBC_CATALOG_TERM);
+			return write_tstr(DBCH(ConnectionHandle), InfoValue, 
+					MK_TSTR(ESODBC_CATALOG_TERM), BufferLength, 
+					StringLengthPtr);
+
+		case SQL_MAX_SCHEMA_NAME_LEN: /* SQL_MAX_OWNER_NAME_LEN */
+			/* JDBC[0]: getMaxSchemaNameLength() */
+			DBG("requested: max schema len (%d).", ESODBC_MAX_SCHEMA_LEN);
+			*(SQLUSMALLINT *)InfoValue = ESODBC_MAX_SCHEMA_LEN;
+			break;
+
+		case SQL_IDENTIFIER_QUOTE_CHAR:
+			/* JDBC[0]: getIdentifierQuoteString() */
+			DBG("requested: quoting char (`%s`).", ESODBC_QUOTE_CHAR);
+			return write_tstr(DBCH(ConnectionHandle), InfoValue, 
+					MK_TSTR(ESODBC_QUOTE_CHAR), BufferLength, 
+					StringLengthPtr);
 
 		default:
 			ERR("unknown InfoType: %u.", InfoType);
@@ -492,6 +555,25 @@ SQLRETURN EsSQLGetFunctions(SQLHDBC ConnectionHandle,
 	}
 
 	// TODO: does this require connecting to the server?
+	RET_STATE(SQL_STATE_00000);
+}
+
+SQLRETURN EsSQLGetTypeInfoW(SQLHSTMT StatementHandle, SQLSMALLINT DataType)
+{
+	switch (DataType) {
+		case SQL_ALL_TYPES:
+			DBG("requested type description for all supported types.");
+			break;
+
+		/* "If the DataType argument specifies a data type which is valid for
+		 * the version of ODBC supported by the driver, but is not supported
+		 * by the driver, then it will return an empty result set." */
+		default:
+			ERR("invalid DataType: %d.", DataType);
+			RET_HDIAGS(STMH(StatementHandle), SQL_STATE_HY004);
+	}
+
+	BUG("not (fully) implemented.");
 	RET_STATE(SQL_STATE_00000);
 }
 

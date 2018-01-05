@@ -126,10 +126,12 @@ SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 			// TODO: remove from (potential) list?
 			free(Handle);
 			break;
+		case SQL_HANDLE_STMT:
+			// TODO: remove from (potential) list?
+			free(Handle);
+			break;
 
 		case SQL_HANDLE_DESC:
-			//break;
-		case SQL_HANDLE_STMT:
 			//break;
 			RET_NOT_IMPLEMENTED;
 
@@ -145,6 +147,50 @@ SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 			return SQL_INVALID_HANDLE;
 	}
 
+	RET_STATE(SQL_STATE_00000);
+}
+
+
+/*
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetstmtattr-function :
+ * """
+ * Calling SQLFreeStmt with the SQL_CLOSE, SQL_UNBIND, or SQL_RESET_PARAMS
+ * option does not reset statement attributes
+ * """
+ * */
+SQLRETURN EsSQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option)
+{
+	switch (Option) {
+		/* "deprecated. A call to SQLFreeStmt with an Option of SQL_DROP is
+		 * mapped in the Driver Manager to SQLFreeHandle." */
+		case SQL_DROP:
+			/*TODO: what? if freeing, the app/DM might reuse the handler; if
+			 * doing nothing, it might leak mem. */
+			WARN("DM deprecated call (drop) -- no action taken!");
+			// TODO: do nothing?
+			//return SQLFreeStmt(SQL_HANDLE_STMT, (SQLHANDLE)StatementHandle);
+			break;
+
+		/* "Closes the cursor associated with StatementHandle and discards all
+		 * pending results." */
+		case SQL_CLOSE: // TODO: PROTO
+		/* "Sets the SQL_DESC_COUNT field of the ARD to 0, releasing all
+		 * column buffers bound by SQLBindCol for the given StatementHandle"
+		 * */
+		case SQL_UNBIND: // TODO: PROTO
+		/* "Sets the SQL_DESC_COUNT field of the APD to 0, releasing all
+		 * parameter buffers set by SQLBindParameter for the given
+		 * StatementHandle." */
+		case SQL_RESET_PARAMS: // TODO: PROTO
+			BUG("not implemented.");
+			// returning success, tho, for further developing 
+			break;
+
+		default:
+			ERR("unknown Option value: %d.", Option);
+			RET_HDIAGS(STMH(StatementHandle), SQL_STATE_HY092);
+
+	}
 	RET_STATE(SQL_STATE_00000);
 }
 
