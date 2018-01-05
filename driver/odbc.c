@@ -21,6 +21,7 @@
 #include "handles.h"
 #include "info.h"
 #include "connect.h"
+#include "queries.h"
 
 //#include "elasticodbc_export.h"
 //#define SQL_API	ELASTICODBC_EXPORT SQL_API
@@ -214,14 +215,19 @@ SQLRETURN  SQL_API SQLGetFunctions(SQLHDBC ConnectionHandle,
 	return ret;
 }
 
-#if WITH_EMPTY
 SQLRETURN SQL_API   SQLGetTypeInfoW(
     SQLHSTMT            StatementHandle,
     SQLSMALLINT         DataType)
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE2(_IN, "pd", StatementHandle, DataType);
+	ret = EsSQLGetTypeInfoW(StatementHandle, DataType);
+	TRACE3(_OUT, "dpd", ret, StatementHandle, DataType);
+	return ret;
+	//RET_NOT_IMPLEMENTED;
 }
 
+#if WITH_EMPTY
 
 /*
  *
@@ -590,19 +596,34 @@ SQLRETURN SQL_API SQLColAttributeW(
 }
 #endif /* _WIN64 */
 
+#endif /*WITH_EMPTY*/
+
 SQLRETURN  SQL_API SQLBindCol(SQLHSTMT StatementHandle,
            SQLUSMALLINT ColumnNumber, SQLSMALLINT TargetType,
            _Inout_updates_opt_(_Inexpressible_(BufferLength)) SQLPOINTER TargetValue, 
            SQLLEN BufferLength, _Inout_opt_ SQLLEN *StrLen_or_Ind)
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE6(_IN, "pddpdp", StatementHandle, ColumnNumber, TargetType,
+			TargetValue, BufferLength, StrLen_or_Ind);
+	ret = EsSQLBindCol(StatementHandle, ColumnNumber, TargetType,
+			TargetValue, BufferLength, StrLen_or_Ind);
+	TRACE7(_OUT, "dpddpdD", ret, StatementHandle, ColumnNumber, TargetType,
+			TargetValue, BufferLength, StrLen_or_Ind);
+	return ret;
 }
+
 
 SQLRETURN  SQL_API SQLFetch(SQLHSTMT StatementHandle)
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE1(_IN, "p", StatementHandle);
+	ret = EsSQLFetch(StatementHandle);
+	TRACE2(_OUT, "dp", ret, StatementHandle);
+	return ret;
 }
 
+#ifdef WITH_EMPTY
 SQLRETURN  SQL_API SQLFetchScroll(SQLHSTMT StatementHandle,
            SQLSMALLINT FetchOrientation, SQLLEN FetchOffset)
 {
@@ -831,6 +852,8 @@ SQLRETURN SQL_API SQLTablePrivilegesW
 	RET_NOT_IMPLEMENTED;
 }
 
+#endif /*0*/
+
 SQLRETURN SQL_API SQLTablesW
 (
     SQLHSTMT           hstmt,
@@ -844,8 +867,19 @@ SQLRETURN SQL_API SQLTablesW
     SQLSMALLINT        cchTableType
 )
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE9(_IN, "ppdpdpdpd", hstmt, szCatalogName, cchCatalogName,
+			szSchemaName, cchSchemaName, szTableName, cchTableName,
+			szTableType, cchTableType);
+	ret = EsSQLTablesW(hstmt, szCatalogName, cchCatalogName,
+			szSchemaName, cchSchemaName, szTableName, cchTableName,
+			szTableType, cchTableType);
+	TRACE10(_OUT, "dppdpdpdpd", ret, hstmt, szCatalogName, cchCatalogName,
+			szSchemaName, cchSchemaName, szTableName, cchTableName,
+			szTableType, cchTableType);
+	return ret;
 }
+
 
 /*
  *
@@ -853,17 +887,16 @@ SQLRETURN SQL_API SQLTablesW
  *
  */
 
-/*
- * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetstmtattr-function :
- * """
- * Calling SQLFreeStmt with the SQL_CLOSE, SQL_UNBIND, or SQL_RESET_PARAMS option does not reset statement attributes
- * """
- * */
-SQLRETURN  SQL_API SQLFreeStmt(SQLHSTMT StatementHandle,
-           SQLUSMALLINT Option)
+SQLRETURN  SQL_API SQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option)
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE2(_IN, "pd", StatementHandle, Option);
+	ret = EsSQLFreeStmt(StatementHandle, Option);
+	TRACE3(_OUT, "dpd", ret, StatementHandle, Option);
+	return ret;
 }
+
+#if WITH_EMPTY
 
 SQLRETURN  SQL_API SQLCloseCursor(SQLHSTMT StatementHandle)
 {

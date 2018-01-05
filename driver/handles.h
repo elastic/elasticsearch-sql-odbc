@@ -19,6 +19,7 @@
 #define __HANDLES_H__
 
 #include "error.h"
+#include "log.h"
 
 /*
  * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/environment-handles :
@@ -32,7 +33,6 @@
 typedef struct struct_env {
 	SQLUINTEGER version; /* versions defined as UL (see SQL_OV_ODBC3) */
 	/* diagnostic/state keeping */
-	// TODO: needed, actually?
 	esodbc_diag_st diag;
 	// TODO: connections
 } esodbc_env_st;
@@ -87,6 +87,7 @@ typedef struct struct_stmt {
 SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 	SQLHANDLE InputHandle, _Out_ SQLHANDLE *OutputHandle);
 SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle);
+SQLRETURN EsSQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option);
 
 SQLRETURN EsSQLSetEnvAttr(SQLHENV EnvironmentHandle,
 		SQLINTEGER Attribute, 

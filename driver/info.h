@@ -51,6 +51,7 @@ SQLRETURN EsSQLGetFunctions(SQLHDBC ConnectionHandle,
 		SQLUSMALLINT FunctionId, 
 		_Out_writes_opt_(_Inexpressible_("Buffer length pfExists points to depends on fFunction value.")) SQLUSMALLINT *Supported);
 
+SQLRETURN EsSQLGetTypeInfoW(SQLHSTMT StatementHandle, SQLSMALLINT DataType);
 
 #endif /* __INFO_H__ */
 

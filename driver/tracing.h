@@ -171,6 +171,21 @@
 		_TRACE_ENDING; \
 	} while(0)
 
+#define TRACE10(out, fmt, p0, p1, p2, p3, p4, p5, p6, p7, p8, p9) \
+	do { \
+		_TRACE_DECLARATION(out); \
+		_PRINT_PARAM(fmt[0], p0, 0); \
+		_PRINT_PARAM(fmt[1], p1, 1); \
+		_PRINT_PARAM(fmt[2], p2, 1); \
+		_PRINT_PARAM(fmt[3], p3, 1); \
+		_PRINT_PARAM(fmt[4], p4, 1); \
+		_PRINT_PARAM(fmt[5], p5, 1); \
+		_PRINT_PARAM(fmt[6], p6, 1); \
+		_PRINT_PARAM(fmt[7], p7, 1); \
+		_PRINT_PARAM(fmt[8], p8, 1); \
+		_PRINT_PARAM(fmt[9], p9, 1); \
+		_TRACE_ENDING; \
+	} while(0)
 
 
 

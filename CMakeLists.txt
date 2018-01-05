@@ -79,7 +79,7 @@ message("Driver source files: " ${DRV_SRC})
 
 # generate Module definition file (symbols to export)
 execute_process(COMMAND 
-		${CMAKE_SOURCE_DIR}/${DRV_SRC_DIR}/build_def.bat
+	${CMAKE_SOURCE_DIR}/${DRV_SRC_DIR}/build_def.bat ${DRV_NAME}
 		${CMAKE_SOURCE_DIR}/${DRV_BUILD_DIR}/${DRV_NAME}.def
 	WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/${DRV_SRC_DIR}"
 	RESULT_VARIABLE CMD_RETURN
