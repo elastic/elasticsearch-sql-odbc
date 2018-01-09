@@ -101,7 +101,7 @@ static SQLUSMALLINT esodbc_functions[] = {
 	SQL_API_SQLTABLES,
 	SQL_API_SQLBINDPARAMETER,
 	SQL_API_SQLBROWSECONNECT,
-	SQL_API_SQLBULKOPERATIONS,
+	/* SQL_API_SQLBULKOPERATIONS, */
 	SQL_API_SQLCOLUMNPRIVILEGES,
 	SQL_API_SQLDESCRIBEPARAM,
 	SQL_API_SQLDRIVERCONNECT,
@@ -163,7 +163,7 @@ static SQLRETURN write_tstr(esodbc_dbc_st *hdbc, SQLTCHAR *dest, SQLTCHAR *src,
 	RET_STATE(SQL_STATE_00000);
 }
 
-// [0] x-p-es/sql/jdbc/src/main/java/org/elasticsearch/xpack/sql/jdbc/jdbc/JdbcDatabaseMetaData.java
+// [0] x-p-es/sql/jdbc/src/main/java/org/elasticsearch/xpack/sql/jdbc/jdbc/JdbcDatabaseMetaData.java : DatabaseMetaData
 /*
  * """
  * The SQL_MAX_DRIVER_CONNECTIONS option in SQLGetInfo specifies how many
@@ -299,6 +299,25 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			return write_tstr(DBCH(ConnectionHandle), InfoValue, 
 					MK_TSTR(ESODBC_QUOTE_CHAR), BufferLength, 
 					StringLengthPtr);
+
+		/* what Operations are supported by SQLSetPos  */
+		// FIXME: review@alpha
+		case SQL_DYNAMIC_CURSOR_ATTRIBUTES1:
+			DBG("requested cursor attributes 1.");
+			*(SQLUINTEGER *)InfoValue = SQL_CA1_POS_UPDATE;
+			break;
+		case SQL_FORWARD_ONLY_CURSOR_ATTRIBUTES1:
+			*(SQLUINTEGER *)InfoValue = 0;
+			break;
+		case SQL_KEYSET_CURSOR_ATTRIBUTES1:
+		case SQL_STATIC_CURSOR_ATTRIBUTES1:
+			/* "An SQL-92 Intermediate level–conformant driver will usually
+			 * return the SQL_CA1_NEXT, SQL_CA1_ABSOLUTE, and SQL_CA1_RELATIVE
+			 * options as supported, because the driver supports scrollable
+			 * cursors through the embedded SQL FETCH statement. " */
+			*(SQLUINTEGER *)InfoValue = 
+				SQL_CA1_NEXT | SQL_CA1_ABSOLUTE | SQL_CA1_RELATIVE;
+			break;
 
 		default:
 			ERR("unknown InfoType: %u.", InfoType);
@@ -557,6 +576,28 @@ SQLRETURN EsSQLGetFunctions(SQLHDBC ConnectionHandle,
 	// TODO: does this require connecting to the server?
 	RET_STATE(SQL_STATE_00000);
 }
+
+#if 0
+TYPE_NAME
+DATA_TYPE
+COLUMN_SIZE
+LITERAL_PREFIX
+LITERAL_SUFFIX
+CREATE_PARAMS
+NULLABLE
+CASE_SENSITIVE
+SEARCHABLE
+UNSIGNED_ATTRIBUTE
+FIXED_PREC_SCALE
+AUTO_UNIQUE_VALUE
+LOCAL_TYPE_NAME
+MINIMUM_SCALE
+MAXIMUM_SCALE
+SQL_DATA_TYPE
+SQL_DATETIME_SUB
+NUM_PREC_RADIX
+INTERVAL_PRECISION
+#endif
 
 SQLRETURN EsSQLGetTypeInfoW(SQLHSTMT StatementHandle, SQLSMALLINT DataType)
 {
