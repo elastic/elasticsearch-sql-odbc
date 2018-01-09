@@ -97,15 +97,30 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			STMH(*OutputHandle)->dbc = DBCH(InputHandle);
 			/* "When a statement is allocated, four descriptor handles are
 			 * automatically allocated and associated with the statement." */
+			STMH(*OutputHandle)->i_ard.type = DESC_TYPE_ARD;
 			STMH(*OutputHandle)->ard = &STMH(*OutputHandle)->i_ard;
+			STMH(*OutputHandle)->i_ird.type = DESC_TYPE_IRD;
 			STMH(*OutputHandle)->ird = &STMH(*OutputHandle)->i_ird;
+			STMH(*OutputHandle)->i_apd.type = DESC_TYPE_APD;
 			STMH(*OutputHandle)->apd = &STMH(*OutputHandle)->i_apd;
+			STMH(*OutputHandle)->i_ipd.type = DESC_TYPE_IPD;
 			STMH(*OutputHandle)->ipd = &STMH(*OutputHandle)->i_ipd;
+
+			/* bind to one row, by default */
+			STMH(*OutputHandle)->options.array_size = 1;
 			DBG("new Statement handle allocated @0x%p.", *OutputHandle);
 			break;
 
 		case SQL_HANDLE_DESC:
-			//break;
+			*OutputHandle = (SQLHANDLE *)calloc(1, sizeof(esodbc_desc_st));
+			if (! *OutputHandle) {
+				ERRN("failed to callocate descriptor handle.");
+				RET_HDIAGS(DBCH(InputHandle), SQL_STATE_HY001); 
+			}
+			DBG("new Descriptor handle allocated @0x%p.", *OutputHandle);
+			// FIXME: assign/chain to statement?
+			break;
+
 		case SQL_HANDLE_SENV: /* Shared Environment Handle */
 			RET_NOT_IMPLEMENTED;
 			//break;
@@ -163,11 +178,12 @@ SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 
 
 /*
- * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetstmtattr-function :
- * """
- * Calling SQLFreeStmt with the SQL_CLOSE, SQL_UNBIND, or SQL_RESET_PARAMS
- * option does not reset statement attributes
- * """
+ * "Calling SQLFreeStmt with the SQL_CLOSE, SQL_UNBIND, or SQL_RESET_PARAMS
+ * option does not reset statement attributes."
+ *
+ * "To unbind all columns, an application calls SQLFreeStmt with fOption set
+ * to SQL_UNBIND. This can also be accomplished by setting the SQL_DESC_COUNT
+ * field of the ARD to zero.
  * */
 SQLRETURN EsSQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option)
 {
@@ -358,6 +374,49 @@ SQLRETURN EsSQLSetConnectAttrW(
 	RET_STATE(SQL_STATE_00000);
 }
 
+SQLRETURN EsSQLSetStmtAttrW(
+		SQLHSTMT           StatementHandle,
+		SQLINTEGER         Attribute,
+		SQLPOINTER         ValuePtr,
+		SQLINTEGER         BufferLength)
+{
+	switch(Attribute) {
+		case SQL_ATTR_USE_BOOKMARKS:
+			DBG("setting use-bookmarks to: %u.", *(SQLULEN *)ValuePtr);
+			STMH(StatementHandle)->options.bookmarks = *(SQLULEN *)ValuePtr;
+			break;
+
+		case SQL_ATTR_ROW_BIND_OFFSET_PTR:
+			/* offset in bytes */
+			/* TODO: call SQLSetDescField(ARD) here? */
+			DBG("setting row-bind-offset to: %d", *(SQLINTEGER *)ValuePtr);
+			STMH(StatementHandle)->options.bind_offset = 
+				*(SQLINTEGER *)ValuePtr;
+
+		/* Setting this statement attribute sets the SQL_DESC_ARRAY_SIZE field
+		 * in the ARD header. */
+		case SQL_ATTR_ROW_ARRAY_SIZE:
+			DBG("setting array size to: %d", *(SQLULEN *)ValuePtr);
+			/* TODO: call SQLSetDescField(ARD) here? */
+			if (ESODBC_MAX_ARRAY_SIZE < *(SQLULEN *)ValuePtr) {
+				STMH(StatementHandle)->options.array_size =
+					ESODBC_MAX_ARRAY_SIZE;
+				RET_HDIAGS(STMH(StatementHandle), SQL_STATE_01S02);
+			} else {
+				STMH(StatementHandle)->options.array_size = 
+					*(SQLULEN *)ValuePtr;
+			}
+			break;
+
+		default:
+			// FIXME
+			BUG("not fully implemented.");
+			ERR("unknown Attribute: %d.", Attribute);
+			RET_HDIAGS(STMH(StatementHandle), SQL_STATE_HY092);
+	}
+
+	RET_STATE(SQL_STATE_00000);
+}
 
 SQLRETURN EsSQLGetStmtAttrW(
 		SQLHSTMT     StatementHandle,

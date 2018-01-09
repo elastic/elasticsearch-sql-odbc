@@ -59,10 +59,30 @@ typedef struct struct_dbc {
 	// TODO: statements?
 } esodbc_dbc_st;
 
+
+typedef enum {
+	DESC_TYPE_ANON, /* SQLAllocHandle()'ed */
+	DESC_TYPE_ARD,
+	DESC_TYPE_IRD,
+	DESC_TYPE_APD,
+	DESC_TYPE_IPD,
+} desc_type_et;
+
 typedef struct struct_desc {
 	//esodbc_stmt_st *stmt;
 	esodbc_diag_st diag;
+	desc_type_et type; /* APD, IPD, ARD, IRD */
 } esodbc_desc_st;
+
+
+typedef struct stmt_options {
+	/* use bookmarks? */
+	SQLULEN bookmarks;
+	/* offset in bytes to the bound addresses */
+	SQLINTEGER bind_offset; /* TODO: ARD option only? */
+	/* bound array size */
+	SQLULEN array_size; /* TODO: ARD option only */
+} stmt_options_st;
 
 typedef struct struct_stmt {
 	esodbc_dbc_st *dbc;
@@ -78,11 +98,14 @@ typedef struct struct_stmt {
 	esodbc_desc_st i_ird;
 	esodbc_desc_st i_apd;
 	esodbc_desc_st i_ipd;
+
+	stmt_options_st options;
 } esodbc_stmt_st;
 
 
 // FIXME: review@alpha
 #define ESODBC_DBC_CONN_TIMEOUT	120
+#define ESODBC_MAX_ARRAY_SIZE	128 /* TODO: should there be a max? */
 
 SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 	SQLHANDLE InputHandle, _Out_ SQLHANDLE *OutputHandle);
@@ -105,6 +128,11 @@ SQLRETURN EsSQLSetConnectAttrW(
 		SQLINTEGER StringLength);
 
 
+SQLRETURN EsSQLSetStmtAttrW(
+		SQLHSTMT           StatementHandle,
+		SQLINTEGER         Attribute,
+		SQLPOINTER         ValuePtr,
+		SQLINTEGER         BufferLength);
 SQLRETURN EsSQLGetStmtAttrW(
 		SQLHSTMT     StatementHandle,
 		SQLINTEGER   Attribute,

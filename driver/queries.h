@@ -2,7 +2,7 @@
  * ELASTICSEARCH CONFIDENTIAL
  * __________________
  *
- *  [2014] Elasticsearch Incorporated. All Rights Reserved.
+ *  [2018] Elasticsearch Incorporated. All Rights Reserved.
  *
  * NOTICE:  All information contained herein is, and remains
  * the property of Elasticsearch Incorporated and its suppliers,
@@ -23,10 +23,19 @@ SQLRETURN EsSQLBindCol(
 		SQLHSTMT StatementHandle,
 		SQLUSMALLINT ColumnNumber,
 		SQLSMALLINT TargetType,
-		_Inout_updates_opt_(_Inexpressible_(BufferLength)) SQLPOINTER TargetValue,
+		_Inout_updates_opt_(_Inexpressible_(BufferLength))
+				SQLPOINTER TargetValue,
 		SQLLEN BufferLength,
 		_Inout_opt_ SQLLEN *StrLen_or_Ind);
 SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle);
+SQLRETURN EsSQLSetPos(
+		SQLHSTMT        StatementHandle,
+		SQLSETPOSIROW   RowNumber,
+		SQLUSMALLINT    Operation,
+		SQLUSMALLINT    LockType);
+SQLRETURN EsSQLBulkOperations(
+		SQLHSTMT            StatementHandle,
+		SQLSMALLINT         Operation);
 
 
 #endif /* __QUERIES_H__ */

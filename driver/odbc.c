@@ -294,16 +294,20 @@ SQLRETURN  SQL_API SQLGetEnvAttr(SQLHENV EnvironmentHandle,
 	return ret;
 }
 
-#if WITH_EMPTY
 SQLRETURN SQL_API SQLSetStmtAttrW(
 		SQLHSTMT           StatementHandle,
-    SQLINTEGER         Attribute,
-    SQLPOINTER         ValuePtr,
-    SQLINTEGER         BufferLength)
+		SQLINTEGER         Attribute,
+		SQLPOINTER         ValuePtr,
+		SQLINTEGER         BufferLength)
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE4(_IN, "pdpd", StatementHandle, Attribute, ValuePtr, BufferLength);
+	ret = EsSQLSetStmtAttrW(StatementHandle, Attribute, ValuePtr,
+			BufferLength);
+	TRACE5(_OUT, "dpdpd", ret, StatementHandle, Attribute, ValuePtr, 
+			BufferLength);
+	return ret;
 }
-#endif /* WITH_EMPTY */
 
 SQLRETURN SQL_API SQLGetStmtAttrW(
 		SQLHSTMT           StatementHandle,
@@ -408,6 +412,9 @@ SQLRETURN SQL_API SQLPrepareW
 	RET_NOT_IMPLEMENTED;
 }
 
+/*
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/sending-long-data
+ */
 SQLRETURN SQL_API SQLBindParameter(
     SQLHSTMT           hstmt,
     SQLUSMALLINT       ipar,
@@ -624,6 +631,13 @@ SQLRETURN  SQL_API SQLFetch(SQLHSTMT StatementHandle)
 }
 
 #ifdef WITH_EMPTY
+/*
+ * "SQLFetch and SQLFetchScroll use the rowset size at the time of the call to
+ * determine how many rows to fetch. However, SQLFetchScroll with a
+ * FetchOrientation of SQL_FETCH_NEXT increments the cursor based on the
+ * rowset of the previous fetch and then fetches a rowset based on the current
+ * rowset size."
+ */
 SQLRETURN  SQL_API SQLFetchScroll(SQLHSTMT StatementHandle,
            SQLSMALLINT FetchOrientation, SQLLEN FetchOffset)
 {
@@ -637,23 +651,33 @@ SQLRETURN  SQL_API SQLGetData(SQLHSTMT StatementHandle,
 {
 	RET_NOT_IMPLEMENTED;
 }
+#endif /* WITH_EMPTY */
 
 SQLRETURN SQL_API SQLSetPos(
-    SQLHSTMT           hstmt,
-    SQLSETPOSIROW      irow,
-    SQLUSMALLINT       fOption,
-    SQLUSMALLINT       fLock)
+		SQLHSTMT        StatementHandle,
+		SQLSETPOSIROW   RowNumber,
+		SQLUSMALLINT    Operation,
+		SQLUSMALLINT    LockType)
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE4(_IN, "puuu", StatementHandle, RowNumber, Operation, LockType);
+	ret = EsSQLSetPos(StatementHandle, RowNumber, Operation, LockType);
+	TRACE5(_OUT, "dpuuu", ret,StatementHandle, RowNumber, Operation, LockType);
+	return ret;
 }
 
 SQLRETURN   SQL_API SQLBulkOperations(
-    SQLHSTMT            StatementHandle,
-    SQLSMALLINT         Operation)
+		SQLHSTMT            StatementHandle,
+		SQLSMALLINT         Operation)
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE2(_IN, "pd", StatementHandle, Operation);
+	ret = EsSQLBulkOperations(StatementHandle, Operation);
+	TRACE3(_OUT, "dpd", ret, StatementHandle, Operation);
+	return ret;
 }
 
+#ifdef WITH_EMPTY
 SQLRETURN SQL_API SQLMoreResults(
     SQLHSTMT           hstmt)
 {
