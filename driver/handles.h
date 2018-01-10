@@ -2,7 +2,7 @@
  * ELASTICSEARCH CONFIDENTIAL
  * __________________
  *
- *  [2014] Elasticsearch Incorporated. All Rights Reserved.
+ *  [2018] Elasticsearch Incorporated. All Rights Reserved.
  *
  * NOTICE:  All information contained herein is, and remains
  * the property of Elasticsearch Incorporated and its suppliers,
@@ -79,9 +79,17 @@ typedef struct stmt_options {
 	/* use bookmarks? */
 	SQLULEN bookmarks;
 	/* offset in bytes to the bound addresses */
-	SQLINTEGER bind_offset; /* TODO: ARD option only? */
+	/* "The driver calculates the buffer address just before it writes to the
+	 * buffers (such as during fetch time)." */
+	SQLULEN *bind_offset; /* TODO: ARD option only? */
 	/* bound array size */
 	SQLULEN array_size; /* TODO: ARD option only */
+	/* row/column, with block cursors */
+	SQLULEN bind_type; /* TODO: ARD option only */
+	/* row status values after Fetch/Scroll */
+	SQLUSMALLINT *row_status; /* TODO: IRD option only */
+	/* number of rows fetched */
+	SQLULEN *rows_fetched; /* TODO: IRD option only */
 } stmt_options_st;
 
 typedef struct struct_stmt {
@@ -104,8 +112,8 @@ typedef struct struct_stmt {
 
 
 // FIXME: review@alpha
-#define ESODBC_DBC_CONN_TIMEOUT	120
-#define ESODBC_MAX_ARRAY_SIZE	128 /* TODO: should there be a max? */
+#define ESODBC_DBC_CONN_TIMEOUT		120
+#define ESODBC_MAX_ROW_ARRAY_SIZE	128 /* TODO: should there be a max? */
 
 SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 	SQLHANDLE InputHandle, _Out_ SQLHANDLE *OutputHandle);
@@ -140,6 +148,18 @@ SQLRETURN EsSQLGetStmtAttrW(
 		SQLINTEGER   BufferLength,
 		SQLINTEGER  *StringLengthPtr);
 
+SQLRETURN EsSQLSetDescRec(
+		SQLHDESC DescriptorHandle,
+		SQLSMALLINT RecNumber,
+		SQLSMALLINT Type,
+		SQLSMALLINT SubType,
+		SQLLEN Length,
+		SQLSMALLINT Precision,
+		SQLSMALLINT Scale,
+		_Inout_updates_bytes_opt_(Length) SQLPOINTER Data, 
+		_Inout_opt_ SQLLEN *StringLength,
+		_Inout_opt_ SQLLEN *Indicator);
+
 #define ENVH(_h)	((esodbc_env_st *)(_h))
 #define DBCH(_h)	((esodbc_dbc_st *)(_h))
 #define STMH(_h)	((esodbc_stmt_st *)(_h))
@@ -165,6 +185,13 @@ SQLRETURN EsSQLGetStmtAttrW(
 	do { \
 		BUG("not implemented.");\
 		return SQL_ERROR; \
+	} while (0)
+
+#include <assert.h>
+#define FIXME \
+	do { \
+		BUG("not yet implemented"); \
+		assert(0); \
 	} while (0)
 
 #endif /* __HANDLES_H__ */

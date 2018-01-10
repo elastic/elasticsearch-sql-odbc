@@ -2,7 +2,7 @@
  * ELASTICSEARCH CONFIDENTIAL
  * __________________
  *
- *  [2014] Elasticsearch Incorporated. All Rights Reserved.
+ *  [2018] Elasticsearch Incorporated. All Rights Reserved.
  *
  * NOTICE:  All information contained herein is, and remains
  * the property of Elasticsearch Incorporated and its suppliers,
@@ -386,27 +386,109 @@ SQLRETURN EsSQLSetStmtAttrW(
 			STMH(StatementHandle)->options.bookmarks = *(SQLULEN *)ValuePtr;
 			break;
 
+		/* "If this field is non-null, the driver dereferences the pointer,
+		 * adds the dereferenced value to each of the deferred fields in the
+		 * descriptor record (SQL_DESC_DATA_PTR, SQL_DESC_INDICATOR_PTR, and
+		 * SQL_DESC_OCTET_LENGTH_PTR), and uses the new pointer values when
+		 * binding. It is set to null by default." */
 		case SQL_ATTR_ROW_BIND_OFFSET_PTR:
 			/* offset in bytes */
-			/* TODO: call SQLSetDescField(ARD) here? */
-			DBG("setting row-bind-offset to: %d", *(SQLINTEGER *)ValuePtr);
-			STMH(StatementHandle)->options.bind_offset = 
-				*(SQLINTEGER *)ValuePtr;
+			/* "Setting this statement attribute sets the
+			 * SQL_DESC_BIND_OFFSET_PTR field in the ARD header." */
+			// TODO: call SQLSetDescField(ARD) here?
+			DBG("setting row-bind-offset pointer to: 0x%p.", ValuePtr);
+			STMH(StatementHandle)->options.bind_offset = (SQLULEN *)ValuePtr;
 
-		/* Setting this statement attribute sets the SQL_DESC_ARRAY_SIZE field
-		 * in the ARD header. */
 		case SQL_ATTR_ROW_ARRAY_SIZE:
-			DBG("setting array size to: %d", *(SQLULEN *)ValuePtr);
-			/* TODO: call SQLSetDescField(ARD) here? */
-			if (ESODBC_MAX_ARRAY_SIZE < *(SQLULEN *)ValuePtr) {
+			DBG("setting array size to: %d.", *(SQLULEN *)ValuePtr);
+			/* "Setting this statement attribute sets the SQL_DESC_ARRAY_SIZE
+			 * field in the ARD header." */
+			// TODO: call SQLSetDescField(ARD) here?
+			if (ESODBC_MAX_ROW_ARRAY_SIZE < *(SQLULEN *)ValuePtr) {
 				STMH(StatementHandle)->options.array_size =
-					ESODBC_MAX_ARRAY_SIZE;
+					ESODBC_MAX_ROW_ARRAY_SIZE;
+				/* TODO: return the fixed size in ValuePtr? */
 				RET_HDIAGS(STMH(StatementHandle), SQL_STATE_01S02);
 			} else {
 				STMH(StatementHandle)->options.array_size = 
 					*(SQLULEN *)ValuePtr;
 			}
 			break;
+
+		/* "sets the binding orientation to be used when SQLFetch or
+		 * SQLFetchScroll is called on the associated statement" */
+		case SQL_ATTR_ROW_BIND_TYPE:
+			/* "Setting this statement attribute sets the SQL_DESC_BIND_TYPE
+			 * field in the ARD header." */
+			// TODO: call SQLSetDescField(ARD) here?
+			DBG("setting row bind type to: %d.", *(SQLULEN *)ValuePtr);
+			/* value is SQL_BIND_BY_COLUMN (0UL) or struct len  */
+			/* "the driver can calculate the address of the data for a
+			 * particular row and column as:
+			 * Address = Bound Address + ((Row Number - 1) * Structure Size)"
+			 * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/column-wise-binding
+			 * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/row-wise-binding
+			 */
+			STMH(StatementHandle)->options.bind_type = *(SQLULEN *)ValuePtr;
+			break;
+
+		/* "an array of SQLUSMALLINT values containing row status values after
+		 * a call to SQLFetch or SQLFetchScroll." */
+		/* https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/row-status-array */
+		case SQL_ATTR_ROW_STATUS_PTR:
+			/* "Setting this statement attribute sets the
+			 * SQL_DESC_ARRAY_STATUS_PTR field in the IRD header." */
+			// TODO: call SQLSetDescField(IRD) here?
+			DBG("setting row status pointer to: 0x%p.", ValuePtr);
+			STMH(StatementHandle)->options.row_status = 
+				(SQLUSMALLINT *)ValuePtr;
+			break;
+
+		case SQL_ATTR_ROWS_FETCHED_PTR:
+			/* "Setting this statement attribute sets the
+			 * SQL_DESC_ROWS_PROCESSED_PTR field in the IRD header." */
+			// TODO: call SQLSetDescField(IRD) here?
+			DBG("setting rows fetched pointer to: 0x%p.", ValuePtr);
+			STMH(StatementHandle)->options.rows_fetched = (SQLULEN *)ValuePtr;
+			break;
+
+		case SQL_ATTR_APP_ROW_DESC:
+			if ((ValuePtr == (SQLPOINTER *)&STMH(StatementHandle)->i_ard) || 
+					(ValuePtr == SQL_NULL_HDESC)) {
+				if (STMH(StatementHandle)->ard) {
+					DBG("unbinding ARD 0x%p from statement 0x%p.");
+					// FIXME: unbind
+					FIXME;
+				}
+				STMH(StatementHandle)->ard = &STMH(StatementHandle)->i_ard;
+				FIXME;
+			} else if (FALSE) {
+				/* "This attribute cannot be set to a descriptor handle that
+				 * was implicitly allocated for another statement or to
+				 * another descriptor handle that was implicitly set on the
+				 * same statement; implicitly allocated descriptor handles
+				 * cannot be associated with more than one statement or
+				 * descriptor handle." */
+				/* TODO: check if this is implicitely allocated in all
+				statements??? */
+				ERR("trying to set A*D (%d) descriptor to the wrong implicit"
+						" descriptor @0x%p.", Attribute, ValuePtr);
+				RET_HDIAGS(STMH(StatementHandle), SQL_STATE_HY017);
+			} else {
+				STMH(StatementHandle)->ard = (esodbc_desc_st *)ValuePtr;
+				// FIXME: bind: re-init
+				FIXME;
+			}	
+		case SQL_ATTR_APP_PARAM_DESC:
+			// FIXME: same logic for APD as above
+			FIXME;
+			break;
+
+		case SQL_ATTR_IMP_ROW_DESC:
+		case SQL_ATTR_IMP_PARAM_DESC:
+			ERR("trying to set I*D (%d) descriptor (to @0x%p).", Attribute, 
+					ValuePtr);
+			RET_HDIAGS(STMH(StatementHandle), SQL_STATE_HY017);
 
 		default:
 			// FIXME
@@ -454,6 +536,47 @@ SQLRETURN EsSQLGetStmtAttrW(
 	}
 
 	RET_STATE(SQL_STATE_00000);
+}
+
+/*
+ * "A consistency check is performed by the driver automatically whenever an
+ * application sets the SQL_DESC_DATA_PTR field of the APD, ARD, or IPD.
+ * Whenever this field is set, the driver checks that the value of the
+ * SQL_DESC_TYPE field and the values applicable to the SQL_DESC_TYPE field in
+ * the same record are valid and consistent.
+ *
+ * The SQL_DESC_DATA_PTR field of an IPD is not normally set; however, an
+ * application can do so to force a consistency check of IPD fields. The value
+ * that the SQL_DESC_DATA_PTR field of the IPD is set to is not actually
+ * stored and cannot be retrieved by a call to SQLGetDescField or
+ * SQLGetDescRec; the setting is made only to force the consistency check. A
+ * consistency check cannot be performed on an IRD."
+ */
+SQLRETURN EsSQLSetDescRec(
+		SQLHDESC DescriptorHandle,
+		SQLSMALLINT RecNumber,
+		SQLSMALLINT Type,
+		SQLSMALLINT SubType,
+		SQLLEN Length,
+		SQLSMALLINT Precision,
+		SQLSMALLINT Scale,
+		_Inout_updates_bytes_opt_(Length) SQLPOINTER Data, 
+		_Inout_opt_ SQLLEN *StringLength,
+		_Inout_opt_ SQLLEN *Indicator)
+{
+	/*
+	 * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/column-wise-binding :
+	 * "When using column-wise binding, an application binds one or two, or in
+	 * some cases three, arrays to each column for which data is to be
+	 * returned. The first array holds the data values, and the second array
+	 * holds length/indicator buffers. Indicators and length values can be
+	 * stored in separate buffers by setting the SQL_DESC_INDICATOR_PTR and
+	 * SQL_DESC_OCTET_LENGTH_PTR descriptor fields to different values; if
+	 * this is done, a third array is bound. Each array contains as many
+	 * elements as there are rows in the rowset."
+	 */
+
+	RET_NOT_IMPLEMENTED;
 }
 
 

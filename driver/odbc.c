@@ -2,7 +2,7 @@
  * ELASTICSEARCH CONFIDENTIAL
  * __________________
  *
- *  [2014] Elasticsearch Incorporated. All Rights Reserved.
+ *  [2018] Elasticsearch Incorporated. All Rights Reserved.
  *
  * NOTICE:  All information contained herein is, and remains
  * the property of Elasticsearch Incorporated and its suppliers,
@@ -385,17 +385,31 @@ SQLRETURN  SQL_API SQLSetDescFieldW
 {
 	RET_NOT_IMPLEMENTED;
 }
+#endif /* WITH_EMPTY */
 
-SQLRETURN  SQL_API SQLSetDescRec(SQLHDESC DescriptorHandle,
-           SQLSMALLINT RecNumber, SQLSMALLINT Type,
-           SQLSMALLINT SubType, SQLLEN Length,
-           SQLSMALLINT Precision, SQLSMALLINT Scale,
-           _Inout_updates_bytes_opt_(Length) SQLPOINTER Data, _Inout_opt_ SQLLEN *StringLength,
-           _Inout_opt_ SQLLEN *Indicator)
+SQLRETURN  SQL_API SQLSetDescRec(
+		SQLHDESC DescriptorHandle,
+		SQLSMALLINT RecNumber,
+		SQLSMALLINT Type,
+		SQLSMALLINT SubType,
+		SQLLEN Length,
+		SQLSMALLINT Precision,
+		SQLSMALLINT Scale,
+		_Inout_updates_bytes_opt_(Length) SQLPOINTER Data, 
+		_Inout_opt_ SQLLEN *StringLength,
+		_Inout_opt_ SQLLEN *Indicator)
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE10(_IN, "pddddddppp", DescriptorHandle, RecNumber, Type, SubType,
+			Length, Precision, Scale, Data, StringLength, Indicator);
+	ret = EsSQLSetDescRec(DescriptorHandle, RecNumber, Type, SubType,
+			Length, Precision, Scale, Data, StringLength, Indicator);
+	TRACE11(_OUT, "dpddddddpDD", ret, DescriptorHandle, RecNumber, Type, 
+			SubType, Length, Precision, Scale, Data, StringLength, Indicator);
+	return ret;
 }
 
+#if WITH_EMPTY
 SQLRETURN  SQL_API SQLCopyDesc(SQLHDESC SourceDescHandle,
            SQLHDESC TargetDescHandle)
 {

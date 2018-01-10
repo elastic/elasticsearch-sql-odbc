@@ -2,7 +2,7 @@
  * ELASTICSEARCH CONFIDENTIAL
  * __________________
  *
- *  [2014] Elasticsearch Incorporated. All Rights Reserved.
+ *  [2018] Elasticsearch Incorporated. All Rights Reserved.
  *
  * NOTICE:  All information contained herein is, and remains
  * the property of Elasticsearch Incorporated and its suppliers,
