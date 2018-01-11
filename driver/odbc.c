@@ -227,7 +227,6 @@ SQLRETURN SQL_API   SQLGetTypeInfoW(
 	//RET_NOT_IMPLEMENTED;
 }
 
-#if WITH_EMPTY
 
 /*
  *
@@ -250,21 +249,23 @@ SQLRETURN  SQL_API SQLSetConnectAttrW(
 	return ret;
 }
 
-SQLRETURN SQL_API SQLGetConnectAttrW
-(
-    SQLHDBC     hdbc,
-    SQLINTEGER  fAttribute,
-    _Out_writes_opt_(_Inexpressible_(cbValueMax))
-    SQLPOINTER  rgbValue,
-    SQLINTEGER  cbValueMax,
-    _Out_opt_
-    SQLINTEGER* pcbValue
-)
+SQLRETURN SQL_API SQLGetConnectAttrW(
+		SQLHDBC        ConnectionHandle,
+		SQLINTEGER     Attribute,
+		_Out_writes_opt_(_Inexpressible_(cbValueMax)) SQLPOINTER ValuePtr,
+		SQLINTEGER     BufferLength,
+		_Out_opt_ SQLINTEGER* StringLengthPtr)
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE5(_IN, "pdpdp", ConnectionHandle, Attribute, ValuePtr,
+		BufferLength, StringLengthPtr);
+	ret = EsSQLGetConnectAttrW(ConnectionHandle, Attribute, ValuePtr, 
+			BufferLength, StringLengthPtr);
+	TRACE6(_OUT, "dpdpdD", ret, ConnectionHandle, Attribute, ValuePtr,
+		BufferLength, StringLengthPtr);
+	return ret;
 }
 
-#endif /* WITH_EMPTY */
 
 SQLRETURN  SQL_API SQLSetEnvAttr(SQLHENV EnvironmentHandle,
 		SQLINTEGER Attribute, 
@@ -334,6 +335,10 @@ SQLRETURN SQL_API SQLGetStmtAttrW(
  *
  */
 
+/*
+ * "Even when freed, an implicitly allocated descriptor remains valid, and
+ * SQLGetDescField can be called on its fields."
+ */
 SQLRETURN SQL_API SQLGetDescFieldW
 (
     SQLHDESC        hdesc,
@@ -410,6 +415,18 @@ SQLRETURN  SQL_API SQLSetDescRec(
 }
 
 #if WITH_EMPTY
+/*
+ * "SQLCopyDesc function is called to copy the fields of one descriptor to
+ * another descriptor. Fields can be copied only to an application descriptor
+ * or an IPD, but not to an IRD. Fields can be copied from any type of
+ * descriptor. Only those fields that are defined for both the source and
+ * target descriptors are copied." (with the exception of SQL_DESC_ALLOC_TYPE
+ * field, which can't be changed)
+ *
+ * "An ARD on one statement handle can serve as the APD on another statement
+ * handle." (= copying data between tables w/o extra copy in App; only if 
+ * SQL_MAX_CONCURRENT_ACTIVITIES > 1)
+ */
 SQLRETURN  SQL_API SQLCopyDesc(SQLHDESC SourceDescHandle,
            SQLHDESC TargetDescHandle)
 {
@@ -509,6 +526,13 @@ SQLRETURN SQL_API SQLNativeSqlW
 	RET_NOT_IMPLEMENTED;
 }
 
+/*
+ * "drivers are capable of setting the fields of the IPD after a parameterized
+ * query has been prepared. The descriptor fields are automatically populated
+ * with information about the parameter, including the data type, precision,
+ * scale, and other characteristics. This is equivalent to supporting
+ * SQLDescribeParam."
+ */
 SQLRETURN SQL_API SQLDescribeParam(
     SQLHSTMT           hstmt,
     SQLUSMALLINT       ipar,

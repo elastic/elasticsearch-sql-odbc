@@ -106,6 +106,7 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			STMH(*OutputHandle)->i_ipd.type = DESC_TYPE_IPD;
 			STMH(*OutputHandle)->ipd = &STMH(*OutputHandle)->i_ipd;
 
+			STMH(*OutputHandle)->options.bookmark = SQL_UB_OFF;
 			/* bind to one row, by default */
 			STMH(*OutputHandle)->options.array_size = 1;
 			DBG("new Statement handle allocated @0x%p.", *OutputHandle);
@@ -157,6 +158,10 @@ SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 			free(Handle);
 			break;
 
+		
+		/* "When an explicitly allocated descriptor is freed, all statement
+		 * handles to which the freed descriptor applied automatically revert
+		 * to the descriptors implicitly allocated for them." */
 		case SQL_HANDLE_DESC:
 			//break;
 			RET_NOT_IMPLEMENTED;
@@ -366,6 +371,18 @@ SQLRETURN EsSQLSetConnectAttrW(
 			DBCH(ConnectionHandle)->timeout = (SQLUINTEGER)(uintptr_t)Value;
 			break;
 
+		/* https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/automatic-population-of-the-ipd */
+		case SQL_ATTR_AUTO_IPD:
+			ERR("trying to set read-only attribute AUTO IPD.");
+			RET_HDIAGS(DBCH(ConnectionHandle), SQL_STATE_HY092);
+		case SQL_ATTR_ENABLE_AUTO_IPD:
+			if (*(SQLUINTEGER *)Value != SQL_FALSE) {
+				ERR("trying to enable unsupported attribute AUTO IPD.");
+				RET_HDIAGS(DBCH(ConnectionHandle), SQL_STATE_HYC00);
+			}
+			WARN("disabling (unsupported) attribute AUTO IPD -- NOOP.");
+			break;
+
 		default:
 			ERR("unknown Attribute: %d.", Attribute);
 			RET_HDIAGS(DBCH(ConnectionHandle), SQL_STATE_HY092);
@@ -373,6 +390,34 @@ SQLRETURN EsSQLSetConnectAttrW(
 
 	RET_STATE(SQL_STATE_00000);
 }
+
+
+SQLRETURN EsSQLGetConnectAttrW(
+		SQLHDBC        ConnectionHandle,
+		SQLINTEGER     Attribute,
+		_Out_writes_opt_(_Inexpressible_(cbValueMax)) SQLPOINTER ValuePtr,
+		SQLINTEGER     BufferLength,
+		_Out_opt_ SQLINTEGER* StringLengthPtr)
+{
+	switch(Attribute) {
+		/* https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/automatic-population-of-the-ipd */
+		case SQL_ATTR_AUTO_IPD:
+			DBG("requested: support for attribute AUTO IPD (false).");
+			/* "Servers that do not support prepared statements will not be
+			 * able to populate the IPD automatically." */
+			*(SQLUINTEGER *)ValuePtr = SQL_FALSE;
+			break;
+
+		default:
+			// FIXME: add the other attributes
+			FIXME;
+			ERR("unknown Attribute type %d.", Attribute);
+			RET_HDIAGS(DBCH(ConnectionHandle), SQL_STATE_HY092);
+	}
+	
+	RET_STATE(SQL_STATE_00000);
+}
+
 
 SQLRETURN EsSQLSetStmtAttrW(
 		SQLHSTMT           StatementHandle,
@@ -383,7 +428,11 @@ SQLRETURN EsSQLSetStmtAttrW(
 	switch(Attribute) {
 		case SQL_ATTR_USE_BOOKMARKS:
 			DBG("setting use-bookmarks to: %u.", *(SQLULEN *)ValuePtr);
-			STMH(StatementHandle)->options.bookmarks = *(SQLULEN *)ValuePtr;
+			if (*(SQLULEN *)ValuePtr != SQL_UB_OFF) {
+				WARN("bookmarks are not supported by driver.");
+				RET_HDIAG(STMH(StatementHandle), SQL_STATE_01000,
+						"bookmarks are not supported by driver", 0);
+			}
 			break;
 
 		/* "If this field is non-null, the driver dereferences the pointer,
@@ -539,6 +588,9 @@ SQLRETURN EsSQLGetStmtAttrW(
 }
 
 /*
+ * "When the application sets the SQL_DESC_TYPE field, the driver checks that
+ * other fields that specify the type are valid and consistent." AND:
+ *
  * "A consistency check is performed by the driver automatically whenever an
  * application sets the SQL_DESC_DATA_PTR field of the APD, ARD, or IPD.
  * Whenever this field is set, the driver checks that the value of the

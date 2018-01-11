@@ -90,6 +90,9 @@ SQLRETURN EsSQLDriverConnectW
 #endif
 }
 
+/* "Implicitly allocated descriptors can be freed only by calling
+ * SQLDisconnect, which drops any statements or descriptors open on the
+ * connection" */
 SQLRETURN EsSQLDisconnect(SQLHDBC ConnectionHandle)
 {
 	// FIXME: disconnect

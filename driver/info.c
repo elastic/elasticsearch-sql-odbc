@@ -330,6 +330,11 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 				SQL_CA1_NEXT | SQL_CA1_ABSOLUTE | SQL_CA1_RELATIVE;
 			break;
 
+		case SQL_BOOKMARK_PERSISTENCE:
+			DBG("requested bookmark persistence (none).");
+			*(SQLUINTEGER *)InfoValue = 0; /* no support */
+			break;
+
 		default:
 			ERR("unknown InfoType: %u.", InfoType);
 			RET_HDIAGS(DBCH(ConnectionHandle), SQL_STATE_HYC00/*096?*/);

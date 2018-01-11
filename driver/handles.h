@@ -77,13 +77,13 @@ typedef struct struct_desc {
 
 typedef struct stmt_options {
 	/* use bookmarks? */
-	SQLULEN bookmarks;
+	SQLULEN bookmarks; //default: SQL_UB_OFF
 	/* offset in bytes to the bound addresses */
 	/* "The driver calculates the buffer address just before it writes to the
 	 * buffers (such as during fetch time)." */
 	SQLULEN *bind_offset; /* TODO: ARD option only? */
 	/* bound array size */
-	SQLULEN array_size; /* TODO: ARD option only */
+	SQLULEN array_size; //default: 1 /* TODO: ARD option only */
 	/* row/column, with block cursors */
 	SQLULEN bind_type; /* TODO: ARD option only */
 	/* row status values after Fetch/Scroll */
@@ -134,6 +134,12 @@ SQLRETURN EsSQLSetConnectAttrW(
 		SQLINTEGER Attribute,
 		_In_reads_bytes_opt_(StringLength) SQLPOINTER Value,
 		SQLINTEGER StringLength);
+SQLRETURN EsSQLGetConnectAttrW(
+		SQLHDBC        ConnectionHandle,
+		SQLINTEGER     Attribute,
+		_Out_writes_opt_(_Inexpressible_(cbValueMax)) SQLPOINTER ValuePtr,
+		SQLINTEGER     BufferLength,
+		_Out_opt_ SQLINTEGER* StringLengthPtr);
 
 
 SQLRETURN EsSQLSetStmtAttrW(
