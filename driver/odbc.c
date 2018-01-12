@@ -316,7 +316,6 @@ SQLRETURN SQL_API SQLGetStmtAttrW(
 	return ret;
 }
 
-#if WITH_EMPTY
 
 /*
  *
@@ -324,49 +323,60 @@ SQLRETURN SQL_API SQLGetStmtAttrW(
  *
  */
 
-/*
- * "Even when freed, an implicitly allocated descriptor remains valid, and
- * SQLGetDescField can be called on its fields."
- */
-SQLRETURN SQL_API SQLGetDescFieldW
-(
-    SQLHDESC        hdesc,
-    SQLSMALLINT     iRecord,
-    SQLSMALLINT     iField,
-    _Out_writes_opt_(_Inexpressible_(cbBufferLength))
-    SQLPOINTER      rgbValue,
-    SQLINTEGER      cbBufferLength,
-    _Out_opt_
-    SQLINTEGER      *StringLength
-)
+SQLRETURN SQL_API SQLGetDescFieldW(
+		SQLHDESC        DescriptorHandle,
+		SQLSMALLINT     RecNumber,
+		SQLSMALLINT     FieldIdentifier,
+		_Out_writes_opt_(_Inexpressible_(BufferLength))
+		SQLPOINTER      ValuePtr,
+		SQLINTEGER      BufferLength,
+		SQLINTEGER      *StringLengthPtr)
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE6(_IN, "pddpdp", DescriptorHandle, RecNumber, FieldIdentifier,
+			ValuePtr, BufferLength, StringLengthPtr);
+	ret = EsSQLGetDescFieldW(DescriptorHandle, RecNumber, FieldIdentifier,
+			ValuePtr, BufferLength, StringLengthPtr);
+	TRACE7(_OUT, "dpddpdD", ret, DescriptorHandle, RecNumber, FieldIdentifier,
+			ValuePtr, BufferLength, StringLengthPtr);
+	return ret;
 }
 
-SQLRETURN SQL_API SQLGetDescRecW
-(
-    SQLHDESC        hdesc,
-    SQLSMALLINT     iRecord,
-    _Out_writes_opt_(cchNameMax) SQLWCHAR* szName,
-    SQLSMALLINT     cchNameMax,
-    _Out_opt_
-    SQLSMALLINT     *pcchName,
-    _Out_opt_
-    SQLSMALLINT     *pfType,
-    _Out_opt_
-    SQLSMALLINT     *pfSubType,
-    _Out_opt_
-    SQLLEN          *pLength,
-    _Out_opt_
-    SQLSMALLINT     *pPrecision,
-    _Out_opt_
-    SQLSMALLINT     *pScale,
-    _Out_opt_
-    SQLSMALLINT     *pNullable
-)
+SQLRETURN SQL_API SQLGetDescRecW(
+		SQLHDESC        DescriptorHandle,
+		SQLSMALLINT     RecNumber,
+		_Out_writes_opt_(BufferLength)
+		SQLWCHAR        *Name,
+		_Out_opt_ 
+		SQLSMALLINT     BufferLength,
+		_Out_opt_ 
+		SQLSMALLINT     *StringLengthPtr,
+		_Out_opt_ 
+		SQLSMALLINT     *TypePtr,
+		_Out_opt_ 
+		SQLSMALLINT     *SubTypePtr,
+		_Out_opt_ 
+		SQLLEN          *LengthPtr,
+		_Out_opt_ 
+		SQLSMALLINT     *PrecisionPtr,
+		_Out_opt_ 
+		SQLSMALLINT     *ScalePtr,
+		_Out_opt_ 
+		SQLSMALLINT     *NullablePtr)
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE11(_IN, "pdpdppppppp", DescriptorHandle, RecNumber, Name, 
+			BufferLength, StringLengthPtr, TypePtr, SubTypePtr, LengthPtr, 
+			PrecisionPtr, ScalePtr, NullablePtr);
+	ret = EsSQLGetDescRecW(DescriptorHandle, RecNumber, Name, 
+			BufferLength, StringLengthPtr, TypePtr, SubTypePtr, LengthPtr, 
+			PrecisionPtr, ScalePtr, NullablePtr);
+	TRACE12(_OUT, "dpdWdDDDDDDD", ret, DescriptorHandle, RecNumber, Name, 
+			BufferLength, StringLengthPtr, TypePtr, SubTypePtr, LengthPtr, 
+			PrecisionPtr, ScalePtr, NullablePtr);
+	return ret;
 }
+
 
 SQLRETURN  SQL_API SQLSetDescFieldW
 (
@@ -377,9 +387,15 @@ SQLRETURN  SQL_API SQLSetDescFieldW
     SQLINTEGER      BufferLength
 )
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE5(_IN, "pddpd", DescriptorHandle, RecNumber, FieldIdentifier, 
+			Value, BufferLength);
+	ret = EsSQLSetDescFieldW(DescriptorHandle, RecNumber, FieldIdentifier, 
+			Value, BufferLength);
+	TRACE6(_OUT, "dpddpd", ret, DescriptorHandle, RecNumber, FieldIdentifier, 
+			Value, BufferLength);
+	return ret;
 }
-#endif /* WITH_EMPTY */
 
 SQLRETURN  SQL_API SQLSetDescRec(
 		SQLHDESC DescriptorHandle,

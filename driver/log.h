@@ -9,6 +9,7 @@
 
 #include <errno.h>
 #include <string.h>
+#include <assert.h>
 
 
 /*
@@ -106,7 +107,6 @@ extern int _esodbc_log_level;
 		_esodbc_log(lvl, werr, __func__, __FILE__, __LINE__, fmt, __VA_ARGS__)
 #define LOG(lvl, fmt, ...)	_LOG(lvl, 0, fmt, __VA_ARGS__)
 
-#define BUG(fmt, ...)	LOG(LOG_LEVEL_ERR, fmt, __VA_ARGS__)
 #define ERR(fmt, ...)	LOG(LOG_LEVEL_ERR, fmt, __VA_ARGS__)
 #define ERRN(fmt, ...)	_LOG(LOG_LEVEL_ERR, 1, fmt, __VA_ARGS__)
 #define WARN(fmt, ...)	LOG(LOG_LEVEL_WARN, fmt, __VA_ARGS__)
@@ -114,6 +114,13 @@ extern int _esodbc_log_level;
 #define DBG(fmt, ...)	LOG(LOG_LEVEL_DBG, fmt, __VA_ARGS__)
 #define TRACE			LOG(LOG_LEVEL_DBG, "===== TR4C3 =====")
 
+#define BUG(fmt, ...) \
+	do { \
+		LOG(LOG_LEVEL_ERR, fmt, __VA_ARGS__); \
+		assert(0); \
+	} while (0)
+
+#define FIXME BUG("not yet implemented"); 
 
 #endif
 
