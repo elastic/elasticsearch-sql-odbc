@@ -16,9 +16,26 @@
  */
 
 #include <assert.h>
+#include <fcntl.h>
 
 #include "handles.h"
 #include "log.h"
+
+#define NO_REC_NR	-1
+
+static void init_desc(esodbc_desc_st *desc, desc_type_et type,
+		SQLSMALLINT alloc_type)
+{
+	memset(desc, 0, sizeof(esodbc_desc_st));
+
+	desc->type = type;
+	desc->alloc_type = alloc_type;
+	/* a user can only alloc an anon type -> can't have IxD on _USER type */
+	assert((alloc_type == SQL_DESC_ALLOC_USER && type == DESC_TYPE_ANON) || 
+			(alloc_type == SQL_DESC_ALLOC_AUTO));
+
+	desc->array_size = ESODBC_DEF_ARRAY_SIZE;
+}
 
 /*
  * The Driver Manager does not call the driver-level environment handle
@@ -31,6 +48,12 @@
  * 3. Finally, the Driver Manager calls the connection function in the driver.
  * 4. SQLDisconnect()
  * 5. SQLFreeHandle()
+ *
+ * "The fields of an IRD have a default value only after the statement has
+ * been prepared or executed and the IRD has been populated, not when the
+ * statement handle or descriptor has been allocated. Until the IRD has been
+ * populated, any attempt to gain access to a field of an IRD will return an
+ * error."
  */
 SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 	SQLHANDLE InputHandle, _Out_ SQLHANDLE *OutputHandle)
@@ -95,20 +118,24 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 				RET_HDIAGS(DBCH(InputHandle), SQL_STATE_HY001); 
 			}
 			STMH(*OutputHandle)->dbc = DBCH(InputHandle);
+
+			init_desc(&STMH(*OutputHandle)->i_ard, DESC_TYPE_ARD, 
+					SQL_DESC_ALLOC_AUTO);
+			init_desc(&STMH(*OutputHandle)->i_ird, DESC_TYPE_IRD, 
+					SQL_DESC_ALLOC_AUTO);
+			init_desc(&STMH(*OutputHandle)->i_apd, DESC_TYPE_APD, 
+					SQL_DESC_ALLOC_AUTO);
+			init_desc(&STMH(*OutputHandle)->i_ipd, DESC_TYPE_IPD, 
+					SQL_DESC_ALLOC_AUTO);
+
 			/* "When a statement is allocated, four descriptor handles are
 			 * automatically allocated and associated with the statement." */
-			STMH(*OutputHandle)->i_ard.type = DESC_TYPE_ARD;
 			STMH(*OutputHandle)->ard = &STMH(*OutputHandle)->i_ard;
-			STMH(*OutputHandle)->i_ird.type = DESC_TYPE_IRD;
 			STMH(*OutputHandle)->ird = &STMH(*OutputHandle)->i_ird;
-			STMH(*OutputHandle)->i_apd.type = DESC_TYPE_APD;
 			STMH(*OutputHandle)->apd = &STMH(*OutputHandle)->i_apd;
-			STMH(*OutputHandle)->i_ipd.type = DESC_TYPE_IPD;
 			STMH(*OutputHandle)->ipd = &STMH(*OutputHandle)->i_ipd;
 
-			STMH(*OutputHandle)->options.bookmark = SQL_UB_OFF;
-			/* bind to one row, by default */
-			STMH(*OutputHandle)->options.array_size = 1;
+			STMH(*OutputHandle)->options.bookmarks = SQL_UB_OFF;
 			DBG("new Statement handle allocated @0x%p.", *OutputHandle);
 			break;
 
@@ -118,6 +145,7 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 				ERRN("failed to callocate descriptor handle.");
 				RET_HDIAGS(DBCH(InputHandle), SQL_STATE_HY001); 
 			}
+			init_desc(*OutputHandle, DESC_TYPE_ANON, SQL_DESC_ALLOC_USER);
 			DBG("new Descriptor handle allocated @0x%p.", *OutputHandle);
 			// FIXME: assign/chain to statement?
 			break;
@@ -425,6 +453,9 @@ SQLRETURN EsSQLSetStmtAttrW(
 		SQLPOINTER         ValuePtr,
 		SQLINTEGER         BufferLength)
 {
+	SQLRETURN ret;
+	esodbc_desc_st *desc;
+
 	switch(Attribute) {
 		case SQL_ATTR_USE_BOOKMARKS:
 			DBG("setting use-bookmarks to: %u.", *(SQLULEN *)ValuePtr);
@@ -447,28 +478,34 @@ SQLRETURN EsSQLSetStmtAttrW(
 			// TODO: call SQLSetDescField(ARD) here?
 			DBG("setting row-bind-offset pointer to: 0x%p.", ValuePtr);
 			STMH(StatementHandle)->options.bind_offset = (SQLULEN *)ValuePtr;
-
-		case SQL_ATTR_ROW_ARRAY_SIZE:
-			DBG("setting array size to: %d.", *(SQLULEN *)ValuePtr);
-			/* "Setting this statement attribute sets the SQL_DESC_ARRAY_SIZE
-			 * field in the ARD header." */
-			// TODO: call SQLSetDescField(ARD) here?
-			if (ESODBC_MAX_ROW_ARRAY_SIZE < *(SQLULEN *)ValuePtr) {
-				STMH(StatementHandle)->options.array_size =
-					ESODBC_MAX_ROW_ARRAY_SIZE;
-				/* TODO: return the fixed size in ValuePtr? */
-				RET_HDIAGS(STMH(StatementHandle), SQL_STATE_01S02);
-			} else {
-				STMH(StatementHandle)->options.array_size = 
-					*(SQLULEN *)ValuePtr;
-			}
 			break;
+
+		do {
+		/* "Setting this statement attribute sets the SQL_DESC_ARRAY_SIZE
+		 * field in the ARD header." */
+		case SQL_ATTR_ROW_ARRAY_SIZE:
+			DBG("setting row array size to: %d.", *(SQLULEN *)ValuePtr);
+			desc = STMH(StatementHandle)->ard;
+			break;
+		/* "Setting this statement attribute sets the SQL_DESC_ARRAY_SIZE
+		 * field in the APD header." */
+		case SQL_ATTR_PARAMSET_SIZE:
+			DBG("setting param set size to: %d.", *(SQLULEN *)ValuePtr);
+			desc = STMH(StatementHandle)->apd;
+			break;
+		} while (0);
+			ret = EsSQLSetDescFieldW(desc, NO_REC_NR, SQL_DESC_ARRAY_SIZE,
+					ValuePtr, BufferLength);
+			if (ret != SQL_SUCCESS) /* _WITH_INFO wud be "error" here */
+				/* if SetDescField() fails, DM will check statement's diag */
+				HDIAG_COPY(STMH(StatementHandle)->ard, STMH(StatementHandle));
+			return ret;
 
 		/* "sets the binding orientation to be used when SQLFetch or
 		 * SQLFetchScroll is called on the associated statement" */
+		/* "Setting this statement attribute sets the SQL_DESC_BIND_TYPE field
+		 * in the ARD header." */
 		case SQL_ATTR_ROW_BIND_TYPE:
-			/* "Setting this statement attribute sets the SQL_DESC_BIND_TYPE
-			 * field in the ARD header." */
 			// TODO: call SQLSetDescField(ARD) here?
 			DBG("setting row bind type to: %d.", *(SQLULEN *)ValuePtr);
 			/* value is SQL_BIND_BY_COLUMN (0UL) or struct len  */
@@ -484,18 +521,18 @@ SQLRETURN EsSQLSetStmtAttrW(
 		/* "an array of SQLUSMALLINT values containing row status values after
 		 * a call to SQLFetch or SQLFetchScroll." */
 		/* https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/row-status-array */
+		/* "Setting this statement attribute sets the
+		 * SQL_DESC_ARRAY_STATUS_PTR field in the IRD header." */
 		case SQL_ATTR_ROW_STATUS_PTR:
-			/* "Setting this statement attribute sets the
-			 * SQL_DESC_ARRAY_STATUS_PTR field in the IRD header." */
 			// TODO: call SQLSetDescField(IRD) here?
 			DBG("setting row status pointer to: 0x%p.", ValuePtr);
 			STMH(StatementHandle)->options.row_status = 
 				(SQLUSMALLINT *)ValuePtr;
 			break;
 
+		/* "Setting this statement attribute sets the
+		 * SQL_DESC_ROWS_PROCESSED_PTR field in the IRD header." */
 		case SQL_ATTR_ROWS_FETCHED_PTR:
-			/* "Setting this statement attribute sets the
-			 * SQL_DESC_ROWS_PROCESSED_PTR field in the IRD header." */
 			// TODO: call SQLSetDescField(IRD) here?
 			DBG("setting rows fetched pointer to: 0x%p.", ValuePtr);
 			STMH(StatementHandle)->options.rows_fetched = (SQLULEN *)ValuePtr;
@@ -520,7 +557,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 				 * descriptor handle." */
 				/* TODO: check if this is implicitely allocated in all
 				statements??? */
-				ERR("trying to set A*D (%d) descriptor to the wrong implicit"
+				ERR("trying to set AxD (%d) descriptor to the wrong implicit"
 						" descriptor @0x%p.", Attribute, ValuePtr);
 				RET_HDIAGS(STMH(StatementHandle), SQL_STATE_HY017);
 			} else {
@@ -535,13 +572,13 @@ SQLRETURN EsSQLSetStmtAttrW(
 
 		case SQL_ATTR_IMP_ROW_DESC:
 		case SQL_ATTR_IMP_PARAM_DESC:
-			ERR("trying to set I*D (%d) descriptor (to @0x%p).", Attribute, 
+			ERR("trying to set IxD (%d) descriptor (to @0x%p).", Attribute, 
 					ValuePtr);
 			RET_HDIAGS(STMH(StatementHandle), SQL_STATE_HY017);
 
 		default:
 			// FIXME
-			BUG("not fully implemented.");
+			FIXME;
 			ERR("unknown Attribute: %d.", Attribute);
 			RET_HDIAGS(STMH(StatementHandle), SQL_STATE_HY092);
 	}
@@ -586,6 +623,265 @@ SQLRETURN EsSQLGetStmtAttrW(
 
 	RET_STATE(SQL_STATE_00000);
 }
+
+
+
+
+/*
+ * Access permission matrix (TSV) lifted and rearanged from:
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetdescfield-function#fieldidentifier-argument
+ *
+ * Name		ARD	APD	IRD	IPD
+ * SQL_DESC_ALLOC_TYPE		r	r	r	r
+ * SQL_DESC_ARRAY_STATUS_PTR		rw	rw	rw	rw
+ * SQL_DESC_ROWS_PROCESSED_PTR				rw	rw
+ * SQL_DESC_PARAMETER_TYPE					rw
+ * SQL_DESC_ARRAY_SIZE		rw	rw		
+ * SQL_DESC_BIND_OFFSET_PTR		rw	rw		
+ * SQL_DESC_BIND_TYPE		rw	rw		
+ * SQL_DESC_DATA_PTR		rw	rw		
+ * SQL_DESC_INDICATOR_PTR		rw	rw		
+ * SQL_DESC_OCTET_LENGTH_PTR		rw	rw		
+ * SQL_DESC_AUTO_UNIQUE_VALUE				r	
+ * SQL_DESC_BASE_COLUMN_NAME				r	
+ * SQL_DESC_BASE_TABLE_NAME				r	
+ * SQL_DESC_DISPLAY_SIZE				r	
+ * SQL_DESC_CATALOG_NAME				r	
+ * SQL_DESC_LABEL				r	
+ * SQL_DESC_LITERAL_PREFIX				r	
+ * SQL_DESC_LITERAL_SUFFIX				r	
+ * SQL_DESC_SCHEMA_NAME				r	
+ * SQL_DESC_SEARCHABLE				r	
+ * SQL_DESC_TABLE_NAME				r	
+ * SQL_DESC_UPDATABLE				r	
+ * SQL_DESC_CASE_SENSITIVE				r	r
+ * SQL_DESC_FIXED_PREC_SCALE				r	r
+ * SQL_DESC_LOCAL_TYPE_NAME				r	r
+ * SQL_DESC_NULLABLE				r	r
+ * SQL_DESC_ROWVER				r	r
+ * SQL_DESC_UNSIGNED				r	r
+ * SQL_DESC_TYPE_NAME				r	r
+ * SQL_DESC_NAME				r	rw
+ * SQL_DESC_UNNAMED				r	rw
+ * SQL_DESC_COUNT		rw	rw	r	rw
+ * SQL_DESC_CONCISE_TYPE		rw	rw	r	rw
+ * SQL_DESC_DATETIME_INTERVAL_CODE		rw	rw	r	rw
+ * SQL_DESC_DATETIME_INTERVAL_PRECISION		rw	rw	r	rw
+ * SQL_DESC_LENGTH		rw	rw	r	rw
+ * SQL_DESC_NUM_PREC_RADIX		rw	rw	r	rw
+ * SQL_DESC_OCTET_LENGTH		rw	rw	r	rw
+ * SQL_DESC_PRECISION		rw	rw	r	rw
+ * SQL_DESC_SCALE		rw	rw	r	rw
+ * SQL_DESC_TYPE		rw	rw	r	rw
+ */
+// TODO: individual tests just for this
+static BOOL check_access(desc_type_et desc_type, SQLSMALLINT field_id, 
+		char mode /* O_RDONLY | O_RDWR */)
+{
+	BOOL ret;
+
+	if (desc_type == DESC_TYPE_ANON) {
+		BUG("can't check permissions against ANON descryptor type.");
+		return FALSE;
+	}
+	assert(mode == O_RDONLY || mode == O_RDWR);
+
+	switch (field_id) {
+		case SQL_DESC_ALLOC_TYPE:
+			ret = mode == O_RDONLY; 
+			break;
+		case SQL_DESC_ARRAY_STATUS_PTR:
+			ret = TRUE;
+			break;
+		case SQL_DESC_ROWS_PROCESSED_PTR:
+			ret = desc_type == DESC_TYPE_IRD || desc_type == DESC_TYPE_IPD;
+			break;
+		case SQL_DESC_PARAMETER_TYPE:
+			ret = desc_type == DESC_TYPE_IPD;
+			break;
+
+		case SQL_DESC_ARRAY_SIZE:
+		case SQL_DESC_BIND_OFFSET_PTR:
+		case SQL_DESC_BIND_TYPE:
+		case SQL_DESC_DATA_PTR:
+		case SQL_DESC_INDICATOR_PTR:
+		case SQL_DESC_OCTET_LENGTH_PTR:
+			ret = desc_type == DESC_TYPE_ARD || desc_type == DESC_TYPE_APD;
+			break;
+
+		case SQL_DESC_AUTO_UNIQUE_VALUE:
+		case SQL_DESC_BASE_COLUMN_NAME:
+		case SQL_DESC_BASE_TABLE_NAME:
+		case SQL_DESC_DISPLAY_SIZE:
+		case SQL_DESC_CATALOG_NAME:
+		case SQL_DESC_LABEL:
+		case SQL_DESC_LITERAL_PREFIX:
+		case SQL_DESC_LITERAL_SUFFIX:
+		case SQL_DESC_SCHEMA_NAME:
+		case SQL_DESC_SEARCHABLE:
+		case SQL_DESC_TABLE_NAME:
+		case SQL_DESC_UPDATABLE:
+			ret = desc_type == DESC_TYPE_ARD && mode == O_RDONLY;
+			break;
+
+		case SQL_DESC_CASE_SENSITIVE:
+		case SQL_DESC_FIXED_PREC_SCALE:
+		case SQL_DESC_LOCAL_TYPE_NAME:
+		case SQL_DESC_NULLABLE:
+		case SQL_DESC_ROWVER:
+		case SQL_DESC_UNSIGNED:
+		case SQL_DESC_TYPE_NAME:
+			ret = mode == O_RDONLY && 
+				(desc_type == DESC_TYPE_IRD || desc_type == DESC_TYPE_IPD);
+			break;
+
+		case SQL_DESC_NAME:
+		case SQL_DESC_UNNAMED:
+			ret = desc_type == DESC_TYPE_IPD || 
+				(desc_type == DESC_TYPE_IPD && mode == O_RDONLY);
+			break;
+
+		case SQL_DESC_COUNT:
+		case SQL_DESC_CONCISE_TYPE:
+		case SQL_DESC_DATETIME_INTERVAL_CODE:
+		case SQL_DESC_DATETIME_INTERVAL_PRECISION:
+		case SQL_DESC_LENGTH:
+		case SQL_DESC_NUM_PREC_RADIX:
+		case SQL_DESC_OCTET_LENGTH:
+		case SQL_DESC_PRECISION:
+		case SQL_DESC_SCALE:
+		case SQL_DESC_TYPE:
+			switch (desc_type) {
+				case DESC_TYPE_ARD:
+				case DESC_TYPE_APD:
+				case DESC_TYPE_IPD:
+					ret = TRUE;
+					break;
+				case DESC_TYPE_IRD:
+					ret = mode == O_RDONLY;
+					break;
+				//default: ANON mode checked above;
+			}
+			break;
+
+		default:
+			BUG("unknown field identifier: %d.", field_id);
+			ret = FALSE;
+	}
+	LOG(ret ? LOG_LEVEL_DBG : LOG_LEVEL_ERR,
+			"Descriptor type: %d, Field ID: %d, mode=%s => grant: %s.", 
+			desc_type, field_id, 
+			mode == O_RDONLY ? "read" : "read/write",
+			ret ? "OK" : "NOT");
+	return ret;
+}
+
+/*
+ * "Even when freed, an implicitly allocated descriptor remains valid, and
+ * SQLGetDescField can be called on its fields."
+ *
+ * "In a subsequent call to SQLGetDescField or SQLGetDescRec, the driver is
+ * not required to return the value that SQL_DESC_DATA_PTR was set to."
+ */
+SQLRETURN EsSQLGetDescFieldW(
+		SQLHDESC        DescriptorHandle,
+		SQLSMALLINT     RecNumber,
+		SQLSMALLINT     FieldIdentifier,
+		_Out_writes_opt_(_Inexpressible_(BufferLength))
+		SQLPOINTER      ValuePtr,
+		SQLINTEGER      BufferLength,
+		SQLINTEGER      *StringLengthPtr)
+{
+	RET_NOT_IMPLEMENTED;
+}
+
+/*
+ * "The fields of an IRD have a default value only after the statement has
+ * been prepared or executed and the IRD has been populated, not when the
+ * statement handle or descriptor has been allocated. Until the IRD has been
+ * populated, any attempt to gain access to a field of an IRD will return an
+ * error."
+ *
+ * "In a subsequent call to SQLGetDescField or SQLGetDescRec, the driver is
+ * not required to return the value that SQL_DESC_DATA_PTR was set to."
+ */
+SQLRETURN EsSQLGetDescRecW(
+		SQLHDESC        DescriptorHandle,
+		SQLSMALLINT     RecNumber,
+		_Out_writes_opt_(BufferLength)
+		SQLWCHAR        *Name,
+		_Out_opt_ 
+		SQLSMALLINT     BufferLength,
+		_Out_opt_ 
+		SQLSMALLINT     *StringLengthPtr,
+		_Out_opt_ 
+		SQLSMALLINT     *TypePtr,
+		_Out_opt_ 
+		SQLSMALLINT     *SubTypePtr,
+		_Out_opt_ 
+		SQLLEN          *LengthPtr,
+		_Out_opt_ 
+		SQLSMALLINT     *PrecisionPtr,
+		_Out_opt_ 
+		SQLSMALLINT     *ScalePtr,
+		_Out_opt_ 
+		SQLSMALLINT     *NullablePtr)
+{
+	RET_NOT_IMPLEMENTED;
+}
+
+/*
+ * "If an application calls SQLSetDescField to set any field other than
+ * SQL_DESC_COUNT or the deferred fields SQL_DESC_DATA_PTR,
+ * SQL_DESC_OCTET_LENGTH_PTR, or SQL_DESC_INDICATOR_PTR, the record becomes
+ * unbound."
+ *
+ * "When SQLSetDescField is called to set a header field, the RecNumber
+ * argument is ignored."
+ *
+ * The "driver sets data type attribute fields to the appropriate default
+ * values for the data type" (once either of SQL_DESC_TYPE,
+ * SQL_DESC_CONCISE_TYPE, or SQL_DESC_DATETIME_INTERVAL_CODE are set).
+ *
+ * The "application can set SQL_DESC_DATA_PTR. This prompts a consistency
+ * check of descriptor fields."
+ *
+ * "If the application changes the data type or attributes after setting the
+ * SQL_DESC_DATA_PTR field, the driver sets SQL_DESC_DATA_PTR to a null
+ * pointer, unbinding the record."
+ */
+SQLRETURN EsSQLSetDescFieldW(
+		SQLHDESC        DescriptorHandle,
+		SQLSMALLINT     RecNumber,
+		SQLSMALLINT     FieldIdentifier,
+		SQLPOINTER      Value,
+		SQLINTEGER      BufferLength)
+{
+
+	if (! check_access(DSCH(DescriptorHandle)->type, FieldIdentifier, O_RDWR))
+		RET_HDIAGS(DSCH(DescriptorHandle), SQL_STATE_HY091);
+
+	switch(FieldIdentifier) {
+		case SQL_DESC_ARRAY_SIZE:
+			if (ESODBC_MAX_ROW_ARRAY_SIZE < *(SQLULEN *)Value) {
+				DSCH(DescriptorHandle)->array_size = ESODBC_MAX_ROW_ARRAY_SIZE;
+				/* TODO: return the fixed size in Value?? */
+				RET_HDIAGS(DSCH(DescriptorHandle), SQL_STATE_01S02);
+			} else {
+				DSCH(DescriptorHandle)->array_size = *(SQLULEN *)Value;
+			}
+			break;
+
+		default:
+			// FIXME
+			FIXME;
+			ERR("unknown FieldIdentifier: %d.", FieldIdentifier);
+			RET_HDIAGS(DSCH(DescriptorHandle), SQL_STATE_HY092);
+	}
+	
+	RET_STATE(SQL_STATE_00000);
+}
+
 
 /*
  * "When the application sets the SQL_DESC_TYPE field, the driver checks that

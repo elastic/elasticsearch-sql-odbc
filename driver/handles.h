@@ -59,6 +59,45 @@ typedef struct struct_dbc {
 	// TODO: statements?
 } esodbc_dbc_st;
 
+typedef struct desc_rec {
+	/* record fields */
+	SQLINTEGER		auto_unique_value;
+	SQLCHAR			*base_column_name;
+	SQLCHAR			*base_table_name;
+	SQLINTEGER		case_sensitive;
+	SQLCHAR			*catalog_name;
+	SQLSMALLINT		concise_type;
+	SQLPOINTER		data_ptr; /* array, if .array_size > 1 */
+	SQLSMALLINT		datetime_interval_code;
+	SQLINTEGER		datetime_interval_precision;
+	SQLLEN			display_size;
+	SQLSMALLINT		fixed_prec_scale;
+	SQLLEN			*indicator_ptr; /* array, if .array_size > 1 */
+	SQLCHAR			*label;
+	SQLULEN			length;
+	SQLCHAR			*literal_prefix;
+	SQLCHAR			*literal_suffix;
+	SQLCHAR			*local_type_name;
+	SQLCHAR			*name;
+	SQLSMALLINT		nullable;
+	SQLINTEGER		num_prec_radix;
+	SQLLEN			octet_length;
+	SQLLEN			*octet_length_ptr; /* array, if .array_size > 1 */
+	SQLSMALLINT		parameter_type;
+	SQLSMALLINT		precision;
+	SQLSMALLINT		rowver;
+	SQLSMALLINT		scale;
+	SQLCHAR			*schema_name;
+	SQLSMALLINT		searchable;
+	SQLCHAR			*table_name;
+	SQLSMALLINT		type;
+	SQLCHAR			*type_name;
+	SQLSMALLINT		unnamed;
+	SQLSMALLINT		usigned;
+	SQLSMALLINT		updatable;
+	/* /record fields */
+} desc_rec_st;
+
 
 typedef enum {
 	DESC_TYPE_ANON, /* SQLAllocHandle()'ed */
@@ -72,8 +111,23 @@ typedef struct struct_desc {
 	//esodbc_stmt_st *stmt;
 	esodbc_diag_st diag;
 	desc_type_et type; /* APD, IPD, ARD, IRD */
-} esodbc_desc_st;
 
+	/* header fields */
+	/* descriptor was allocated automatically by the driver or explicitly by
+	 * the application */
+	SQLSMALLINT		alloc_type;
+	/* ARDs: the number of rows in the rowset.
+	 * APDs: the number of values for each parameter. */
+	SQLULEN			array_size;
+	SQLUSMALLINT	*array_status_ptr;
+	SQLLEN			*bind_offset_ptr;
+	SQLINTEGER		bind_type;
+	SQLSMALLINT		count;
+	SQLULEN			*rows_processed_ptr;
+	/* /header fields */
+
+	//desc_rec_st *recs;
+} esodbc_desc_st;
 
 typedef struct stmt_options {
 	/* use bookmarks? */
@@ -82,8 +136,6 @@ typedef struct stmt_options {
 	/* "The driver calculates the buffer address just before it writes to the
 	 * buffers (such as during fetch time)." */
 	SQLULEN *bind_offset; /* TODO: ARD option only? */
-	/* bound array size */
-	SQLULEN array_size; //default: 1 /* TODO: ARD option only */
 	/* row/column, with block cursors */
 	SQLULEN bind_type; /* TODO: ARD option only */
 	/* row status values after Fetch/Scroll */
@@ -91,6 +143,14 @@ typedef struct stmt_options {
 	/* number of rows fetched */
 	SQLULEN *rows_fetched; /* TODO: IRD option only */
 } stmt_options_st;
+
+/*
+ * "The fields of an IRD have a default value only after the statement has
+ * been prepared or executed and the IRD has been populated, not when the
+ * statement handle or descriptor has been allocated. Until the IRD has been
+ * populated, any attempt to gain access to a field of an IRD will return an
+ * error."
+ */
 
 typedef struct struct_stmt {
 	esodbc_dbc_st *dbc;
@@ -114,6 +174,7 @@ typedef struct struct_stmt {
 // FIXME: review@alpha
 #define ESODBC_DBC_CONN_TIMEOUT		120
 #define ESODBC_MAX_ROW_ARRAY_SIZE	128 /* TODO: should there be a max? */
+#define ESODBC_DEF_ARRAY_SIZE		1
 
 SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 	SQLHANDLE InputHandle, _Out_ SQLHANDLE *OutputHandle);
@@ -154,6 +215,42 @@ SQLRETURN EsSQLGetStmtAttrW(
 		SQLINTEGER   BufferLength,
 		SQLINTEGER  *StringLengthPtr);
 
+SQLRETURN EsSQLGetDescFieldW(
+		SQLHDESC        DescriptorHandle,
+		SQLSMALLINT     RecNumber,
+		SQLSMALLINT     FieldIdentifier,
+		_Out_writes_opt_(_Inexpressible_(BufferLength))
+		SQLPOINTER      ValuePtr,
+		SQLINTEGER      BufferLength,
+		SQLINTEGER      *StringLengthPtr);
+SQLRETURN EsSQLGetDescRecW(
+		SQLHDESC        DescriptorHandle,
+		SQLSMALLINT     RecNumber,
+		_Out_writes_opt_(BufferLength)
+		SQLWCHAR        *Name,
+		_Out_opt_ 
+		SQLSMALLINT     BufferLength,
+		_Out_opt_ 
+		SQLSMALLINT     *StringLengthPtr,
+		_Out_opt_ 
+		SQLSMALLINT     *TypePtr,
+		_Out_opt_ 
+		SQLSMALLINT     *SubTypePtr,
+		_Out_opt_ 
+		SQLLEN          *LengthPtr,
+		_Out_opt_ 
+		SQLSMALLINT     *PrecisionPtr,
+		_Out_opt_ 
+		SQLSMALLINT     *ScalePtr,
+		_Out_opt_ 
+		SQLSMALLINT     *NullablePtr);
+
+SQLRETURN EsSQLSetDescFieldW(
+		SQLHDESC        DescriptorHandle,
+		SQLSMALLINT     RecNumber,
+		SQLSMALLINT     FieldIdentifier,
+		SQLPOINTER      Value,
+		SQLINTEGER      BufferLength);
 SQLRETURN EsSQLSetDescRec(
 		SQLHDESC DescriptorHandle,
 		SQLSMALLINT RecNumber,
@@ -177,6 +274,8 @@ SQLRETURN EsSQLSetDescRec(
 /* similar to RET_HDIAG, but only post the state */
 #define RET_HDIAGS(_hp/*handle ptr*/, _s/*tate*/) \
 	RET_DIAG(&(_hp)->diag, _s, NULL, 0)
+/* copy the diagnostics from one handler to the other */
+#define HDIAG_COPY(_s, _d)	(_s)->diag = (_d)->diag
 
 /* return the code associated with the given state (and debug-log) */
 #define RET_STATE(_s)	\
@@ -189,15 +288,8 @@ SQLRETURN EsSQLSetDescRec(
 
 #define RET_NOT_IMPLEMENTED	\
 	do { \
-		BUG("not implemented.");\
+		ERR("not implemented.");\
 		return SQL_ERROR; \
-	} while (0)
-
-#include <assert.h>
-#define FIXME \
-	do { \
-		BUG("not yet implemented"); \
-		assert(0); \
 	} while (0)
 
 #endif /* __HANDLES_H__ */
