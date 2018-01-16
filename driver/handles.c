@@ -10,7 +10,6 @@
 #include "handles.h"
 #include "log.h"
 
-#define NO_REC_NR	-1
 
 static void init_desc(esodbc_desc_st *desc, desc_type_et type,
 		SQLSMALLINT alloc_type)
@@ -24,6 +23,12 @@ static void init_desc(esodbc_desc_st *desc, desc_type_et type,
 			(alloc_type == SQL_DESC_ALLOC_AUTO));
 
 	desc->array_size = ESODBC_DEF_ARRAY_SIZE;
+	desc->array_status_ptr = NULL; /* formal, 0'd above */
+	desc->bind_offset_ptr = NULL; /* formal, 0'd above */
+	if (type == DESC_TYPE_ARD || type == DESC_TYPE_APD)
+		desc->bind_type = SQL_BIND_BY_COLUMN;
+	desc->count = 0; /* formal, 0'd above */
+	desc->rows_processed_ptr = NULL; /* formal, 0'd above */
 }
 
 /*
@@ -124,7 +129,7 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			STMH(*OutputHandle)->apd = &STMH(*OutputHandle)->i_apd;
 			STMH(*OutputHandle)->ipd = &STMH(*OutputHandle)->i_ipd;
 
-			STMH(*OutputHandle)->options.bookmarks = SQL_UB_OFF;
+			STMH(*OutputHandle)->bookmarks = SQL_UB_OFF;
 			DBG("new Statement handle allocated @0x%p.", *OutputHandle);
 			break;
 
@@ -206,6 +211,11 @@ SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
  * "To unbind all columns, an application calls SQLFreeStmt with fOption set
  * to SQL_UNBIND. This can also be accomplished by setting the SQL_DESC_COUNT
  * field of the ARD to zero.
+ *
+ * "If all columns are unbound by calling SQLFreeStmt with the SQL_UNBIND
+ * option, the SQL_DESC_COUNT fields in the ARD and IRD are set to 0. If
+ * SQLFreeStmt is called with the SQL_RESET_PARAMS option, the SQL_DESC_COUNT
+ * fields in the APD and IPD are set to 0." (.count)
  * */
 SQLRETURN EsSQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option)
 {
@@ -455,6 +465,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 			}
 			break;
 
+		do {
 		/* "If this field is non-null, the driver dereferences the pointer,
 		 * adds the dereferenced value to each of the deferred fields in the
 		 * descriptor record (SQL_DESC_DATA_PTR, SQL_DESC_INDICATOR_PTR, and
@@ -464,10 +475,20 @@ SQLRETURN EsSQLSetStmtAttrW(
 			/* offset in bytes */
 			/* "Setting this statement attribute sets the
 			 * SQL_DESC_BIND_OFFSET_PTR field in the ARD header." */
-			// TODO: call SQLSetDescField(ARD) here?
 			DBG("setting row-bind-offset pointer to: 0x%p.", ValuePtr);
-			STMH(StatementHandle)->options.bind_offset = (SQLULEN *)ValuePtr;
+			desc = STMH(StatementHandle)->ard;
 			break;
+		case SQL_ATTR_PARAM_BIND_OFFSET_PTR:
+			DBG("setting param-bind-offset pointer to: 0x%p.", ValuePtr);
+			desc = STMH(StatementHandle)->apd;
+			break;
+		} while (0);
+			ret = EsSQLSetDescFieldW(desc, NO_REC_NR, SQL_DESC_BIND_OFFSET_PTR,
+					ValuePtr, BufferLength);
+			if (ret != SQL_SUCCESS) /* _WITH_INFO wud be "error" here */
+				/* if SetDescField() fails, DM will check statement's diag */
+				HDIAG_COPY(desc, STMH(StatementHandle));
+			return ret;
 
 		do {
 		/* "Setting this statement attribute sets the SQL_DESC_ARRAY_SIZE
@@ -487,15 +508,15 @@ SQLRETURN EsSQLSetStmtAttrW(
 					ValuePtr, BufferLength);
 			if (ret != SQL_SUCCESS) /* _WITH_INFO wud be "error" here */
 				/* if SetDescField() fails, DM will check statement's diag */
-				HDIAG_COPY(STMH(StatementHandle)->ard, STMH(StatementHandle));
+				HDIAG_COPY(desc, STMH(StatementHandle));
 			return ret;
 
+		do {
 		/* "sets the binding orientation to be used when SQLFetch or
 		 * SQLFetchScroll is called on the associated statement" */
 		/* "Setting this statement attribute sets the SQL_DESC_BIND_TYPE field
 		 * in the ARD header." */
 		case SQL_ATTR_ROW_BIND_TYPE:
-			// TODO: call SQLSetDescField(ARD) here?
 			DBG("setting row bind type to: %d.", *(SQLULEN *)ValuePtr);
 			/* value is SQL_BIND_BY_COLUMN (0UL) or struct len  */
 			/* "the driver can calculate the address of the data for a
@@ -504,9 +525,23 @@ SQLRETURN EsSQLSetStmtAttrW(
 			 * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/column-wise-binding
 			 * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/row-wise-binding
 			 */
-			STMH(StatementHandle)->options.bind_type = *(SQLULEN *)ValuePtr;
+			desc = STMH(StatementHandle)->ard;
 			break;
+		case SQL_ATTR_PARAM_BIND_TYPE:
+			DBG("setting param bind type to: %d.", *(SQLULEN *)ValuePtr);
+			desc = STMH(StatementHandle)->apd;
+			break;
+		} while (0);
+			ret = EsSQLSetDescFieldW(desc, NO_REC_NR, SQL_DESC_BIND_TYPE,
+					/* note: SetStmt()'s spec defineds the ValuePtr as
+					 * SQLULEN, but SetDescField()'s as SQLUINTEGER.. */
+					ValuePtr, BufferLength);
+			if (ret != SQL_SUCCESS) /* _WITH_INFO wud be "error" here */
+				/* if SetDescField() fails, DM will check statement's diag */
+				HDIAG_COPY(desc, STMH(StatementHandle));
+			return ret;
 
+		do {
 		/* "an array of SQLUSMALLINT values containing row status values after
 		 * a call to SQLFetch or SQLFetchScroll." */
 		/* https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/row-status-array */
@@ -515,17 +550,48 @@ SQLRETURN EsSQLSetStmtAttrW(
 		case SQL_ATTR_ROW_STATUS_PTR:
 			// TODO: call SQLSetDescField(IRD) here?
 			DBG("setting row status pointer to: 0x%p.", ValuePtr);
-			STMH(StatementHandle)->options.row_status = 
-				(SQLUSMALLINT *)ValuePtr;
+			desc = STMH(StatementHandle)->ird;
 			break;
+		case SQL_ATTR_PARAM_STATUS_PTR:
+			DBG("setting param status pointer to: 0x%p.", ValuePtr);
+			desc = STMH(StatementHandle)->ipd;
+			break;
+		case SQL_ATTR_ROW_OPERATION_PTR:
+			DBG("setting row operation array pointer to: 0x%p.", ValuePtr);
+			desc = STMH(StatementHandle)->ard;
+			break;
+		case SQL_ATTR_PARAM_OPERATION_PTR:
+			DBG("setting param operation array pointer to: 0x%p.", ValuePtr);
+			desc = STMH(StatementHandle)->apd;
+			break;
+		} while (0);
+			ret = EsSQLSetDescFieldW(desc, NO_REC_NR, 
+					SQL_DESC_ARRAY_STATUS_PTR, ValuePtr, BufferLength);
+			if (ret != SQL_SUCCESS) /* _WITH_INFO wud be "error" here */
+				/* if SetDescField() fails, DM will check statement's diag */
+				HDIAG_COPY(desc, STMH(StatementHandle));
+			return ret;
 
+		do {
 		/* "Setting this statement attribute sets the
 		 * SQL_DESC_ROWS_PROCESSED_PTR field in the IRD header." */
 		case SQL_ATTR_ROWS_FETCHED_PTR:
-			// TODO: call SQLSetDescField(IRD) here?
 			DBG("setting rows fetched pointer to: 0x%p.", ValuePtr);
-			STMH(StatementHandle)->options.rows_fetched = (SQLULEN *)ValuePtr;
+			/* NOTE: documentation writes about "ARD", while also stating that
+			 * this field is unused in the ARD. I assume the former as wrong */
+			desc = STMH(StatementHandle)->ird;
 			break;
+		case SQL_ATTR_PARAMS_PROCESSED_PTR:
+			DBG("setting params processed pointer to: 0x%p.", ValuePtr);
+			desc = STMH(StatementHandle)->ipd;
+			break;
+		} while (0);
+			ret = EsSQLSetDescFieldW(desc, NO_REC_NR, 
+					SQL_DESC_ROWS_PROCESSED_PTR, ValuePtr, BufferLength);
+			if (ret != SQL_SUCCESS) /* _WITH_INFO wud be "error" here */
+				/* if SetDescField() fails, DM will check statement's diag */
+				HDIAG_COPY(desc, STMH(StatementHandle));
+			return ret;
 
 		case SQL_ATTR_APP_ROW_DESC:
 			if ((ValuePtr == (SQLPOINTER *)&STMH(StatementHandle)->i_ard) || 
@@ -614,7 +680,158 @@ SQLRETURN EsSQLGetStmtAttrW(
 }
 
 
+/*
+ * SQL_DESC_BASE_COLUMN_NAME	pointer to a character string
+ * SQL_DESC_BASE_TABLE_NAME	pointer to a character string
+ * SQL_DESC_CATALOG_NAME	pointer to a character string
+ * SQL_DESC_LABEL	pointer to a character string
+ * SQL_DESC_LITERAL_PREFIX	pointer to a character string
+ * SQL_DESC_LITERAL_SUFFIX	pointer to a character string
+ * SQL_DESC_LOCAL_TYPE_NAME	pointer to a character string
+ * SQL_DESC_NAME	pointer to a character string
+ * SQL_DESC_SCHEMA_NAME	pointer to a character string
+ * SQL_DESC_TABLE_NAME	pointer to a character string
+ * SQL_DESC_TYPE_NAME	pointer to a character string
+ * SQL_DESC_INDICATOR_PTR	pointer to a binary buffer
+ * SQL_DESC_OCTET_LENGTH_PTR	pointer to a binary buffer
+ * SQL_DESC_BIND_OFFSET_PTR	pointer to a binary buffer
+ * SQL_DESC_ROWS_PROCESSED_PTR	pointer to a binary buffer
+ * SQL_DESC_ARRAY_STATUS_PTR	pointer to a binary buffer
+ * SQL_DESC_DATA_PTR	pointer to a value,
+ *                      other than a character string or binary string
+ * SQL_DESC_BIND_TYPE	SQL_IS_INTEGER
+ * SQL_DESC_AUTO_UNIQUE_VALUE	SQL_IS_INTEGER
+ * SQL_DESC_CASE_SENSITIVE	SQL_IS_INTEGER
+ * SQL_DESC_DATETIME_INTERVAL_PRECISION	SQL_IS_INTEGER
+ * SQL_DESC_NUM_PREC_RADIX	SQL_IS_INTEGER
+ * SQL_DESC_DISPLAY_SIZE	SQL_IS_INTEGER
+ * SQL_DESC_OCTET_LENGTH	SQL_IS_INTEGER
+ * SQL_DESC_ARRAY_SIZE	SQL_IS_UINTEGER
+ * SQL_DESC_LENGTH	SQL_IS_UINTEGER
+ * SQL_DESC_ALLOC_TYPE	SQL_IS_SMALLINT
+ * SQL_DESC_COUNT	SQL_IS_SMALLINT
+ * SQL_DESC_CONCISE_TYPE	SQL_IS_SMALLINT
+ * SQL_DESC_DATETIME_INTERVAL_CODE	SQL_IS_SMALLINT
+ * SQL_DESC_FIXED_PREC_SCALE	SQL_IS_SMALLINT
+ * SQL_DESC_NULLABLE	SQL_IS_SMALLINT
+ * SQL_DESC_PARAMETER_TYPE	SQL_IS_SMALLINT
+ * SQL_DESC_PRECISION	SQL_IS_SMALLINT
+ * SQL_DESC_ROWVER	SQL_IS_SMALLINT
+ * SQL_DESC_SCALE	SQL_IS_SMALLINT
+ * SQL_DESC_SEARCHABLE	SQL_IS_SMALLINT
+ * SQL_DESC_TYPE	SQL_IS_SMALLINT
+ * SQL_DESC_UNNAMED	SQL_IS_SMALLINT
+ * SQL_DESC_UNSIGNED	SQL_IS_SMALLINT
+ * SQL_DESC_UPDATABLE	SQL_IS_SMALLINT
+ */
+static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
+		SQLINTEGER buff_len)
+{
+	switch (field_id) {
+		/* pointer to a character string */
+		case SQL_DESC_BASE_COLUMN_NAME:
+		case SQL_DESC_BASE_TABLE_NAME:
+		case SQL_DESC_CATALOG_NAME:
+		case SQL_DESC_LABEL:
+		case SQL_DESC_LITERAL_PREFIX:
+		case SQL_DESC_LITERAL_SUFFIX:
+		case SQL_DESC_LOCAL_TYPE_NAME:
+		case SQL_DESC_NAME:
+		case SQL_DESC_SCHEMA_NAME:
+		case SQL_DESC_TABLE_NAME:
+		case SQL_DESC_TYPE_NAME:
+			if (buff_len < 0 && buff_len != SQL_NTS) {
+				ERR("buffer is for a character string and its length is "
+						"negative (%d).", buff_len);
+				return SQL_STATE_HY090;
+			}
+			return SQL_STATE_00000;
+	}
 
+	if (! buff) {
+		ERR("null output buffer provided for non-string field (%d).", 
+				field_id);
+		return SQL_STATE_HY090;
+	}
+
+	switch (field_id) {
+		/* pointer to a binary buffer */
+		case SQL_DESC_INDICATOR_PTR:
+		case SQL_DESC_OCTET_LENGTH_PTR:
+		case SQL_DESC_BIND_OFFSET_PTR:
+		case SQL_DESC_ROWS_PROCESSED_PTR:
+		case SQL_DESC_ARRAY_STATUS_PTR:
+			if (0 < buff_len) {
+				ERR("buffer is for binary buffer, but length indicator is "
+						"positive (%d).", buff_len);
+				return SQL_STATE_HY090;
+			}
+			break;
+
+		/* pointer to a value other than string or binary string */
+		case SQL_DESC_DATA_PTR:
+			if (buff_len != SQL_IS_POINTER) {
+				ERR("buffer is for pointer, but its lenght indicator doesn't "
+						"match (%d).", buff_len);
+				return SQL_STATE_HY090;
+			}
+			break;
+
+		/* SQL_IS_INTEGER */
+		case SQL_DESC_BIND_TYPE:
+		case SQL_DESC_AUTO_UNIQUE_VALUE:
+		case SQL_DESC_CASE_SENSITIVE:
+		case SQL_DESC_DATETIME_INTERVAL_PRECISION:
+		case SQL_DESC_NUM_PREC_RADIX:
+		case SQL_DESC_DISPLAY_SIZE:
+		case SQL_DESC_OCTET_LENGTH:
+			if (buff_len != SQL_IS_INTEGER) {
+				ERR("buffer is for interger, but its lenght indicator doesn't "
+						"match (%d).", buff_len);
+				return SQL_STATE_HY090;
+			}
+			break;
+
+		/* SQL_IS_UINTEGER */
+		case SQL_DESC_ARRAY_SIZE:
+		case SQL_DESC_LENGTH:
+			if (buff_len != SQL_IS_UINTEGER) {
+				ERR("buffer is for uint, but its lenght indicator doesn't "
+						"match (%d).", buff_len);
+				return SQL_STATE_HY090;
+			}
+			break;
+
+		/* SQL_IS_SMALLINT */
+		case SQL_DESC_ALLOC_TYPE:
+		case SQL_DESC_COUNT:
+		case SQL_DESC_CONCISE_TYPE:
+		case SQL_DESC_DATETIME_INTERVAL_CODE:
+		case SQL_DESC_FIXED_PREC_SCALE:
+		case SQL_DESC_NULLABLE:
+		case SQL_DESC_PARAMETER_TYPE:
+		case SQL_DESC_PRECISION:
+		case SQL_DESC_ROWVER:
+		case SQL_DESC_SCALE:
+		case SQL_DESC_SEARCHABLE:
+		case SQL_DESC_TYPE:
+		case SQL_DESC_UNNAMED:
+		case SQL_DESC_UNSIGNED:
+		case SQL_DESC_UPDATABLE:
+			if (buff_len != SQL_IS_SMALLINT) {
+				ERR("buffer is for short, but its lenght indicator doesn't "
+						"match (%d).", buff_len);
+				return SQL_STATE_HY090;
+			}
+			break;
+
+		default:
+			ERR("unknown field identifier: %d.", field_id);
+			return SQL_STATE_HY091;
+	}
+
+	return SQL_STATE_00000;
+}
 
 /*
  * Access permission matrix (TSV) lifted and rearanged from:
@@ -749,7 +966,8 @@ static BOOL check_access(desc_type_et desc_type, SQLSMALLINT field_id,
 				case DESC_TYPE_IRD:
 					ret = mode == O_RDONLY;
 					break;
-				//default: ANON mode checked above;
+				// just for compiler warning, ANON mode checked above;
+				default: ret = FALSE;
 			}
 			break;
 
@@ -778,9 +996,66 @@ SQLRETURN EsSQLGetDescFieldW(
 		SQLSMALLINT     FieldIdentifier,
 		_Out_writes_opt_(_Inexpressible_(BufferLength))
 		SQLPOINTER      ValuePtr,
-		SQLINTEGER      BufferLength,
+		SQLINTEGER      BufferLength, /* byte count, also for wchar's */
 		SQLINTEGER      *StringLengthPtr)
 {
+	esodbc_state_et state;
+
+	if (! check_access(DSCH(DescriptorHandle)->type, FieldIdentifier, 
+				O_RDONLY)) {
+		ERR("field access check failed: not defined for desciptor.");
+		RET_HDIAGS(DSCH(DescriptorHandle), SQL_STATE_HY091);
+	}
+	state = check_buff(FieldIdentifier, ValuePtr, BufferLength);
+	if (state != SQL_STATE_00000) {
+		ERR("buffer/~ length check failed (%d).", state);
+		RET_HDIAGS(DSCH(DescriptorHandle), state);
+	}
+
+
+	switch (FieldIdentifier) {
+		case SQL_DESC_ALLOC_TYPE:
+			*(SQLSMALLINT *)ValuePtr = DSCH(DescriptorHandle)->alloc_type;
+			DBG("inquired: desc alloc type: %u.", *(SQLSMALLINT *)ValuePtr);
+			break;
+
+		case SQL_DESC_ARRAY_SIZE:
+			*(SQLULEN *)ValuePtr = DSCH(DescriptorHandle)->array_size;
+			DBG("inquired: desc array size: %u.", *(SQLULEN *)ValuePtr);
+			break;
+
+		case SQL_DESC_ARRAY_STATUS_PTR:
+			*(SQLUSMALLINT **)ValuePtr = 
+				DSCH(DescriptorHandle)->array_status_ptr;
+			DBG("inquired: status array ptr: 0x%p.", (SQLUSMALLINT *)ValuePtr);
+			break;
+
+		case SQL_DESC_BIND_OFFSET_PTR:
+			*(SQLLEN **)ValuePtr = DSCH(DescriptorHandle)->bind_offset_ptr;
+			DBG("inquired binding offset ptr: 0x%p.", (SQLLEN *)ValuePtr);
+			break;
+
+		case SQL_DESC_BIND_TYPE:
+			(SQLUINTEGER)ValuePtr = DSCH(DescriptorHandle)->bind_type;
+			DBG("inquired bind type: %u.", (SQLUINTEGER)ValuePtr);
+			break;
+
+		case SQL_DESC_COUNT:
+			(SQLSMALLINT)ValuePtr = DSCH(DescriptorHandle)->count;
+			DBG("inquired count: %d.", (SQLSMALLINT)ValuePtr);
+			break;
+
+		case SQL_DESC_ROWS_PROCESSED_PTR:
+			*(SQLULEN **)ValuePtr = DSCH(DescriptorHandle)->rows_processed_ptr;
+			DBG("inquired desc rows processed ptr: 0x%p.", ValuePtr);
+			break;
+
+		default:
+			// FIXME
+			FIXME;
+			ERR("unknown FieldIdentifier: %d.", FieldIdentifier);
+			RET_HDIAGS(DSCH(DescriptorHandle), SQL_STATE_HY091);
+	}
 	RET_NOT_IMPLEMENTED;
 }
 
@@ -819,6 +1094,71 @@ SQLRETURN EsSQLGetDescRecW(
 	RET_NOT_IMPLEMENTED;
 }
 
+static SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count)
+{
+	desc_rec_st *recs;
+
+	if (new_count < 0) {
+		ERR("new record count is negative (%d).", new_count);
+		RET_HDIAGS(desc, SQL_STATE_07009);
+	}
+
+	if (desc->count == new_count) {
+		INFO("new descriptor count equals old one, %d.", new_count);
+		RET_STATE(SQL_STATE_00000);
+	}
+
+	if (ESODBC_MAX_DESC_COUNT < new_count) {
+		ERR("count value (%d) higher than allowed max (%d).", new_count, 
+				ESODBC_MAX_DESC_COUNT);
+		RET_HDIAGS(desc, SQL_STATE_07009);
+	}
+
+	if (new_count == 0) {
+		DBG("freeing the array of %d elems.", desc->count);
+		// TODO: do I need to de-init/free anything in the record itself?
+		free(desc->recs);
+		recs = NULL;
+	} else {
+		/* TODO: change to a list implementation? review@alpha */
+		recs = (desc_rec_st *)realloc(desc->recs, 
+				sizeof(desc_rec_st) * new_count);
+		if (! recs) {
+			ERRN("can't (re)alloc %d records.", new_count);
+			RET_HDIAGS(desc, SQL_STATE_HY001);
+		}
+		if (new_count < desc->count) { /* shrinking array */
+			DBG("recs array is shrinking %d -> %d.", desc->count, new_count);
+			// TODO: see above the freeing case
+		} else { /* growing array */
+			DBG("recs array is growing %d -> %d.", desc->count, new_count);
+			memset(&desc->recs[new_count - 1], 0, 
+					(new_count - desc->count) * sizeof(desc_rec_st));
+			// TODO: do i need to init each record?
+		}
+	}
+
+	desc->count = new_count;
+	desc->recs = recs;
+	RET_STATE(SQL_STATE_00000);
+}
+
+/*
+ * Returns the record with desired index.
+ * Grow the array if needed (desired index higher than current count).
+ */
+static desc_rec_st* get_record(esodbc_desc_st *desc, SQLSMALLINT rec_no)
+{
+	assert(0 <= rec_no);
+
+	if (desc->count < rec_no) {
+		if (! SQL_SUCCEEDED(update_rec_count(desc, rec_no)))
+			return NULL;
+	}
+	return &desc->recs[rec_no - 1];
+}
+
+
 /*
  * "If an application calls SQLSetDescField to set any field other than
  * SQL_DESC_COUNT or the deferred fields SQL_DESC_DATA_PTR,
@@ -838,6 +1178,9 @@ SQLRETURN EsSQLGetDescRecW(
  * "If the application changes the data type or attributes after setting the
  * SQL_DESC_DATA_PTR field, the driver sets SQL_DESC_DATA_PTR to a null
  * pointer, unbinding the record."
+ *
+ * "The only way to unbind a bookmark column is to set the SQL_DESC_DATA_PTR
+ * field to a null pointer."
  */
 SQLRETURN EsSQLSetDescFieldW(
 		SQLHDESC        DescriptorHandle,
@@ -846,26 +1189,100 @@ SQLRETURN EsSQLSetDescFieldW(
 		SQLPOINTER      Value,
 		SQLINTEGER      BufferLength)
 {
+	esodbc_state_et ret;
+	desc_rec_st *rec;
 
-	if (! check_access(DSCH(DescriptorHandle)->type, FieldIdentifier, O_RDWR))
+	if (! check_access(DSCH(DescriptorHandle)->type, FieldIdentifier, O_RDWR)){
+		ERR("field access check failed: not defined or RO for desciptor.");
 		RET_HDIAGS(DSCH(DescriptorHandle), SQL_STATE_HY091);
+	}
 
-	switch(FieldIdentifier) {
+	/* header fields */
+	switch (FieldIdentifier) {
 		case SQL_DESC_ARRAY_SIZE:
+			DBG("setting desc array size to: %u.", *(SQLULEN *)Value);
 			if (ESODBC_MAX_ROW_ARRAY_SIZE < *(SQLULEN *)Value) {
+				WARN("provided desc array size (%u) larger than allowed max "
+						"(%u) -- set value adjusted to max.", 
+						*(SQLULEN *)Value, ESODBC_MAX_ROW_ARRAY_SIZE);
 				DSCH(DescriptorHandle)->array_size = ESODBC_MAX_ROW_ARRAY_SIZE;
 				/* TODO: return the fixed size in Value?? */
 				RET_HDIAGS(DSCH(DescriptorHandle), SQL_STATE_01S02);
 			} else {
 				DSCH(DescriptorHandle)->array_size = *(SQLULEN *)Value;
 			}
-			break;
+			return SQL_SUCCESS;
+
+		case SQL_DESC_ARRAY_STATUS_PTR:
+			DBG("setting desc array status ptr to: 0x%p.", Value);
+			DSCH(DescriptorHandle)->array_status_ptr = (SQLUSMALLINT *)Value;
+			return SQL_SUCCESS;
+
+		case SQL_DESC_BIND_OFFSET_PTR:
+			DBG("setting binding offset ptr to: 0x%p.", Value);
+			DSCH(DescriptorHandle)->bind_offset_ptr = (SQLLEN *)Value;
+			return SQL_SUCCESS;
+
+		case SQL_DESC_BIND_TYPE:
+			DBG("setting bind type to: %u.", (SQLUINTEGER)Value);
+			DSCH(DescriptorHandle)->bind_type = (SQLUINTEGER)Value;
+			return SQL_SUCCESS;
+
+		/* 
+		 * "Specifies the 1-based index of the highest-numbered record that
+		 * contains data."
+		 * "Is not a count of all data columns or of all parameters that are
+		 * bound, but the number of the highest-numbered record." 
+		 *
+		 * "If the highest-numbered column or parameter is unbound, then
+		 * SQL_DESC_COUNT is changed to the number of the next
+		 * highest-numbered column or parameter. If a column or a parameter
+		 * with a number that is less than the number of the highest-numbered
+		 * column is unbound, SQL_DESC_COUNT is not changed. If additional
+		 * columns or parameters are bound with numbers greater than the
+		 * highest-numbered record that contains data, the driver
+		 * automatically increases the value in the SQL_DESC_COUNT field."
+		 *
+		 * "If the value in SQL_DESC_COUNT is explicitly decreased, all
+		 * records with numbers greater than the new value in SQL_DESC_COUNT
+		 * are effectively removed. If the value in SQL_DESC_COUNT is
+		 * explicitly set to 0 and the field is in an ARD, all data buffers
+		 * except a bound bookmark column are released."
+		 */
+		case SQL_DESC_COUNT:
+			return update_rec_count(DSCH(DescriptorHandle),(SQLSMALLINT)Value);
+
+		case SQL_DESC_ROWS_PROCESSED_PTR:
+			DBG("setting desc rwos processed ptr to: 0x%p.", Value);
+			DSCH(DescriptorHandle)->rows_processed_ptr = (SQLULEN *)Value;
+			return SQL_SUCCESS;
+	}
+
+	if (RecNumber < 0) { /* TODO: check also if AxD, as per spec?? */
+		ERR("negative record number provided (%d) with record field (%d).",
+				RecNumber, FieldIdentifier);
+		RET_HDIAG(DSCH(DescriptorHandle), SQL_STATE_07009, 
+				"Negative record number provided with record field", 0);
+	} else if (RecNumber == 0) {
+		ERR("unsupported record number 0."); /* TODO: bookmarks? */
+		RET_HDIAG(DSCH(DescriptorHandle), SQL_STATE_07009, 
+				"Unsupported record number 0", 0);
+	} else { /* apparently one can set a record before the count is set */
+		rec = get_record(DSCH(DescriptorHandle), RecNumber);
+		if (! rec)
+			RET_STATE(DSCH(DescriptorHandle)->diag.state);
+		DBG("setting field %d of record #%d @ 0x%p.", FieldIdentifier, 
+				RecNumber, rec);
+	}
+
+	/* record fields */
+	switch (FieldIdentifier) {
 
 		default:
 			// FIXME
 			FIXME;
 			ERR("unknown FieldIdentifier: %d.", FieldIdentifier);
-			RET_HDIAGS(DSCH(DescriptorHandle), SQL_STATE_HY092);
+			RET_HDIAGS(DSCH(DescriptorHandle), SQL_STATE_HY091);
 	}
 	
 	RET_STATE(SQL_STATE_00000);
