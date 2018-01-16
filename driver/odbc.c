@@ -514,11 +514,35 @@ SQLRETURN SQL_API SQLSetScrollOptions(    /*      Use SQLSetStmtOptions */
  *
  */
 
+/*
+ * "In the IPD, this header field points to a parameter status array
+ * containing status information for each set of parameter values after a call
+ * to SQLExecute or SQLExecDirect." = .array_status_ptr
+ *
+ * "In the APD, this header field points to a parameter operation array of
+ * values that can be set by the application to indicate whether this set of
+ * parameters is to be ignored when SQLExecute or SQLExecDirect is called."
+ * = .array_status_ptr
+ * "If no elements of the array are set, all sets of parameters in the array
+ * are used in the SQLExecute or SQLExecDirect calls."
+ */
 SQLRETURN  SQL_API SQLExecute(SQLHSTMT StatementHandle)
 {
 	RET_NOT_IMPLEMENTED;
 }
 
+/*
+ * "In the IPD, this header field points to a parameter status array
+ * containing status information for each set of parameter values after a call
+ * to SQLExecute or SQLExecDirect." = .array_status_ptr
+ *
+ * "In the APD, this header field points to a parameter operation array of
+ * values that can be set by the application to indicate whether this set of
+ * parameters is to be ignored when SQLExecute or SQLExecDirect is called."
+ * = .array_status_ptr
+ * "If no elements of the array are set, all sets of parameters in the array
+ * are used in the SQLExecute or SQLExecDirect calls."
+ */
 SQLRETURN SQL_API SQLExecDirectW
 (
     SQLHSTMT    hstmt,
@@ -691,6 +715,19 @@ SQLRETURN  SQL_API SQLFetch(SQLHSTMT StatementHandle)
  * FetchOrientation of SQL_FETCH_NEXT increments the cursor based on the
  * rowset of the previous fetch and then fetches a rowset based on the current
  * rowset size."
+ *
+ * "In the IRD, this header field points to a row status array containing
+ * status values after a call to SQLBulkOperations, SQLFetch, SQLFetchScroll,
+ * or SQLSetPos."  = row status array of IRD (.array_status_ptr)
+ *
+ * "In ARDs, this field specifies the binding orientation when SQLFetchScroll
+ * or SQLFetch is called on the associated statement handle." (.bind_type)
+ *
+ * "In an IRD, this SQLULEN * header field points to a buffer containing the
+ * number of rows fetched after a call to SQLFetch or SQLFetchScroll, or the
+ * number of rows affected in a bulk operation performed by a call to
+ * SQLBulkOperations or SQLSetPos, including error rows."
+ * (.rows_processed_ptr)
  */
 SQLRETURN  SQL_API SQLFetchScroll(SQLHSTMT StatementHandle,
            SQLSMALLINT FetchOrientation, SQLLEN FetchOffset)

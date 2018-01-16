@@ -126,23 +126,10 @@ typedef struct struct_desc {
 	SQLULEN			*rows_processed_ptr;
 	/* /header fields */
 
-	//desc_rec_st *recs;
+	/* array of records.
+	 * TODO: list? binding occurs seldomly, compared to execution, tho. */
+	desc_rec_st *recs;
 } esodbc_desc_st;
-
-typedef struct stmt_options {
-	/* use bookmarks? */
-	SQLULEN bookmarks; //default: SQL_UB_OFF
-	/* offset in bytes to the bound addresses */
-	/* "The driver calculates the buffer address just before it writes to the
-	 * buffers (such as during fetch time)." */
-	SQLULEN *bind_offset; /* TODO: ARD option only? */
-	/* row/column, with block cursors */
-	SQLULEN bind_type; /* TODO: ARD option only */
-	/* row status values after Fetch/Scroll */
-	SQLUSMALLINT *row_status; /* TODO: IRD option only */
-	/* number of rows fetched */
-	SQLULEN *rows_fetched; /* TODO: IRD option only */
-} stmt_options_st;
 
 /*
  * "The fields of an IRD have a default value only after the statement has
@@ -167,7 +154,7 @@ typedef struct struct_stmt {
 	esodbc_desc_st i_apd;
 	esodbc_desc_st i_ipd;
 
-	stmt_options_st options;
+	SQLULEN bookmarks; //default: SQL_UB_OFF
 } esodbc_stmt_st;
 
 
@@ -175,6 +162,7 @@ typedef struct struct_stmt {
 #define ESODBC_DBC_CONN_TIMEOUT		120
 #define ESODBC_MAX_ROW_ARRAY_SIZE	128 /* TODO: should there be a max? */
 #define ESODBC_DEF_ARRAY_SIZE		1
+#define ESODBC_MAX_DESC_COUNT		128 /* max cols or args to bind */
 
 SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 	SQLHANDLE InputHandle, _Out_ SQLHANDLE *OutputHandle);
@@ -244,6 +232,9 @@ SQLRETURN EsSQLGetDescRecW(
 		SQLSMALLINT     *ScalePtr,
 		_Out_opt_ 
 		SQLSMALLINT     *NullablePtr);
+
+/* use with RecNumber for header fields */
+#define NO_REC_NR	-1
 
 SQLRETURN EsSQLSetDescFieldW(
 		SQLHDESC        DescriptorHandle,

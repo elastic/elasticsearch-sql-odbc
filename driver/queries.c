@@ -57,13 +57,16 @@ SQLRETURN EsSQLBindCol(
 		SQLLEN BufferLength,
 		_Inout_opt_ SQLLEN *StrLen_or_Ind)
 {
+	SQLRETURN ret;
+	esodbc_stmt_st *stmt = STMH(StatementHandle);
+	esodbc_desc_st *ard = stmt->ard;
 
 	if (BufferLength < 0) {
 		ERR("invalid negative BufferLength: %d.", BufferLength);
 		RET_HDIAGS(STMH(StatementHandle), SQL_STATE_HY090);
 	}
 
-	if (STMH(StatementHandle)->options.bookmarks != SQL_UB_OFF) {
+	if ((STMH(StatementHandle)->bookmarks != SQL_UB_OFF) || (! ColumnNumber)) {
 		/* "The statement attribute SQL_ATTR_USE_BOOKMARKS should always be
 		 * set before binding a column to column 0. This is not required but
 		 * is strongly recommended." */
@@ -72,14 +75,51 @@ SQLRETURN EsSQLBindCol(
 		FIXME;
 	}
 
+	/* ajust record count */
+	if (ard->count < ColumnNumber) {
+		ret = EsSQLSetDescFieldW(ard, NO_REC_NR, SQL_DESC_COUNT, ColumnNumber,
+				SQL_IS_SMALLINT);
+		if (ret != SQL_SUCCESS) {
+			DBG("failed to update desc count to %d.", ColumnNumber);
+			HDIAG_COPY(ard, stmt); /* copy error at top handle level */
+			return ret;
+		}
+	}
+
 	// FIXME: consider STMH(StatementHandle)->options.bind_offset
 	// FIXME: consider STMH(StatementHandle)->options.array_size
 
+#if 0
+	/* set concise type (or verbose for datetime/interval types) */
+	ret = EsSQLSetDescFieldW(ard, ColumnNumber - 1, SQL_DESC_TYPE, TargetType,
+			SQL_IS_SMALLINT);
+	if (ret != SQL_SUCCESS) {
+		HDIAG_COPY(ard, stmt); /* copy error at top handle level */
+		return ret;
+	}
 
+	/* set concise type */
+	switch (TargetType) {
+		case SQL_DATETIME:
+		case SQL_INTERVAL:
+		default:
+			ret = EsSQLSetDescFieldW(ard, ColumnNumber - 1,
+					SQL_DESC_CONCISE_TYPE, TargetType, SQL_IS_SMALLINT);
+			if (ret != SQL_SUCCESS) {
+				HDIAG_COPY(ard, stmt); /* copy error at top handle level */
+				return ret;
+			}
+	}
+	if (TargetType != SQL_DATETIME && TargetType != SQL_INTERVAL) {
+	} else {
+
+	}
+#endif
 
 	BUG("not implemented.");
 	//RET_NOT_IMPLEMENTED;
 	return SQL_SUCCESS;
+//error_cpy:
 }
 
 /*
@@ -112,6 +152,23 @@ SQLRETURN EsSQLBindCol(
  *
  * "If the bound address is 0, no data value is returned" (also for row/column
  * binding)
+ *
+ * "In the IRD, this header field points to a row status array containing
+ * status values after a call to SQLBulkOperations, SQLFetch, SQLFetchScroll,
+ * or SQLSetPos."  = row status array of IRD (.array_status_ptr); can be NULL.
+ *
+ * "The binding offset is always added directly to the values in the
+ * SQL_DESC_DATA_PTR, SQL_DESC_INDICATOR_PTR, and SQL_DESC_OCTET_LENGTH_PTR
+ * fields." (.bind_offset.ptr)
+ *
+ * "In ARDs, this field specifies the binding orientation when SQLFetchScroll
+ * or SQLFetch is called on the associated statement handle." (.bind_type)
+ *
+ * "In an IRD, this SQLULEN * header field points to a buffer containing the
+ * number of rows fetched after a call to SQLFetch or SQLFetchScroll, or the
+ * number of rows affected in a bulk operation performed by a call to
+ * SQLBulkOperations or SQLSetPos, including error rows."
+ * (.rows_processed_ptr)
  */
 SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 {
@@ -133,6 +190,16 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
  * error has occurred while rows were fetched by a call to SQLSetPos to
  * perform a bulk operation when the function is called in state S7." (not
  * supported currently, with RO operation)
+ *
+ * "In the IRD, this header field points to a row status array containing
+ * status values after a call to SQLBulkOperations, SQLFetch, SQLFetchScroll,
+ * or SQLSetPos."  = row status array of IRD (.array_status_ptr)
+ *
+ * "In the ARD, this header field points to a row operation array of values
+ * that can be set by the application to indicate whether this row is to be
+ * ignored for SQLSetPos operations." .array_status_ptr
+ * "If the value in the SQL_DESC_ARRAY_STATUS_PTR field of the ARD is a null
+ * pointer, all rows are included in the bulk operation"
  */
 SQLRETURN EsSQLSetPos(
 		SQLHSTMT        StatementHandle,
@@ -162,6 +229,9 @@ SQLRETURN EsSQLSetPos(
  * "SQLBulkOperations uses the rowset size in effect at the time of the call,
  * because it performs operations on a table independent of any fetched
  * rowset."
+ * "In the IRD, this header field points to a row status array containing
+ * status values after a call to SQLBulkOperations, SQLFetch, SQLFetchScroll,
+ * or SQLSetPos."  = row status array of IRD (.array_status_ptr)
  */
 SQLRETURN EsSQLBulkOperations(
 		SQLHSTMT            StatementHandle,
