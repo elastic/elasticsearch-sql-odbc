@@ -11,6 +11,7 @@
 #include "info.h"
 #include "connect.h"
 #include "queries.h"
+#include "catalogue.h"
 
 //#include "elasticodbc_export.h"
 //#define SQL_API	ELASTICODBC_EXPORT SQL_API

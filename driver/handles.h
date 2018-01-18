@@ -50,37 +50,44 @@ typedef struct struct_dbc {
 
 typedef struct desc_rec {
 	/* record fields */
-	SQLINTEGER		auto_unique_value;
-	SQLCHAR			*base_column_name;
-	SQLCHAR			*base_table_name;
-	SQLINTEGER		case_sensitive;
-	SQLCHAR			*catalog_name;
 	SQLSMALLINT		concise_type;
-	SQLPOINTER		data_ptr; /* array, if .array_size > 1 */
+	SQLSMALLINT		type;
 	SQLSMALLINT		datetime_interval_code;
-	SQLINTEGER		datetime_interval_precision;
-	SQLLEN			display_size;
-	SQLSMALLINT		fixed_prec_scale;
+
+	SQLPOINTER		data_ptr; /* array, if .array_size > 1 */
+
+	SQLTCHAR		*base_column_name; /* read-only */
+	SQLTCHAR		*base_table_name; /* r/o */
+	SQLTCHAR		*catalog_name; /* r/o */
+	SQLTCHAR		*label; /* r/o */
+	SQLTCHAR		*literal_prefix; /* r/o */
+	SQLTCHAR		*literal_suffix; /* r/o */
+	SQLTCHAR		*local_type_name; /* r/o */
+	SQLTCHAR		*name;
+	SQLTCHAR		*schema_name; /* r/o */
+	SQLTCHAR		*table_name; /* r/o */
+	SQLTCHAR		*type_name; /* r/o */
+
 	SQLLEN			*indicator_ptr; /* array, if .array_size > 1 */
-	SQLCHAR			*label;
-	SQLULEN			length;
-	SQLCHAR			*literal_prefix;
-	SQLCHAR			*literal_suffix;
-	SQLCHAR			*local_type_name;
-	SQLCHAR			*name;
-	SQLSMALLINT		nullable;
-	SQLINTEGER		num_prec_radix;
-	SQLLEN			octet_length;
 	SQLLEN			*octet_length_ptr; /* array, if .array_size > 1 */
+
+	SQLLEN			display_size;
+	SQLLEN			octet_length;
+
+	SQLULEN			length;
+
+	SQLINTEGER		auto_unique_value;
+	SQLINTEGER		case_sensitive;
+	SQLINTEGER		datetime_interval_precision;
+	SQLINTEGER		num_prec_radix;
+
+	SQLSMALLINT		fixed_prec_scale;
+	SQLSMALLINT		nullable; /* r/o */
 	SQLSMALLINT		parameter_type;
 	SQLSMALLINT		precision;
 	SQLSMALLINT		rowver;
 	SQLSMALLINT		scale;
-	SQLCHAR			*schema_name;
 	SQLSMALLINT		searchable;
-	SQLCHAR			*table_name;
-	SQLSMALLINT		type;
-	SQLCHAR			*type_name;
 	SQLSMALLINT		unnamed;
 	SQLSMALLINT		usigned;
 	SQLSMALLINT		updatable;

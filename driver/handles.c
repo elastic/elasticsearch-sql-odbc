@@ -983,115 +983,30 @@ static BOOL check_access(desc_type_et desc_type, SQLSMALLINT field_id,
 	return ret;
 }
 
-/*
- * "Even when freed, an implicitly allocated descriptor remains valid, and
- * SQLGetDescField can be called on its fields."
- *
- * "In a subsequent call to SQLGetDescField or SQLGetDescRec, the driver is
- * not required to return the value that SQL_DESC_DATA_PTR was set to."
- */
-SQLRETURN EsSQLGetDescFieldW(
-		SQLHDESC        DescriptorHandle,
-		SQLSMALLINT     RecNumber,
-		SQLSMALLINT     FieldIdentifier,
-		_Out_writes_opt_(_Inexpressible_(BufferLength))
-		SQLPOINTER      ValuePtr,
-		SQLINTEGER      BufferLength, /* byte count, also for wchar's */
-		SQLINTEGER      *StringLengthPtr)
+static void get_rec_default(SQLSMALLINT field_id, SQLINTEGER buff_len, 
+		SQLPOINTER buff)
 {
-	esodbc_state_et state;
+	size_t sz;
 
-	if (! check_access(DSCH(DescriptorHandle)->type, FieldIdentifier, 
-				O_RDONLY)) {
-		ERR("field access check failed: not defined for desciptor.");
-		RET_HDIAGS(DSCH(DescriptorHandle), SQL_STATE_HY091);
+	switch (field_id) {
+		case SQL_DESC_CONCISE_TYPE:
+		case SQL_DESC_TYPE:
+			*(SQLSMALLINT *)buff = SQL_C_DEFAULT;
+			return;
+		case SQL_DESC_PARAMETER_TYPE:
+			*(SQLSMALLINT *)buff = SQL_PARAM_INPUT;
+			return;
 	}
-	state = check_buff(FieldIdentifier, ValuePtr, BufferLength);
-	if (state != SQL_STATE_00000) {
-		ERR("buffer/~ length check failed (%d).", state);
-		RET_HDIAGS(DSCH(DescriptorHandle), state);
+
+	switch (buff_len) {
+		case SQL_IS_INTEGER: sz = sizeof(SQLINTEGER); break;
+		case SQL_IS_UINTEGER: sz = sizeof(SQLULEN); break;
+		case SQL_IS_SMALLINT: sz = sizeof(SQLSMALLINT); break;
+		default: sz = 0;
 	}
 
-
-	switch (FieldIdentifier) {
-		case SQL_DESC_ALLOC_TYPE:
-			*(SQLSMALLINT *)ValuePtr = DSCH(DescriptorHandle)->alloc_type;
-			DBG("inquired: desc alloc type: %u.", *(SQLSMALLINT *)ValuePtr);
-			break;
-
-		case SQL_DESC_ARRAY_SIZE:
-			*(SQLULEN *)ValuePtr = DSCH(DescriptorHandle)->array_size;
-			DBG("inquired: desc array size: %u.", *(SQLULEN *)ValuePtr);
-			break;
-
-		case SQL_DESC_ARRAY_STATUS_PTR:
-			*(SQLUSMALLINT **)ValuePtr = 
-				DSCH(DescriptorHandle)->array_status_ptr;
-			DBG("inquired: status array ptr: 0x%p.", (SQLUSMALLINT *)ValuePtr);
-			break;
-
-		case SQL_DESC_BIND_OFFSET_PTR:
-			*(SQLLEN **)ValuePtr = DSCH(DescriptorHandle)->bind_offset_ptr;
-			DBG("inquired binding offset ptr: 0x%p.", (SQLLEN *)ValuePtr);
-			break;
-
-		case SQL_DESC_BIND_TYPE:
-			(SQLUINTEGER)ValuePtr = DSCH(DescriptorHandle)->bind_type;
-			DBG("inquired bind type: %u.", (SQLUINTEGER)ValuePtr);
-			break;
-
-		case SQL_DESC_COUNT:
-			(SQLSMALLINT)ValuePtr = DSCH(DescriptorHandle)->count;
-			DBG("inquired count: %d.", (SQLSMALLINT)ValuePtr);
-			break;
-
-		case SQL_DESC_ROWS_PROCESSED_PTR:
-			*(SQLULEN **)ValuePtr = DSCH(DescriptorHandle)->rows_processed_ptr;
-			DBG("inquired desc rows processed ptr: 0x%p.", ValuePtr);
-			break;
-
-		default:
-			// FIXME
-			FIXME;
-			ERR("unknown FieldIdentifier: %d.", FieldIdentifier);
-			RET_HDIAGS(DSCH(DescriptorHandle), SQL_STATE_HY091);
-	}
-	RET_NOT_IMPLEMENTED;
-}
-
-/*
- * "The fields of an IRD have a default value only after the statement has
- * been prepared or executed and the IRD has been populated, not when the
- * statement handle or descriptor has been allocated. Until the IRD has been
- * populated, any attempt to gain access to a field of an IRD will return an
- * error."
- *
- * "In a subsequent call to SQLGetDescField or SQLGetDescRec, the driver is
- * not required to return the value that SQL_DESC_DATA_PTR was set to."
- */
-SQLRETURN EsSQLGetDescRecW(
-		SQLHDESC        DescriptorHandle,
-		SQLSMALLINT     RecNumber,
-		_Out_writes_opt_(BufferLength)
-		SQLWCHAR        *Name,
-		_Out_opt_ 
-		SQLSMALLINT     BufferLength,
-		_Out_opt_ 
-		SQLSMALLINT     *StringLengthPtr,
-		_Out_opt_ 
-		SQLSMALLINT     *TypePtr,
-		_Out_opt_ 
-		SQLSMALLINT     *SubTypePtr,
-		_Out_opt_ 
-		SQLLEN          *LengthPtr,
-		_Out_opt_ 
-		SQLSMALLINT     *PrecisionPtr,
-		_Out_opt_ 
-		SQLSMALLINT     *ScalePtr,
-		_Out_opt_ 
-		SQLSMALLINT     *NullablePtr)
-{
-	RET_NOT_IMPLEMENTED;
+	if (sz)
+		memset(buff, 0, sz);
 }
 
 static SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count)
@@ -1134,7 +1049,7 @@ static SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count)
 			DBG("recs array is growing %d -> %d.", desc->count, new_count);
 			memset(&desc->recs[new_count - 1], 0, 
 					(new_count - desc->count) * sizeof(desc_rec_st));
-			// TODO: do i need to init each record?
+			/* further init to defaults is done once the data type is set */
 		}
 	}
 
@@ -1144,20 +1059,628 @@ static SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count)
 }
 
 /*
- * Returns the record with desired index.
+ * Returns the record with desired 1-based index.
  * Grow the array if needed (desired index higher than current count).
  */
-static desc_rec_st* get_record(esodbc_desc_st *desc, SQLSMALLINT rec_no)
+static desc_rec_st* get_record(esodbc_desc_st *desc, SQLSMALLINT rec_no, 
+		BOOL grow)
 {
 	assert(0 <= rec_no);
 
 	if (desc->count < rec_no) {
+		if (! grow)
+			return NULL;
 		if (! SQL_SUCCEEDED(update_rec_count(desc, rec_no)))
 			return NULL;
 	}
 	return &desc->recs[rec_no - 1];
 }
 
+
+/*
+ * "Even when freed, an implicitly allocated descriptor remains valid, and
+ * SQLGetDescField can be called on its fields."
+ *
+ * "In a subsequent call to SQLGetDescField or SQLGetDescRec, the driver is
+ * not required to return the value that SQL_DESC_DATA_PTR was set to."
+ */
+SQLRETURN EsSQLGetDescFieldW(
+		SQLHDESC        DescriptorHandle,
+		SQLSMALLINT     RecNumber,
+		SQLSMALLINT     FieldIdentifier,
+		_Out_writes_opt_(_Inexpressible_(BufferLength))
+		SQLPOINTER      ValuePtr,
+		SQLINTEGER      BufferLength, /* byte count, also for wchar's */
+		SQLINTEGER      *StringLengthPtr)
+{
+	esodbc_desc_st *desc = DSCH(DescriptorHandle);
+	esodbc_state_et state;
+	SQLTCHAR *tstr;
+	SQLSMALLINT word;
+	SQLINTEGER intgr;
+	desc_rec_st *rec;
+
+	if (! check_access(desc->type, FieldIdentifier, 
+				O_RDONLY)) {
+		int llev;
+#if 0
+		/* 
+		 * Actually, the spec ask to return success, but just set nothing: ???
+		 * "When an application calls SQLGetDescField to retrieve the value of
+		 * a field that is undefined for a particular descriptor type, the
+		 * function returns SQL_SUCCESS but the value returned for the field
+		 * is undefined." 
+		 */
+		llev = LOG_LEVEL_ERR;
+		state = SQL_STATE_HY091;
+#else /* 0 */
+		llev = LOG_LEVEL_WARN;
+		state = SQL_STATE_01000;
+#endif /* 0 */
+		LOG(llev, "field (%d) access check failed: not defined for desciptor "
+				"(type: %d).", FieldIdentifier, desc->type);
+		RET_HDIAG(desc, state, 
+				"field type not defined for descriptor", 0);
+	}
+
+	state = check_buff(FieldIdentifier, ValuePtr, BufferLength);
+	if (state != SQL_STATE_00000) {
+		ERR("buffer/~ length check failed (%d).", state);
+		RET_HDIAGS(desc, state);
+	}
+
+	/* header fields */
+	switch (FieldIdentifier) {
+		case SQL_DESC_ALLOC_TYPE:
+			*(SQLSMALLINT *)ValuePtr = desc->alloc_type;
+			DBG("returning: desc alloc type: %u.", *(SQLSMALLINT *)ValuePtr);
+			RET_STATE(SQL_STATE_00000);
+
+		case SQL_DESC_ARRAY_SIZE:
+			*(SQLULEN *)ValuePtr = desc->array_size;
+			DBG("returning: desc array size: %u.", *(SQLULEN *)ValuePtr);
+			RET_STATE(SQL_STATE_00000);
+
+		case SQL_DESC_ARRAY_STATUS_PTR:
+			*(SQLUSMALLINT **)ValuePtr = 
+				desc->array_status_ptr;
+			DBG("returning: status array ptr: 0x%p.",(SQLUSMALLINT *)ValuePtr);
+			RET_STATE(SQL_STATE_00000);
+
+		case SQL_DESC_BIND_OFFSET_PTR:
+			*(SQLLEN **)ValuePtr = desc->bind_offset_ptr;
+			DBG("returning binding offset ptr: 0x%p.", (SQLLEN *)ValuePtr);
+			RET_STATE(SQL_STATE_00000);
+
+		case SQL_DESC_BIND_TYPE:
+			*(SQLUINTEGER *)ValuePtr = desc->bind_type;
+			DBG("returning bind type: %u.", *(SQLUINTEGER *)ValuePtr);
+			RET_STATE(SQL_STATE_00000);
+
+		case SQL_DESC_COUNT:
+			*(SQLSMALLINT *)ValuePtr = desc->count;
+			DBG("returning count: %d.", (SQLSMALLINT *)ValuePtr);
+			RET_STATE(SQL_STATE_00000);
+
+		case SQL_DESC_ROWS_PROCESSED_PTR:
+			*(SQLULEN **)ValuePtr = desc->rows_processed_ptr;
+			DBG("returning desc rows processed ptr: 0x%p.", ValuePtr);
+			RET_STATE(SQL_STATE_00000);
+	}
+
+	/* 
+	 * The field is a record field -> get the record to apply the field to.
+	 */
+	if (RecNumber < 0) { /* TODO: need to check also if AxD, as per spec?? */
+		ERR("negative record number provided (%d) with record field (%d).",
+				RecNumber, FieldIdentifier);
+		RET_HDIAG(desc, SQL_STATE_07009, 
+				"Negative record number provided with record field", 0);
+	} else if (RecNumber == 0) {
+		ERR("unsupported record number 0."); /* TODO: bookmarks? */
+		RET_HDIAG(desc, SQL_STATE_07009, 
+				"Unsupported record number 0", 0);
+	} else {
+		/*
+		 * "When an application calls SQLGetDescField to retrieve the value of
+		 * a field that is defined for a particular descriptor type but that
+		 * has no default value and has not been set yet, the function returns
+		 * SQL_SUCCESS but the value returned for the field is undefined."
+		 */
+		rec = get_record(desc, RecNumber, FALSE);
+		if (! rec) {
+#if 0
+			RET_HDIAGS(desc, SQL_STATE_07009);
+#else /* 0 */
+		WARN("record #%d not yet set; returning defaults.", RecNumber);
+		get_rec_default(FieldIdentifier, BufferLength, ValuePtr);
+		RET_STATE(SQL_STATE_00000);
+#endif /* 0 */
+		}
+		DBG("getting field %d of record #%d @ 0x%p.", FieldIdentifier, 
+				RecNumber, rec);
+	}
+
+
+	/* record fields */
+	switch (FieldIdentifier) {
+		/* <SQLPOINTER> */
+		case SQL_DESC_DATA_PTR:
+			*(SQLPOINTER *)ValuePtr = rec->data_ptr;
+			DBG("returning data pointer 0x%p.", rec->data_ptr);
+			break;
+
+		/* <SQLTCHAR *> */
+		do {
+		case SQL_DESC_BASE_COLUMN_NAME: tstr = rec->base_column_name; break;
+		case SQL_DESC_BASE_TABLE_NAME: tstr = rec->base_table_name; break;
+		case SQL_DESC_CATALOG_NAME: tstr = rec->catalog_name; break;
+		case SQL_DESC_LABEL: tstr = rec->label; break;
+		case SQL_DESC_LITERAL_PREFIX: tstr = rec->literal_prefix; break;
+		case SQL_DESC_LITERAL_SUFFIX: tstr = rec->literal_suffix; break;
+		case SQL_DESC_LOCAL_TYPE_NAME: tstr = rec->local_type_name; break;
+		case SQL_DESC_NAME: tstr = rec->name; break;
+		case SQL_DESC_SCHEMA_NAME: tstr = rec->schema_name; break;
+		case SQL_DESC_TABLE_NAME: tstr = rec->table_name; break;
+		case SQL_DESC_TYPE_NAME: tstr = rec->type_name; break;
+		} while (0);
+			*(SQLTCHAR **)ValuePtr = tstr;
+			DBG("returning record field %d as SQLTCHAR 0x%p (`"LTPD"`).", 
+					FieldIdentifier, tstr, tstr ? tstr : MK_TSTR("<NULL>"));
+			break;
+
+		/* <SQLLEN *> */
+		case SQL_DESC_INDICATOR_PTR:
+			*(SQLLEN **)ValuePtr = rec->indicator_ptr;
+			DBG("returning indicator pointer: 0x%p.", rec->indicator_ptr);
+			break;
+		case SQL_DESC_OCTET_LENGTH_PTR:
+			*(SQLLEN **)ValuePtr = rec->octet_length_ptr;
+			DBG("returning octet length pointer 0x%p.", rec->octet_length_ptr);
+			break;
+
+		/* <SQLLEN> */
+		case SQL_DESC_DISPLAY_SIZE:
+			*(SQLLEN *)ValuePtr = rec->display_size;
+			DBG("returning display size: %d.", rec->display_size);
+			break;
+		case SQL_DESC_OCTET_LENGTH:
+			*(SQLLEN *)ValuePtr = rec->octet_length;
+			DBG("returning octet length: %d.", rec->octet_length);
+			break;
+
+		/* <SQLULEN> */
+		case SQL_DESC_LENGTH:
+			*(SQLULEN *)ValuePtr = rec->length;
+			DBG("returning lenght: %u.", rec->length);
+			break;
+
+		/* <SQLSMALLINT> */
+		do {
+		case SQL_DESC_CONCISE_TYPE: word = rec->concise_type; break;
+		case SQL_DESC_TYPE: word = rec->type; break;
+		case SQL_DESC_DATETIME_INTERVAL_CODE:
+			word = rec->datetime_interval_code; break;
+
+		case SQL_DESC_FIXED_PREC_SCALE: word = rec->fixed_prec_scale; break;
+		case SQL_DESC_NULLABLE: word = rec->nullable; break;
+		case SQL_DESC_PARAMETER_TYPE: word = rec->parameter_type; break;
+		case SQL_DESC_PRECISION: word = rec->precision; break;
+		case SQL_DESC_ROWVER: word = rec->rowver; break;
+		case SQL_DESC_SCALE: word = rec->scale; break;
+		case SQL_DESC_SEARCHABLE: word = rec->searchable; break;
+		case SQL_DESC_UNNAMED: word = rec->unnamed; break;
+		case SQL_DESC_UNSIGNED: word = rec->usigned; break;
+		case SQL_DESC_UPDATABLE: word = rec->updatable; break;
+		} while (0);
+			*(SQLSMALLINT *)ValuePtr = word;
+			DBG("returning record field %d as %d.", FieldIdentifier, word);
+			break;
+
+		/* <SQLINTEGER> */
+		do {
+		case SQL_DESC_AUTO_UNIQUE_VALUE: intgr = rec->auto_unique_value; break;
+		case SQL_DESC_CASE_SENSITIVE: intgr = rec->case_sensitive; break;
+		case SQL_DESC_DATETIME_INTERVAL_PRECISION: 
+			intgr = rec->datetime_interval_precision; break;
+		case SQL_DESC_NUM_PREC_RADIX: intgr = rec->num_prec_radix; break;
+		} while (0);
+			*(SQLINTEGER *)ValuePtr = intgr;
+			DBG("returning record field %d as %d.", FieldIdentifier, intgr);
+			break;
+
+		default:
+			ERR("unknown FieldIdentifier: %d.", FieldIdentifier);
+			RET_HDIAGS(desc, SQL_STATE_HY091);
+	}
+	
+	RET_STATE(SQL_STATE_00000);
+}
+
+/*
+ * "The fields of an IRD have a default value only after the statement has
+ * been prepared or executed and the IRD has been populated, not when the
+ * statement handle or descriptor has been allocated. Until the IRD has been
+ * populated, any attempt to gain access to a field of an IRD will return an
+ * error."
+ *
+ * "In a subsequent call to SQLGetDescField or SQLGetDescRec, the driver is
+ * not required to return the value that SQL_DESC_DATA_PTR was set to."
+ */
+SQLRETURN EsSQLGetDescRecW(
+		SQLHDESC        DescriptorHandle,
+		SQLSMALLINT     RecNumber,
+		_Out_writes_opt_(BufferLength)
+		SQLWCHAR        *Name,
+		_Out_opt_ 
+		SQLSMALLINT     BufferLength,
+		_Out_opt_ 
+		SQLSMALLINT     *StringLengthPtr,
+		_Out_opt_ 
+		SQLSMALLINT     *TypePtr,
+		_Out_opt_ 
+		SQLSMALLINT     *SubTypePtr,
+		_Out_opt_ 
+		SQLLEN          *LengthPtr,
+		_Out_opt_ 
+		SQLSMALLINT     *PrecisionPtr,
+		_Out_opt_ 
+		SQLSMALLINT     *ScalePtr,
+		_Out_opt_ 
+		SQLSMALLINT     *NullablePtr)
+{
+	RET_NOT_IMPLEMENTED;
+}
+
+/*
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/data-type-identifiers-and-descriptors
+ *
+ * Note: C and SQL are the same for these following defines.
+ */
+static void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type, 
+		SQLSMALLINT *code)
+{
+	switch (concise) {
+		case SQL_C_DATE:
+		case SQL_C_TYPE_DATE:
+			*type = SQL_DATETIME;
+			*code = SQL_CODE_DATE;
+			break;
+		case SQL_C_TIME:
+		case SQL_C_TYPE_TIME:
+		//case SQL_C_TYPE_TIME_WITH_TIMEZONE: //4.0
+			*type = SQL_DATETIME;
+			*code = SQL_CODE_TIME;
+			break;
+		case SQL_C_TIMESTAMP:
+		case SQL_C_TYPE_TIMESTAMP:
+		//case SQL_C_TYPE_TIMESTAMP_WITH_TIMEZONE: // 4.0
+			*type = SQL_DATETIME;
+			*code = SQL_CODE_TIMESTAMP;
+			break;
+		case SQL_C_INTERVAL_MONTH:
+			*type = SQL_INTERVAL;
+			*code = SQL_CODE_MONTH;
+			break;
+		case SQL_C_INTERVAL_YEAR:
+			*type = SQL_INTERVAL;
+			*code = SQL_CODE_YEAR;
+			break;
+		case SQL_C_INTERVAL_YEAR_TO_MONTH:
+			*type = SQL_INTERVAL;
+			*code = SQL_CODE_YEAR_TO_MONTH;
+			break;
+		case SQL_C_INTERVAL_DAY:
+			*type = SQL_INTERVAL;
+			*code = SQL_CODE_DAY;
+			break;
+		case SQL_C_INTERVAL_HOUR:
+			*type = SQL_INTERVAL;
+			*code = SQL_CODE_HOUR;
+			break;
+		case SQL_C_INTERVAL_MINUTE:
+			*type = SQL_INTERVAL;
+			*code = SQL_CODE_MINUTE;
+			break;
+		case SQL_C_INTERVAL_SECOND:
+			*type = SQL_INTERVAL;
+			*code = SQL_CODE_SECOND;
+			break;
+		case SQL_C_INTERVAL_DAY_TO_HOUR:
+			*type = SQL_INTERVAL;
+			*code = SQL_CODE_DAY_TO_HOUR;
+			break;
+		case SQL_C_INTERVAL_DAY_TO_MINUTE:
+			*type = SQL_INTERVAL;
+			*code = SQL_CODE_DAY_TO_MINUTE;
+			break;
+		case SQL_C_INTERVAL_DAY_TO_SECOND:
+			*type = SQL_INTERVAL;
+			*code = SQL_CODE_DAY_TO_SECOND;
+			break;
+		case SQL_C_INTERVAL_HOUR_TO_MINUTE:
+			*type = SQL_INTERVAL;
+			*code = SQL_CODE_HOUR_TO_MINUTE;
+			break;
+		case SQL_C_INTERVAL_HOUR_TO_SECOND:
+			*type = SQL_INTERVAL;
+			*code = SQL_CODE_HOUR_TO_SECOND;
+			break;
+		case SQL_C_INTERVAL_MINUTE_TO_SECOND:
+			*type = SQL_INTERVAL;
+			*code = SQL_CODE_MINUTE_TO_SECOND;
+			break;
+		default:
+			*type = concise;
+			*code = 0;
+	}
+}
+
+/*
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetdescfield-function#comments
+ */
+static void set_defaults_from_type(desc_rec_st *rec)
+{
+	switch (rec->type) {
+		case SQL_CHAR:
+		case SQL_VARCHAR:
+		//case SQL_C_CHAR:
+		//case SQL_C_VARCHAR:
+			rec->length = 1;
+			rec->precision = 0;
+			break;
+
+		case SQL_DATETIME:
+			if (rec->datetime_interval_code == SQL_CODE_DATE || 
+					rec->datetime_interval_code == SQL_CODE_TIME)
+				rec->precision = 0;
+			else if (rec->datetime_interval_code == SQL_CODE_TIMESTAMP)
+				rec->precision = 6;
+			break;
+
+		case SQL_DECIMAL:
+		case SQL_NUMERIC:
+		//case SQL_C_NUMERIC:
+			rec->scale = 0;
+			rec->precision = 38; /* TODO: "implementation-defined precision" */
+			break;
+
+		case SQL_FLOAT:
+		case SQL_C_FLOAT:
+			rec->precision = 38; /* TODO: "implementation-defined precision" */
+			break;
+
+		case SQL_INTERVAL:
+			if (rec->datetime_interval_code)
+				rec->datetime_interval_precision = 2;
+			/* TODO: "When the interval has a seconds component, " */
+			rec->precision = 6;
+			break;
+	}
+}
+
+static inline BOOL is_c_type(SQLSMALLINT type)
+{
+	switch (type) {
+		case SQL_C_CHAR:
+		case SQL_C_WCHAR:
+		case SQL_C_SSHORT:
+		case SQL_C_USHORT:
+		case SQL_C_SLONG:
+		case SQL_C_ULONG:
+		case SQL_C_FLOAT:
+		case SQL_C_DOUBLE:
+		case SQL_C_BIT:
+		case SQL_C_STINYINT:
+		case SQL_C_UTINYINT:
+		case SQL_C_SBIGINT:
+		case SQL_C_UBIGINT:
+		case SQL_C_BINARY:
+		//case SQL_C_BOOKMARK:
+		//case SQL_C_VARBOOKMARK:
+			return TRUE;
+	}
+	return FALSE;
+}
+
+static inline BOOL is_sql_type(SQLSMALLINT type)
+{
+	switch (type) {
+		case SQL_CHAR:
+		case SQL_VARCHAR:
+		case SQL_LONGVARCHAR:
+		case SQL_WCHAR:
+		case SQL_WVARCHAR:
+		case SQL_WLONGVARCHAR:
+		case SQL_DECIMAL:
+		case SQL_NUMERIC:
+		case SQL_SMALLINT:
+		case SQL_INTEGER:
+		case SQL_REAL:
+		case SQL_FLOAT:
+		case SQL_DOUBLE:
+		case SQL_BIT:
+		case SQL_TINYINT:
+		case SQL_BIGINT:
+		case SQL_BINARY:
+		case SQL_VARBINARY:
+		case SQL_LONGVARBINARY:
+		case SQL_TYPE_DATE:
+		case SQL_TYPE_TIME:
+		case SQL_TYPE_TIMESTAMP:
+		//case SQL_TYPE_UTCDATETIME:
+		//case SQL_TYPE_UTCTIME:
+		case SQL_INTERVAL_MONTH:
+		case SQL_INTERVAL_YEAR:
+		case SQL_INTERVAL_YEAR_TO_MONTH:
+		case SQL_INTERVAL_DAY:
+		case SQL_INTERVAL_HOUR:
+		case SQL_INTERVAL_MINUTE:
+		case SQL_INTERVAL_SECOND:
+		case SQL_INTERVAL_DAY_TO_HOUR:
+		case SQL_INTERVAL_DAY_TO_MINUTE:
+		case SQL_INTERVAL_DAY_TO_SECOND:
+		case SQL_INTERVAL_HOUR_TO_MINUTE:
+		case SQL_INTERVAL_HOUR_TO_SECOND:
+		case SQL_INTERVAL_MINUTE_TO_SECOND:
+		case SQL_GUID:
+			return TRUE;
+	}
+	return FALSE;
+}
+
+static inline BOOL is_numeric(SQLSMALLINT type)
+{
+	/* C types */
+	switch (type) {
+		case SQL_C_SHORT:
+		case SQL_C_SSHORT:
+		case SQL_C_USHORT:
+		case SQL_C_LONG:
+		case SQL_C_SLONG:
+		case SQL_C_ULONG:
+		case SQL_C_FLOAT:
+		case SQL_C_DOUBLE:
+		case SQL_C_BIT:
+		case SQL_C_TINYINT:
+		case SQL_C_STINYINT:
+		case SQL_C_UTINYINT:
+		case SQL_C_SBIGINT:
+		case SQL_C_UBIGINT:
+			return TRUE;
+	}
+
+	/* XXX: there's an overlap between the two (most C types are defines of
+	 * SQL types), but I might need to split this check by SQL/C group type */
+	/* SQL types */
+	switch (type) {
+		case SQL_DECIMAL:
+		case SQL_NUMERIC:
+		case SQL_SMALLINT:
+		case SQL_INTEGER:
+		case SQL_REAL:
+		case SQL_FLOAT:
+		case SQL_DOUBLE:
+		case SQL_BIT:
+		case SQL_TINYINT:
+		case SQL_BIGINT:
+			return TRUE;
+	}
+	
+	return FALSE;
+}
+
+static inline BOOL needs_precision(SQLSMALLINT concise)
+{
+	switch (concise) {
+		/* "a time or timestamp data type" */
+		case SQL_C_TIME:
+		case SQL_C_TYPE_TIME:
+		//case SQL_C_TYPE_TIME_WITH_TIMEZONE: //4.0
+		case SQL_C_TIMESTAMP:
+		case SQL_C_TYPE_TIMESTAMP:
+		// case SQL_C_TYPE_TIMESTAMP_WITH_TIMEZONE: // 4.0
+
+		/* TODO: what's "an interval type with a seconds component"? */
+
+		/* "interval data types with a time component" */
+		case SQL_C_INTERVAL_DAY:
+		case SQL_C_INTERVAL_HOUR:
+		case SQL_C_INTERVAL_MINUTE:
+		case SQL_C_INTERVAL_SECOND:
+		case SQL_C_INTERVAL_DAY_TO_HOUR:
+		case SQL_C_INTERVAL_DAY_TO_MINUTE:
+		case SQL_C_INTERVAL_DAY_TO_SECOND:
+		case SQL_C_INTERVAL_HOUR_TO_MINUTE:
+		case SQL_C_INTERVAL_HOUR_TO_SECOND:
+		case SQL_C_INTERVAL_MINUTE_TO_SECOND:
+
+			/* Note: SQL types are the same defines (check if adding extras) */
+
+			return TRUE;
+	}
+	return FALSE;
+}
+
+static inline BOOL is_interval(SQLSMALLINT concise)
+{
+	switch (concise) {
+		case SQL_C_INTERVAL_DAY:
+		case SQL_C_INTERVAL_HOUR:
+		case SQL_C_INTERVAL_MINUTE:
+		case SQL_C_INTERVAL_SECOND:
+		case SQL_C_INTERVAL_DAY_TO_HOUR:
+		case SQL_C_INTERVAL_DAY_TO_MINUTE:
+		case SQL_C_INTERVAL_DAY_TO_SECOND:
+		case SQL_C_INTERVAL_HOUR_TO_MINUTE:
+		case SQL_C_INTERVAL_HOUR_TO_SECOND:
+		case SQL_C_INTERVAL_MINUTE_TO_SECOND:
+		case SQL_C_INTERVAL_MONTH:
+		case SQL_C_INTERVAL_YEAR:
+		case SQL_C_INTERVAL_YEAR_TO_MONTH:
+
+			/* Note: SQL types are the same defines (check if adding extras) */
+
+			return TRUE;
+	}
+	return FALSE;
+}
+
+static BOOL consistency_check(esodbc_desc_st *desc, desc_rec_st *rec)
+{
+
+	SQLSMALLINT type, code; 
+
+	if ((! is_c_type(rec->type)) && (! is_sql_type(rec->type))) {
+		ERR("record 0x%p type %d is neither C nor SQL type.", rec, rec->type);
+		return FALSE;
+	}
+	if ((! is_c_type(rec->concise_type)) && 
+			(! is_sql_type(rec->concise_type))) {
+		ERR("record 0x%p concise type %d is neither C nor SQL type.", 
+				rec, rec->type);
+		return FALSE;
+	}
+
+	concise_to_type_code(rec->concise_type, &type, &code);
+	if (rec->type != type || rec->datetime_interval_code != code) {
+		ERR("inconsistent types for rec 0x%p: concise: %d, verbose: %d, "
+				"code: %d.", rec, rec->concise_type, rec->type, 
+				rec->datetime_interval_code);
+		return FALSE;
+	}
+
+	if (is_numeric(rec->type)) {
+		/* TODO: actually check validity of precision/scale for data type */
+		if ((! rec->precision) || (! rec->scale)) {
+			ERR("invalid numeric precision/scale: %d/%d for data type %d.", 
+					rec->precision, rec->scale, rec->type);
+			return FALSE;
+		}
+	}
+
+	if (needs_precision(rec->concise_type)) {
+		/* TODO: actually check validity of precision for data type */
+		if (! rec->precision) {
+			ERR("invalid time/timestamp/interval with seconds/time "
+					"precision %d for concise type %d.", 
+					rec->precision, rec->concise_type);
+			return FALSE;
+		}
+	}
+
+	if (is_interval(rec->concise_type)) {
+		/* TODO: actually check the validity of dt_i_precision for data type */
+		if (! rec->datetime_interval_precision) {
+			ERR("invalid datetime_interval_precision %d for interval concise "
+					"type %d.", rec->datetime_interval_precision, 
+					rec->concise_type);
+			return FALSE;
+		}
+	}
+
+	return TRUE;
+}
 
 /*
  * "If an application calls SQLSetDescField to set any field other than
@@ -1189,12 +1712,23 @@ SQLRETURN EsSQLSetDescFieldW(
 		SQLPOINTER      Value,
 		SQLINTEGER      BufferLength)
 {
+	esodbc_desc_st *desc = DSCH(DescriptorHandle);
 	esodbc_state_et ret;
 	desc_rec_st *rec;
+	char *fname; /* field name */
+	SQLTCHAR **tstrp;
+	SQLSMALLINT *wordp;
+	SQLINTEGER *intp;
 
-	if (! check_access(DSCH(DescriptorHandle)->type, FieldIdentifier, O_RDWR)){
+	if (! check_access(desc->type, FieldIdentifier, O_RDWR)) {
+		/* "The SQL_DESC_DATA_PTR field of an IPD is not normally set;
+		 * however, an application can do so to force a consistency check of
+		 * IPD fields." 
+		 * TODO: the above won't work with the generic check implementation:
+		 * is it worth hacking an exception here? (since IPD/.data_ptr is 
+		 * marked RO) */
 		ERR("field access check failed: not defined or RO for desciptor.");
-		RET_HDIAGS(DSCH(DescriptorHandle), SQL_STATE_HY091);
+		RET_HDIAGS(desc, SQL_STATE_HY091);
 	}
 
 	/* header fields */
@@ -1205,27 +1739,27 @@ SQLRETURN EsSQLSetDescFieldW(
 				WARN("provided desc array size (%u) larger than allowed max "
 						"(%u) -- set value adjusted to max.", 
 						*(SQLULEN *)Value, ESODBC_MAX_ROW_ARRAY_SIZE);
-				DSCH(DescriptorHandle)->array_size = ESODBC_MAX_ROW_ARRAY_SIZE;
+				desc->array_size = ESODBC_MAX_ROW_ARRAY_SIZE;
 				/* TODO: return the fixed size in Value?? */
-				RET_HDIAGS(DSCH(DescriptorHandle), SQL_STATE_01S02);
+				RET_HDIAGS(desc, SQL_STATE_01S02);
 			} else {
-				DSCH(DescriptorHandle)->array_size = *(SQLULEN *)Value;
+				desc->array_size = *(SQLULEN *)Value;
 			}
 			return SQL_SUCCESS;
 
 		case SQL_DESC_ARRAY_STATUS_PTR:
 			DBG("setting desc array status ptr to: 0x%p.", Value);
-			DSCH(DescriptorHandle)->array_status_ptr = (SQLUSMALLINT *)Value;
+			desc->array_status_ptr = (SQLUSMALLINT *)Value;
 			return SQL_SUCCESS;
 
 		case SQL_DESC_BIND_OFFSET_PTR:
 			DBG("setting binding offset ptr to: 0x%p.", Value);
-			DSCH(DescriptorHandle)->bind_offset_ptr = (SQLLEN *)Value;
+			desc->bind_offset_ptr = (SQLLEN *)Value;
 			return SQL_SUCCESS;
 
 		case SQL_DESC_BIND_TYPE:
-			DBG("setting bind type to: %u.", (SQLUINTEGER)Value);
-			DSCH(DescriptorHandle)->bind_type = (SQLUINTEGER)Value;
+			DBG("setting bind type to: %u.", (SQLUINTEGER)(uintptr_t)Value);
+			desc->bind_type = (SQLUINTEGER)(uintptr_t)Value;
 			return SQL_SUCCESS;
 
 		/* 
@@ -1250,39 +1784,177 @@ SQLRETURN EsSQLSetDescFieldW(
 		 * except a bound bookmark column are released."
 		 */
 		case SQL_DESC_COUNT:
-			return update_rec_count(DSCH(DescriptorHandle),(SQLSMALLINT)Value);
+			return update_rec_count(desc,(SQLSMALLINT)(intptr_t)Value);
 
 		case SQL_DESC_ROWS_PROCESSED_PTR:
 			DBG("setting desc rwos processed ptr to: 0x%p.", Value);
-			DSCH(DescriptorHandle)->rows_processed_ptr = (SQLULEN *)Value;
+			desc->rows_processed_ptr = (SQLULEN *)Value;
 			return SQL_SUCCESS;
 	}
 
-	if (RecNumber < 0) { /* TODO: check also if AxD, as per spec?? */
+	/* 
+	 * The field is a record field -> get the record to apply the field to.
+	 */
+	if (RecNumber < 0) { /* TODO: need to check also if AxD, as per spec?? */
 		ERR("negative record number provided (%d) with record field (%d).",
 				RecNumber, FieldIdentifier);
-		RET_HDIAG(DSCH(DescriptorHandle), SQL_STATE_07009, 
+		RET_HDIAG(desc, SQL_STATE_07009, 
 				"Negative record number provided with record field", 0);
 	} else if (RecNumber == 0) {
 		ERR("unsupported record number 0."); /* TODO: bookmarks? */
-		RET_HDIAG(DSCH(DescriptorHandle), SQL_STATE_07009, 
+		RET_HDIAG(desc, SQL_STATE_07009, 
 				"Unsupported record number 0", 0);
 	} else { /* apparently one can set a record before the count is set */
-		rec = get_record(DSCH(DescriptorHandle), RecNumber);
-		if (! rec)
-			RET_STATE(DSCH(DescriptorHandle)->diag.state);
+		rec = get_record(desc, RecNumber, TRUE);
+		if (! rec) {
+			ERR("can't get record with number %d.", RecNumber);
+			RET_STATE(desc->diag.state);
+		}
 		DBG("setting field %d of record #%d @ 0x%p.", FieldIdentifier, 
 				RecNumber, rec);
 	}
 
+	/*
+	 * "If the application changes the data type or attributes after setting
+	 * the SQL_DESC_DATA_PTR field, the driver sets SQL_DESC_DATA_PTR to a
+	 * null pointer, unbinding the record."
+	 */
+	if (FieldIdentifier != SQL_DESC_DATA_PTR)
+		rec->data_ptr = NULL;
+
 	/* record fields */
 	switch (FieldIdentifier) {
+		case SQL_DESC_CONCISE_TYPE:
+			DBG("setting concise type of rec 0x%p to %d.", rec, 
+					(SQLSMALLINT)(intptr_t)Value); 
+			rec->concise_type = (SQLSMALLINT)(intptr_t)Value;
+			concise_to_type_code(rec->concise_type, &rec->type, 
+					&rec->datetime_interval_code);
+			set_defaults_from_type(rec);
+			DBG("rec 0x%p types: concise: %d, verbose: %d, code: %d.", rec,
+					rec->concise_type, rec->type, rec->datetime_interval_code);
+			break;
+
+		case SQL_DESC_TYPE:
+			DBG("setting type of rec 0x%p to %d.", rec, 
+					(SQLSMALLINT)(intptr_t)Value);
+			rec->type = (SQLSMALLINT)(intptr_t)Value;
+			if (rec->type == SQL_DATETIME || rec->type == SQL_INTERVAL)
+				RET_HDIAGS(desc, SQL_STATE_HY021);
+			rec->concise_type = rec->type;
+			rec->datetime_interval_code = 0;
+			set_defaults_from_type(rec);
+			DBG("rec 0x%p types: concise: %d, verbose: %d, code: %d.", rec,
+					rec->concise_type, rec->type, rec->datetime_interval_code);
+			break;
+
+		case SQL_DESC_DATA_PTR:
+			DBG("setting data ptr to 0x%p.", Value);
+			rec->data_ptr = Value;
+			if (rec->data_ptr) {
+				if ((desc->type != DESC_TYPE_IRD) && 
+						(! consistency_check(desc, rec))) {
+					ERR("consistency check failed on record 0x%p.", rec);
+					RET_HDIAGS(desc, SQL_STATE_HY021);
+				} else {
+					DBG("rec 0x%p bound to data ptr 0x%p.", rec, Value);
+				}
+			} else {
+				DBG("rec 0x%p unbound.", rec);
+			}
+			break;
+
+		case SQL_DESC_NAME:
+			WARN("stored procedure params (to set to `"LTPD"`) not "
+					"supported.", (SQLTCHAR *)Value);
+			RET_HDIAG(desc, SQL_STATE_HYC00, 
+					"stored procedure params not supported", 0);
+
+		/* <SQLTCHAR *> */
+		do {
+		case SQL_DESC_BASE_COLUMN_NAME: tstrp = &rec->base_column_name; break;
+		case SQL_DESC_BASE_TABLE_NAME: tstrp = &rec->base_table_name; break;
+		case SQL_DESC_CATALOG_NAME: tstrp = &rec->catalog_name; break;
+		case SQL_DESC_LABEL: tstrp = &rec->label; break;
+		case SQL_DESC_LITERAL_PREFIX: tstrp = &rec->literal_prefix; break;
+		case SQL_DESC_LITERAL_SUFFIX: tstrp = &rec->literal_suffix; break;
+		case SQL_DESC_LOCAL_TYPE_NAME: tstrp = &rec->local_type_name; break;
+		case SQL_DESC_SCHEMA_NAME: tstrp = &rec->schema_name; break;
+		case SQL_DESC_TABLE_NAME: tstrp = &rec->table_name; break;
+		case SQL_DESC_TYPE_NAME: tstrp = &rec->type_name; break;
+		} while (0);
+			DBG("setting SQLTCHAR field %d to 0x%p(`"LTPD"`).", 
+					FieldIdentifier, Value, 
+					Value ? (SQLTCHAR *)Value : MK_TSTR("<NULL>"));
+			*tstrp = (SQLTCHAR *)Value;
+			break;
+
+		/* <SQLLEN *> */
+		case SQL_DESC_INDICATOR_PTR:
+			DBG("setting indicator pointer to 0x%p.", Value);
+			rec->indicator_ptr = (SQLLEN *)Value;
+			break;
+		case SQL_DESC_OCTET_LENGTH_PTR:
+			DBG("setting octet length pointer to 0x%p.", Value);
+			rec->octet_length_ptr = (SQLLEN *)Value;
+			break;
+
+		/* <SQLLEN> */
+		case SQL_DESC_DISPLAY_SIZE:
+			DBG("setting display size: %d.", (SQLLEN)(intptr_t)Value);
+			rec->display_size = (SQLLEN)(intptr_t)Value;
+			break;
+		case SQL_DESC_OCTET_LENGTH:
+			DBG("setting octet length: %d.", (SQLLEN)(intptr_t)Value);
+			rec->octet_length = (SQLLEN)(intptr_t)Value;
+			break;
+
+		/* <SQLULEN> */
+		case SQL_DESC_LENGTH:
+			DBG("setting lenght: %u.", (SQLULEN)(uintptr_t)Value);
+			rec->length = (SQLULEN)(uintptr_t)Value;
+			break;
+
+		/* <SQLSMALLINT> */
+		do {
+		case SQL_DESC_DATETIME_INTERVAL_CODE:
+			wordp = &rec->datetime_interval_code; break;
+		case SQL_DESC_FIXED_PREC_SCALE: wordp = &rec->fixed_prec_scale; break;
+		case SQL_DESC_NULLABLE: wordp = &rec->nullable; break;
+		case SQL_DESC_PARAMETER_TYPE: wordp = &rec->parameter_type; break;
+		case SQL_DESC_PRECISION: wordp = &rec->precision; break;
+		case SQL_DESC_ROWVER: wordp = &rec->rowver; break;
+		case SQL_DESC_SCALE: wordp = &rec->scale; break;
+		case SQL_DESC_SEARCHABLE: wordp = &rec->searchable; break;
+		case SQL_DESC_UNNAMED: 
+			if ((SQLSMALLINT)(intptr_t)Value == SQL_NAMED)
+				RET_HDIAGS(desc, SQL_STATE_HY091);
+			wordp = &rec->unnamed;
+			break;
+		case SQL_DESC_UNSIGNED: wordp = &rec->usigned; break;
+		case SQL_DESC_UPDATABLE: wordp = &rec->updatable; break;
+		} while (0);
+			DBG("setting record field %d to %d.", FieldIdentifier, 
+					(SQLSMALLINT)(intptr_t)Value);
+			*wordp = (SQLSMALLINT)(intptr_t)Value;
+			break;
+
+		/* <SQLINTEGER> */
+		do {
+		case SQL_DESC_AUTO_UNIQUE_VALUE: intp = &rec->auto_unique_value; break;
+		case SQL_DESC_CASE_SENSITIVE: intp = &rec->case_sensitive; break;
+		case SQL_DESC_DATETIME_INTERVAL_PRECISION: 
+			intp = &rec->datetime_interval_precision; break;
+		case SQL_DESC_NUM_PREC_RADIX: intp = &rec->num_prec_radix; break;
+		} while (0);
+			DBG("returning record field %d as %d.", FieldIdentifier,
+					(SQLINTEGER)(intptr_t)Value);
+			*intp = (SQLINTEGER)(intptr_t)Value;
+			break;
 
 		default:
-			// FIXME
-			FIXME;
 			ERR("unknown FieldIdentifier: %d.", FieldIdentifier);
-			RET_HDIAGS(DSCH(DescriptorHandle), SQL_STATE_HY091);
+			RET_HDIAGS(desc, SQL_STATE_HY091);
 	}
 	
 	RET_STATE(SQL_STATE_00000);

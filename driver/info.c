@@ -604,6 +604,9 @@ NUM_PREC_RADIX
 INTERVAL_PRECISION
 #endif
 
+/*
+ * Equivalent of JDBC's getTypeInfo() ([0]:900)
+ */
 SQLRETURN EsSQLGetTypeInfoW(SQLHSTMT StatementHandle, SQLSMALLINT DataType)
 {
 	switch (DataType) {
