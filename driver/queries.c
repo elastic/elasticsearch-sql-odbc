@@ -51,7 +51,7 @@
 SQLRETURN EsSQLBindCol(
 		SQLHSTMT StatementHandle,
 		SQLUSMALLINT ColumnNumber,
-		SQLSMALLINT TargetType,
+		SQLSMALLINT TargetType, /* identifier of the C data type */
 		_Inout_updates_opt_(_Inexpressible_(BufferLength)) 
 				SQLPOINTER TargetValue,
 		SQLLEN BufferLength,
@@ -77,8 +77,8 @@ SQLRETURN EsSQLBindCol(
 
 	/* ajust record count */
 	if (ard->count < ColumnNumber) {
-		ret = EsSQLSetDescFieldW(ard, NO_REC_NR, SQL_DESC_COUNT, ColumnNumber,
-				SQL_IS_SMALLINT);
+		ret = EsSQLSetDescFieldW(ard, NO_REC_NR, SQL_DESC_COUNT, 
+				(SQLPOINTER)(uintptr_t)ColumnNumber, SQL_IS_SMALLINT);
 		if (ret != SQL_SUCCESS) {
 			DBG("failed to update desc count to %d.", ColumnNumber);
 			HDIAG_COPY(ard, stmt); /* copy error at top handle level */
@@ -89,6 +89,13 @@ SQLRETURN EsSQLBindCol(
 	// FIXME: consider STMH(StatementHandle)->options.bind_offset
 	// FIXME: consider STMH(StatementHandle)->options.array_size
 
+	/* set concise type (or verbose for datetime/interval types) */
+	ret = EsSQLSetDescFieldW(ard, ColumnNumber, SQL_DESC_CONCISE_TYPE, 
+			(SQLPOINTER)(intptr_t)TargetType, SQL_IS_SMALLINT);
+	if (ret != SQL_SUCCESS) {
+		HDIAG_COPY(ard, stmt); /* copy error at top handle level */
+		return ret;
+	}
 #if 0
 	/* set concise type (or verbose for datetime/interval types) */
 	ret = EsSQLSetDescFieldW(ard, ColumnNumber - 1, SQL_DESC_TYPE, TargetType,
@@ -103,7 +110,7 @@ SQLRETURN EsSQLBindCol(
 		case SQL_DATETIME:
 		case SQL_INTERVAL:
 		default:
-			ret = EsSQLSetDescFieldW(ard, ColumnNumber - 1,
+			ret = EsSQLSetDescFieldW(ard, ColumnNumber,
 					SQL_DESC_CONCISE_TYPE, TargetType, SQL_IS_SMALLINT);
 			if (ret != SQL_SUCCESS) {
 				HDIAG_COPY(ard, stmt); /* copy error at top handle level */
