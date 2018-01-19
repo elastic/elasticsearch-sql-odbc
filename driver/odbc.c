@@ -729,6 +729,14 @@ SQLRETURN  SQL_API SQLFetch(SQLHSTMT StatementHandle)
  * number of rows affected in a bulk operation performed by a call to
  * SQLBulkOperations or SQLSetPos, including error rows."
  * (.rows_processed_ptr)
+ *
+ * "The variable that the StrLen_or_Ind argument refers to is used for both
+ * indicator and length information. If a fetch encounters a null value for
+ * the column, it stores SQL_NULL_DATA in this variable; otherwise, it stores
+ * the data length in this variable. Passing a null pointer as StrLen_or_Ind
+ * keeps the fetch operation from returning the data length but makes the
+ * fetch fail if it encounters a null value and has no way to return
+ * SQL_NULL_DATA." (.indicator_ptr)
  */
 SQLRETURN  SQL_API SQLFetchScroll(SQLHSTMT StatementHandle,
            SQLSMALLINT FetchOrientation, SQLLEN FetchOffset)

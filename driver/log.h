@@ -123,7 +123,6 @@ extern int _esodbc_log_level;
 #define WARN(fmt, ...)	LOG(LOG_LEVEL_WARN, fmt, __VA_ARGS__)
 #define INFO(fmt, ...)	LOG(LOG_LEVEL_INFO, fmt, __VA_ARGS__)
 #define DBG(fmt, ...)	LOG(LOG_LEVEL_DBG, fmt, __VA_ARGS__)
-#define TRACE			LOG(LOG_LEVEL_DBG, "===== TR4C3 =====")
 
 #define BUG(fmt, ...) \
 	do { \
@@ -131,7 +130,8 @@ extern int _esodbc_log_level;
 		assert(0); \
 	} while (0)
 
-#define FIXME BUG("not yet implemented"); 
+#define FIXME	BUG("not yet implemented")
+#define TRACE	DBG("===== TR4C3 =====");
 
 #endif
 

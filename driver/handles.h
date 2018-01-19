@@ -56,6 +56,9 @@ typedef struct struct_dbc {
 	// FIXME: placeholder; used if connection has been established or not
 	// TODO: PROTO
 	void *conn;
+	/* "the catalog is a database", "For a single-tier driver, the catalog
+	 * might be a directory" */
+	SQLTCHAR *catalog; 
 	// TODO: statements?
 } esodbc_dbc_st;
 
@@ -133,7 +136,7 @@ typedef struct struct_desc {
 	SQLULEN			*rows_processed_ptr;
 	/* /header fields */
 
-	/* array of records.
+	/* array of records of .count cardinality
 	 * TODO: list? binding occurs seldomly, compared to execution, tho. */
 	desc_rec_st *recs;
 } esodbc_desc_st;
