@@ -60,62 +60,64 @@ SQLRETURN EsSQLBindCol(
 		 * set before binding a column to column 0. This is not required but
 		 * is strongly recommended." */
 		//RET_HDIAGS(STMH(StatementHandle), SQL_STATE_IM001);
-		// FIXME: implement bookmarks
+		/* TODO: implement bookmarks? */
 		FIXME;
 	}
 
-	/* ajust record count */
+	/* "if the value in the ColumnNumber argument exceeds the value of
+	 * SQL_DESC_COUNT, calls SQLSetDescField to increase the value of
+	 * SQL_DESC_COUNT to ColumnNumber." */
 	if (ard->count < ColumnNumber) {
-		ret = EsSQLSetDescFieldW(ard, NO_REC_NR, SQL_DESC_COUNT, 
+		ret = EsSQLSetDescFieldW(ard, NO_REC_NR, SQL_DESC_COUNT,
 				(SQLPOINTER)(uintptr_t)ColumnNumber, SQL_IS_SMALLINT);
-		if (ret != SQL_SUCCESS) {
-			DBG("failed to update desc count to %d.", ColumnNumber);
-			HDIAG_COPY(ard, stmt); /* copy error at top handle level */
-			return ret;
-		}
+		if (ret != SQL_SUCCESS)
+			goto copy_ret;
 	}
 
-	// FIXME: consider STMH(StatementHandle)->options.bind_offset
-	// FIXME: consider STMH(StatementHandle)->options.array_size
-
 	/* set concise type (or verbose for datetime/interval types) */
-	ret = EsSQLSetDescFieldW(ard, ColumnNumber, SQL_DESC_CONCISE_TYPE, 
+	ret = EsSQLSetDescFieldW(ard, ColumnNumber, SQL_DESC_CONCISE_TYPE,
 			(SQLPOINTER)(intptr_t)TargetType, SQL_IS_SMALLINT);
-	if (ret != SQL_SUCCESS) {
-		HDIAG_COPY(ard, stmt); /* copy error at top handle level */
-		return ret;
-	}
-#if 0
-	/* set concise type (or verbose for datetime/interval types) */
-	ret = EsSQLSetDescFieldW(ard, ColumnNumber - 1, SQL_DESC_TYPE, TargetType,
-			SQL_IS_SMALLINT);
-	if (ret != SQL_SUCCESS) {
-		HDIAG_COPY(ard, stmt); /* copy error at top handle level */
-		return ret;
-	}
+	if (ret != SQL_SUCCESS) 
+		goto copy_ret;
 
-	/* set concise type */
-	switch (TargetType) {
-		case SQL_DATETIME:
-		case SQL_INTERVAL:
-		default:
-			ret = EsSQLSetDescFieldW(ard, ColumnNumber,
-					SQL_DESC_CONCISE_TYPE, TargetType, SQL_IS_SMALLINT);
-			if (ret != SQL_SUCCESS) {
-				HDIAG_COPY(ard, stmt); /* copy error at top handle level */
-				return ret;
-			}
-	}
-	if (TargetType != SQL_DATETIME && TargetType != SQL_INTERVAL) {
-	} else {
+	 // TODO: "Sets one or more of SQL_DESC_LENGTH, SQL_DESC_PRECISION,
+	 // SQL_DESC_SCALE, and SQL_DESC_DATETIME_INTERVAL_PRECISION, as
+	 // appropriate for TargetType."
+	 // TODO: Cautions Regarding SQL_DEFAULT
 
-	}
-#endif
+	/* "Sets the SQL_DESC_OCTET_LENGTH field to the value of BufferLength." */
+	ret = EsSQLSetDescFieldW(ard, ColumnNumber, SQL_DESC_OCTET_LENGTH,
+			(SQLPOINTER)(intptr_t)BufferLength, SQL_IS_INTEGER);
+	if (ret != SQL_SUCCESS)
+		goto copy_ret;
 
-	BUG("not implemented.");
-	//RET_NOT_IMPLEMENTED;
+	/* "Sets the SQL_DESC_DATA_PTR field to the value of TargetValue." */
+	ret = EsSQLSetDescFieldW(ard, ColumnNumber, SQL_DESC_DATA_PTR,
+			TargetValue, SQL_IS_POINTER);
+	if (ret != SQL_SUCCESS)
+		goto copy_ret;
+
+	/* Sets the SQL_DESC_INDICATOR_PTR field to the value of StrLen_or_Ind" */
+	ret = EsSQLSetDescFieldW(ard, ColumnNumber, SQL_DESC_INDICATOR_PTR,
+			StrLen_or_Ind, 
+			SQL_LEN_BINARY_ATTR((SQLINTEGER)sizeof(StrLen_or_Ind)));
+	if (ret != SQL_SUCCESS)
+		goto copy_ret;
+
+	/* "Sets the SQL_DESC_OCTET_LENGTH_PTR field to the value of
+	 * StrLen_or_Ind." */
+	ret = EsSQLSetDescFieldW(ard, ColumnNumber, SQL_DESC_OCTET_LENGTH_PTR,
+			StrLen_or_Ind, 
+			SQL_LEN_BINARY_ATTR((SQLINTEGER)sizeof(StrLen_or_Ind)));
+	if (ret != SQL_SUCCESS)
+		goto copy_ret;
+
 	return SQL_SUCCESS;
-//error_cpy:
+
+copy_ret:
+	/* copy error at top handle level, where it's going to be inquired from */
+	HDIAG_COPY(ard, stmt);
+	return ret;
 }
 
 /*
@@ -165,9 +167,20 @@ SQLRETURN EsSQLBindCol(
  * number of rows affected in a bulk operation performed by a call to
  * SQLBulkOperations or SQLSetPos, including error rows."
  * (.rows_processed_ptr)
+ *
+ * "The variable that the StrLen_or_Ind argument refers to is used for both
+ * indicator and length information. If a fetch encounters a null value for
+ * the column, it stores SQL_NULL_DATA in this variable; otherwise, it stores
+ * the data length in this variable. Passing a null pointer as StrLen_or_Ind
+ * keeps the fetch operation from returning the data length but makes the
+ * fetch fail if it encounters a null value and has no way to return
+ * SQL_NULL_DATA." (.indicator_ptr)
  */
 SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 {
+	// FIXME: consider STMH(StatementHandle)->options.bind_offset
+	// FIXME: consider STMH(StatementHandle)->options.array_size
+	
 	return SQL_NO_DATA;
 	RET_NOT_IMPLEMENTED;
 }

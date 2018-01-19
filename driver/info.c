@@ -176,12 +176,13 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		SQLSMALLINT BufferLength,
 		_Out_opt_ SQLSMALLINT *StringLengthPtr)
 {
+	esodbc_dbc_st *dbc = DBCH(ConnectionHandle);
+
 	switch (InfoType) {
 		/* Driver Information */
 		/* "what version of odbc a driver complies with" */
 		case SQL_DRIVER_ODBC_VER:
-			return write_tstr(DBCH(ConnectionHandle), InfoValue, 
-					MK_TSTR(ESODBC_SQL_SPEC_STRING), 
+			return write_tstr(dbc, InfoValue, MK_TSTR(ESODBC_SQL_SPEC_STRING),
 					BufferLength, StringLengthPtr);
 
 		/* "if the driver can execute functions asynchronously on the
@@ -226,28 +227,25 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			break;
 
 		case SQL_DATA_SOURCE_NAME:
-			DBG("requested: data source name: `"LTPD"`.", 
-					DBCH(ConnectionHandle)->connstr);
-			return write_tstr(DBCH(ConnectionHandle), InfoValue, 
-					DBCH(ConnectionHandle)->connstr,
-					BufferLength, StringLengthPtr);
+			DBG("requested: data source name: `"LTPD"`.", dbc->connstr);
+			return write_tstr(dbc, InfoValue, dbc->connstr, BufferLength,
+					StringLengthPtr);
 
 		case SQL_DRIVER_NAME:
 			DBG("requested: driver (file) name: %s.", DRIVER_NAME);
-			return write_tstr(DBCH(ConnectionHandle), InfoValue, 
+			return write_tstr(dbc, InfoValue, 
 					MK_TSTR(DRIVER_NAME), BufferLength, StringLengthPtr);
 			break;
 
 		case SQL_DATA_SOURCE_READ_ONLY:
 			DBG("requested: if data source is read only (`Y`es, it is).");
-			return write_tstr(DBCH(ConnectionHandle), InfoValue, 
-					MK_TSTR("Y"), BufferLength, StringLengthPtr);
+			return write_tstr(dbc, InfoValue, MK_TSTR("Y"), BufferLength,
+					StringLengthPtr);
 
 		case SQL_SEARCH_PATTERN_ESCAPE:
 			DBG("requested: escape character (`%s`).", ESODBC_PATTERN_ESCAPE);
-			return write_tstr(DBCH(ConnectionHandle), InfoValue, 
-					MK_TSTR(ESODBC_PATTERN_ESCAPE), BufferLength, 
-					StringLengthPtr);
+			return write_tstr(dbc, InfoValue, MK_TSTR(ESODBC_PATTERN_ESCAPE),
+					BufferLength, StringLengthPtr);
 
 		case SQL_CORRELATION_NAME:
 			// JDBC[0]: supportsDifferentTableCorrelationNames()
@@ -267,8 +265,8 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			/* JDBC[0]: getCatalogSeparator() */
 			DBG("requested: catalogue separator (`%s`).", 
 					ESODBC_CATALOG_SEPARATOR);
-			return write_tstr(DBCH(ConnectionHandle), InfoValue, 
-					MK_TSTR(ESODBC_CATALOG_SEPARATOR), BufferLength, 
+			return write_tstr(dbc, InfoValue,
+					MK_TSTR(ESODBC_CATALOG_SEPARATOR), BufferLength,
 					StringLengthPtr);
 
 		case SQL_FILE_USAGE:
@@ -283,9 +281,8 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		case SQL_CATALOG_TERM: /* SQL_QUALIFIER_TERM */
 			/* JDBC[0]: getCatalogSeparator() */
 			DBG("requested: catalogue term (`%s`).", ESODBC_CATALOG_TERM);
-			return write_tstr(DBCH(ConnectionHandle), InfoValue, 
-					MK_TSTR(ESODBC_CATALOG_TERM), BufferLength, 
-					StringLengthPtr);
+			return write_tstr(dbc, InfoValue, MK_TSTR(ESODBC_CATALOG_TERM),
+					BufferLength, StringLengthPtr);
 
 		case SQL_MAX_SCHEMA_NAME_LEN: /* SQL_MAX_OWNER_NAME_LEN */
 			/* JDBC[0]: getMaxSchemaNameLength() */
@@ -296,9 +293,8 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		case SQL_IDENTIFIER_QUOTE_CHAR:
 			/* JDBC[0]: getIdentifierQuoteString() */
 			DBG("requested: quoting char (`%s`).", ESODBC_QUOTE_CHAR);
-			return write_tstr(DBCH(ConnectionHandle), InfoValue, 
-					MK_TSTR(ESODBC_QUOTE_CHAR), BufferLength, 
-					StringLengthPtr);
+			return write_tstr(dbc, InfoValue, MK_TSTR(ESODBC_QUOTE_CHAR),
+					BufferLength, StringLengthPtr);
 
 		/* what Operations are supported by SQLSetPos  */
 		// FIXME: review@alpha
@@ -326,7 +322,7 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 
 		default:
 			ERR("unknown InfoType: %u.", InfoType);
-			RET_HDIAGS(DBCH(ConnectionHandle), SQL_STATE_HYC00/*096?*/);
+			RET_HDIAGS(dbc, SQL_STATE_HYC00/*096?*/);
 	}
 
 	RET_STATE(SQL_STATE_00000);
