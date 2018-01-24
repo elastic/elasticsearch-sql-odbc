@@ -54,6 +54,9 @@ static void init_desc(esodbc_desc_st *desc, desc_type_et type,
 SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 	SQLHANDLE InputHandle, _Out_ SQLHANDLE *OutputHandle)
 {
+	esodbc_dbc_st *dbc;
+	esodbc_stmt_st *stmt;
+
 	switch(HandleType) {
 		/* 
 		 * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlallochandle-function :
@@ -97,41 +100,49 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 				RET_HDIAG(ENVH(InputHandle), SQL_STATE_HY010, 
 						"enviornment has no version set yet", 0);
 			}
-			*OutputHandle = (SQLHANDLE *)calloc(1, sizeof(esodbc_dbc_st));
-			if (! *OutputHandle) {
+			dbc = (esodbc_dbc_st *)calloc(1, sizeof(esodbc_dbc_st));
+			*OutputHandle = (SQLHANDLE *)dbc;
+			if (! dbc) {
 				ERRN("failed to callocate connection handle.");
 				RET_HDIAGS(ENVH(InputHandle), SQL_STATE_HY001);
 			}
-			DBCH(*OutputHandle)->env = ENVH(InputHandle);
-			DBCH(*OutputHandle)->timeout = ESODBC_DBC_CONN_TIMEOUT;
+			dbc->env = ENVH(InputHandle);
+			dbc->timeout = ESODBC_TIMEOUT_DEFAULT;
+			dbc->metadata_id = SQL_FALSE;
+			dbc->async_enable = SQL_ASYNC_ENABLE_OFF;
+
 			DBG("new Connection handle allocated @0x%p.", *OutputHandle);
 			break;
 
 		case SQL_HANDLE_STMT: /* Statement Handle */
-			*OutputHandle = (SQLHANDLE *)calloc(1, sizeof(esodbc_stmt_st));
-			if (! *OutputHandle) {
+			dbc = DBCH(InputHandle);
+			stmt = (esodbc_stmt_st *)calloc(1, sizeof(esodbc_stmt_st));
+			*OutputHandle = stmt;
+			if (! stmt) {
 				ERRN("failed to callocate statement handle.");
-				RET_HDIAGS(DBCH(InputHandle), SQL_STATE_HY001); 
+				RET_HDIAGS(dbc, SQL_STATE_HY001); 
 			}
-			STMH(*OutputHandle)->dbc = DBCH(InputHandle);
+			stmt->dbc = dbc;
 
-			init_desc(&STMH(*OutputHandle)->i_ard, DESC_TYPE_ARD, 
-					SQL_DESC_ALLOC_AUTO);
-			init_desc(&STMH(*OutputHandle)->i_ird, DESC_TYPE_IRD, 
-					SQL_DESC_ALLOC_AUTO);
-			init_desc(&STMH(*OutputHandle)->i_apd, DESC_TYPE_APD, 
-					SQL_DESC_ALLOC_AUTO);
-			init_desc(&STMH(*OutputHandle)->i_ipd, DESC_TYPE_IPD, 
-					SQL_DESC_ALLOC_AUTO);
+			init_desc(&stmt->i_ard, DESC_TYPE_ARD, SQL_DESC_ALLOC_AUTO);
+			init_desc(&stmt->i_ird, DESC_TYPE_IRD, SQL_DESC_ALLOC_AUTO);
+			init_desc(&stmt->i_apd, DESC_TYPE_APD, SQL_DESC_ALLOC_AUTO);
+			init_desc(&stmt->i_ipd, DESC_TYPE_IPD, SQL_DESC_ALLOC_AUTO);
 
 			/* "When a statement is allocated, four descriptor handles are
 			 * automatically allocated and associated with the statement." */
-			STMH(*OutputHandle)->ard = &STMH(*OutputHandle)->i_ard;
-			STMH(*OutputHandle)->ird = &STMH(*OutputHandle)->i_ird;
-			STMH(*OutputHandle)->apd = &STMH(*OutputHandle)->i_apd;
-			STMH(*OutputHandle)->ipd = &STMH(*OutputHandle)->i_ipd;
+			stmt->ard = &stmt->i_ard;
+			stmt->ird = &stmt->i_ird;
+			stmt->apd = &stmt->i_apd;
+			stmt->ipd = &stmt->i_ipd;
 
-			STMH(*OutputHandle)->bookmarks = SQL_UB_OFF;
+			/* set option defaults */
+			stmt->bookmarks = SQL_UB_OFF;
+			/* inherit this connection-statement attributes
+			 * Note: these attributes won't propagate at statement level when
+			 * set at connection level. */
+			stmt->metadata_id = dbc->metadata_id;
+			stmt->async_enable = dbc->async_enable;
 			DBG("new Statement handle allocated @0x%p.", *OutputHandle);
 			break;
 
@@ -394,6 +405,8 @@ SQLRETURN EsSQLSetConnectAttrW(
 		_In_reads_bytes_opt_(StringLength) SQLPOINTER Value,
 		SQLINTEGER StringLength)
 {
+	esodbc_dbc_st *dbc = DBCH(ConnectionHandle);
+
 	switch(Attribute) {
 		case SQL_ATTR_ANSI_APP:
 			/* this driver doesn't behave differently based on app being ANSI
@@ -405,30 +418,38 @@ SQLRETURN EsSQLSetConnectAttrW(
 			return SQL_ERROR; /* error means ANSI */
 
 		case SQL_ATTR_LOGIN_TIMEOUT:
-			if (DBCH(ConnectionHandle)->conn) {
+			if (dbc->conn) {
 				ERR("connection already established, can't set connection"
 						" timeout (to %u).", (SQLUINTEGER)(uintptr_t)Value);
-				RET_HDIAG(DBCH(ConnectionHandle), SQL_STATE_HY011,
-						"connection established, can't set connection "
-						"timeout.", 0);
+				RET_HDIAG(dbc, SQL_STATE_HY011, "connection established, "
+						"can't set connection timeout.", 0);
 			}
 			INFO("setting connection timeout to: %u, from previous: %u.", 
-					DBCH(ConnectionHandle)->timeout, 
-					(SQLUINTEGER)(uintptr_t)Value);
-			DBCH(ConnectionHandle)->timeout = (SQLUINTEGER)(uintptr_t)Value;
+					dbc->timeout, (SQLUINTEGER)(uintptr_t)Value);
+			dbc->timeout = (long)(uintptr_t)Value;
 			break;
 
 		/* https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/automatic-population-of-the-ipd */
 		case SQL_ATTR_AUTO_IPD:
 			ERR("trying to set read-only attribute AUTO IPD.");
-			RET_HDIAGS(DBCH(ConnectionHandle), SQL_STATE_HY092);
+			RET_HDIAGS(dbc, SQL_STATE_HY092);
 		case SQL_ATTR_ENABLE_AUTO_IPD:
 			if (*(SQLUINTEGER *)Value != SQL_FALSE) {
 				ERR("trying to enable unsupported attribute AUTO IPD.");
-				RET_HDIAGS(DBCH(ConnectionHandle), SQL_STATE_HYC00);
+				RET_HDIAGS(dbc, SQL_STATE_HYC00);
 			}
 			WARN("disabling (unsupported) attribute AUTO IPD -- NOOP.");
 			break;
+
+		case SQL_ATTR_METADATA_ID:
+			DBG("DBC 0x%p setting metadata_id to %u.", dbc, (SQLULEN)Value);
+			dbc->metadata_id = (SQLULEN)Value;
+			break;
+		case SQL_ATTR_ASYNC_ENABLE:
+			DBG("DBC 0x%p setting async enable to %u.", dbc, (SQLULEN)Value);
+			dbc->async_enable = (SQLULEN)Value;
+			break;
+
 
 		default:
 			ERR("unknown Attribute: %d.", Attribute);
@@ -485,10 +506,20 @@ SQLRETURN EsSQLGetConnectAttrW(
 			*StringLengthPtr *= sizeof(SQLTCHAR);
 			*(SQLTCHAR **)ValuePtr = val;
 #else //0
+			// FIXME;
 			memcpy(ValuePtr, MK_TSTR("NulL"), 8);
 			((SQLTCHAR *)ValuePtr)[5] = 0;
 			
 #endif //0
+			break;
+
+		case SQL_ATTR_METADATA_ID:
+			DBG("requested: metadata_id: %u.", dbc->metadata_id);
+			*(SQLULEN *)ValuePtr = dbc->metadata_id;
+			break;
+		case SQL_ATTR_ASYNC_ENABLE:
+			DBG("requested: async enable: %u.", dbc->async_enable);
+			*(SQLULEN *)ValuePtr = dbc->async_enable;
 			break;
 
 		case SQL_ATTR_ACCESS_MODE:
@@ -496,14 +527,12 @@ SQLRETURN EsSQLGetConnectAttrW(
 		case SQL_ATTR_ASYNC_DBC_FUNCTIONS_ENABLE:
 		//case SQL_ATTR_ASYNC_DBC_PCALLBACK:
 		//case SQL_ATTR_ASYNC_DBC_PCONTEXT:
-		case SQL_ATTR_ASYNC_ENABLE:
 		case SQL_ATTR_AUTOCOMMIT:
 		case SQL_ATTR_CONNECTION_DEAD:
 		case SQL_ATTR_CONNECTION_TIMEOUT:
 		//case SQL_ATTR_DBC_INFO_TOKEN:
 		case SQL_ATTR_ENLIST_IN_DTC:
 		case SQL_ATTR_LOGIN_TIMEOUT:
-		case SQL_ATTR_METADATA_ID:
 		case SQL_ATTR_ODBC_CURSORS:
 		case SQL_ATTR_PACKET_SIZE:
 		case SQL_ATTR_QUIET_MODE:
@@ -532,13 +561,14 @@ SQLRETURN EsSQLSetStmtAttrW(
 {
 	SQLRETURN ret;
 	esodbc_desc_st *desc;
+	esodbc_stmt_st *stmt = STMH(StatementHandle);
 
 	switch(Attribute) {
 		case SQL_ATTR_USE_BOOKMARKS:
-			DBG("setting use-bookmarks to: %u.", *(SQLULEN *)ValuePtr);
-			if (*(SQLULEN *)ValuePtr != SQL_UB_OFF) {
+			DBG("setting use-bookmarks to: %u.", (SQLULEN)ValuePtr);
+			if ((SQLULEN)ValuePtr != SQL_UB_OFF) {
 				WARN("bookmarks are not supported by driver.");
-				RET_HDIAG(STMH(StatementHandle), SQL_STATE_01000,
+				RET_HDIAG(stmt, SQL_STATE_01000,
 						"bookmarks are not supported by driver", 0);
 			}
 			break;
@@ -554,39 +584,39 @@ SQLRETURN EsSQLSetStmtAttrW(
 			/* "Setting this statement attribute sets the
 			 * SQL_DESC_BIND_OFFSET_PTR field in the ARD header." */
 			DBG("setting row-bind-offset pointer to: 0x%p.", ValuePtr);
-			desc = STMH(StatementHandle)->ard;
+			desc = stmt->ard;
 			break;
 		case SQL_ATTR_PARAM_BIND_OFFSET_PTR:
 			DBG("setting param-bind-offset pointer to: 0x%p.", ValuePtr);
-			desc = STMH(StatementHandle)->apd;
+			desc = stmt->apd;
 			break;
 		} while (0);
 			ret = EsSQLSetDescFieldW(desc, NO_REC_NR, SQL_DESC_BIND_OFFSET_PTR,
 					ValuePtr, BufferLength);
 			if (ret != SQL_SUCCESS) /* _WITH_INFO wud be "error" here */
 				/* if SetDescField() fails, DM will check statement's diag */
-				HDIAG_COPY(desc, STMH(StatementHandle));
+				HDIAG_COPY(desc, stmt);
 			return ret;
 
 		do {
 		/* "Setting this statement attribute sets the SQL_DESC_ARRAY_SIZE
 		 * field in the ARD header." */
 		case SQL_ATTR_ROW_ARRAY_SIZE:
-			DBG("setting row array size to: %d.", *(SQLULEN *)ValuePtr);
-			desc = STMH(StatementHandle)->ard;
+			DBG("setting row array size to: %d.", (SQLULEN)ValuePtr);
+			desc = stmt->ard;
 			break;
 		/* "Setting this statement attribute sets the SQL_DESC_ARRAY_SIZE
 		 * field in the APD header." */
 		case SQL_ATTR_PARAMSET_SIZE:
-			DBG("setting param set size to: %d.", *(SQLULEN *)ValuePtr);
-			desc = STMH(StatementHandle)->apd;
+			DBG("setting param set size to: %d.", (SQLULEN)ValuePtr);
+			desc = stmt->apd;
 			break;
 		} while (0);
 			ret = EsSQLSetDescFieldW(desc, NO_REC_NR, SQL_DESC_ARRAY_SIZE,
 					ValuePtr, BufferLength);
 			if (ret != SQL_SUCCESS) /* _WITH_INFO wud be "error" here */
 				/* if SetDescField() fails, DM will check statement's diag */
-				HDIAG_COPY(desc, STMH(StatementHandle));
+				HDIAG_COPY(desc, stmt);
 			return ret;
 
 		do {
@@ -595,7 +625,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 		/* "Setting this statement attribute sets the SQL_DESC_BIND_TYPE field
 		 * in the ARD header." */
 		case SQL_ATTR_ROW_BIND_TYPE:
-			DBG("setting row bind type to: %d.", *(SQLULEN *)ValuePtr);
+			DBG("setting row bind type to: %d.", (SQLULEN)ValuePtr);
 			/* value is SQL_BIND_BY_COLUMN (0UL) or struct len  */
 			/* "the driver can calculate the address of the data for a
 			 * particular row and column as:
@@ -603,11 +633,11 @@ SQLRETURN EsSQLSetStmtAttrW(
 			 * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/column-wise-binding
 			 * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/row-wise-binding
 			 */
-			desc = STMH(StatementHandle)->ard;
+			desc = stmt->ard;
 			break;
 		case SQL_ATTR_PARAM_BIND_TYPE:
-			DBG("setting param bind type to: %d.", *(SQLULEN *)ValuePtr);
-			desc = STMH(StatementHandle)->apd;
+			DBG("setting param bind type to: %d.", (SQLULEN)ValuePtr);
+			desc = stmt->apd;
 			break;
 		} while (0);
 			ret = EsSQLSetDescFieldW(desc, NO_REC_NR, SQL_DESC_BIND_TYPE,
@@ -616,7 +646,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 					ValuePtr, BufferLength);
 			if (ret != SQL_SUCCESS) /* _WITH_INFO wud be "error" here */
 				/* if SetDescField() fails, DM will check statement's diag */
-				HDIAG_COPY(desc, STMH(StatementHandle));
+				HDIAG_COPY(desc, stmt);
 			return ret;
 
 		do {
@@ -628,26 +658,26 @@ SQLRETURN EsSQLSetStmtAttrW(
 		case SQL_ATTR_ROW_STATUS_PTR:
 			// TODO: call SQLSetDescField(IRD) here?
 			DBG("setting row status pointer to: 0x%p.", ValuePtr);
-			desc = STMH(StatementHandle)->ird;
+			desc = stmt->ird;
 			break;
 		case SQL_ATTR_PARAM_STATUS_PTR:
 			DBG("setting param status pointer to: 0x%p.", ValuePtr);
-			desc = STMH(StatementHandle)->ipd;
+			desc = stmt->ipd;
 			break;
 		case SQL_ATTR_ROW_OPERATION_PTR:
 			DBG("setting row operation array pointer to: 0x%p.", ValuePtr);
-			desc = STMH(StatementHandle)->ard;
+			desc = stmt->ard;
 			break;
 		case SQL_ATTR_PARAM_OPERATION_PTR:
 			DBG("setting param operation array pointer to: 0x%p.", ValuePtr);
-			desc = STMH(StatementHandle)->apd;
+			desc = stmt->apd;
 			break;
 		} while (0);
 			ret = EsSQLSetDescFieldW(desc, NO_REC_NR, 
 					SQL_DESC_ARRAY_STATUS_PTR, ValuePtr, BufferLength);
 			if (ret != SQL_SUCCESS) /* _WITH_INFO wud be "error" here */
 				/* if SetDescField() fails, DM will check statement's diag */
-				HDIAG_COPY(desc, STMH(StatementHandle));
+				HDIAG_COPY(desc, stmt);
 			return ret;
 
 		do {
@@ -657,29 +687,29 @@ SQLRETURN EsSQLSetStmtAttrW(
 			DBG("setting rows fetched pointer to: 0x%p.", ValuePtr);
 			/* NOTE: documentation writes about "ARD", while also stating that
 			 * this field is unused in the ARD. I assume the former as wrong */
-			desc = STMH(StatementHandle)->ird;
+			desc = stmt->ird;
 			break;
 		case SQL_ATTR_PARAMS_PROCESSED_PTR:
 			DBG("setting params processed pointer to: 0x%p.", ValuePtr);
-			desc = STMH(StatementHandle)->ipd;
+			desc = stmt->ipd;
 			break;
 		} while (0);
 			ret = EsSQLSetDescFieldW(desc, NO_REC_NR, 
 					SQL_DESC_ROWS_PROCESSED_PTR, ValuePtr, BufferLength);
 			if (ret != SQL_SUCCESS) /* _WITH_INFO wud be "error" here */
 				/* if SetDescField() fails, DM will check statement's diag */
-				HDIAG_COPY(desc, STMH(StatementHandle));
+				HDIAG_COPY(desc, stmt);
 			return ret;
 
 		case SQL_ATTR_APP_ROW_DESC:
-			if ((ValuePtr == (SQLPOINTER *)&STMH(StatementHandle)->i_ard) || 
+			if ((ValuePtr == (SQLPOINTER *)&stmt->i_ard) || 
 					(ValuePtr == SQL_NULL_HDESC)) {
-				if (STMH(StatementHandle)->ard) {
+				if (stmt->ard) {
 					DBG("unbinding ARD 0x%p from statement 0x%p.");
 					// FIXME: unbind
 					FIXME;
 				}
-				STMH(StatementHandle)->ard = &STMH(StatementHandle)->i_ard;
+				stmt->ard = &stmt->i_ard;
 				FIXME;
 			} else if (FALSE) {
 				/* "This attribute cannot be set to a descriptor handle that
@@ -692,9 +722,9 @@ SQLRETURN EsSQLSetStmtAttrW(
 				statements??? */
 				ERR("trying to set AxD (%d) descriptor to the wrong implicit"
 						" descriptor @0x%p.", Attribute, ValuePtr);
-				RET_HDIAGS(STMH(StatementHandle), SQL_STATE_HY017);
+				RET_HDIAGS(stmt, SQL_STATE_HY017);
 			} else {
-				STMH(StatementHandle)->ard = (esodbc_desc_st *)ValuePtr;
+				stmt->ard = (esodbc_desc_st *)ValuePtr;
 				// FIXME: bind: re-init
 				FIXME;
 			}	
@@ -707,13 +737,22 @@ SQLRETURN EsSQLSetStmtAttrW(
 		case SQL_ATTR_IMP_PARAM_DESC:
 			ERR("trying to set IxD (%d) descriptor (to @0x%p).", Attribute, 
 					ValuePtr);
-			RET_HDIAGS(STMH(StatementHandle), SQL_STATE_HY017);
+			RET_HDIAGS(stmt, SQL_STATE_HY017);
+
+		case SQL_ATTR_METADATA_ID:
+			DBG("setting metadata_id to: %u", (SQLULEN)ValuePtr);
+			stmt->metadata_id = (SQLULEN)ValuePtr;
+			break;
+		case SQL_ATTR_ASYNC_ENABLE:
+			DBG("setting async_enable to: %u", (SQLULEN)ValuePtr);
+			stmt->async_enable = (SQLULEN)ValuePtr;
+			break;
 
 		default:
 			// FIXME
 			FIXME;
 			ERR("unknown Attribute: %d.", Attribute);
-			RET_HDIAGS(STMH(StatementHandle), SQL_STATE_HY092);
+			RET_HDIAGS(stmt, SQL_STATE_HY092);
 	}
 
 	RET_STATE(SQL_STATE_00000);
@@ -727,13 +766,14 @@ SQLRETURN EsSQLGetStmtAttrW(
 		SQLINTEGER  *StringLengthPtr)
 {
 	esodbc_desc_st *desc;
+	esodbc_stmt_st *stmt = STMH(StatementHandle);
 
 	switch (Attribute) {
 		do {
-		case SQL_ATTR_APP_ROW_DESC: desc = STMH(StatementHandle)->ard; break;
-		case SQL_ATTR_APP_PARAM_DESC: desc = STMH(StatementHandle)->apd; break;
-		case SQL_ATTR_IMP_ROW_DESC: desc = STMH(StatementHandle)->ird; break;
-		case SQL_ATTR_IMP_PARAM_DESC: desc = STMH(StatementHandle)->ipd; break;
+		case SQL_ATTR_APP_ROW_DESC: desc = stmt->ard; break;
+		case SQL_ATTR_APP_PARAM_DESC: desc = stmt->apd; break;
+		case SQL_ATTR_IMP_ROW_DESC: desc = stmt->ird; break;
+		case SQL_ATTR_IMP_PARAM_DESC: desc = stmt->ipd; break;
 		} while (0);
 #if 0
 			/* probably not needed, just undocumented behavior this check
@@ -742,16 +782,25 @@ SQLRETURN EsSQLGetStmtAttrW(
 				WARN("Not enough buffer space to return result: ""have %d"
 						", need: %zd.", BufferLength, sizeof(SQLPOINTER));
 				/* bail out, don't just copy half of the pointer size */
-				//RET_HDIAGS(STMH(StatementHandle), SQL_STATE_01004);
+				//RET_HDIAGS(stmt, SQL_STATE_01004);
 			}
 #endif
 			/* what a silly API! */
 			*(SQLPOINTER *)ValuePtr = desc;
 			break;
 
+		case SQL_ATTR_METADATA_ID:
+			DBG("getting metadata_id: %u", stmt->metadata_id);
+			*(SQLULEN *)ValuePtr = stmt->metadata_id;
+			break;
+		case SQL_ATTR_ASYNC_ENABLE:
+			DBG("getting async_enable: %u", stmt->async_enable);
+			*(SQLULEN *)ValuePtr = stmt->async_enable;
+			break;
+
 		default:
 			ERR("unknown attribute: %d.", Attribute);
-			RET_HDIAGS(STMH(StatementHandle), SQL_STATE_HY092);
+			RET_HDIAGS(stmt, SQL_STATE_HY092);
 	}
 
 	RET_STATE(SQL_STATE_00000);
@@ -1107,9 +1156,44 @@ static void get_rec_default(SQLSMALLINT field_id, SQLINTEGER buff_len,
 		memset(buff, 0, sz);
 }
 
+static void free_rec_fields(desc_rec_st *rec)
+{
+	int i;
+	SQLTCHAR **tstr[] = {
+		&rec->base_column_name,
+		&rec->base_table_name,
+		&rec->catalog_name,
+		&rec->label,
+		&rec->literal_prefix,
+		&rec->literal_suffix,
+		&rec->local_type_name,
+		&rec->name,
+		&rec->schema_name,
+		&rec->table_name,
+		&rec->type_name,
+	};
+	for (i = 0; i < sizeof(tstr)/sizeof(tstr[0]); i ++) {
+		DBG("freeing field #%d = 0x%p.", i, *tstr[i]);
+		if (*tstr[i]) {
+			free(*tstr[i]);
+			*tstr[i] = NULL;
+		}
+	}
+}
+
+static inline void free_desc_recs(esodbc_desc_st *desc)
+{
+	int i;
+	for (i = 0; i < desc->count; i++)
+		free_rec_fields(&desc->recs[i]);
+	free(desc->recs);
+	desc->recs = NULL;
+}
+
 static SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count)
 {
 	desc_rec_st *recs;
+	int i;
 
 	if (new_count < 0) {
 		ERR("new record count is negative (%d).", new_count);
@@ -1129,8 +1213,7 @@ static SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count)
 
 	if (new_count == 0) {
 		DBG("freeing the array of %d elems.", desc->count);
-		// TODO: do I need to de-init/free anything in the record itself?
-		free(desc->recs);
+		free_desc_recs(desc);
 		recs = NULL;
 	} else {
 		/* TODO: change to a list implementation? review@alpha */
@@ -1142,7 +1225,8 @@ static SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count)
 		}
 		if (new_count < desc->count) { /* shrinking array */
 			DBG("recs array is shrinking %d -> %d.", desc->count, new_count);
-			// TODO: see above the freeing case
+			for (i = new_count - 1; i < desc->count; i ++)
+				free_rec_fields(&desc->recs[i]);
 		} else { /* growing array */
 			DBG("recs array is growing %d -> %d.", desc->count, new_count);
 			/* clear all new records */
@@ -1834,7 +1918,6 @@ SQLRETURN EsSQLSetDescFieldW(
 	esodbc_desc_st *desc = DSCH(DescriptorHandle);
 	esodbc_state_et state;
 	desc_rec_st *rec;
-	char *fname; /* field name */
 	SQLTCHAR **tstrp, *tstr;
 	SQLSMALLINT *wordp;
 	SQLINTEGER *intp;

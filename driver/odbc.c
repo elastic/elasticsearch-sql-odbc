@@ -4,7 +4,6 @@
  * you may not use this file except in compliance with the Elastic License.
  */
 
-
 #include "log.h"
 #include "tracing.h"
 #include "handles.h"
@@ -19,14 +18,11 @@
 // compile in empty functions (less unref'd params when leaving them out)
 #define WITH_EMPTY	1
 
-#if WITH_EMPTY
 BOOL WINAPI DllMain(
 	HINSTANCE hinstDLL,  // handle to DLL module
 	DWORD fdwReason,     // reason for calling function
-	LPVOID lpReserved )  // reserved
+	LPVOID lpReserved)  // reserved
 {
-	SQLRETURN ret = TRUE;
-
 	TRACE3(_IN, "pdp", hinstDLL, fdwReason, lpReserved);
 
 	// Perform actions based on the reason for calling.
@@ -34,7 +30,11 @@ BOOL WINAPI DllMain(
 		// Initialize once for each new process.
 		// Return FALSE to fail DLL load.
 		case DLL_PROCESS_ATTACH:
-			DBG("process attach.");
+			INFO("process %d attach.", GetCurrentProcessId());
+			if (! connect_init()) {
+				ERR("failed to init transport.");
+				return  FALSE;
+			}
 			break;
 
 		// Do thread-specific initialization.
@@ -49,14 +49,14 @@ BOOL WINAPI DllMain(
 
 		// Perform any necessary cleanup.
 		case DLL_PROCESS_DETACH:
-			DBG("process dettach.");
+			INFO("process %d dettach.", GetCurrentProcessId());
+			connect_cleanup();
 			break;
 	}
 
-	TRACE4(_OUT, "updp", ret, hinstDLL, fdwReason, lpReserved);
-	return ret;
+	TRACE4(_OUT, "updp", TRUE, hinstDLL, fdwReason, lpReserved);
+	return TRUE;
 }
-#endif /* WITH_EMPTY */
 
 /*
  * Connecting to a data source
@@ -698,7 +698,7 @@ SQLRETURN  SQL_API SQLFetch(SQLHSTMT StatementHandle)
 	return ret;
 }
 
-#ifdef WITH_EMPTY
+#if WITH_EMPTY
 /*
  * "SQLFetch and SQLFetchScroll use the rowset size at the time of the call to
  * determine how many rows to fetch. However, SQLFetchScroll with a
@@ -766,12 +766,13 @@ SQLRETURN   SQL_API SQLBulkOperations(
 	return ret;
 }
 
-#ifdef WITH_EMPTY
+#if WITH_EMPTY
 SQLRETURN SQL_API SQLMoreResults(
     SQLHSTMT           hstmt)
 {
 	RET_NOT_IMPLEMENTED;
 }
+#endif /* WITH_EMPTY */
 
 /* TODO: see error.h: esodbc_errors definition note (2.x apps support) */
 SQLRETURN  SQL_API SQLGetDiagFieldW(
@@ -815,6 +816,7 @@ SQLRETURN  SQL_API SQLGetDiagRecW
 	return ret;
 }
 
+#if WITH_EMPTY
 /*
  *
  * Obtaining information about the data source's system tables 
@@ -965,7 +967,7 @@ SQLRETURN SQL_API SQLTablePrivilegesW
 	RET_NOT_IMPLEMENTED;
 }
 
-#endif /*0*/
+#endif /* WITH_EMPTY */
 
 SQLRETURN SQL_API SQLTablesW
 (
@@ -987,7 +989,7 @@ SQLRETURN SQL_API SQLTablesW
 	ret = EsSQLTablesW(hstmt, szCatalogName, cchCatalogName,
 			szSchemaName, cchSchemaName, szTableName, cchTableName,
 			szTableType, cchTableType);
-	TRACE10(_OUT, "dppdpdpdpd", ret, hstmt, szCatalogName, cchCatalogName,
+	TRACE10(_OUT, "dpWdWdWdWd", ret, hstmt, szCatalogName, cchCatalogName,
 			szSchemaName, cchSchemaName, szTableName, cchTableName,
 			szTableType, cchTableType);
 	return ret;

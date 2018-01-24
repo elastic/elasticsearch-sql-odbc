@@ -19,6 +19,10 @@ if "%INSTALL_DIR%" == "" (
 	SET INSTALL_DIR=%USERPROFILE%\Temp\
 )
 
+if "%LIBCURL_PATH_BUILD%" == "" (
+	SET LIBCURL_PATH_BUILD=%USERPROFILE%\RnD\oss\curl\builds\libcurl-vc-x64-release-dll-ipv6-sspi-winssl
+)
+
 pushd .
 cd %BUILD_DIR%
 

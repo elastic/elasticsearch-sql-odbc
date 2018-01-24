@@ -8,6 +8,15 @@
 #define __CONNECT_H__
 
 #include "error.h"
+#include "handles.h"
+
+BOOL connect_init();
+void connect_cleanup();
+
+long post_sql(esodbc_dbc_st *dbc, long timeout, const char *u8json, 
+		long jlen, char *const answer, long avail);
+long post_sql_tables(esodbc_dbc_st *dbc, long timeout, const char *u8json, 
+		long jlen, char *const answer, long avail);
 
 SQLRETURN EsSQLDriverConnectW
 (
