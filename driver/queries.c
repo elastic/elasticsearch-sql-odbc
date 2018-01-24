@@ -242,6 +242,7 @@ SQLRETURN EsSQLSetPos(
 			ERR("unknown operation type: %d.", Operation);
 			RET_HDIAGS(STMH(StatementHandle), SQL_STATE_HY092);
 	}
+	RET_STATE(SQL_STATE_00000);
 }
 
 /*

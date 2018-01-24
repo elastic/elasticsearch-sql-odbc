@@ -18,6 +18,8 @@
 #ifndef __HANDLES_H__
 #define __HANDLES_H__
 
+#include  <curl/curl.h>
+
 #include "error.h"
 #include "log.h"
 
@@ -51,15 +53,26 @@ typedef struct struct_dbc {
 	esodbc_env_st *env;
 	/* diagnostic/state keeping */
 	esodbc_diag_st diag;
-	SQLTCHAR *connstr;
 	SQLUINTEGER timeout;
+
 	// FIXME: placeholder; used if connection has been established or not
 	// TODO: PROTO
 	void *conn;
+
+	SQLTCHAR *connstr; /* connection string */ // TODO: IDNA?
+	CURL *curl; /* cURL handle */
+	char *wbuf; /* write buffer for the answer */
+	long wlen; /* size of wbuf */
+	long wpos; /* current write position in the wbuf */
+
 	/* "the catalog is a database", "For a single-tier driver, the catalog
 	 * might be a directory" */
 	SQLTCHAR *catalog; 
 	// TODO: statements?
+	
+	/* options */
+	SQLULEN metadata_id; // default: SQL_FALSE
+	SQLULEN async_enable; // default: SQL_ASYNC_ENABLE_OFF
 } esodbc_dbc_st;
 
 typedef struct desc_rec {
@@ -164,15 +177,20 @@ typedef struct struct_stmt {
 	esodbc_desc_st i_apd;
 	esodbc_desc_st i_ipd;
 
+	/* options */
 	SQLULEN bookmarks; //default: SQL_UB_OFF
+	SQLULEN metadata_id; // default: copied from connection
+	SQLULEN async_enable; // default: copied from connection
 } esodbc_stmt_st;
 
 
+/* leave the timeout to default value (0: don't timeout, pos: seconds) */
+#define ESODBC_TIMEOUT_DEFAULT		-1
 // FIXME: review@alpha
-#define ESODBC_DBC_CONN_TIMEOUT		120
 #define ESODBC_MAX_ROW_ARRAY_SIZE	128 /* TODO: should there be a max? */
 #define ESODBC_DEF_ARRAY_SIZE		1
-#define ESODBC_MAX_DESC_COUNT		128 /* max cols or args to bind */
+/* max cols or args to bind */
+#define ESODBC_MAX_DESC_COUNT		128 
 
 SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 	SQLHANDLE InputHandle, _Out_ SQLHANDLE *OutputHandle);
@@ -277,6 +295,9 @@ SQLRETURN EsSQLSetDescRec(
 	RET_DIAG(&(_hp)->diag, _s, NULL, 0)
 /* copy the diagnostics from one handler to the other */
 #define HDIAG_COPY(_s, _d)	(_s)->diag = (_d)->diag
+/* set a diagnostic to a(ny) handle */
+#define SET_HDIAG(_hp/*handle ptr*/, _s/*tate*/, _t/*char text*/, _c/*ode*/) \
+	post_diagnostic(&(_hp)->diag, _s, MK_TSTR(_t), _c)
 
 /* return the code associated with the given state (and debug-log) */
 #define RET_STATE(_s)	\

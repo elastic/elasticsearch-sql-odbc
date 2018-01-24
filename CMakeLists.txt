@@ -50,11 +50,13 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
  
 # Set compiler flags and options. 
 if (${WIN32})
-	# Here it is setting the Visual Studio warning level to 4
-	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /W4")
-	##set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /W3")
+	# set the Visual Studio warning level to 4
+	#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /W4")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /W3")
 	# TODO: review@alpha
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /D_CRT_SECURE_NO_WARNINGS")
+	# don't complain about non-constant aggregate initializer (C4204)
+	# set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /Ze")
 
 	if (${IS_UNICODE})
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DUNICODE")
@@ -64,8 +66,12 @@ if (${WIN32})
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_VER_MINOR=${DRV_VER_MINOR}")
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_ENCODING=${ENCODING}")
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_NAME=${DRV_NAME}")
+
+	#set(LIBCURL_PATH_LIB ${LIBCURL_PATH_LIB}\\libcurl.dll)
 else (${WIN32})
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
+
+	#set(LIBCURL_PATH_LIB ${LIBCURL_PATH_LIB}/libcurl.so)
 endif (${WIN32})
 message("C flags:" ${CMAKE_C_FLAGS})
 
@@ -92,16 +98,33 @@ if(${CMD_RETURN})
 	message("\tret: ${CMD_RETURN}")
 	message("\tout: ${CMD_OUTPUT}")
 	message("\terr: ${CMD_OUTERR}")
-endif()
+endif(${CMD_RETURN})
 
+# add target output library
 add_library(${DRV_NAME} SHARED ${DRV_SRC} ${DRV_BUILD_DIR}/${DRV_NAME}.def)
 #generate_export_header(${DRV_NAME})
 
-#include_directories(${DRV_SRC_DIR} ${DRV_BUILD_DIR})
-include_directories(${DRV_SRC_DIR})
 
-target_link_libraries(${DRV_NAME}
-		)
+# read libcurl's build paths from the environment
+# add HTTP lib dependency
+add_library(libcurl SHARED IMPORTED)
+set(LIBCURL_INC $ENV{LIBCURL_PATH_BUILD}/include)
+if (${WIN32})
+	set_property(TARGET libcurl PROPERTY IMPORTED_LOCATION 
+		$ENV{LIBCURL_PATH_BUILD}/bin/libcurl.dll)
+	set_property(TARGET libcurl PROPERTY IMPORTED_IMPLIB
+		$ENV{LIBCURL_PATH_BUILD}/lib/libcurl.lib)
+else (${WIN32})
+	set_property(TARGET libcurl PROPERTY IMPORTED_LOCATION 
+		$ENV{LIBCURL_PATH_BUILD}/lib/libcurl.so)
+endif (${WIN32})
+
+
+#include_directories(${DRV_SRC_DIR} ${DRV_BUILD_DIR})
+include_directories(${DRV_SRC_DIR} ${LIBCURL_INC})
+
+
+target_link_libraries(${DRV_NAME} libcurl)
 
 
 install(TARGETS ${DRV_NAME}

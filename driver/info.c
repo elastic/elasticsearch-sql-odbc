@@ -30,6 +30,10 @@
 #error "unsupported ODBC version"
 #endif /* ver==3.8 */
 
+#define ORIG_DISCRIM	"IM"
+#define ORIG_CLASS_ISO	"ISO 9075"
+#define ORIG_CLASS_ODBC	"ODBC 3.0"
+
 #if defined(_WIN32) || defined (WIN32)
 /* DRV_NAME is a define */
 #define DRIVER_NAME	STR(DRV_NAME) ".dll"
@@ -134,41 +138,45 @@ static SQLUSMALLINT esodbc_functions[] = {
 	*(((UWORD*) (pfExists)) + ((uwAPI) >> 4)) |= (1 << ((uwAPI) & 0x000F))
 #define SQL_API_ODBC2_ALL_FUNCTIONS_SIZE	100
 
-static SQLRETURN write_tstr(esodbc_dbc_st *hdbc, SQLTCHAR *dest, SQLTCHAR *src,
-		SQLSMALLINT avail, SQLSMALLINT *used)
+static SQLRETURN write_tstr(esodbc_diag_st *diag,
+		SQLTCHAR *dest, const SQLTCHAR *src,
+		SQLSMALLINT avail, SQLSMALLINT *usedp)
 {
 	size_t src_len, len;
+	SQLSMALLINT used;
 
 	if (! dest)
 		avail = 0;
 	/* needs to be multiple of SQLTCHAR units (2 on Win) */
 	if (avail % sizeof(SQLTCHAR)) {
 		ERR("invalid buffer length provided: %d.", avail);
-		RET_HDIAG(hdbc, SQL_STATE_HY090, "invalid buffer length provided", 0);
-	}
-	if (! used) {
-		ERR("invalid used provided (NULL).");
-		RET_HDIAG(hdbc, SQL_STATE_HY013, "invalid used provided (NULL)", 0);
+		RET_CDIAG(diag, SQL_STATE_HY090, "invalid buffer length provided", 0);
 	}
 	src_len = wcslen(src);
 	/* return value always set to what it needs to be written. */
-	*used = (SQLSMALLINT)src_len * sizeof(SQLTCHAR);
+	used = (SQLSMALLINT)src_len * sizeof(SQLTCHAR);
+	if (! usedp) {
+		WARN("invalid used output buffer provided (NULL).");
+		//RET_cDIAG(diag, SQL_STATE_HY013, "invalid used provided (NULL)", 0);
+	} else {
+		*usedp = used;
+	}
 	if (! dest) {
 		/* only return how large of a buffer we need */
-		INFO("NULL out buff: returning needed buffer size only (%d).", *used);
+		INFO("NULL out buff: returning needed buffer size only (%d).", used);
 	} else {
 		len = swprintf(dest, avail/sizeof(SQLTCHAR), WPFWP_DESC, src);
 		if (len < 0) {
 			ERRN("failed to print `"LTPD"` in dest: 0x%p, avail: %d.", 
 					src, dest, avail);
-			RET_HDIAGS(hdbc, SQL_STATE_HY000);
+			RET_DIAG(diag, SQL_STATE_HY000, NULL, 0);
 		}
-		DBG("written: `"LTPD"` (%d).", dest, *used);
+		DBG("written: `"LTPD"` (%d).", dest, used);
 		/* has the string been trucated? */
 		if (len + /*\0*/1 < src_len) {
 			INFO("not enough buffer size to write required string `"LTPD"`; "
 					"available: %d.", src, avail);
-			RET_HDIAGS(hdbc, SQL_STATE_01004);
+			RET_DIAG(diag, SQL_STATE_01004, NULL, 0);
 		}
 	}
 	RET_STATE(SQL_STATE_00000);
@@ -193,8 +201,9 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		/* Driver Information */
 		/* "what version of odbc a driver complies with" */
 		case SQL_DRIVER_ODBC_VER:
-			return write_tstr(dbc, InfoValue, MK_TSTR(ESODBC_SQL_SPEC_STRING),
-					BufferLength, StringLengthPtr);
+			return write_tstr(&dbc->diag, InfoValue,
+					MK_TSTR(ESODBC_SQL_SPEC_STRING), BufferLength,
+					StringLengthPtr);
 
 		/* "if the driver can execute functions asynchronously on the
 		 * connection handle" */
@@ -239,24 +248,25 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 
 		case SQL_DATA_SOURCE_NAME:
 			DBG("requested: data source name: `"LTPD"`.", dbc->connstr);
-			return write_tstr(dbc, InfoValue, dbc->connstr, BufferLength,
-					StringLengthPtr);
+			return write_tstr(&dbc->diag, InfoValue, dbc->connstr,
+					BufferLength, StringLengthPtr);
 
 		case SQL_DRIVER_NAME:
 			DBG("requested: driver (file) name: %s.", DRIVER_NAME);
-			return write_tstr(dbc, InfoValue, 
+			return write_tstr(&dbc->diag, InfoValue, 
 					MK_TSTR(DRIVER_NAME), BufferLength, StringLengthPtr);
 			break;
 
 		case SQL_DATA_SOURCE_READ_ONLY:
 			DBG("requested: if data source is read only (`Y`es, it is).");
-			return write_tstr(dbc, InfoValue, MK_TSTR("Y"), BufferLength,
-					StringLengthPtr);
+			return write_tstr(&dbc->diag, InfoValue, MK_TSTR("Y"),
+					BufferLength, StringLengthPtr);
 
 		case SQL_SEARCH_PATTERN_ESCAPE:
 			DBG("requested: escape character (`%s`).", ESODBC_PATTERN_ESCAPE);
-			return write_tstr(dbc, InfoValue, MK_TSTR(ESODBC_PATTERN_ESCAPE),
-					BufferLength, StringLengthPtr);
+			return write_tstr(&dbc->diag, InfoValue,
+					MK_TSTR(ESODBC_PATTERN_ESCAPE), BufferLength,
+					StringLengthPtr);
 
 		case SQL_CORRELATION_NAME:
 			// JDBC[0]: supportsDifferentTableCorrelationNames()
@@ -276,7 +286,7 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			/* JDBC[0]: getCatalogSeparator() */
 			DBG("requested: catalogue separator (`%s`).", 
 					ESODBC_CATALOG_SEPARATOR);
-			return write_tstr(dbc, InfoValue,
+			return write_tstr(&dbc->diag, InfoValue,
 					MK_TSTR(ESODBC_CATALOG_SEPARATOR), BufferLength,
 					StringLengthPtr);
 
@@ -292,8 +302,9 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		case SQL_CATALOG_TERM: /* SQL_QUALIFIER_TERM */
 			/* JDBC[0]: getCatalogSeparator() */
 			DBG("requested: catalogue term (`%s`).", ESODBC_CATALOG_TERM);
-			return write_tstr(dbc, InfoValue, MK_TSTR(ESODBC_CATALOG_TERM),
-					BufferLength, StringLengthPtr);
+			return write_tstr(&dbc->diag, InfoValue,
+					MK_TSTR(ESODBC_CATALOG_TERM), BufferLength,
+					StringLengthPtr);
 
 		case SQL_MAX_SCHEMA_NAME_LEN: /* SQL_MAX_OWNER_NAME_LEN */
 			/* JDBC[0]: getMaxSchemaNameLength() */
@@ -304,8 +315,9 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		case SQL_IDENTIFIER_QUOTE_CHAR:
 			/* JDBC[0]: getIdentifierQuoteString() */
 			DBG("requested: quoting char (`%s`).", ESODBC_QUOTE_CHAR);
-			return write_tstr(dbc, InfoValue, MK_TSTR(ESODBC_QUOTE_CHAR),
-					BufferLength, StringLengthPtr);
+			return write_tstr(&dbc->diag, InfoValue,
+					MK_TSTR(ESODBC_QUOTE_CHAR), BufferLength,
+					StringLengthPtr);
 
 		/* what Operations are supported by SQLSetPos  */
 		// FIXME: review@alpha
@@ -349,7 +361,19 @@ SQLRETURN EsSQLGetDiagFieldW(
 		SQLSMALLINT BufferLength,
 		_Out_opt_ SQLSMALLINT *StringLengthPtr)
 {
-	esodbc_diag_st *diag;
+	esodbc_diag_st *diag, dummy;
+	size_t len;
+	SQLTCHAR *tstr;
+
+	if (RecNumber <= 0) {
+		ERR("record number must be >=1; received: %d.", RecNumber);
+		return SQL_ERROR;
+	}
+	if (1 < RecNumber) {
+		/* XXX: does it make sense to have error FIFOs? (mysql doesn't) */
+		WARN("no error lists supported (yet).");
+		return SQL_NO_DATA;
+	}
 
 	if (! Handle) {
 		ERR("null handle provided.");
@@ -363,6 +387,8 @@ SQLRETURN EsSQLGetDiagFieldW(
 		return SQL_ERROR;
 	}
 #endif
+
+	GET_DIAG(Handle, HandleType, diag);
 
 	switch(DiagIdentifier) {
 		/* Header Fields */
@@ -393,60 +419,140 @@ SQLRETURN EsSQLGetDiagFieldW(
 		/* case SQL_DIAG_RETURNCODE: break; -- DM only */
 
 		/* Record Fields */
-		case SQL_DIAG_CLASS_ORIGIN: //break;
+		do {
+		case SQL_DIAG_CLASS_ORIGIN:
+			len = (sizeof(ORIG_DISCRIM) - 1) * sizeof (SQLTCHAR);
+			assert(len <= sizeof(esodbc_errors[diag->state].code));
+			if (memcmp(esodbc_errors[diag->state].code, MK_TSTR(ORIG_DISCRIM),
+						len) == 0) {
+				tstr = MK_TSTR(ORIG_CLASS_ODBC);
+			} else {
+				tstr = MK_TSTR(ORIG_CLASS_ISO);
+			}
+			break;
+		case SQL_DIAG_SUBCLASS_ORIGIN:
+			switch (diag->state) {
+				case SQL_STATE_01S00:
+				case SQL_STATE_01S01:
+				case SQL_STATE_01S02:
+				case SQL_STATE_01S06:
+				case SQL_STATE_01S07:
+				case SQL_STATE_07S01:
+				case SQL_STATE_08S01:
+				case SQL_STATE_21S01:
+				case SQL_STATE_21S02:
+				case SQL_STATE_25S01:
+				case SQL_STATE_25S02:
+				case SQL_STATE_25S03:
+				case SQL_STATE_42S01:
+				case SQL_STATE_42S02:
+				case SQL_STATE_42S11:
+				case SQL_STATE_42S12:
+				case SQL_STATE_42S21:
+				case SQL_STATE_42S22:
+				case SQL_STATE_HY095:
+				case SQL_STATE_HY097:
+				case SQL_STATE_HY098:
+				case SQL_STATE_HY099:
+				case SQL_STATE_HY100:
+				case SQL_STATE_HY101:
+				case SQL_STATE_HY105:
+				case SQL_STATE_HY107:
+				case SQL_STATE_HY109:
+				case SQL_STATE_HY110:
+				case SQL_STATE_HY111:
+				case SQL_STATE_HYT00:
+				case SQL_STATE_HYT01:
+				case SQL_STATE_IM001:
+				case SQL_STATE_IM002:
+				case SQL_STATE_IM003:
+				case SQL_STATE_IM004:
+				case SQL_STATE_IM005:
+				case SQL_STATE_IM006:
+				case SQL_STATE_IM007:
+				case SQL_STATE_IM008:
+				case SQL_STATE_IM010:
+				case SQL_STATE_IM011:
+				case SQL_STATE_IM012:
+					tstr = MK_TSTR(ORIG_CLASS_ODBC);
+					break;
+				default:
+					tstr = MK_TSTR(ORIG_CLASS_ISO);
+			}
+			break;
+		} while (0);
+			DBG("diagnostic code '"LTPD"' is of class '"LTPD"'.",
+					esodbc_errors[diag->state].code, tstr);
+			return write_tstr(&dummy, DiagInfoPtr, tstr, BufferLength,
+					StringLengthPtr);
+		
+		case SQL_DIAG_CONNECTION_NAME:
+		/* same as SQLGetInfo(SQL_DATA_SOURCE_NAME) */
+		case SQL_DIAG_SERVER_NAME: /* TODO: keep same as _CONNECTION_NAME? */
+			switch (HandleType) {
+				case SQL_HANDLE_DBC: tstr = DBCH(Handle)->connstr; break;
+				case SQL_HANDLE_DESC: // FIXME: once have db-stmt-desc link
+				case SQL_HANDLE_STMT: FIXME; break;
+				default: tstr = MK_TSTR("");
+			}
+			DBG("inquired connection name (`"LTPD"`)", tstr);
+			return write_tstr(&dummy, DiagInfoPtr, tstr, BufferLength,
+					StringLengthPtr);
+		
+
 		case SQL_DIAG_COLUMN_NUMBER: //break;
-		case SQL_DIAG_CONNECTION_NAME: //break;
 		case SQL_DIAG_MESSAGE_TEXT: //break;
 		case SQL_DIAG_NATIVE: //break;
 		case SQL_DIAG_ROW_NUMBER: //break;
-		case SQL_DIAG_SERVER_NAME: //break;
 			RET_NOT_IMPLEMENTED;
 
 		case SQL_DIAG_SQLSTATE: 
-			GET_DIAG(Handle, HandleType, diag);
 			if (diag->state == SQL_STATE_00000) {
 				DBG("no diagnostic available for handle type %d.", HandleType);
 				return SQL_NO_DATA;
+			}
+			/* GetDiagField can't set diagnostics itself, so use a dummy */
+			return write_tstr(&dummy, DiagInfoPtr,
+					esodbc_errors[diag->state].code, BufferLength,
+					StringLengthPtr);
+#if 0
+			if (BufferLength % 2) {
+				ERR("BufferLength not an even number: %d.", BufferLength);
+				return SQL_ERROR;
+			}
+#if 0
+			/* always return how many bytes we would need (or used) */
+			*StringLengthPtr = SQL_SQLSTATE_SIZE + /*\0*/1;
+			*StringLengthPtr *= sizeof(SQLTCHAR);
+#endif
+			if (SQL_SQLSTATE_SIZE < BufferLength) {
+				/* no error indicator exists */
+				wcsncpy(DiagInfoPtr, esodbc_errors[diag->state].code, 
+						SQL_SQLSTATE_SIZE);
+				DBG("SQL state for handler of type %d: "LTPD".", 
+						HandleType, DiagInfoPtr);
+				return SQL_SUCCESS;
 			} else {
-				if (BufferLength % 2) {
-					ERR("BufferLength not an even number: %d.", BufferLength);
+				if (BufferLength < 0) {
+					ERR("negative BufferLength rcvd: %d.", BufferLength);
 					return SQL_ERROR;
 				}
-#if 0
-				/* always return how many bytes we would need (or used) */
-				*StringLengthPtr = SQL_SQLSTATE_SIZE + /*\0*/1;
-				*StringLengthPtr *= sizeof(SQLTCHAR);
-#endif
-				if (SQL_SQLSTATE_SIZE < BufferLength) {
-					/* no error indicator exists */
-					wcsncpy(DiagInfoPtr, esodbc_errors[diag->state].code, 
-							SQL_SQLSTATE_SIZE);
-					DBG("SQL state for handler of type %d: "LTPD".", 
-							HandleType, DiagInfoPtr);
-					return SQL_SUCCESS;
-				} else {
-					if (BufferLength < 0) {
-						ERR("negative BufferLength rcvd: %d.", BufferLength);
-						return SQL_ERROR;
-					}
-					/* no error indicator exists */
-					wcsncpy(DiagInfoPtr, esodbc_errors[diag->state].code, 
-							BufferLength);
-					INFO("not enough space to copy state; have: %d, need: %d.",
-							BufferLength,
+				/* no error indicator exists */
+				wcsncpy(DiagInfoPtr, esodbc_errors[diag->state].code, 
+						BufferLength);
+				INFO("not enough space to copy state; have: %d, need: %d.",
+						BufferLength,
 /* CL trips on this macro -- WTF?? */
 //#if 0
 //							*StringLengthPtr
 //#else
-							(SQL_SQLSTATE_SIZE + /*\0*/1) * sizeof(SQLTCHAR)
+						(SQL_SQLSTATE_SIZE + /*\0*/1) * sizeof(SQLTCHAR)
 //#endif
-							);
-					return SQL_SUCCESS_WITH_INFO;
-				}
+						);
+				return SQL_SUCCESS_WITH_INFO;
 			}
 			break;
-		case SQL_DIAG_SUBCLASS_ORIGIN: //break;
-			RET_NOT_IMPLEMENTED;
+#endif /*0*/
 
 		default:
 			ERR("unknown DiagIdentifier: %d.", DiagIdentifier);
