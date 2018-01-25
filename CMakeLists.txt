@@ -73,7 +73,7 @@ else (${WIN32})
 
 	#set(LIBCURL_PATH_LIB ${LIBCURL_PATH_LIB}/libcurl.so)
 endif (${WIN32})
-message("C flags:" ${CMAKE_C_FLAGS})
+message("C flags: ${CMAKE_C_FLAGS} .")
 
 set(DRV_SRC_DIR driver)
 set(DRV_LIB_DIR lib)
@@ -81,7 +81,6 @@ set(DRV_BUILD_DIR cbuild)
 message("Directories: source: '${DRV_SRC_DIR}', output: '${DRV_LIB_DIR}'.")
 
 aux_source_directory(${DRV_SRC_DIR} DRV_SRC)
-message("Driver source files: " ${DRV_SRC})
 
 # generate Module definition file (symbols to export)
 execute_process(COMMAND 
@@ -93,35 +92,73 @@ execute_process(COMMAND
 	ERROR_VARIABLE CMD_OUTERR
 	)
 #	WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/${DRV_SRC_DIR}"
-if(${CMD_RETURN})
+if (${CMD_RETURN})
 	message("Generating module .def file failed:")
 	message("\tret: ${CMD_RETURN}")
 	message("\tout: ${CMD_OUTPUT}")
 	message("\terr: ${CMD_OUTERR}")
-endif(${CMD_RETURN})
+endif (${CMD_RETURN})
 
-# add target output library
+
+#
+# add ujson4c to the project
+#
+if (IS_DIRECTORY $ENV{UJSON4C_PATH_SRC})
+	set(UJSON4C_PATH_SRC $ENV{UJSON4C_PATH_SRC})
+else (IS_DIRECTORY $ENV{UJSON4C_PATH_SRC})
+	if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/ujson4c)
+		set(UJSON4C_PATH_SRC ${CMAKE_SOURCE_DIR}/ujson4c)
+	else (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/ujson4c)
+		message(FATAL_ERROR "No ujson4c directory found: set environment var "
+				"UJSON4C_PATH_SRC or place an export into 'ujson4c' dir in "
+				"local source tree.")
+	endif (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/ujson4c)
+endif (IS_DIRECTORY $ENV{UJSON4C_PATH_SRC})
+message("Lib ujson4c source path: ${UJSON4C_PATH_SRC} .")
+aux_source_directory(${UJSON4C_PATH_SRC}/src DRV_SRC)
+aux_source_directory(${UJSON4C_PATH_SRC}/3rdparty DRV_SRC)
+set(UJSON4C_INC ${UJSON4C_PATH_SRC}/src ${UJSON4C_PATH_SRC}/3rdparty )
+
+#
+# add libcurl to the project
+#
+# read libcurl's build paths from the environment (assume local dir otherwise)
+if (IS_DIRECTORY $ENV{LIBCURL_PATH_BUILD})
+	set(LIBCURL_PATH_BUILD $ENV{LIBCURL_PATH_BUILD})
+else (IS_DIRECTORY $ENV{LIBCURL_PATH_BUILD})
+	if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/libcurl)
+		set(LIBCURL_PATH_BUILD libcurl)
+	else (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/libcurl)
+		message(FATAL_ERROR "No libcurl directory found: set environment var "
+				"LIBCURL_PATH_BUILD or place a 'libcurl' dir in local source"
+				"tree, with 'bin' and 'include' subdirs.")
+	endif (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/libcurl)
+endif (IS_DIRECTORY $ENV{LIBCURL_PATH_BUILD})
+message("Lib libcurl build path: ${LIBCURL_PATH_BUILD} .")
+# add libcurl as dependency
+add_library(libcurl SHARED IMPORTED)
+set(LIBCURL_INC ${LIBCURL_PATH_BUILD}/include)
+if (${WIN32})
+	set_property(TARGET libcurl PROPERTY IMPORTED_LOCATION 
+		${LIBCURL_PATH_BUILD}/bin/libcurl.dll)
+	set_property(TARGET libcurl PROPERTY IMPORTED_IMPLIB
+		${LIBCURL_PATH_BUILD}/lib/libcurl.lib)
+else (${WIN32})
+	set_property(TARGET libcurl PROPERTY IMPORTED_LOCATION 
+		${LIBCURL_PATH_BUILD}/lib/libcurl.so)
+endif (${WIN32})
+
+message("Driver source files: ${DRV_SRC} .")
+message("Driver include paths: " ${DRV_SRC_DIR} ${LIBCURL_INC} ${UJSON4C_INC})
+
+#
+# finally, set destination library
+#
 add_library(${DRV_NAME} SHARED ${DRV_SRC} ${DRV_BUILD_DIR}/${DRV_NAME}.def)
 #generate_export_header(${DRV_NAME})
 
-
-# read libcurl's build paths from the environment
-# add HTTP lib dependency
-add_library(libcurl SHARED IMPORTED)
-set(LIBCURL_INC $ENV{LIBCURL_PATH_BUILD}/include)
-if (${WIN32})
-	set_property(TARGET libcurl PROPERTY IMPORTED_LOCATION 
-		$ENV{LIBCURL_PATH_BUILD}/bin/libcurl.dll)
-	set_property(TARGET libcurl PROPERTY IMPORTED_IMPLIB
-		$ENV{LIBCURL_PATH_BUILD}/lib/libcurl.lib)
-else (${WIN32})
-	set_property(TARGET libcurl PROPERTY IMPORTED_LOCATION 
-		$ENV{LIBCURL_PATH_BUILD}/lib/libcurl.so)
-endif (${WIN32})
-
-
 #include_directories(${DRV_SRC_DIR} ${DRV_BUILD_DIR})
-include_directories(${DRV_SRC_DIR} ${LIBCURL_INC})
+include_directories(${DRV_SRC_DIR} ${LIBCURL_INC} ${UJSON4C_INC})
 
 
 target_link_libraries(${DRV_NAME} libcurl)

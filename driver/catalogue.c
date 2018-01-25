@@ -7,6 +7,8 @@
 #include <string.h>
 #include <wchar.h>
 
+#include "ujdecode.h"
+
 #include "catalogue.h"
 #include "handles.h"
 #include "connect.h"
@@ -33,8 +35,13 @@ SQLRETURN EsSQLTablesW(
 	char answer[1<<16]; // FIXME
 	esodbc_stmt_st *stmt = STMH(StatementHandle);
 	esodbc_dbc_st *dbc = stmt->dbc;
-	int i, count;
-	long ret;
+	int i;
+	long count;
+	size_t len;
+	UJObject obj, tables, table;
+	wchar_t *keys[] = {L"tables"};
+	const wchar_t *tname;
+    void *state = NULL, *iter;
 
 	if (CatalogName && (wmemcmp(CatalogName, MK_TSTR(SQL_ALL_CATALOGS), 
 					NameLength1) != 0)) {
@@ -43,7 +50,7 @@ SQLRETURN EsSQLTablesW(
 	}
 	if (SchemaName && (wmemcmp(SchemaName, MK_TSTR(SQL_ALL_SCHEMAS), 
 					NameLength2) != 0)) {
-		WARN("filtering by schemas is not supported."); /* TODO? */
+		WARN("filtering by schemas is not supported.");
 		goto empty;
 	}
 	if (TableType) {
@@ -70,7 +77,6 @@ SQLRETURN EsSQLTablesW(
 		table_name = MK_TSTR("*");
 	}
 
-#ifdef _WIN32
 	/* print JSON to send to server */
 	count = _snwprintf(tbuf, sizeof(tbuf), SQL_TABLES_JSON, table_name);
 	if ((count < 0) || sizeof(tbuf) <= count) {
@@ -78,7 +84,10 @@ SQLRETURN EsSQLTablesW(
 		RET_HDIAGS(stmt, SQL_STATE_HY000);
 	}
 
-	/* convert UCS2 -> UTF8 */
+#ifdef _WIN32 /* TODO a Posix friendlier equivalent */
+	/* convert UCS2 -> UTF8
+	 * WC_NO_BEST_FIT_CHARS: https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/unicode-data
+	 */
 	count = WideCharToMultiByte(CP_UTF8, WC_NO_BEST_FIT_CHARS, tbuf, count, 
 			u8, sizeof(u8), NULL, NULL);
 	if (count <= 0) {
@@ -92,17 +101,45 @@ SQLRETURN EsSQLTablesW(
 #endif /* _WIN32 */
 
 
-	ret = post_sql_tables(dbc, ESODBC_TIMEOUT_DEFAULT, u8, count, answer, 
+	count = post_sql_tables(dbc, ESODBC_TIMEOUT_DEFAULT, u8, count, answer, 
 			sizeof(answer));
-	DBG("ret: %d, answer: `%s`.", ret, answer);
+	DBG("response received `%.*s` (%ld).", count, answer, count);
 
-	// FIXME: parse into JSON
-	FIXME;
+    obj = UJDecode(answer, count, NULL, &state);
+    if (UJObjectUnpack(obj, 1, "A", keys, &tables) >= 1) {
+		iter = UJBeginArray(tables);
+		if (! iter) {
+			ERR("failed to obtain array iterator: %s.", UJGetError(state));
+			goto err;
+		}
+		while (UJIterArray(&iter, &table)) {
+			if (! UJIsString(table)) {
+				ERR("received non-string table name element (%d) - skipped.", 
+						UJGetType(table));
+				continue;
+			}
+			tname = UJReadString(table, &len);
+			DBG("available table: `" LTPDL "`.", len, tname);
+			// FIXME
+			FIXME;
+		}
+	} else {
+		ERR("failed to decode JSON answer (`%.*s`): %s.", count, answer, 
+				UJGetError(state));
+		goto err;
+	}
+    UJFree(state);
 
 	return SQL_SUCCESS;
 
 empty:
 	// FIXME: set empty result to statement
 	FIXME;
+	return SQL_SUCCESS;
+
+err:
+	// FIXME
+	assert(state);
+    UJFree(state);
 	return SQL_ERROR;
 }
