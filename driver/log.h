@@ -31,32 +31,42 @@
 /* funny M$ 'inverted' logic */
 /* wprintf wide_t pointer descriptor */
 #define WPFWP_DESC		L"%s"
+#define WPFWP_LDESC		L"%.*s"
 /* printf wide_t pointer descriptor */
 #define PFWP_DESC		"%S"
+#define PFWP_LDESC		"%.*S"
 /* wprintf char pointer descriptor */
 #define WPFCP_DESC		L"%S" 
+#define WPFCP_LDESC		L"%.*S" 
 /* printf char pointer descriptor */
 #define PFCP_DESC		"%s"
+#define PFCP_LDESC		"%.*s"
 #else /* _WIN32 */
 /* wprintf wide_t pointer descriptor */
 #define WPFWP_DESC		L"%S"
+#define WPFWP_LDESC		L"%.*S"
 /* printf wide_t pointer descriptor */
 #define PFWP_DESC		"%S"
+#define PFWP_LDESC		"%.*S"
 /* silly M$ */
 /* wprintf char pointer descriptor */
 #define WPFCP_DESC		L"%s" 
+#define WPFCP_LDESC		L"%.*s" 
 /* printf char pointer descriptor */
 #define PFCP_DESC		"%s"
+#define PFCP_LDESC		"%.*s"
 #endif /* _WIN32 */
 
 /*
  * Descriptors to be used with logging with SQLTCHAR pointer type.
- * "Log Tchar Pointer Descriptor"
+ * "Log Tchar Pointer Descriptor [with Lenght]"
  */
 #ifdef UNICODE
 #define LTPD	PFWP_DESC
+#define LTPDL	PFWP_LDESC
 #else /* UNICODE */
 #define LTPD	PFCP_DESC
+#define LTPDL	PFCP_LDESC
 #endif /* UNICODE */
 
 

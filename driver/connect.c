@@ -333,7 +333,8 @@ long post_sql(esodbc_dbc_st *dbc,
 			emsg = MK_TSTR("failed to set transport content");
 			goto err;
 		} else {
-			DBG("libcurl: set curl 0x%p post fields to `%s`.", dbc, u8json);
+			DBG("libcurl: set curl 0x%p post fields to `%.*s`.", dbc, 
+					jlen, u8json);
 		}
 	}
 
@@ -355,9 +356,9 @@ long post_sql(esodbc_dbc_st *dbc,
 	return dbc->wpos;
 
 err:
-	ERR("libcurl: request on DBC 0x%p (timeout:%ld, u8json:`%s`, answer:0x%p, "
-			"avail:%ld) failed: '"LTPD"', '%s' (%d).", dbc, timeout,
-			u8json ? u8json : "<NULL>", answer, avail, emsg,
+	ERR("libcurl: request on DBC 0x%p (timeout:%ld, u8json:`%.*s`, "
+			"answer:0x%p, avail:%ld) failed: '"LTPD"', '%s' (%d).", dbc, 
+			timeout, 0, u8json ? u8json : "<NULL>", answer, avail, emsg,
 			res ? curl_easy_strerror(res) : "<unspecified>", res);
 	/* if buffer len has been set, the error occured in _perform() */
 	post_diagnostic(&dbc->diag, dbc->wlen ? SQL_STATE_08S01 : SQL_STATE_HY000, 
