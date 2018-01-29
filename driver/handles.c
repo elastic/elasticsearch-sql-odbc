@@ -20,12 +20,50 @@
 
 #include "handles.h"
 #include "log.h"
+#include "queries.h"
 
 #define TS_NULL						MK_TSTR("<NULL>")
 #define ESODBC_MAX_IDENTIFIER_LEN	128 /* TODO: review@alpha */
 
-static void init_desc(esodbc_desc_st *desc, desc_type_et type,
-		SQLSMALLINT alloc_type)
+
+static void free_rec_fields(desc_rec_st *rec)
+{
+	int i;
+	SQLTCHAR **tstr[] = {
+		&rec->base_column_name,
+		&rec->base_table_name,
+		&rec->catalog_name,
+		&rec->label,
+		&rec->literal_prefix,
+		&rec->literal_suffix,
+		&rec->local_type_name,
+		&rec->name,
+		&rec->schema_name,
+		&rec->table_name,
+		&rec->type_name,
+	};
+	for (i = 0; i < sizeof(tstr)/sizeof(tstr[0]); i ++) {
+		DBG("freeing field #%d = 0x%p.", i, *tstr[i]);
+		if (*tstr[i]) {
+			free(*tstr[i]);
+			*tstr[i] = NULL;
+		}
+	}
+}
+
+static inline void free_desc_recs(esodbc_desc_st *desc)
+{
+	int i;
+	/* IRD's pointers are 0-copy, no need to free them */
+	if (desc->type != DESC_TYPE_IRD)
+		for (i = 0; i < desc->count; i++)
+			free_rec_fields(&desc->recs[i]);
+	free(desc->recs);
+	desc->recs = NULL;
+}
+
+
+void init_desc(esodbc_desc_st *desc, desc_type_et type, SQLSMALLINT alloc_type)
 {
 	memset(desc, 0, sizeof(esodbc_desc_st));
 
@@ -36,12 +74,20 @@ static void init_desc(esodbc_desc_st *desc, desc_type_et type,
 			(alloc_type == SQL_DESC_ALLOC_AUTO));
 
 	desc->array_size = ESODBC_DEF_ARRAY_SIZE;
-	desc->array_status_ptr = NULL; /* formal, 0'd above */
-	desc->bind_offset_ptr = NULL; /* formal, 0'd above */
+	// desc->array_status_ptr = NULL; /* formal, 0'd above */
+	// desc->bind_offset_ptr = NULL; /* formal, 0'd above */
 	if (type == DESC_TYPE_ARD || type == DESC_TYPE_APD)
 		desc->bind_type = SQL_BIND_BY_COLUMN;
-	desc->count = 0; /* formal, 0'd above */
-	desc->rows_processed_ptr = NULL; /* formal, 0'd above */
+	// desc->count = 0; /* formal, 0'd above */
+	// desc->rows_processed_ptr = NULL; /* formal, 0'd above */
+}
+
+void reinit_desc(esodbc_desc_st *desc)
+{
+	DBG("clearing 0x%p.", desc);
+	if (desc->recs)
+		free_desc_recs(desc);
+	init_desc(desc, desc->type, desc->alloc_type);
 }
 
 /*
@@ -185,6 +231,8 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 
 SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 {
+	esodbc_stmt_st *stmt;
+
 	if (! Handle) {
 		ERR("provided null Handle.");
 		RET_STATE(SQL_STATE_HY009);
@@ -201,7 +249,10 @@ SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 			break;
 		case SQL_HANDLE_STMT:
 			// TODO: remove from (potential) list?
-			free(Handle);
+			stmt = STMH(Handle);
+			if (stmt->rset.buff)
+				clear_resultset(stmt);
+			free(stmt);
 			break;
 
 		
@@ -210,7 +261,8 @@ SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 		 * to the descriptors implicitly allocated for them." */
 		case SQL_HANDLE_DESC:
 			//break;
-			RET_NOT_IMPLEMENTED;
+			// FIXME
+			FIXME;
 
 		case SQL_HANDLE_SENV: /* Shared Environment Handle */
 			// TODO: do I need to set the state into the Handle?
@@ -261,6 +313,7 @@ SQLRETURN EsSQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option)
 		 * SQL_DESC_DATA_PTR field of the ARD for the bookmark column is set
 		 * to NULL." TODO, with bookmarks. */
 		case SQL_UNBIND:
+			DBG("unbinding statement 0x%p", stmt);
 			/* "Sets the SQL_DESC_COUNT field of the ARD to 0, releasing all
 			 * column buffers bound by SQLBindCol for the given
 			 * StatementHandle." */
@@ -276,14 +329,25 @@ SQLRETURN EsSQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option)
 
 		/* "Closes the cursor associated with StatementHandle and discards all
 		 * pending results." */
-		case SQL_CLOSE: // TODO: PROTO
+		case SQL_CLOSE:
+			DBG("closing statement 0x%p", stmt);
+			clear_resultset(stmt);
+			reinit_desc(stmt->ird);
+			break;
 
 		/* "Sets the SQL_DESC_COUNT field of the APD to 0, releasing all
 		 * parameter buffers set by SQLBindParameter for the given
 		 * StatementHandle." */
-		case SQL_RESET_PARAMS: // TODO: PROTO
-			BUG("not implemented.");
-			// returning success, tho, for further developing 
+		case SQL_RESET_PARAMS:
+			DBG("resetting params of 0x%p", stmt);
+			ret = EsSQLSetDescFieldW(stmt->apd, NO_REC_NR, SQL_DESC_COUNT,
+					(SQLPOINTER)0, SQL_IS_SMALLINT);
+			if (ret != SQL_SUCCESS) {
+				/* copy error at top handle level, where it's going to be
+				 * inquired from */
+				HDIAG_COPY(stmt->ard, stmt);
+				return ret;
+			}
 			break;
 
 		default:
@@ -1167,41 +1231,7 @@ static void get_rec_default(SQLSMALLINT field_id, SQLINTEGER buff_len,
 		memset(buff, 0, sz);
 }
 
-static void free_rec_fields(desc_rec_st *rec)
-{
-	int i;
-	SQLTCHAR **tstr[] = {
-		&rec->base_column_name,
-		&rec->base_table_name,
-		&rec->catalog_name,
-		&rec->label,
-		&rec->literal_prefix,
-		&rec->literal_suffix,
-		&rec->local_type_name,
-		&rec->name,
-		&rec->schema_name,
-		&rec->table_name,
-		&rec->type_name,
-	};
-	for (i = 0; i < sizeof(tstr)/sizeof(tstr[0]); i ++) {
-		DBG("freeing field #%d = 0x%p.", i, *tstr[i]);
-		if (*tstr[i]) {
-			free(*tstr[i]);
-			*tstr[i] = NULL;
-		}
-	}
-}
-
-static inline void free_desc_recs(esodbc_desc_st *desc)
-{
-	int i;
-	for (i = 0; i < desc->count; i++)
-		free_rec_fields(&desc->recs[i]);
-	free(desc->recs);
-	desc->recs = NULL;
-}
-
-static SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count)
+SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count)
 {
 	desc_rec_st *recs;
 	int i;

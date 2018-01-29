@@ -18,6 +18,159 @@
 #include "queries.h"
 #include "handles.h"
 
+
+void clear_resultset(esodbc_stmt_st *stmt)
+{
+	if (stmt->rset.buff)
+		free(stmt->rset.buff);
+	if (stmt->rset.state)
+		UJFree(stmt->rset.state);
+	memset(&stmt->rset, 0, sizeof(stmt->rset));
+}
+
+static int wmemncasecmp(const wchar_t *a, const wchar_t *b, size_t len)
+{
+	size_t i;
+	int diff = 0; /* if len == 0 */
+	for (i = 0; i < len; i ++) {
+		diff = towlower(a[i]) - towlower(b[i]);
+		if (diff)
+			break;
+	}
+	//DBG("`" LTPDL "` vs `" LTPDL "` => %d (len=%zd, i=%d).", 
+	//		len, a, len, b, diff, len, i);
+	return diff;
+}
+
+static SQLSMALLINT type_elastic2csql(const wchar_t *type_name, size_t len)
+{
+	switch (len) {
+		case sizeof(JSON_COL_INTEGER) - 1:
+			if (wmemncasecmp(type_name, MK_WSTR(JSON_COL_INTEGER), len) == 0)
+				// TODO: take in the precision for a better representation
+				return SQL_INTEGER;
+			break;
+		// case sizeof(JSON_COL_DATE):
+		case sizeof(JSON_COL_TEXT) - 1: 
+			if (wmemncasecmp(type_name, MK_WSTR(JSON_COL_TEXT), len) == 0)
+				// TODO: char/longvarchar/wchar/wvarchar?
+				return SQL_VARCHAR;
+			else if (wmemncasecmp(type_name, MK_WSTR(JSON_COL_DATE), len) == 0)
+				// TODO: time/timestamp
+				return SQL_TYPE_DATE;
+	}
+	ERR("unrecognized Elastic type `" LTPDL "`.", len, type_name);
+	return SQL_UNKNOWN_TYPE;
+}
+
+
+static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
+{
+	SQLRETURN ret;
+	SQLSMALLINT recno;
+	void *iter;
+	UJObject col_o, name_o, type_o;
+	const wchar_t *col_wname, *col_wtype;
+	SQLSMALLINT col_stype;
+	size_t len, ncols;
+	
+	esodbc_desc_st *ird = stmt->ird;
+	wchar_t *keys[] = {
+		MK_WSTR(JSON_ANSWER_COL_NAME),
+		MK_WSTR(JSON_ANSWER_COL_TYPE)
+	};
+
+
+	ncols = UJArraySize(columns);
+	DBG("columns received: %zd.", ncols);
+	ret = update_rec_count(ird, (SQLSMALLINT)ncols);
+	if (! SQL_SUCCEEDED(ret)) {
+		ERR("failed to set IRD's record count to %d.", ncols);
+		HDIAG_COPY(ird, stmt);
+		return ret;
+	}
+
+	iter = UJBeginArray(columns);
+	if (! iter) {
+		ERR("failed to obtain array iterator: %s.", 
+				UJGetError(stmt->rset.state));
+		RET_HDIAG(stmt, SQL_STATE_HY000, "Invalid server answer", 0);
+	}
+	recno = 0;
+	while (UJIterArray(&iter, &col_o)) {
+		if (UJObjectUnpack(col_o, 2, "SS", keys, &name_o, &type_o) < 2) {
+			ERR("failed to decode JSON column: %s.", 
+					UJGetError(stmt->rset.state));
+			RET_HDIAG(stmt, SQL_STATE_HY000, "Invalid server answer", 0);
+		}
+
+		col_wname = UJReadString(name_o, &len);
+		ird->recs[recno].base_column_name = (SQLTCHAR *)col_wname;
+
+		col_wtype = UJReadString(type_o, &len);
+		col_stype = type_elastic2csql(col_wtype, len);
+		if (col_stype == SQL_UNKNOWN_TYPE) {
+			ERR("failed to convert Elastic to C SQL type `" LTPDL "`.", 
+					len, col_wtype);
+			RET_HDIAG(stmt, SQL_STATE_HY000, "Invalid server answer", 0);
+		}
+		ird->recs[recno].type = col_stype;
+
+		DBG("column #%d: name=`" LTPD "`, type=%d (`" LTPD "`).", recno, 
+				col_wname, col_stype, col_wtype);
+		recno ++;
+	}
+
+	return SQL_SUCCESS;
+}
+
+/*
+ * Takes a dynamic buffer, buff, of length blen. Will handle the buff memory
+ * even if the call fails.
+ */
+SQLRETURN attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
+{
+	UJObject obj, columns, rows;
+	wchar_t *keys[] = {
+		MK_WSTR(JSON_ANSWER_COLUMNS), 
+		MK_WSTR(JSON_ANSWER_ROWS) 
+	};
+
+	/* IRD and statement should be cleaned by closing the statement */
+	assert(stmt->ird->recs == NULL);
+	assert(stmt->rset.buff == NULL);
+
+	/* the statement takes ownership of mem obj */
+	stmt->rset.buff = buff;
+	stmt->rset.blen = blen;
+
+	obj = UJDecode(buff, blen, NULL, &stmt->rset.state);
+	if (! obj) {
+		ERR("failed to decode JSON answer (`%.*s`): %s.", blen, buff, 
+				stmt->rset.state ? UJGetError(stmt->rset.state) : "<none>");
+		RET_HDIAG(stmt, SQL_STATE_HY000, "Invalid server answer", 0);
+	}
+    if (UJObjectUnpack(obj, 2, "AA", keys, &columns, &rows) < 2) {
+		ERR("failed to unpack JSON answer (`%.*s`): %s.", blen, buff, 
+				stmt->rset.state ? UJGetError(stmt->rset.state) : "<none>");
+		RET_HDIAG(stmt, SQL_STATE_HY000, "Invalid server answer", 0);
+	}
+
+	/* set the cursor */
+	stmt->rset.rows_iter = UJBeginArray(rows);
+	if (! stmt->rset.rows_iter) {
+		ERR("failed to get iterrator on received rows: %s.", 
+				UJGetError(stmt->rset.state));
+		RET_HDIAGS(stmt, SQL_STATE_HY000);
+	}
+	stmt->rset.nrows = UJArraySize(rows);
+	stmt->rset.cursor = 0;
+	DBG("rows received: %zd.", stmt->rset.nrows);
+
+	return attach_columns(stmt, columns);
+}
+
+
 /*
  * "An application can unbind the data buffer for a column but still have a
  * length/indicator buffer bound for the column, if the TargetValuePtr
@@ -189,11 +342,92 @@ copy_ret:
  */
 SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 {
+	esodbc_stmt_st *stmt;
+	esodbc_desc_st *ard, *ird;
+	SQLSMALLINT i;
+	UJObject obj, row;
+	size_t len;
+	void *iter_row;
+
+	stmt = STMH(StatementHandle);
+	ard = stmt->ard;
+	ird = stmt->ird;
+
+	DBG("fetching on statement 0x%p; cursor @ %zd / %zd.", stmt, 
+			stmt->rset.cursor, stmt->rset.nrows);
+
 	// FIXME: consider STMH(StatementHandle)->options.bind_offset
 	// FIXME: consider STMH(StatementHandle)->options.array_size
 	
-	return SQL_NO_DATA;
-	RET_NOT_IMPLEMENTED;
+#if 0
+	do {
+		while (UJIterArray(&stmt->rset.rows_iter, &row)) {
+			if (UJIsArray(row)) {
+				DBG("got array of size: %zd.", UJArraySize(row));
+			} else {
+				ERR("got instead: %d", UJGetType(row));
+			}
+			iter_row = UJBeginArray(row);
+			if (! iter_row) {
+				ERR("no iter.");
+				break;
+			}
+			while (UJIterArray(&iter_row, &obj)) {
+				if (UJIsString(obj))
+					DBG("got string: `" LTPD "`.", UJReadString(obj, &len));
+				else if (UJIsInteger(obj))
+					DBG("got integer: %d.", UJNumericInt(obj));
+				else
+					DBG("no idea");
+			}
+		}
+	} while (0);
+#endif
+
+	if (stmt->rset.nrows <= stmt->rset.cursor) {
+		DBG("cursor past result set size => no more data");
+		return SQL_NO_DATA;
+	}
+
+	if (! UJIterArray(&stmt->rset.rows_iter, &row)) {
+		BUG("Unexpected end of iterator: cursor @ %zd / %zd.",
+			stmt->rset.cursor, stmt->rset.nrows);
+		return SQL_NO_DATA;
+	}
+	if (! UJIsArray(row)) {
+		ERR("element '%s' in result set not array; type: %d.", 
+				JSON_ANSWER_ROWS, UJGetType(row));
+		RET_HDIAG(stmt, SQL_STATE_01S01, "Invalid server answer", 0);
+	}
+	iter_row = UJBeginArray(row);
+	if (! iter_row) {
+		ERR("Failed to obtain iterator on row: %s.", 
+				UJGetError(stmt->rset.state));
+		RET_HDIAG(stmt, SQL_STATE_01S01, "Invalid server answer", 0);
+	}
+
+	/* iterate over the contents of one row */
+	for (i = 0; i < ard->count && UJIterArray(&iter_row, &obj); i ++) {
+		/* if record not bound skip it */
+		if (! ard->recs[i].data_ptr) {
+			DBG("column #%d not bound.", i + 1);
+			continue;
+		}
+		if (UJIsNull(obj))
+			DBG("got NULL.");
+		else if (UJIsString(obj))
+			DBG("got string: `" LTPD "`.", UJReadString(obj, &len));
+		else if (UJIsInteger(obj))
+			DBG("got integer: %d.", UJNumericInt(obj));
+		else
+			DBG("received object of type: %d", UJGetType(row));
+	}
+
+
+	stmt->rset.cursor ++;
+
+	
+	return SQL_SUCCESS;
 }
 
 /*
@@ -261,3 +495,15 @@ SQLRETURN EsSQLBulkOperations(
 	ERR("data update functions not supported");
 	RET_HDIAGS(STMH(StatementHandle), SQL_STATE_IM001);
 }
+
+SQLRETURN EsSQLCloseCursor(SQLHSTMT StatementHandle)
+{
+	esodbc_stmt_st *stmt = STMH(StatementHandle);
+	if (! stmt->rset.buff)
+		RET_HDIAGS(stmt, SQL_STATE_24000);
+	clear_resultset(stmt);
+	reinit_desc(stmt->ird);
+	RET_STATE(SQL_STATE_00000);
+}
+
+
