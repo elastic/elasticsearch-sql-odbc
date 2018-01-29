@@ -1011,12 +1011,16 @@ SQLRETURN  SQL_API SQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option)
 	return ret;
 }
 
-#if WITH_EMPTY
-
 SQLRETURN  SQL_API SQLCloseCursor(SQLHSTMT StatementHandle)
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE1(_IN, "p", StatementHandle);
+	ret = EsSQLCloseCursor(StatementHandle);
+	TRACE2(_OUT, "dpd", ret, StatementHandle);
+	return ret;
 }
+
+#if WITH_EMPTY
 
 SQLRETURN  SQL_API SQLCancel(SQLHSTMT StatementHandle)
 {

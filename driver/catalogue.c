@@ -10,12 +10,42 @@
 #include "ujdecode.h"
 
 #include "catalogue.h"
+#include "log.h"
 #include "handles.h"
 #include "connect.h"
 #include "info.h"
-#include "log.h"
+#include "queries.h"
 
 #define SQL_TABLES_JSON		"{\"table_pattern\" : \"" WPFWP_DESC "\"}"
+
+#define JSON_TABLES_PREFIX \
+	"{\"" JSON_ANSWER_COLUMNS "\": [" \
+		"{" \
+			"\"name\": \"TABLE_CAT\"," \
+			"\"type\": \"text\"" \
+		"}," \
+		"{" \
+			"\"name\": \"TABLE_SCHEM\"," \
+			"\"type\": \"text\"" \
+		"}," \
+		"{" \
+			"\"name\": \"TABLE_NAME\"," \
+			"\"type\": \"text\"" \
+		"}," \
+		"{" \
+			"\"name\": \"TABLE_TYPE\"," \
+			"\"type\": \"text\"" \
+		"}," \
+		"{" \
+			"\"name\": \"REMARKS\"," \
+			"\"type\": \"text\"" \
+		"}" \
+	"]," \
+	"\"" JSON_ANSWER_ROWS "\": ["
+#define JSON_TABLES_SUFFIX "]}"
+
+#define JSON_TABLES_ROW_TEMPLATE \
+	"[null,null,\"" LTPDL "\",\"TABLE\",\"\"]"
 
 SQLRETURN EsSQLTablesW(
 		SQLHSTMT StatementHandle,
@@ -32,12 +62,13 @@ SQLRETURN EsSQLTablesW(
 	SQLTCHAR tbuf[SQL_MAX_IDENTIFIER_LEN + sizeof(SQL_TABLES_JSON)];
 	char u8[/*max bytes per character */4 * SQL_MAX_IDENTIFIER_LEN + 
 		sizeof(SQLTCHAR) * sizeof(SQL_TABLES_JSON)];
-	char answer[1<<16]; // FIXME
+	char answer[1<<16], faked[1<<16]; // FIXME: buffer handling
+	char *dupped;
 	esodbc_stmt_st *stmt = STMH(StatementHandle);
 	esodbc_dbc_st *dbc = stmt->dbc;
 	int i;
 	long count;
-	size_t len;
+	size_t len, pos;
 	UJObject obj, tables, table;
 	wchar_t *keys[] = {L"tables"};
 	const wchar_t *tname;
@@ -105,32 +136,71 @@ SQLRETURN EsSQLTablesW(
 			sizeof(answer));
 	DBG("response received `%.*s` (%ld).", count, answer, count);
 
+	/*
+	 * Note: UJDecode will treat UTF8 strings and UJReadString will return
+	 * directly wchar_t.
+	 */
     obj = UJDecode(answer, count, NULL, &state);
-    if (UJObjectUnpack(obj, 1, "A", keys, &tables) >= 1) {
-		iter = UJBeginArray(tables);
-		if (! iter) {
-			ERR("failed to obtain array iterator: %s.", UJGetError(state));
-			goto err;
-		}
-		while (UJIterArray(&iter, &table)) {
-			if (! UJIsString(table)) {
-				ERR("received non-string table name element (%d) - skipped.", 
-						UJGetType(table));
-				continue;
-			}
-			tname = UJReadString(table, &len);
-			DBG("available table: `" LTPDL "`.", len, tname);
-			// FIXME
-			FIXME;
-		}
-	} else {
+    if (UJObjectUnpack(obj, 1, "A", keys, &tables) < 1) {
 		ERR("failed to decode JSON answer (`%.*s`): %s.", count, answer, 
-				UJGetError(state));
+				state ? UJGetError(state) : "<none>");
 		goto err;
 	}
-    UJFree(state);
+	DBG("unpacked array of size: %zd.", UJArraySize(tables));
 
-	return SQL_SUCCESS;
+	assert(sizeof(JSON_TABLES_PREFIX) < sizeof(faked));
+	memcpy(faked, JSON_TABLES_PREFIX, sizeof(JSON_TABLES_PREFIX) - /*0term*/1);
+	pos = sizeof(JSON_TABLES_PREFIX) - 1;
+	
+	iter = UJBeginArray(tables);
+	if (! iter) {
+		ERR("failed to obtain array iterator: %s.", UJGetError(state));
+		goto err;
+	}
+	count = 0;
+	while (UJIterArray(&iter, &table)) {
+		if (! UJIsString(table)) {
+			ERR("received non-string table name element (%d) - skipped.", 
+					UJGetType(table));
+			continue;
+		}
+		tname = UJReadString(table, &len);
+		DBG("available table: `" LTPDL "`.", len, tname);
+		count = snprintf(faked + pos, sizeof(faked), 
+				"%s" JSON_TABLES_ROW_TEMPLATE, count ? "," : "",
+				(int)len, tname);
+		if (count < 0) {
+			ERRN("buffer printing failed");
+			goto err;
+		} else if (count < sizeof(JSON_TABLES_ROW_TEMPLATE) - 1 
+				- sizeof(LTPDL) - 1 + len) {
+			ERR("buffer to small (%d) to print faked 'tables' JSON.", 
+					sizeof(faked));
+			goto err;
+		}
+		pos += count;
+	}
+    UJFree(state);
+	state = NULL;
+	
+	if (sizeof(faked) <= pos + sizeof(JSON_TABLES_SUFFIX)/*w/ \0*/) {
+		ERR("buffer to small (%d) to print faked 'tables' JSON.", 
+				sizeof(faked));
+		goto err;
+	}
+	memcpy(faked + pos, JSON_TABLES_SUFFIX, sizeof(JSON_TABLES_SUFFIX));
+	pos += sizeof(JSON_TABLES_SUFFIX); /* includes \0 */
+
+	DBG("faked 'tables' answer: `%.*s`.", pos, faked);
+
+	dupped = (char *)malloc(pos);
+	if (! dupped) {
+		ERRN("failed to strndup faked answer.");
+		RET_HDIAGS(stmt, SQL_STATE_HY001);
+	}
+	memcpy(dupped, faked, pos);
+
+	return attach_answer(stmt, dupped, pos - /*\0*/1);
 
 empty:
 	// FIXME: set empty result to statement
@@ -139,7 +209,7 @@ empty:
 
 err:
 	// FIXME
-	assert(state);
-    UJFree(state);
-	return SQL_ERROR;
+	if (state)
+		UJFree(state);
+	RET_HDIAGS(stmt, SQL_STATE_HY000);
 }

@@ -150,12 +150,13 @@ typedef enum {
 } esodbc_state_et;
 
 
-#define MK_WSTR(_cstr_)	(L ## _cstr_)
+#define _MK_WSTR(_cstr_)	(L ## _cstr_)
+#define MK_WSTR(_cstr_)		_MK_WSTR(_cstr_)
 
 #ifdef UNICODE
-#define MK_TSTR(_cstr_)	MK_WSTR(_cstr_)
+#define MK_TSTR				MK_WSTR
 #else /* UNICODE */
-#define MK_TSTR(_cstr_)	(_cstr_)
+#define MK_TSTR(_cstr_)		(_cstr_)
 #endif /* UNICODE */
 
 

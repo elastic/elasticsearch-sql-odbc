@@ -9,6 +9,8 @@
 
 #include  <curl/curl.h>
 
+#include "ujdecode.h"
+
 #include "error.h"
 #include "log.h"
 
@@ -133,8 +135,8 @@ typedef struct struct_desc {
 	SQLULEN			array_size;
 	SQLUSMALLINT	*array_status_ptr;
 	SQLLEN			*bind_offset_ptr;
-	SQLINTEGER		bind_type;
-	SQLSMALLINT		count;
+	SQLINTEGER		bind_type; /* row/col */
+	SQLSMALLINT		count; /* of recs */
 	SQLULEN			*rows_processed_ptr;
 	/* /header fields */
 
@@ -142,6 +144,18 @@ typedef struct struct_desc {
 	 * TODO: list? binding occurs seldomly, compared to execution, tho. */
 	desc_rec_st *recs;
 } esodbc_desc_st;
+
+
+typedef struct struct_resultset {
+	char *buff; /* buffer containing the answer to the request */
+	size_t blen; /* lenght of the answer */
+
+	void *state; /* top UJSON decoder state */
+	void *rows_iter; /* UJSON array with the result set */
+
+	size_t nrows; /* row count */
+	size_t cursor; /* next row to fetch data from */
+} resultset_st;
 
 /*
  * "The fields of an IRD have a default value only after the statement has
@@ -154,7 +168,7 @@ typedef struct struct_desc {
 typedef struct struct_stmt {
 	esodbc_dbc_st *dbc;
 	esodbc_diag_st diag;
-	// TODO: descriptors
+
 	/* pointers to the current descriptors */
 	esodbc_desc_st *ard;
 	esodbc_desc_st *ird;
@@ -170,6 +184,9 @@ typedef struct struct_stmt {
 	SQLULEN bookmarks; //default: SQL_UB_OFF
 	SQLULEN metadata_id; // default: copied from connection
 	SQLULEN async_enable; // default: copied from connection
+
+	/* result set */
+	resultset_st rset;
 } esodbc_stmt_st;
 
 
@@ -180,6 +197,10 @@ typedef struct struct_stmt {
 #define ESODBC_DEF_ARRAY_SIZE		1
 /* max cols or args to bind */
 #define ESODBC_MAX_DESC_COUNT		128 
+
+void reinit_desc(esodbc_desc_st *desc);
+SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count);
+
 
 SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 	SQLHANDLE InputHandle, _Out_ SQLHANDLE *OutputHandle);
@@ -302,6 +323,21 @@ SQLRETURN EsSQLSetDescRec(
 		ERR("not implemented.");\
 		return SQL_ERROR; \
 	} while (0)
+
+/* TODO: this is inefficient: add directly into ujson4c lib (as .size of
+ * ArrayItem struct, inc'd in arrayAddItem()) or local utils file. Only added
+ * here to be accessible with the statement resultset member. */
+static inline size_t UJArraySize(UJObject obj)
+{
+	UJObject _u; /* unused */
+	size_t size = 0;
+	void *iter = UJBeginArray(obj);
+	if (iter) {
+		while (UJIterArray(&iter, &_u))
+			size ++;
+	}
+	return size;
+}
 
 #endif /* __HANDLES_H__ */
 

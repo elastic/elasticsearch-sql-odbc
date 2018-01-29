@@ -526,14 +526,19 @@ SQLRETURN EsSQLDriverConnectW
 	/* return the final connection string */
 	if (szConnStrOut) {
 		// TODO: Driver param
-		n = swprintf(szConnStrOut, cchConnStrOutMax, WPFWP_DESC ";" \
-				"Server="WPFCP_DESC";" \
-				"Port=%d;" \
-				"Secure=%d;" \
-				"Timeout=%d;" \
-				"Follow=%d;" \
+		n = swprintf(szConnStrOut, cchConnStrOutMax, WPFWP_DESC ";"
+				"Server="WPFCP_DESC";"
+				"Port=%d;"
+				"Secure=%d;"
+				"Packing="WPFCP_DESC";"
+				"MaxFetchSize=%d;"
+				"Timeout=%d;"
+				"Follow=%d;"
+				"TraceFile="WPFCP_DESC";"
+				"TraceLevel="WPFCP_DESC";"
 				"User=user;Password=pass;Catalog=cat",
-				szConnStrIn, "host", 9200, 0, -1, 0);
+				szConnStrIn, "host", 9200, 0, "json", 100, -1, 0, 
+				"C:\\foo.txt", "DEBUG");
 		if (n < 0) {
 			ERRN("failed to outprint connection string.");
 			RET_HDIAGS(dbc, SQL_STATE_HY000);
