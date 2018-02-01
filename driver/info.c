@@ -414,7 +414,8 @@ SQLRETURN EsSQLGetDiagFieldW(
 						"type %d.", DiagIdentifier, HandleType);
 				return SQL_ERROR;
 			}
-			RET_NOT_IMPLEMENTED;
+			// FIXME
+			FIXME;
 			//break;
 		/* case SQL_DIAG_RETURNCODE: break; -- DM only */
 
@@ -500,9 +501,9 @@ SQLRETURN EsSQLGetDiagFieldW(
 					StringLengthPtr);
 		
 
-		case SQL_DIAG_COLUMN_NUMBER: //break;
 		case SQL_DIAG_MESSAGE_TEXT: //break;
 		case SQL_DIAG_NATIVE: //break;
+		case SQL_DIAG_COLUMN_NUMBER: //break;
 		case SQL_DIAG_ROW_NUMBER: //break;
 			RET_NOT_IMPLEMENTED;
 

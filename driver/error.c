@@ -21,6 +21,13 @@
 #include "log.h"
 #include "handles.h"
 
+void init_diagnostic(esodbc_diag_st *dest)
+{
+	dest->state = SQL_STATE_00000;
+	dest->row_number = SQL_NO_ROW_NUMBER;
+	dest->column_number = SQL_NO_COLUMN_NUMBER;
+}
+
 /* TODO: must the diagnostic be "cleared" after a succesful invokation?? */
 SQLRETURN post_diagnostic(esodbc_diag_st *dest, esodbc_state_et state, 
 		SQLTCHAR *text, SQLINTEGER code)
@@ -51,4 +58,12 @@ SQLRETURN post_diagnostic(esodbc_diag_st *dest, esodbc_state_et state,
 	 * might have failed. */
 	RET_STATE(state);
 
+}
+
+SQLRETURN post_row_diagnostic(esodbc_diag_st *dest, esodbc_state_et state, 
+		SQLTCHAR *text, SQLINTEGER code, SQLLEN nrow, SQLINTEGER ncol)
+{
+	dest->row_number = nrow;
+	dest->column_number = ncol;
+	return post_diagnostic(dest, state, text, code);
 }

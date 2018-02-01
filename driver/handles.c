@@ -60,12 +60,17 @@ static inline void free_desc_recs(esodbc_desc_st *desc)
 			free_rec_fields(&desc->recs[i]);
 	free(desc->recs);
 	desc->recs = NULL;
+	desc->count = 0;
 }
 
 
-void init_desc(esodbc_desc_st *desc, desc_type_et type, SQLSMALLINT alloc_type)
+void init_desc(esodbc_desc_st *desc, esodbc_stmt_st *stmt, desc_type_et type, 
+		SQLSMALLINT alloc_type)
 {
 	memset(desc, 0, sizeof(esodbc_desc_st));
+
+	desc->stmt = stmt;
+	init_diagnostic(&desc->diag);
 
 	desc->type = type;
 	desc->alloc_type = alloc_type;
@@ -82,12 +87,33 @@ void init_desc(esodbc_desc_st *desc, desc_type_et type, SQLSMALLINT alloc_type)
 	// desc->rows_processed_ptr = NULL; /* formal, 0'd above */
 }
 
-void reinit_desc(esodbc_desc_st *desc)
+static void clear_desc(esodbc_stmt_st *stmt, desc_type_et dtype, BOOL reinit)
 {
-	DBG("clearing 0x%p.", desc);
+	esodbc_desc_st *desc;
+	DBG("clearing desc type %d for statement 0x%p.", dtype, stmt);
+	switch (dtype) {
+		case DESC_TYPE_ARD:
+			desc = stmt->ard;
+			break;
+		case DESC_TYPE_IRD:
+			if (STMT_HAS_RESULTSET(stmt))
+				clear_resultset(stmt);
+			desc = stmt->ird;
+			break;
+		case DESC_TYPE_APD:
+			desc = stmt->apd;
+			break;
+		case DESC_TYPE_IPD:
+			desc = stmt->ipd;
+			break;
+		default:
+			BUG("no such descriptor of type %d.", dtype);
+			return;
+	}
 	if (desc->recs)
 		free_desc_recs(desc);
-	init_desc(desc, desc->type, desc->alloc_type);
+	if (reinit)
+		init_desc(desc, desc->stmt, desc->type, desc->alloc_type);
 }
 
 /*
@@ -141,6 +167,7 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 				ERRN("failed to callocate env handle.");
 				RET_STATE(SQL_STATE_HY001);
 			}
+			init_diagnostic(&ENVH(*OutputHandle)->diag);
 			DBG("new Environment handle allocated @0x%p.", *OutputHandle);
 			break;
 		case SQL_HANDLE_DBC: /* Connection Handle */
@@ -163,6 +190,7 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 				ERRN("failed to callocate connection handle.");
 				RET_HDIAGS(ENVH(InputHandle), SQL_STATE_HY001);
 			}
+			init_diagnostic(&dbc->diag);
 			dbc->env = ENVH(InputHandle);
 			dbc->timeout = ESODBC_TIMEOUT_DEFAULT;
 			dbc->metadata_id = SQL_FALSE;
@@ -179,12 +207,13 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 				ERRN("failed to callocate statement handle.");
 				RET_HDIAGS(dbc, SQL_STATE_HY001); 
 			}
+			init_diagnostic(&stmt->diag);
 			stmt->dbc = dbc;
 
-			init_desc(&stmt->i_ard, DESC_TYPE_ARD, SQL_DESC_ALLOC_AUTO);
-			init_desc(&stmt->i_ird, DESC_TYPE_IRD, SQL_DESC_ALLOC_AUTO);
-			init_desc(&stmt->i_apd, DESC_TYPE_APD, SQL_DESC_ALLOC_AUTO);
-			init_desc(&stmt->i_ipd, DESC_TYPE_IPD, SQL_DESC_ALLOC_AUTO);
+			init_desc(&stmt->i_ard, stmt, DESC_TYPE_ARD, SQL_DESC_ALLOC_AUTO);
+			init_desc(&stmt->i_ird, stmt, DESC_TYPE_IRD, SQL_DESC_ALLOC_AUTO);
+			init_desc(&stmt->i_apd, stmt, DESC_TYPE_APD, SQL_DESC_ALLOC_AUTO);
+			init_desc(&stmt->i_ipd, stmt, DESC_TYPE_IPD, SQL_DESC_ALLOC_AUTO);
 
 			/* "When a statement is allocated, four descriptor handles are
 			 * automatically allocated and associated with the statement." */
@@ -207,9 +236,10 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			*OutputHandle = (SQLHANDLE *)calloc(1, sizeof(esodbc_desc_st));
 			if (! *OutputHandle) {
 				ERRN("failed to callocate descriptor handle.");
-				RET_HDIAGS(DBCH(InputHandle), SQL_STATE_HY001); 
+				RET_HDIAGS(STMH(InputHandle), SQL_STATE_HY001); 
 			}
-			init_desc(*OutputHandle, DESC_TYPE_ANON, SQL_DESC_ALLOC_USER);
+			init_desc(*OutputHandle, InputHandle, DESC_TYPE_ANON, 
+					SQL_DESC_ALLOC_USER);
 			DBG("new Descriptor handle allocated @0x%p.", *OutputHandle);
 			// FIXME: assign/chain to statement?
 			break;
@@ -250,8 +280,12 @@ SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 		case SQL_HANDLE_STMT:
 			// TODO: remove from (potential) list?
 			stmt = STMH(Handle);
-			if (stmt->rset.buff)
-				clear_resultset(stmt);
+			if (stmt->text)
+				free(stmt->text);
+			clear_desc(stmt, DESC_TYPE_ARD, FALSE);
+			clear_desc(stmt, DESC_TYPE_IRD, FALSE);
+			clear_desc(stmt, DESC_TYPE_APD, FALSE);
+			clear_desc(stmt, DESC_TYPE_IPD, FALSE);
 			free(stmt);
 			break;
 
@@ -331,8 +365,7 @@ SQLRETURN EsSQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option)
 		 * pending results." */
 		case SQL_CLOSE:
 			DBG("closing statement 0x%p", stmt);
-			clear_resultset(stmt);
-			reinit_desc(stmt->ird);
+			clear_desc(stmt, DESC_TYPE_IRD, FALSE /*keep the header values*/);
 			break;
 
 		/* "Sets the SQL_DESC_COUNT field of the APD to 0, releasing all
@@ -635,6 +668,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 		SQLINTEGER         BufferLength)
 {
 	SQLRETURN ret;
+	SQLULEN ulen;
 	esodbc_desc_st *desc;
 	esodbc_stmt_st *stmt = STMH(StatementHandle);
 
@@ -823,6 +857,23 @@ SQLRETURN EsSQLSetStmtAttrW(
 			stmt->async_enable = (SQLULEN)ValuePtr;
 			break;
 
+		case SQL_ATTR_MAX_LENGTH:
+			ulen = (SQLULEN)ValuePtr;
+			DBG("setting max_lenght to: %u.", ulen);
+			if (ulen < ESODBC_LO_MAX_LENGTH) {
+				WARN("MAX_LENGHT lower than min allowed (%d) -- correcting "
+						"value.", ESODBC_LO_MAX_LENGTH);
+				ulen = ESODBC_LO_MAX_LENGTH;
+			} else if (ESODBC_UP_MAX_LENGTH && ESODBC_UP_MAX_LENGTH < ulen) {
+				WARN("MAX_LENGTH higher than max allowed (%d) -- correcting "
+						"value", ESODBC_UP_MAX_LENGTH);
+				ulen = ESODBC_UP_MAX_LENGTH;
+			}
+			stmt->max_length = ulen;
+			if (ulen != (SQLULEN)ValuePtr)
+				RET_HDIAGS(stmt, SQL_STATE_01S02);
+			break;
+
 		default:
 			// FIXME
 			FIXME;
@@ -871,6 +922,16 @@ SQLRETURN EsSQLGetStmtAttrW(
 		case SQL_ATTR_ASYNC_ENABLE:
 			DBG("getting async_enable: %u", stmt->async_enable);
 			*(SQLULEN *)ValuePtr = stmt->async_enable;
+			break;
+		case SQL_ATTR_MAX_LENGTH:
+			DBG("getting max_length: %u", stmt->max_length);
+			*(SQLULEN *)ValuePtr = stmt->max_length;
+			break;
+
+		/* "determine the number of the current row in the result set" */
+		case SQL_ATTR_ROW_NUMBER:
+			DBG("getting row number: %u", (SQLULEN)stmt->rset.frows);
+			*(SQLULEN *)ValuePtr = (SQLULEN)stmt->rset.frows;
 			break;
 
 		default:
@@ -1231,6 +1292,13 @@ static void get_rec_default(SQLSMALLINT field_id, SQLINTEGER buff_len,
 		memset(buff, 0, sz);
 }
 
+static inline void init_rec(desc_rec_st *rec, esodbc_desc_st *desc)
+{
+	memset(rec, 0, sizeof(desc_rec_st));
+	rec->desc = desc;
+	/* further init to defaults is done once the data type is set */
+}
+
 SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count)
 {
 	desc_rec_st *recs;
@@ -1270,10 +1338,9 @@ SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count)
 				free_rec_fields(&desc->recs[i]);
 		} else { /* growing array */
 			DBG("recs array is growing %d -> %d.", desc->count, new_count);
-			/* clear all new records */
-			memset(&recs[desc->count], 0, 
-					(new_count - desc->count) * sizeof(desc_rec_st));
-			/* further init to defaults is done once the data type is set */
+			/* init all new records */
+			for (i = desc->count; i < new_count; i ++)
+				init_rec(&recs[i], desc);
 		}
 	}
 
@@ -1286,8 +1353,7 @@ SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count)
  * Returns the record with desired 1-based index.
  * Grow the array if needed (desired index higher than current count).
  */
-static desc_rec_st* get_record(esodbc_desc_st *desc, SQLSMALLINT rec_no, 
-		BOOL grow)
+desc_rec_st* get_record(esodbc_desc_st *desc, SQLSMALLINT rec_no, BOOL grow)
 {
 	assert(0 <= rec_no);
 
@@ -1303,7 +1369,7 @@ static desc_rec_st* get_record(esodbc_desc_st *desc, SQLSMALLINT rec_no,
 static SQLSMALLINT recount_bound(esodbc_desc_st *desc)
 {
 	SQLSMALLINT i;
-	for (i = desc->count; 0 < i && desc->recs[i - 1].data_ptr; i --)
+	for (i = desc->count; 0 < i && REC_IS_BOUND(&desc->recs[i-1]); i--)
 		;
 	return i;
 }
@@ -1994,6 +2060,12 @@ SQLRETURN EsSQLSetDescFieldW(
 						ESODBC_MAX_ROW_ARRAY_SIZE);
 				desc->array_size = ESODBC_MAX_ROW_ARRAY_SIZE;
 				RET_HDIAGS(desc, SQL_STATE_01S02);
+#if 0 // TODO: can it actually be set to 0? just to advance the cursor?
+			} else if (ulen < 1) {
+				ERR("can't set the array size to less than 1; attempted: %u.",
+						ulen);
+				RET_HDIAGS(desc, SQL_STATE_HY092);
+#endif //0
 			} else {
 				desc->array_size = ulen;
 			}
@@ -2072,6 +2144,9 @@ SQLRETURN EsSQLSetDescFieldW(
 	 * "If the application changes the data type or attributes after setting
 	 * the SQL_DESC_DATA_PTR field, the driver sets SQL_DESC_DATA_PTR to a
 	 * null pointer, unbinding the record."
+	 *
+	 * NOTE: the record can actually still be bound by the lenght/indicator
+	 * buffer(s), so the above "binding" definition is incomplete.
 	 */
 	if (FieldIdentifier != SQL_DESC_DATA_PTR)
 		rec->data_ptr = NULL;
@@ -2103,7 +2178,7 @@ SQLRETURN EsSQLSetDescFieldW(
 			break;
 
 		case SQL_DESC_DATA_PTR:
-			DBG("setting data ptr to 0x%p of len %d.", ValuePtr, BufferLength);
+			DBG("setting data ptr to 0x%p of type %d.", ValuePtr,BufferLength);
 			/* deferred */
 			rec->data_ptr = ValuePtr;
 			if (rec->data_ptr) {
@@ -2112,9 +2187,10 @@ SQLRETURN EsSQLSetDescFieldW(
 					ERR("consistency check failed on record 0x%p.", rec);
 					RET_HDIAGS(desc, SQL_STATE_HY021);
 				} else {
-					DBG("rec 0x%p bound to data ptr 0x%p.", rec, ValuePtr);
+					DBG("data ptr 0x%p bound to rec@0x%p.", rec->data_ptr,rec);
 				}
 			} else {
+				// TODO: should this actually use REC_IS_BOUND()?
 				/* "If the highest-numbered column or parameter is unbound,
 				 * then SQL_DESC_COUNT is changed to the number of the next
 				 * highest-numbered column or parameter. " */

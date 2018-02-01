@@ -529,6 +529,7 @@ SQLRETURN SQL_API SQLSetScrollOptions(    /*      Use SQLSetStmtOptions */
  */
 SQLRETURN  SQL_API SQLExecute(SQLHSTMT StatementHandle)
 {
+	// TODO: set .stmt_curs = 0; in resultset
 	RET_NOT_IMPLEMENTED;
 }
 
@@ -551,6 +552,7 @@ SQLRETURN SQL_API SQLExecDirectW
     SQLINTEGER  TextLength
 )
 {
+	// TODO: set .stmt_curs = 0; in resultset
 	RET_NOT_IMPLEMENTED;
 }
 
@@ -620,12 +622,19 @@ SQLRETURN  SQL_API SQLRowCount(_In_ SQLHSTMT StatementHandle,
 {
 	RET_NOT_IMPLEMENTED;
 }
+#endif /* WITH_EMPTY */
 
 SQLRETURN  SQL_API SQLNumResultCols(SQLHSTMT StatementHandle,
            _Out_ SQLSMALLINT *ColumnCount)
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE2(_IN, "pp", StatementHandle, ColumnCount);
+	ret = EsSQLNumResultCols(StatementHandle, ColumnCount);
+	TRACE3(_OUT, "dpD", ret, StatementHandle, ColumnCount);
+	return ret;
 }
+
+#if WITH_EMPTY
 
 SQLRETURN SQL_API SQLDescribeColW
 (

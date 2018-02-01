@@ -22,6 +22,7 @@
 
 void clear_resultset(esodbc_stmt_st *stmt);
 SQLRETURN attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen);
+SQLRETURN attach_sqltext(esodbc_stmt_st *stmt, SQLTCHAR *text, size_t blen);
 
 /* key names used in Elastic/SQL REST/JSON answers */
 #define JSON_ANSWER_COLUMNS		"columns"
@@ -50,6 +51,8 @@ SQLRETURN EsSQLBulkOperations(
 		SQLHSTMT            StatementHandle,
 		SQLSMALLINT         Operation);
 SQLRETURN EsSQLCloseCursor(SQLHSTMT StatementHandle);
+SQLRETURN EsSQLNumResultCols(SQLHSTMT StatementHandle, 
+		_Out_ SQLSMALLINT *ColumnCount);
 
 
 #endif /* __QUERIES_H__ */
