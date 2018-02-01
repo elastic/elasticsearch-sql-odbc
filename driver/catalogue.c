@@ -16,6 +16,7 @@
 #include "info.h"
 #include "queries.h"
 
+#define SQL_TABLES_TEXT		"SYS TABLES;"
 #define SQL_TABLES_JSON		"{\"table_pattern\" : \"" WPFWP_DESC "\"}"
 
 #define JSON_TABLES_PREFIX \
@@ -58,11 +59,12 @@ SQLRETURN EsSQLTablesW(
 		_In_reads_opt_(NameLength4) SQLTCHAR *TableType, 
 		SQLSMALLINT NameLength4)
 {
+	SQLRETURN ret;
 	SQLTCHAR *table_type, *table_name;
 	SQLTCHAR tbuf[SQL_MAX_IDENTIFIER_LEN + sizeof(SQL_TABLES_JSON)];
 	char u8[/*max bytes per character */4 * SQL_MAX_IDENTIFIER_LEN + 
 		sizeof(SQLTCHAR) * sizeof(SQL_TABLES_JSON)];
-	char answer[1<<16], faked[1<<16]; // FIXME: buffer handling
+	char *answer, faked[1<<16]; // FIXME: buffer handling
 	char *dupped;
 	esodbc_stmt_st *stmt = STMH(StatementHandle);
 	esodbc_dbc_st *dbc = stmt->dbc;
@@ -72,7 +74,7 @@ SQLRETURN EsSQLTablesW(
 	UJObject obj, tables, table;
 	wchar_t *keys[] = {L"tables"};
 	const wchar_t *tname;
-    void *state = NULL, *iter;
+	void *state = NULL, *iter;
 
 	if (CatalogName && (wmemcmp(CatalogName, MK_TSTR(SQL_ALL_CATALOGS), 
 					NameLength1) != 0)) {
@@ -131,18 +133,39 @@ SQLRETURN EsSQLTablesW(
 #	error "platform not supported"
 #endif /* _WIN32 */
 
+	/* attach the SQL textual statement to the handler */
+	ret = attach_sqltext(stmt, MK_TSTR(SQL_TABLES_TEXT),
+			sizeof(SQL_TABLES_TEXT)/*add 0-term*/);
+	if (! SQL_SUCCEEDED(ret))
+		return ret;
 
+#if 0
 	count = post_sql_tables(dbc, ESODBC_TIMEOUT_DEFAULT, u8, count, answer, 
 			sizeof(answer));
 	DBG("response received `%.*s` (%ld).", count, answer, count);
+#else //0
+	ret = post_sql_tables(stmt, ESODBC_TIMEOUT_DEFAULT, u8, count);
+	if (! SQL_SUCCEEDED(ret)) {
+		ERR("post failed.");
+		goto err;
+	}
+	answer = dbc->wbuf;
+	count = (long)dbc->wpos;
+	dbc->wbuf = NULL;
+	dbc->wlen = 0;
+	dbc->wpos = 0;
+	DBG("response received `%.*s` (%ld).", count, answer, count);
+#endif //0
 
 	/*
 	 * Note: UJDecode will treat UTF8 strings and UJReadString will return
 	 * directly wchar_t.
 	 */
     obj = UJDecode(answer, count, NULL, &state);
+	free(answer);
+	answer = NULL;
     if (UJObjectUnpack(obj, 1, "A", keys, &tables) < 1) {
-		ERR("failed to decode JSON answer (`%.*s`): %s.", count, answer, 
+		ERR("failed to decode JSON answer: %s.", 
 				state ? UJGetError(state) : "<none>");
 		goto err;
 	}

@@ -53,8 +53,9 @@ typedef struct struct_dbc {
 	SQLTCHAR *connstr; /* connection string */ // TODO: IDNA?
 	CURL *curl; /* cURL handle */
 	char *wbuf; /* write buffer for the answer */
-	long wlen; /* size of wbuf */
-	long wpos; /* current write position in the wbuf */
+	size_t wlen; /* size of wbuf */
+	size_t wpos; /* current write position in the wbuf */
+	size_t wmax; /* maximum lenght (bytes) that wbuf can grow to */
 
 	/* "the catalog is a database", "For a single-tier driver, the catalog
 	 * might be a directory" */
@@ -66,7 +67,14 @@ typedef struct struct_dbc {
 	SQLULEN async_enable; // default: SQL_ASYNC_ENABLE_OFF
 } esodbc_dbc_st;
 
+/* forward declarations */
+struct struct_desc;
+struct struct_stmt;
+
 typedef struct desc_rec {
+	/* back ref to owning descriptor */
+	struct struct_desc *desc;
+
 	/* record fields */
 	SQLSMALLINT		concise_type;
 	SQLSMALLINT		type;
@@ -122,7 +130,9 @@ typedef enum {
 } desc_type_et;
 
 typedef struct struct_desc {
-	//esodbc_stmt_st *stmt;
+	/* back ref to owning statement */
+	struct struct_stmt *stmt;
+
 	esodbc_diag_st diag;
 	desc_type_et type; /* APD, IPD, ARD, IRD */
 
@@ -130,7 +140,7 @@ typedef struct struct_desc {
 	/* descriptor was allocated automatically by the driver or explicitly by
 	 * the application */
 	SQLSMALLINT		alloc_type;
-	/* ARDs: the number of rows in the rowset.
+	/* ARDs: the number of rows returned by each call to SQLFetch* = the rowset
 	 * APDs: the number of values for each parameter. */
 	SQLULEN			array_size;
 	SQLUSMALLINT	*array_status_ptr;
@@ -147,14 +157,17 @@ typedef struct struct_desc {
 
 
 typedef struct struct_resultset {
-	char *buff; /* buffer containing the answer to the request */
+	char *buff; /* buffer containing the answer to the last request in a STM */
 	size_t blen; /* lenght of the answer */
 
 	void *state; /* top UJSON decoder state */
 	void *rows_iter; /* UJSON array with the result set */
 
-	size_t nrows; /* row count */
-	size_t cursor; /* next row to fetch data from */
+	size_t nrows; /* (count of) number of rows in current result set */
+	size_t vrows; /* (count of) visited rows in current result set  */
+	size_t frows; /* (count of) fetched rows across *entire* result set  */
+
+	 SQLULEN array_pos; /* position in ARD array to write_in/resume_at */
 } resultset_st;
 
 /*
@@ -168,6 +181,9 @@ typedef struct struct_resultset {
 typedef struct struct_stmt {
 	esodbc_dbc_st *dbc;
 	esodbc_diag_st diag;
+
+	SQLTCHAR *text; /* textual SQL */
+	SQLINTEGER tlen; /* characters len of text */
 
 	/* pointers to the current descriptors */
 	esodbc_desc_st *ard;
@@ -184,6 +200,7 @@ typedef struct struct_stmt {
 	SQLULEN bookmarks; //default: SQL_UB_OFF
 	SQLULEN metadata_id; // default: copied from connection
 	SQLULEN async_enable; // default: copied from connection
+	SQLULEN max_length;
 
 	/* result set */
 	resultset_st rset;
@@ -193,13 +210,16 @@ typedef struct struct_stmt {
 /* leave the timeout to default value (0: don't timeout, pos: seconds) */
 #define ESODBC_TIMEOUT_DEFAULT		-1
 // FIXME: review@alpha
-#define ESODBC_MAX_ROW_ARRAY_SIZE	128 /* TODO: should there be a max? */
+/* TODO: should there be a max? */
+#define ESODBC_MAX_ROW_ARRAY_SIZE	128
 #define ESODBC_DEF_ARRAY_SIZE		1
 /* max cols or args to bind */
-#define ESODBC_MAX_DESC_COUNT		128 
+#define ESODBC_MAX_DESC_COUNT		128
+#define ESODBC_UP_MAX_LENGTH		0 // USHORT_MAX
+#define ESODBC_LO_MAX_LENGTH		0
 
-void reinit_desc(esodbc_desc_st *desc);
 SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count);
+desc_rec_st* get_record(esodbc_desc_st *desc, SQLSMALLINT rec_no, BOOL grow);
 
 
 SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
@@ -323,6 +343,15 @@ SQLRETURN EsSQLSetDescRec(
 		ERR("not implemented.");\
 		return SQL_ERROR; \
 	} while (0)
+
+#define STMT_HAS_RESULTSET(stmt)	((stmt)->rset.buff != NULL)
+/* "An application can unbind the data buffer for a column but still have a
+ * length/indicator buffer bound for the column" */
+#define REC_IS_BOUND(rec)			( \
+		(rec)->data_ptr != NULL || \
+		(rec)->indicator_ptr != NULL || \
+		(rec)->octet_length_ptr != NULL)
+
 
 /* TODO: this is inefficient: add directly into ujson4c lib (as .size of
  * ArrayItem struct, inc'd in arrayAddItem()) or local utils file. Only added

@@ -19,6 +19,10 @@
 #define ESODBC_MAX_URL_LEN		2048
 /* maximum DNS name */
 #define ESODBC_MAX_DNS_LEN		255 /* SQL_MAX_DSN_LENGTH=32 < IPv6 len */
+/* default maximum amount of bytes to accept as answer */
+#define ESODBC_DEFAULT_MAX_BODY_SIZE	10 * 1024 * 1024
+/* initial size of  */
+#define ESODBC_BODY_BUF_START_SIZE		4 * 1024
 /* SQL plugin's REST endpoint for SQL */
 #define ELASTIC_SQL_PATH		"/_xpack/sql"
 #define ELASTIC_SQL_PATH_TABLES		"tables"
@@ -86,33 +90,45 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb,
 		void *userdata)
 {
 	esodbc_dbc_st *dbc = (esodbc_dbc_st *)userdata;
-	long avail = dbc->wlen - dbc->wpos;
-	long have = (long)(size * nmemb);
-	long count;
+	char *wbuf;
+	size_t need, avail, have;
+
+	assert(dbc->wpos <= dbc->wlen);
+	avail = dbc->wlen - dbc->wpos;
+	have = size * nmemb;
 
 	DBG("libcurl: DBC 0x%p, new data chunk of size [%zd] x %zd arrived; "
-			"available buffer: %ld.", dbc, nmemb, size, avail);
+			"available buffer: %zd/%zd.", dbc, nmemb, size, avail, dbc->wlen);
 
-	if (! dbc->wbuf) {
-		ERR("libcurl: callback has no buffer to write into.");
-		return 0;
-	}
-	if (avail <= 0) {
-		INFO("libcurl: write buffer in DBC 0x%p full, can't write %d bytes.",
-				dbc, have);
-		return 0;
-	}
+	/* do I need to grow the existing buffer? */
 	if (avail < have) {
-		WARN("libcurl: buffer to small for available answer: "
-				"left %ld, have %ld.", avail, have);
-		count = avail;
-	} else {
-		count = have;
+		for (need = dbc->wlen ? dbc->wlen : ESODBC_BODY_BUF_START_SIZE; 
+				need < have; need *= 2)
+			;
+		DBG("libcurl: DBC@0x%p: growing buffer for new chunk of %zd "
+				"from %zd to %zd.", dbc, have, dbc->wlen, need);
+		if (dbc->wmax < need) { /* would I need more than max? */
+			if (dbc->wmax <= (size_t)dbc->wlen) { /* am I at max already? */
+				ERR("libcurl: DBC@0x%p: can't grow past max %zd; have: %zd", 
+						dbc, dbc->wmax, have);
+				return 0;
+			} else {
+				need = dbc->wmax;
+				WARN("libcurl: DBC@0x%p: capped buffer to max: %zd", dbc,need);
+			}
+		}
+		wbuf = realloc(dbc->wbuf, need);
+		if (! wbuf) {
+			ERRN("libcurl: DBC@0x%p: failed to realloc to %zdB.", dbc, need);
+			return 0;
+		}
+		dbc->wbuf = wbuf;
+		dbc->wlen = need;
 	}
 
-	memcpy(dbc->wbuf + dbc->wpos, ptr, count);
-	dbc->wpos += count;
-	DBG("libcurl: DBC 0x%p, copied: %ld bytes.", count);
+	memcpy(dbc->wbuf + dbc->wpos, ptr, have);
+	dbc->wpos += have;
+	DBG("libcurl: DBC@0x%p, copied: %zd bytes.", have);
 
 
 	/*
@@ -125,7 +141,7 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb,
 	 * this transfer to become paused. See curl_easy_pause for further
 	 * details."
 	 */
-	return count;
+	return have;
 }
 
 static SQLRETURN init_curl(esodbc_dbc_st *dbc)
@@ -272,15 +288,17 @@ static void cleanup_curl(esodbc_dbc_st *dbc)
 /*
  * Returns how many bytes have been gotten back, or negative on failure.
  */
-long post_sql(esodbc_dbc_st *dbc, 
+SQLRETURN post_sql(esodbc_stmt_st *stmt, 
 		long timeout, /* req timeout; set to negative for default */
 		const char *u8json, /* stringified JSON object, UTF-8 encoded */
-		long jlen, /* size of the u8json buffer */
-		char *const answer, /* buffer to receive the answer in */
-		long avail /*size of the answer buffer */)
+		long jlen /* size of the u8json buffer */)
 {
+	// char *const answer, /* buffer to receive the answer in */
+	// long avail /*size of the answer buffer */)
 	CURLcode res = CURLE_OK;
-	SQLTCHAR *emsg;
+	esodbc_dbc_st *dbc = stmt->dbc;
+	char *wbuf = NULL;
+	long wpos;
 	long to;
 
 	if (! dbc->curl)
@@ -299,7 +317,6 @@ long post_sql(esodbc_dbc_st *dbc,
 	if (0 <= to) {
 		res = curl_easy_setopt(dbc->curl, CURLOPT_TIMEOUT, to);
 		if (res != CURLE_OK) {
-			emsg = MK_TSTR("failed to set transport timeout value");
 			goto err;
 		} else {
 			DBG("libcurl: set curl 0x%p timeout to %ld.", dbc, to);
@@ -311,7 +328,6 @@ long post_sql(esodbc_dbc_st *dbc,
 		/* len of the body */
 		res = curl_easy_setopt(dbc->curl, CURLOPT_POSTFIELDSIZE, jlen);
 		if (res != CURLE_OK) {
-			emsg = MK_TSTR("failed to set transport content");
 			goto err;
 		} else {
 			DBG("libcurl: set curl 0x%p post fieldsize to %ld.", dbc, jlen);
@@ -319,52 +335,64 @@ long post_sql(esodbc_dbc_st *dbc,
 		/* body itself */
 		res = curl_easy_setopt(dbc->curl, CURLOPT_POSTFIELDS, u8json);
 		if (res != CURLE_OK) {
-			emsg = MK_TSTR("failed to set transport content");
 			goto err;
 		} else {
 			DBG("libcurl: set curl 0x%p post fields to `%.*s`.", dbc, 
 					jlen, u8json);
 		}
+	} else {
+		assert(jlen == 0);
 	}
 
-	/* set call-back members */
-	dbc->wbuf = answer;
-	dbc->wpos = 0;
-	dbc->wlen = avail;
+	assert(dbc->wbuf == NULL);
 
 	/* execute the request */
 	res = curl_easy_perform(dbc->curl);
+
+#ifdef WITH_SYS_FUNCS
+	wbuf = dbc->wbuf;
+	wpos = dbc->wpos;
+
+	/* clear call-back members for next call */
+	dbc->wbuf = NULL;
+	dbc->wpos = 0;
+	dbc->wlen = 0;
+#endif /* WITH_SYS_FUNCS */
+
 	if (res != CURLE_OK) {
-		emsg = MK_TSTR("data transfer failure");
 		goto err;
-	} else {
-		DBG("libcurl: request succesfull, got back %ld bytes in answer.",  
-				dbc->wpos);
 	}
 
-	return dbc->wpos;
+#ifdef WITH_SYS_FUNCS
+	DBG("libcurl: request succesfull, received %zd bytes back.", wpos);
+	return attach_answer(stmt, wbuf, wpos);
+#else /* WITH_SYS_FUNCS */
+	return SQL_SUCCESS;
+#endif /* WITH_SYS_FUNCS */
 
 err:
-	ERR("libcurl: request on DBC 0x%p (timeout:%ld, u8json:`%.*s`, "
-			"answer:0x%p, avail:%ld) failed: '"LTPD"', '%s' (%d).", dbc, 
-			timeout, 0, u8json ? u8json : "<NULL>", answer, avail, emsg,
-			res ? curl_easy_strerror(res) : "<unspecified>", res);
-	/* if buffer len has been set, the error occured in _perform() */
-	post_diagnostic(&dbc->diag, dbc->wlen ? SQL_STATE_08S01 : SQL_STATE_HY000, 
-			emsg, res);
+	ERR("libcurl: request failed STMT@0x%p (timeout:%ld, u8json:`%.*s`) "
+			"failed: '%s' (%d).", stmt, timeout, jlen, u8json, 
+			res != CURLE_OK ? curl_easy_strerror(res) : "<unspecified>", res);
+	if (wbuf)
+		free(wbuf);
 	cleanup_curl(dbc);
-	return -1;
+	if (wbuf) /* if buffer had been set, the error occured in _perform() */
+		RET_HDIAG(stmt, SQL_STATE_08S01, "data transfer failure", res);
+	else
+		RET_HDIAG(stmt, SQL_STATE_HY000, "failed to init transport", res);
 }
 
 
 /* temporary function to get the available tables (indexes) */
-long post_sql_tables(esodbc_dbc_st *dbc, long timeout, const char *u8json, 
-		long jlen, char *const answer, long avail)
+SQLRETURN post_sql_tables(esodbc_stmt_st *stmt, long timeout, 
+		const char *u8json, long jlen)
 {
 	char *urlp;
 	char url[ESODBC_MAX_URL_LEN], orig_url[ESODBC_MAX_URL_LEN];
-	long ret;
+	SQLRETURN ret;
 	CURLcode res;
+	esodbc_dbc_st *dbc = stmt->dbc;
 	CURL *curl = dbc->curl;
 	
 	/* get current URL */
@@ -395,8 +423,8 @@ long post_sql_tables(esodbc_dbc_st *dbc, long timeout, const char *u8json,
 		goto err;
 	}
 
-	ret = post_sql(dbc, timeout, u8json, jlen, answer, avail);
-	if (ret < 0) {
+	ret = post_sql(stmt, timeout, u8json, jlen);
+	if (! SQL_SUCCEEDED(ret)) {
 		ERR("SQL posting failed; ret=%d.", ret);
 		goto err;
 	}
@@ -413,9 +441,10 @@ long post_sql_tables(esodbc_dbc_st *dbc, long timeout, const char *u8json,
 
 err:
 	cleanup_curl(dbc);
-	SET_HDIAG(dbc, SQL_STATE_HY000, "failed to init the transport", 0);
-	return -1;
+	RET_HDIAG(stmt, SQL_STATE_HY000, "failed to init the transport", 0);
 }
+
+
 
 
 static SQLRETURN test_connect(CURL *curl)
@@ -503,6 +532,8 @@ SQLRETURN EsSQLDriverConnectW
 		ERRN("failed to dup string `%s`.", connstr);
 		RET_HDIAGS(dbc, SQL_STATE_HY001);
 	}
+	// FIXME: read from connection string
+	dbc->wmax = ESODBC_DEFAULT_MAX_BODY_SIZE;
 
 	ret = init_curl(dbc);
 	if (! SQL_SUCCEEDED(ret)) {
@@ -532,12 +563,13 @@ SQLRETURN EsSQLDriverConnectW
 				"Secure=%d;"
 				"Packing="WPFCP_DESC";"
 				"MaxFetchSize=%d;"
+				"MaxBodySize="WPFCP_DESC";"
 				"Timeout=%d;"
 				"Follow=%d;"
 				"TraceFile="WPFCP_DESC";"
 				"TraceLevel="WPFCP_DESC";"
 				"User=user;Password=pass;Catalog=cat",
-				szConnStrIn, "host", 9200, 0, "json", 100, -1, 0, 
+				szConnStrIn, "host", 9200, 0, "json", 100, "10M", -1, 0, 
 				"C:\\foo.txt", "DEBUG");
 		if (n < 0) {
 			ERRN("failed to outprint connection string.");

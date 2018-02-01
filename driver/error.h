@@ -455,9 +455,12 @@ typedef struct {
 							/* (SQLSMALLINT)wcslen(native_text) */
 	/* returned in SQLGetDiagField()/SQL_DIAG_NATIVE, SQLGetDiagRecW() */
 	SQLINTEGER native_code;
+	SQLLEN row_number;
+	SQLINTEGER column_number;
 } esodbc_diag_st;
 
 
+void init_diagnostic(esodbc_diag_st *dest);
 SQLRETURN post_diagnostic(esodbc_diag_st *dest, esodbc_state_et state, 
 		SQLTCHAR *text, SQLINTEGER code);
 /* post state into the diagnostic and return state's return code */
@@ -466,6 +469,9 @@ SQLRETURN post_diagnostic(esodbc_diag_st *dest, esodbc_state_et state,
 /* same as above, but take C-strings as messages */
 #define RET_CDIAG(_d/*est*/, _s/*tate*/, _t/*char text*/, _c/*ode*/) \
 		RET_DIAG(_d, _s, MK_TSTR(_t), _c)
+
+SQLRETURN post_row_diagnostic(esodbc_diag_st *dest, esodbc_state_et state, 
+		SQLTCHAR *text, SQLINTEGER code, SQLLEN nrow, SQLINTEGER ncol);
 
 #endif /* __ERROR_H__ */
 
