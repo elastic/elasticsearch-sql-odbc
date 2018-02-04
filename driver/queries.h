@@ -22,16 +22,23 @@
 
 void clear_resultset(esodbc_stmt_st *stmt);
 SQLRETURN attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen);
-SQLRETURN attach_sqltext(esodbc_stmt_st *stmt, SQLTCHAR *text, size_t blen);
+SQLRETURN attach_sql(esodbc_stmt_st *stmt, const SQLTCHAR *sql, size_t tlen);
+void detach_sql(esodbc_stmt_st *stmt);
 
 /* key names used in Elastic/SQL REST/JSON answers */
 #define JSON_ANSWER_COLUMNS		"columns"
 #define JSON_ANSWER_ROWS		"rows"
 #define JSON_ANSWER_COL_NAME	"name"
 #define JSON_ANSWER_COL_TYPE	"type"
-#define JSON_COL_INTEGER		"integer"
+/* 4 */
 #define JSON_COL_TEXT			"text"
 #define JSON_COL_DATE			"date"
+/* 5 */
+#define JSON_COL_SHORT			"short"
+/* 7 */
+#define JSON_COL_BOOLEAN		"boolean"
+#define JSON_COL_INTEGER		"integer"
+#define JSON_COL_KEYWORD		"keyword"
 
 SQLRETURN EsSQLBindCol(
 		SQLHSTMT StatementHandle,
@@ -53,6 +60,16 @@ SQLRETURN EsSQLBulkOperations(
 SQLRETURN EsSQLCloseCursor(SQLHSTMT StatementHandle);
 SQLRETURN EsSQLNumResultCols(SQLHSTMT StatementHandle, 
 		_Out_ SQLSMALLINT *ColumnCount);
+
+SQLRETURN EsSQLPrepareW(
+    SQLHSTMT    hstmt,
+    _In_reads_(cchSqlStr) SQLWCHAR* szSqlStr,
+    SQLINTEGER  cchSqlStr);
+SQLRETURN EsSQLExecute(SQLHSTMT hstmt);
+SQLRETURN EsSQLExecDirectW(
+    SQLHSTMT    hstmt,
+    _In_reads_opt_(TextLength) SQLWCHAR* szSqlStr,
+    SQLINTEGER cchSqlStr);
 
 
 #endif /* __QUERIES_H__ */

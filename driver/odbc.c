@@ -449,7 +449,15 @@ SQLRETURN  SQL_API SQLCopyDesc(SQLHDESC SourceDescHandle,
 {
 	RET_NOT_IMPLEMENTED;
 }
+#endif // WITH_EMPTY
 
+/*
+ * "The prepared statement associated with the statement handle can be
+ * re-executed by calling SQLExecute until the application frees the statement
+ * with a call to SQLFreeStmt with the SQL_DROP option or until the statement
+ * handle is used in a call to SQLPrepare, SQLExecDirect, or one of the
+ * catalog functions (SQLColumns, SQLTables, and so on)."
+ */
 SQLRETURN SQL_API SQLPrepareW
 (
     SQLHSTMT    hstmt,
@@ -457,9 +465,14 @@ SQLRETURN SQL_API SQLPrepareW
     SQLINTEGER  cchSqlStr
 )
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE3(_IN, "ppd", hstmt, szSqlStr, cchSqlStr);
+	ret = EsSQLPrepareW(hstmt, szSqlStr, cchSqlStr);
+	TRACE4(_OUT, "dpSd", ret, hstmt, szSqlStr, cchSqlStr);
+	return ret;
 }
 
+#if WITH_EMPTY
 /*
  * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/sending-long-data
  */
@@ -508,6 +521,7 @@ SQLRETURN SQL_API SQLSetScrollOptions(    /*      Use SQLSetStmtOptions */
 {
 	RET_NOT_IMPLEMENTED;
 }
+#endif // WITH_EMPTY
 
 /*
  *
@@ -527,10 +541,14 @@ SQLRETURN SQL_API SQLSetScrollOptions(    /*      Use SQLSetStmtOptions */
  * "If no elements of the array are set, all sets of parameters in the array
  * are used in the SQLExecute or SQLExecDirect calls."
  */
-SQLRETURN  SQL_API SQLExecute(SQLHSTMT StatementHandle)
+SQLRETURN  SQL_API SQLExecute(SQLHSTMT hstmt)
 {
 	// TODO: set .stmt_curs = 0; in resultset
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE1(_IN, "p", hstmt);
+	ret = EsSQLExecute(hstmt);
+	TRACE2(_OUT, "dp", ret, hstmt);
+	return ret;
 }
 
 /*
@@ -549,13 +567,18 @@ SQLRETURN SQL_API SQLExecDirectW
 (
     SQLHSTMT    hstmt,
     _In_reads_opt_(TextLength) SQLWCHAR* szSqlStr,
-    SQLINTEGER  TextLength
+    SQLINTEGER cchSqlStr 
 )
 {
 	// TODO: set .stmt_curs = 0; in resultset
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE3(_IN, "ppd", hstmt, szSqlStr, cchSqlStr);
+	ret = EsSQLExecDirectW(hstmt, szSqlStr, cchSqlStr);
+	TRACE4(_OUT, "dpSd", ret, hstmt, szSqlStr, cchSqlStr);
+	return ret;
 }
 
+#if WITH_EMPTY
 SQLRETURN SQL_API SQLNativeSqlW
 (
     SQLHDBC                                     hdbc,
@@ -858,6 +881,7 @@ SQLRETURN SQL_API SQLColumnPrivilegesW(
 {
 	RET_NOT_IMPLEMENTED;
 }
+#endif /* WITH_EMPTY */
 
 SQLRETURN SQL_API SQLColumnsW
 (
@@ -872,9 +896,20 @@ SQLRETURN SQL_API SQLColumnsW
     SQLSMALLINT        cchColumnName
 )
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE9(_IN, "ppdpdpdpd", hstmt, szCatalogName, cchCatalogName,
+			szSchemaName, cchSchemaName, szTableName, cchTableName,
+			szColumnName, cchColumnName);
+	ret = EsSQLColumnsW(hstmt, szCatalogName, cchCatalogName, 
+			szSchemaName, cchSchemaName, szTableName, cchTableName,
+			szColumnName, cchColumnName);
+	TRACE10(_OUT, "dpWdWdWdWd", ret, hstmt, szCatalogName, cchCatalogName,
+			szSchemaName, cchSchemaName, szTableName, cchTableName,
+			szColumnName, cchColumnName);
+	return ret;
 }
 
+#if WITH_EMPTY
 SQLRETURN SQL_API SQLForeignKeysW
 (
     SQLHSTMT           hstmt,

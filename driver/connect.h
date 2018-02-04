@@ -24,10 +24,7 @@
 BOOL connect_init();
 void connect_cleanup();
 
-SQLRETURN post_sql(esodbc_stmt_st *stmt, long timeout, const char *u8json,
-		long jlen);
-SQLRETURN post_sql_tables(esodbc_stmt_st *stmt, long timeout, 
-		const char *u8json, long jlen);
+SQLRETURN post_statement(esodbc_stmt_st *stmt);
 
 SQLRETURN EsSQLDriverConnectW
 (
@@ -42,6 +39,18 @@ SQLRETURN EsSQLDriverConnectW
 );
 
 SQLRETURN EsSQLDisconnect(SQLHDBC ConnectionHandle);
+
+SQLRETURN EsSQLSetConnectAttrW(
+		SQLHDBC ConnectionHandle,
+		SQLINTEGER Attribute,
+		_In_reads_bytes_opt_(StringLength) SQLPOINTER Value,
+		SQLINTEGER StringLength);
+SQLRETURN EsSQLGetConnectAttrW(
+		SQLHDBC        ConnectionHandle,
+		SQLINTEGER     Attribute,
+		_Out_writes_opt_(_Inexpressible_(cbValueMax)) SQLPOINTER ValuePtr,
+		SQLINTEGER     BufferLength,
+		_Out_opt_ SQLINTEGER* StringLengthPtr);
 
 #endif /* __CONNECT_H__ */
 
