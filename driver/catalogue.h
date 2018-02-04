@@ -20,6 +20,18 @@ SQLRETURN  EsSQLTablesW(
 		_In_reads_opt_(NameLength4) SQLWCHAR *TableType, 
 		SQLSMALLINT NameLength4);
 
+SQLRETURN EsSQLColumnsW
+(
+    SQLHSTMT           hstmt,
+    _In_reads_opt_(cchCatalogName) SQLWCHAR*    szCatalogName,
+    SQLSMALLINT        cchCatalogName,
+    _In_reads_opt_(cchSchemaName) SQLWCHAR*     szSchemaName,
+    SQLSMALLINT        cchSchemaName,
+    _In_reads_opt_(cchTableName) SQLWCHAR*      szTableName,
+    SQLSMALLINT        cchTableName,
+    _In_reads_opt_(cchColumnName) SQLWCHAR*     szColumnName,
+    SQLSMALLINT        cchColumnName
+);
 #endif /* __CATALOGUE_H__ */
 
 

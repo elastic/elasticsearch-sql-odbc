@@ -181,9 +181,7 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			}
 			init_diagnostic(&dbc->diag);
 			dbc->env = ENVH(InputHandle);
-			dbc->timeout = ESODBC_TIMEOUT_DEFAULT;
-			dbc->metadata_id = SQL_FALSE;
-			dbc->async_enable = SQL_ASYNC_ENABLE_OFF;
+			/* rest of initialization done at connect time */
 
 			DBG("new Connection handle allocated @0x%p.", *OutputHandle);
 			break;
@@ -264,13 +262,14 @@ SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 			break;
 		case SQL_HANDLE_DBC: /* Connection Handle */
 			// TODO: remove from (potential) list?
+			if (DBCH(Handle)->fetch.str)
+				free(DBCH(Handle)->fetch.str);
 			free(Handle);
 			break;
 		case SQL_HANDLE_STMT:
 			// TODO: remove from (potential) list?
 			stmt = STMH(Handle);
-			if (stmt->text)
-				free(stmt->text);
+			detach_sql(stmt);
 			clear_desc(stmt, DESC_TYPE_ARD, FALSE);
 			clear_desc(stmt, DESC_TYPE_IRD, FALSE);
 			clear_desc(stmt, DESC_TYPE_APD, FALSE);
@@ -325,10 +324,10 @@ SQLRETURN EsSQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option)
 		/* "deprecated. A call to SQLFreeStmt with an Option of SQL_DROP is
 		 * mapped in the Driver Manager to SQLFreeHandle." */
 		case SQL_DROP:
-			/*TODO: what? if freeing, the app/DM might reuse the handler; if
+			/*TODO: if freeing, the app/DM might reuse the handler; if
 			 * doing nothing, it might leak mem. */
-			WARN("DM deprecated call (drop) -- no action taken!");
-			// TODO: do nothing?
+			ERR("STMT@0x%p: DROPing is deprecated -- no action taken! "
+					"(might leak memory)", stmt);
 			//return SQLFreeStmt(SQL_HANDLE_STMT, (SQLHANDLE)StatementHandle);
 			break;
 
@@ -336,7 +335,7 @@ SQLRETURN EsSQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option)
 		 * SQL_DESC_DATA_PTR field of the ARD for the bookmark column is set
 		 * to NULL." TODO, with bookmarks. */
 		case SQL_UNBIND:
-			DBG("unbinding statement 0x%p", stmt);
+			DBG("STMT@0x%p unbinding.", stmt);
 			/* "Sets the SQL_DESC_COUNT field of the ARD to 0, releasing all
 			 * column buffers bound by SQLBindCol for the given
 			 * StatementHandle." */
@@ -350,10 +349,14 @@ SQLRETURN EsSQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option)
 			}
 			break;
 
+		case ESODBC_SQL_CLOSE:
+			DBG("STMT@0x%p: ES-closing.", stmt);
+			detach_sql(stmt);
+			/* no break */
 		/* "Closes the cursor associated with StatementHandle and discards all
 		 * pending results." */
 		case SQL_CLOSE:
-			DBG("closing statement 0x%p", stmt);
+			DBG("STMT@0x%p: closing.", stmt);
 			clear_desc(stmt, DESC_TYPE_IRD, FALSE /*keep the header values*/);
 			break;
 
@@ -361,7 +364,7 @@ SQLRETURN EsSQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option)
 		 * parameter buffers set by SQLBindParameter for the given
 		 * StatementHandle." */
 		case SQL_RESET_PARAMS:
-			DBG("resetting params of 0x%p", stmt);
+			DBG("STMT@0x%p: resetting params.", stmt);
 			ret = EsSQLSetDescFieldW(stmt->apd, NO_REC_NR, SQL_DESC_COUNT,
 					(SQLPOINTER)0, SQL_IS_SMALLINT);
 			if (ret != SQL_SUCCESS) {
@@ -475,179 +478,6 @@ SQLRETURN SQL_API EsSQLGetEnvAttr(SQLHENV EnvironmentHandle,
 }
 
 
-/*
- * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/unicode-drivers :
- * """
- * When determining the driver type, the Driver Manager will call
- * SQLSetConnectAttr and set the SQL_ATTR_ANSI_APP attribute at connection
- * time. If the application is using ANSI APIs, SQL_ATTR_ANSI_APP will be set
- * to SQL_AA_TRUE, and if it is using Unicode, it will be set to a value of
- * SQL_AA_FALSE.  If a driver exhibits the same behavior for both ANSI and
- * Unicode applications, it should return SQL_ERROR for this attribute. If the
- * driver returns SQL_SUCCESS, the Driver Manager will separate ANSI and
- * Unicode connections when Connection Pooling is used.
- * """
- * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/statement-attributes :
- * """
- * The ability to set statement attributes at the connection level by calling
- * SQLSetConnectAttr has been deprecated in ODBC 3.x. ODBC 3.x applications
- * should never set statement attributes at the connection level. ODBC 3.x
- * drivers need only support this functionality if they should work with ODBC
- * 2.x applications.
- * """
- */
-SQLRETURN EsSQLSetConnectAttrW(
-		SQLHDBC ConnectionHandle,
-		SQLINTEGER Attribute,
-		_In_reads_bytes_opt_(StringLength) SQLPOINTER Value,
-		SQLINTEGER StringLength)
-{
-	esodbc_dbc_st *dbc = DBCH(ConnectionHandle);
-
-	switch(Attribute) {
-		case SQL_ATTR_ANSI_APP:
-			/* this driver doesn't behave differently based on app being ANSI
-			 * or Unicode. */
-			INFO("no ANSI/Unicode specific behaviour (app is: %s).",
-					(uintptr_t)Value == SQL_AA_TRUE ? "ANSI" : "Unicode");
-			/* TODO: API doesn't require to set a state? */
-			//state = SQL_STATE_IM001;
-			return SQL_ERROR; /* error means ANSI */
-
-		case SQL_ATTR_LOGIN_TIMEOUT:
-			if (dbc->conn) {
-				ERR("connection already established, can't set connection"
-						" timeout (to %u).", (SQLUINTEGER)(uintptr_t)Value);
-				RET_HDIAG(dbc, SQL_STATE_HY011, "connection established, "
-						"can't set connection timeout.", 0);
-			}
-			INFO("setting connection timeout to: %u, from previous: %u.", 
-					dbc->timeout, (SQLUINTEGER)(uintptr_t)Value);
-			dbc->timeout = (long)(uintptr_t)Value;
-			break;
-
-		/* https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/automatic-population-of-the-ipd */
-		case SQL_ATTR_AUTO_IPD:
-			ERR("trying to set read-only attribute AUTO IPD.");
-			RET_HDIAGS(dbc, SQL_STATE_HY092);
-		case SQL_ATTR_ENABLE_AUTO_IPD:
-			if (*(SQLUINTEGER *)Value != SQL_FALSE) {
-				ERR("trying to enable unsupported attribute AUTO IPD.");
-				RET_HDIAGS(dbc, SQL_STATE_HYC00);
-			}
-			WARN("disabling (unsupported) attribute AUTO IPD -- NOOP.");
-			break;
-
-		case SQL_ATTR_METADATA_ID:
-			DBG("DBC 0x%p setting metadata_id to %u.", dbc, (SQLULEN)Value);
-			dbc->metadata_id = (SQLULEN)Value;
-			break;
-		case SQL_ATTR_ASYNC_ENABLE:
-			DBG("DBC 0x%p setting async enable to %u.", dbc, (SQLULEN)Value);
-			dbc->async_enable = (SQLULEN)Value;
-			break;
-
-
-		default:
-			ERR("unknown Attribute: %d.", Attribute);
-			RET_HDIAGS(DBCH(ConnectionHandle), SQL_STATE_HY092);
-	}
-
-	RET_STATE(SQL_STATE_00000);
-}
-
-#if 0
-static BOOL get_current_catalog(esodbc_dbc_st *dbc)
-{
-	FIXME;
-}
-#endif //0
-
-SQLRETURN EsSQLGetConnectAttrW(
-		SQLHDBC        ConnectionHandle,
-		SQLINTEGER     Attribute,
-		_Out_writes_opt_(_Inexpressible_(cbValueMax)) SQLPOINTER ValuePtr,
-		SQLINTEGER     BufferLength,
-		_Out_opt_ SQLINTEGER* StringLengthPtr)
-{
-	esodbc_dbc_st *dbc = DBCH(ConnectionHandle);
-//	SQLTCHAR *val;
-
-	switch(Attribute) {
-		/* https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/automatic-population-of-the-ipd */
-		/* "whether automatic population of the IPD after a call to SQLPrepare
-		 * is supported" */
-		case SQL_ATTR_AUTO_IPD:
-			DBG("requested: support for attribute AUTO IPD (false).");
-			/* "Servers that do not support prepared statements will not be
-			 * able to populate the IPD automatically." */
-			*(SQLUINTEGER *)ValuePtr = SQL_FALSE;
-			break;
-
-		/* "the name of the catalog to be used by the data source" */
-		case SQL_ATTR_CURRENT_CATALOG:
-			DBG("requested: catalog name (@0x%p).", dbc->catalog);
-#if 0
-			if (! dbc->conn) {
-				ERR("no connection active on handle 0x%p.", dbc);
-				/* TODO: check connection state and correct state */
-				RET_HDIAGS(dbc, SQL_STATE_08003);
-			} else if (! get_current_catalog(dbc)) {
-				ERR("failed to get current catalog on handle 0x%p.", dbc);
-				RET_STATE(dbc, dbc->diag.state);
-			}
-#endif //0
-#if 0
-			val = dbc->catalog ? dbc->catalog : MK_TSTR("null");
-			*StringLengthPtr = wcslen(*(SQLTCHAR **)ValuePtr);
-			*StringLengthPtr *= sizeof(SQLTCHAR);
-			*(SQLTCHAR **)ValuePtr = val;
-#else //0
-			// FIXME;
-			memcpy(ValuePtr, MK_TSTR("NulL"), 8);
-			((SQLTCHAR *)ValuePtr)[5] = 0;
-			
-#endif //0
-			break;
-
-		case SQL_ATTR_METADATA_ID:
-			DBG("requested: metadata_id: %u.", dbc->metadata_id);
-			*(SQLULEN *)ValuePtr = dbc->metadata_id;
-			break;
-		case SQL_ATTR_ASYNC_ENABLE:
-			DBG("requested: async enable: %u.", dbc->async_enable);
-			*(SQLULEN *)ValuePtr = dbc->async_enable;
-			break;
-
-		case SQL_ATTR_ACCESS_MODE:
-		case SQL_ATTR_ASYNC_DBC_EVENT:
-		case SQL_ATTR_ASYNC_DBC_FUNCTIONS_ENABLE:
-		//case SQL_ATTR_ASYNC_DBC_PCALLBACK:
-		//case SQL_ATTR_ASYNC_DBC_PCONTEXT:
-		case SQL_ATTR_AUTOCOMMIT:
-		case SQL_ATTR_CONNECTION_DEAD:
-		case SQL_ATTR_CONNECTION_TIMEOUT:
-		//case SQL_ATTR_DBC_INFO_TOKEN:
-		case SQL_ATTR_ENLIST_IN_DTC:
-		case SQL_ATTR_LOGIN_TIMEOUT:
-		case SQL_ATTR_ODBC_CURSORS:
-		case SQL_ATTR_PACKET_SIZE:
-		case SQL_ATTR_QUIET_MODE:
-		case SQL_ATTR_TRACE:
-		case SQL_ATTR_TRACEFILE:
-		case SQL_ATTR_TRANSLATE_LIB:
-		case SQL_ATTR_TRANSLATE_OPTION:
-		case SQL_ATTR_TXN_ISOLATION:
-
-		default:
-			// FIXME: add the other attributes
-			FIXME;
-			ERR("unknown Attribute type %d.", Attribute);
-			RET_HDIAGS(DBCH(ConnectionHandle), SQL_STATE_HY092);
-	}
-	
-	RET_STATE(SQL_STATE_00000);
-}
 
 
 SQLRETURN EsSQLSetStmtAttrW(
@@ -1717,10 +1547,10 @@ static void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type,
 static void set_defaults_from_type(desc_rec_st *rec)
 {
 	switch (rec->type) {
-		case SQL_CHAR:
-		case SQL_VARCHAR:
-		//case SQL_C_CHAR:
-		//case SQL_C_VARCHAR:
+		case SQL_CHAR: //case SQL_C_CHAR:
+			assert(SQL_CHAR == SQL_C_CHAR);
+		case SQL_VARCHAR: /* SQL_C_VARCHAR doesn't exist */
+		/* TODO: SQL_ LONGVARCHAR/WCHAR/etc. ? */
 			rec->length = 1;
 			rec->precision = 0;
 			break;
@@ -1734,8 +1564,9 @@ static void set_defaults_from_type(desc_rec_st *rec)
 			break;
 
 		case SQL_DECIMAL:
-		case SQL_NUMERIC:
-		//case SQL_C_NUMERIC:
+		case SQL_NUMERIC: //case SQL_C_NUMERIC:
+			assert(SQL_NUMERIC == SQL_C_NUMERIC);
+
 			rec->scale = 0;
 			rec->precision = 38; /* TODO: "implementation-defined precision" */
 			break;
@@ -2171,7 +2002,11 @@ SQLRETURN EsSQLSetDescFieldW(
 			/* deferred */
 			rec->data_ptr = ValuePtr;
 			if (rec->data_ptr) {
-				if ((desc->type != DESC_TYPE_IRD) && 
+				if (
+#if 1
+						0 /* FIXME! */ && 
+#endif //1
+						(desc->type != DESC_TYPE_IRD) && 
 						(! consistency_check(desc, rec))) {
 					ERR("consistency check failed on record 0x%p.", rec);
 					RET_HDIAGS(desc, SQL_STATE_HY021);
@@ -2361,6 +2196,8 @@ SQLRETURN EsSQLSetDescRec(
 	 * this is done, a third array is bound. Each array contains as many
 	 * elements as there are rows in the rowset."
 	 */
+
+	// TODO: needs to trigger consistency_check
 
 	RET_NOT_IMPLEMENTED;
 }

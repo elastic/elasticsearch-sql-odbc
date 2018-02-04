@@ -9,6 +9,7 @@
 #include <limits.h>
 
 #include "connect.h"
+#include "queries.h"
 #include "log.h"
 
 /*
@@ -40,6 +41,12 @@
 /* HTTP headers default for every request */
 #define HTTP_ACCEPT_JSON		"Accept: application/json"
 #define HTTP_CONTENT_TYPE_JSON	"Content-Type: application/json; charset=utf-8"
+
+#define JSON_SQL_TEMPLATE_START "{\"query\":\""
+#define JSON_SQL_TEMPLATE_MID_QUERY "\""
+#define JSON_SQL_TEMPLATE_MID_FETCH \
+	JSON_SQL_TEMPLATE_MID_QUERY ",\"fetch_size\":"
+#define JSON_SQL_TEMPLATE_END "}"
 
 /*
  * HTTP headers used for all requests (Content-Type, Accept).
@@ -286,20 +293,22 @@ static void cleanup_curl(esodbc_dbc_st *dbc)
 }
 
 /*
- * Returns how many bytes have been gotten back, or negative on failure.
+ * Sends a POST request given the body
  */
-SQLRETURN post_sql(esodbc_stmt_st *stmt, 
+static SQLRETURN post_request(esodbc_stmt_st *stmt, 
 		long timeout, /* req timeout; set to negative for default */
-		const char *u8json, /* stringified JSON object, UTF-8 encoded */
-		long jlen /* size of the u8json buffer */)
+		const char *u8body, /* stringified JSON object, UTF-8 encoded */
+		size_t blen /* size of the u8body buffer */)
 {
 	// char *const answer, /* buffer to receive the answer in */
 	// long avail /*size of the answer buffer */)
 	CURLcode res = CURLE_OK;
 	esodbc_dbc_st *dbc = stmt->dbc;
 	char *wbuf = NULL;
-	long wpos;
+	size_t wpos;
 	long to;
+
+	DBG("STMT@0x%p posting request `%.*s` (%zd).", stmt, blen, u8body, blen);
 
 	if (! dbc->curl)
 		init_curl(dbc);
@@ -324,24 +333,24 @@ SQLRETURN post_sql(esodbc_stmt_st *stmt,
 	}
 
 	/* set body to send */
-	if (u8json) {
+	if (u8body) {
 		/* len of the body */
-		res = curl_easy_setopt(dbc->curl, CURLOPT_POSTFIELDSIZE, jlen);
+		res = curl_easy_setopt(dbc->curl, CURLOPT_POSTFIELDSIZE, blen);
 		if (res != CURLE_OK) {
 			goto err;
 		} else {
-			DBG("libcurl: set curl 0x%p post fieldsize to %ld.", dbc, jlen);
+			DBG("libcurl: set curl 0x%p post fieldsize to %ld.", dbc, blen);
 		}
 		/* body itself */
-		res = curl_easy_setopt(dbc->curl, CURLOPT_POSTFIELDS, u8json);
+		res = curl_easy_setopt(dbc->curl, CURLOPT_POSTFIELDS, u8body);
 		if (res != CURLE_OK) {
 			goto err;
 		} else {
 			DBG("libcurl: set curl 0x%p post fields to `%.*s`.", dbc, 
-					jlen, u8json);
+					blen, u8body);
 		}
 	} else {
-		assert(jlen == 0);
+		assert(blen == 0);
 	}
 
 	assert(dbc->wbuf == NULL);
@@ -349,7 +358,6 @@ SQLRETURN post_sql(esodbc_stmt_st *stmt,
 	/* execute the request */
 	res = curl_easy_perform(dbc->curl);
 
-#ifdef WITH_SYS_FUNCS
 	wbuf = dbc->wbuf;
 	wpos = dbc->wpos;
 
@@ -357,22 +365,17 @@ SQLRETURN post_sql(esodbc_stmt_st *stmt,
 	dbc->wbuf = NULL;
 	dbc->wpos = 0;
 	dbc->wlen = 0;
-#endif /* WITH_SYS_FUNCS */
 
 	if (res != CURLE_OK) {
 		goto err;
 	}
 
-#ifdef WITH_SYS_FUNCS
 	DBG("libcurl: request succesfull, received %zd bytes back.", wpos);
 	return attach_answer(stmt, wbuf, wpos);
-#else /* WITH_SYS_FUNCS */
-	return SQL_SUCCESS;
-#endif /* WITH_SYS_FUNCS */
 
 err:
-	ERR("libcurl: request failed STMT@0x%p (timeout:%ld, u8json:`%.*s`) "
-			"failed: '%s' (%d).", stmt, timeout, jlen, u8json, 
+	ERR("libcurl: request failed STMT@0x%p (timeout:%ld, body:`%.*s`) "
+			"failed: '%s' (%d).", stmt, timeout, blen, u8body, 
 			res != CURLE_OK ? curl_easy_strerror(res) : "<unspecified>", res);
 	if (wbuf)
 		free(wbuf);
@@ -383,69 +386,66 @@ err:
 		RET_HDIAG(stmt, SQL_STATE_HY000, "failed to init transport", res);
 }
 
-
-/* temporary function to get the available tables (indexes) */
-SQLRETURN post_sql_tables(esodbc_stmt_st *stmt, long timeout, 
-		const char *u8json, long jlen)
+SQLRETURN post_statement(esodbc_stmt_st *stmt)
 {
-	char *urlp;
-	char url[ESODBC_MAX_URL_LEN], orig_url[ESODBC_MAX_URL_LEN];
 	SQLRETURN ret;
-	CURLcode res;
 	esodbc_dbc_st *dbc = stmt->dbc;
-	CURL *curl = dbc->curl;
-	
-	/* get current URL */
-	res = curl_easy_getinfo(dbc->curl, CURLINFO_EFFECTIVE_URL, &urlp);
-	if (res != CURLE_OK) {
-		ERR("libcurl: failed to get effective URL: %s (%d)", 
-				curl_easy_strerror(res), res);
-		goto err;
-	} 
-	/* low perf, lazy copy */
-	if (snprintf(orig_url, sizeof(orig_url), "%s", urlp) < 0) {
-		ERRN("failed to save original URL `%s`.", urlp);
-		goto err;
-	}
-	DBG("saved original URL: `%s`.", orig_url);
-	/* construct new URL */
-	if (snprintf(url, sizeof(url), "%s/%s", urlp, ELASTIC_SQL_PATH_TABLES)<0) {
-		ERRN("failed to build tables URL.");
-		goto err;
-	}
-	DBG("tables URL: `%s`.", url);
+	size_t bodylen, pos;
+	char *body, buff[ESODBC_BODY_BUF_START_SIZE];
 
-	/* TODO: will this free the original URL?? */
-	res = curl_easy_setopt(curl, CURLOPT_URL, url);
-	if (res != CURLE_OK) {
-		ERR("libcurl: failed to set URL `%s`: %s (%d).", url,
-				curl_easy_strerror(res), res);
-		goto err;
+	// TODO: add params (if any)
+
+	bodylen = sizeof(JSON_SQL_TEMPLATE_START) - /*\0*/1;
+	if (dbc->fetch.slen) {
+		bodylen += sizeof(JSON_SQL_TEMPLATE_MID_FETCH) - /*\0*/1;
+		bodylen += dbc->fetch.slen;
+	} else {
+		bodylen += sizeof(JSON_SQL_TEMPLATE_MID_QUERY) - /*\0*/1;
+	}
+	bodylen += stmt->sqllen;
+	bodylen += sizeof(JSON_SQL_TEMPLATE_END) - /*\0*/1;
+
+	if (sizeof(buff) < bodylen) {
+		WARN("local buffer too small (%zd), need %zdB; will alloc.", 
+				sizeof(buff), bodylen);
+		WARN("local buffer too small, SQL: `%.*s`.", stmt->sqllen,stmt->u8sql);
+		body = malloc(bodylen);
+		if (! body) {
+			ERRN("failed to alloc %zdB.", bodylen);
+			RET_HDIAGS(stmt, SQL_STATE_HY001);
+		}
+	} else {
+		body = buff;
 	}
 
-	ret = post_sql(stmt, timeout, u8json, jlen);
-	if (! SQL_SUCCEEDED(ret)) {
-		ERR("SQL posting failed; ret=%d.", ret);
-		goto err;
+	pos = sizeof(JSON_SQL_TEMPLATE_START) - 1;
+	memcpy(body, JSON_SQL_TEMPLATE_START, pos);
+	memcpy(body + pos, stmt->u8sql, stmt->sqllen);
+	pos += stmt->sqllen;
+
+	if (dbc->fetch.slen) {
+		memcpy(body + pos, JSON_SQL_TEMPLATE_MID_FETCH,
+				sizeof(JSON_SQL_TEMPLATE_MID_FETCH) - 1);
+		pos += sizeof(JSON_SQL_TEMPLATE_MID_FETCH) - 1;
+		memcpy(body + pos, dbc->fetch.str, dbc->fetch.slen);
+		pos += dbc->fetch.slen;
+	} else {
+		memcpy(body + pos, JSON_SQL_TEMPLATE_MID_QUERY,
+				sizeof(JSON_SQL_TEMPLATE_MID_QUERY) - 1);
+		pos += sizeof(JSON_SQL_TEMPLATE_MID_QUERY) - 1;
 	}
 
-	/* reinstate original URL */
-	res = curl_easy_setopt(curl, CURLOPT_URL, orig_url);
-	if (res != CURLE_OK) {
-		ERR("libcurl: failed to set URL `%s`: %s (%d).", url,
-				curl_easy_strerror(res), res);
-		goto err;
-	}
+	memcpy(body + pos, JSON_SQL_TEMPLATE_END,
+			sizeof(JSON_SQL_TEMPLATE_END) - /*WITH \0*/0);
+	pos += sizeof(JSON_SQL_TEMPLATE_END) - /* but don't account for it */1;
+
+	ret = post_request(stmt, ESODBC_DEFAULT_TIMEOUT, body, pos);
+
+	if (body != buff)
+		free(body); /* hehe */
 
 	return ret;
-
-err:
-	cleanup_curl(dbc);
-	RET_HDIAG(stmt, SQL_STATE_HY000, "failed to init the transport", 0);
 }
-
-
-
 
 static SQLRETURN test_connect(CURL *curl)
 {
@@ -505,7 +505,7 @@ SQLRETURN EsSQLDriverConnectW
 	esodbc_dbc_st *dbc = DBCH(hdbc);
 	SQLRETURN ret;
 	SQLTCHAR *connstr;
-	int n;
+	size_t n, i;
 	char *url = NULL;
 
 	DBG("Input connection string: '"LTPD"' (%d).", szConnStrIn, cchConnStrIn);
@@ -534,6 +534,28 @@ SQLRETURN EsSQLDriverConnectW
 	}
 	// FIXME: read from connection string
 	dbc->wmax = ESODBC_DEFAULT_MAX_BODY_SIZE;
+
+	dbc->timeout = ESODBC_TIMEOUT_DEFAULT;
+	dbc->fetch.max = ESODBC_DEF_FETCH_SIZE;
+	dbc->metadata_id = SQL_FALSE;
+	dbc->async_enable = SQL_ASYNC_ENABLE_OFF;
+
+	/* set the string representation of fetch_size, once for all STMTs */
+	if (dbc->fetch.max) {
+		for (n = dbc->fetch.max, dbc->fetch.slen = 0; n; n /= 10)
+			dbc->fetch.slen ++;
+		dbc->fetch.str = malloc(dbc->fetch.slen + /*\0*/1);
+		if (! dbc->fetch.str) {
+			ERRN("failed to alloc %zdB.", dbc->fetch.slen);
+			RET_HDIAGS(dbc, SQL_STATE_HY001);
+		}
+		dbc->fetch.str[dbc->fetch.slen] = 0;
+		for (n = dbc->fetch.max, i = dbc->fetch.slen; 0 < i; n /= 10, i --)
+			dbc->fetch.str[i - 1] = '0' + (n % 10);
+
+		DBG("DBC@0x%p, fetch_size: `%.*s` (%c).", dbc, dbc->fetch.slen, 
+				dbc->fetch.str, dbc->fetch.slen);
+	}
 
 	ret = init_curl(dbc);
 	if (! SQL_SUCCEEDED(ret)) {
@@ -598,6 +620,182 @@ SQLRETURN EsSQLDisconnect(SQLHDBC ConnectionHandle)
 
 	cleanup_curl(dbc);
 
+	RET_STATE(SQL_STATE_00000);
+}
+
+
+
+/*
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/unicode-drivers :
+ * """
+ * When determining the driver type, the Driver Manager will call
+ * SQLSetConnectAttr and set the SQL_ATTR_ANSI_APP attribute at connection
+ * time. If the application is using ANSI APIs, SQL_ATTR_ANSI_APP will be set
+ * to SQL_AA_TRUE, and if it is using Unicode, it will be set to a value of
+ * SQL_AA_FALSE.  If a driver exhibits the same behavior for both ANSI and
+ * Unicode applications, it should return SQL_ERROR for this attribute. If the
+ * driver returns SQL_SUCCESS, the Driver Manager will separate ANSI and
+ * Unicode connections when Connection Pooling is used.
+ * """
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/statement-attributes :
+ * """
+ * The ability to set statement attributes at the connection level by calling
+ * SQLSetConnectAttr has been deprecated in ODBC 3.x. ODBC 3.x applications
+ * should never set statement attributes at the connection level. ODBC 3.x
+ * drivers need only support this functionality if they should work with ODBC
+ * 2.x applications.
+ * """
+ */
+SQLRETURN EsSQLSetConnectAttrW(
+		SQLHDBC ConnectionHandle,
+		SQLINTEGER Attribute,
+		_In_reads_bytes_opt_(StringLength) SQLPOINTER Value,
+		SQLINTEGER StringLength)
+{
+	esodbc_dbc_st *dbc = DBCH(ConnectionHandle);
+
+	switch(Attribute) {
+		case SQL_ATTR_ANSI_APP:
+			/* this driver doesn't behave differently based on app being ANSI
+			 * or Unicode. */
+			INFO("no ANSI/Unicode specific behaviour (app is: %s).",
+					(uintptr_t)Value == SQL_AA_TRUE ? "ANSI" : "Unicode");
+			/* TODO: API doesn't require to set a state? */
+			//state = SQL_STATE_IM001;
+			return SQL_ERROR; /* error means ANSI */
+
+		case SQL_ATTR_LOGIN_TIMEOUT:
+			if (dbc->conn) {
+				ERR("connection already established, can't set connection"
+						" timeout (to %u).", (SQLUINTEGER)(uintptr_t)Value);
+				RET_HDIAG(dbc, SQL_STATE_HY011, "connection established, "
+						"can't set connection timeout.", 0);
+			}
+			INFO("setting connection timeout to: %u, from previous: %u.", 
+					dbc->timeout, (SQLUINTEGER)(uintptr_t)Value);
+			dbc->timeout = (long)(uintptr_t)Value;
+			break;
+
+		/* https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/automatic-population-of-the-ipd */
+		case SQL_ATTR_AUTO_IPD:
+			ERR("trying to set read-only attribute AUTO IPD.");
+			RET_HDIAGS(dbc, SQL_STATE_HY092);
+		case SQL_ATTR_ENABLE_AUTO_IPD:
+			if (*(SQLUINTEGER *)Value != SQL_FALSE) {
+				ERR("trying to enable unsupported attribute AUTO IPD.");
+				RET_HDIAGS(dbc, SQL_STATE_HYC00);
+			}
+			WARN("disabling (unsupported) attribute AUTO IPD -- NOOP.");
+			break;
+
+		case SQL_ATTR_METADATA_ID:
+			DBG("DBC 0x%p setting metadata_id to %u.", dbc, (SQLULEN)Value);
+			dbc->metadata_id = (SQLULEN)Value;
+			break;
+		case SQL_ATTR_ASYNC_ENABLE:
+			DBG("DBC 0x%p setting async enable to %u.", dbc, (SQLULEN)Value);
+			dbc->async_enable = (SQLULEN)Value;
+			break;
+
+
+		default:
+			ERR("unknown Attribute: %d.", Attribute);
+			RET_HDIAGS(DBCH(ConnectionHandle), SQL_STATE_HY092);
+	}
+
+	RET_STATE(SQL_STATE_00000);
+}
+
+#if 0
+static BOOL get_current_catalog(esodbc_dbc_st *dbc)
+{
+	FIXME;
+}
+#endif //0
+
+SQLRETURN EsSQLGetConnectAttrW(
+		SQLHDBC        ConnectionHandle,
+		SQLINTEGER     Attribute,
+		_Out_writes_opt_(_Inexpressible_(cbValueMax)) SQLPOINTER ValuePtr,
+		SQLINTEGER     BufferLength,
+		_Out_opt_ SQLINTEGER* StringLengthPtr)
+{
+	esodbc_dbc_st *dbc = DBCH(ConnectionHandle);
+//	SQLTCHAR *val;
+
+	switch(Attribute) {
+		/* https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/automatic-population-of-the-ipd */
+		/* "whether automatic population of the IPD after a call to SQLPrepare
+		 * is supported" */
+		case SQL_ATTR_AUTO_IPD:
+			DBG("requested: support for attribute AUTO IPD (false).");
+			/* "Servers that do not support prepared statements will not be
+			 * able to populate the IPD automatically." */
+			*(SQLUINTEGER *)ValuePtr = SQL_FALSE;
+			break;
+
+		/* "the name of the catalog to be used by the data source" */
+		case SQL_ATTR_CURRENT_CATALOG:
+			DBG("requested: catalog name (@0x%p).", dbc->catalog);
+#if 0
+			if (! dbc->conn) {
+				ERR("no connection active on handle 0x%p.", dbc);
+				/* TODO: check connection state and correct state */
+				RET_HDIAGS(dbc, SQL_STATE_08003);
+			} else if (! get_current_catalog(dbc)) {
+				ERR("failed to get current catalog on handle 0x%p.", dbc);
+				RET_STATE(dbc, dbc->diag.state);
+			}
+#endif //0
+#if 0
+			val = dbc->catalog ? dbc->catalog : MK_TSTR("null");
+			*StringLengthPtr = wcslen(*(SQLTCHAR **)ValuePtr);
+			*StringLengthPtr *= sizeof(SQLTCHAR);
+			*(SQLTCHAR **)ValuePtr = val;
+#else //0
+			// FIXME;
+			memcpy(ValuePtr, MK_TSTR("NulL"), 8);
+			((SQLTCHAR *)ValuePtr)[5] = 0;
+			
+#endif //0
+			break;
+
+		case SQL_ATTR_METADATA_ID:
+			DBG("requested: metadata_id: %u.", dbc->metadata_id);
+			*(SQLULEN *)ValuePtr = dbc->metadata_id;
+			break;
+		case SQL_ATTR_ASYNC_ENABLE:
+			DBG("requested: async enable: %u.", dbc->async_enable);
+			*(SQLULEN *)ValuePtr = dbc->async_enable;
+			break;
+
+		case SQL_ATTR_ACCESS_MODE:
+		case SQL_ATTR_ASYNC_DBC_EVENT:
+		case SQL_ATTR_ASYNC_DBC_FUNCTIONS_ENABLE:
+		//case SQL_ATTR_ASYNC_DBC_PCALLBACK:
+		//case SQL_ATTR_ASYNC_DBC_PCONTEXT:
+		case SQL_ATTR_AUTOCOMMIT:
+		case SQL_ATTR_CONNECTION_DEAD:
+		case SQL_ATTR_CONNECTION_TIMEOUT:
+		//case SQL_ATTR_DBC_INFO_TOKEN:
+		case SQL_ATTR_ENLIST_IN_DTC:
+		case SQL_ATTR_LOGIN_TIMEOUT:
+		case SQL_ATTR_ODBC_CURSORS:
+		case SQL_ATTR_PACKET_SIZE:
+		case SQL_ATTR_QUIET_MODE:
+		case SQL_ATTR_TRACE:
+		case SQL_ATTR_TRACEFILE:
+		case SQL_ATTR_TRANSLATE_LIB:
+		case SQL_ATTR_TRANSLATE_OPTION:
+		case SQL_ATTR_TXN_ISOLATION:
+
+		default:
+			// FIXME: add the other attributes
+			FIXME;
+			ERR("unknown Attribute type %d.", Attribute);
+			RET_HDIAGS(DBCH(ConnectionHandle), SQL_STATE_HY092);
+	}
+	
 	RET_STATE(SQL_STATE_00000);
 }
 

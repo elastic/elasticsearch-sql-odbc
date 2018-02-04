@@ -4,8 +4,11 @@
  * you may not use this file except in compliance with the Elastic License.
  */
 
+#include <windows.h> /* WideCharToMultiByte() */
+
 #include "queries.h"
 #include "handles.h"
+#include "connect.h"
 
 
 void clear_resultset(esodbc_stmt_st *stmt)
@@ -36,21 +39,58 @@ static int wmemncasecmp(const wchar_t *a, const wchar_t *b, size_t len)
 static SQLSMALLINT type_elastic2csql(const wchar_t *type_name, size_t len)
 {
 	switch (len) {
+		// TODO: take in the precision for a better
+		// representation
+		// case sizeof(JSON_COL_KEYWORD) - 1:
+		// case sizeof(JSON_COL_BOOLEAN) - 1:
 		case sizeof(JSON_COL_INTEGER) - 1:
-			if (wmemncasecmp(type_name, MK_WSTR(JSON_COL_INTEGER), len) == 0)
-				// TODO: take in the precision for a better representation
-				return SQL_INTEGER;
+			switch(tolower(type_name[0])) {
+				case (wchar_t)'i': /* integer */
+					if (wmemncasecmp(type_name, MK_WSTR(JSON_COL_INTEGER),
+								len) == 0)
+						return SQL_C_SLONG;
+					break;
+				case (wchar_t)'b': /* boolean */
+					if (wmemncasecmp(type_name, MK_WSTR(JSON_COL_BOOLEAN),
+								len) == 0)
+						return SQL_C_UTINYINT;
+					break;
+				case (wchar_t)'k': /* keyword */
+					if (wmemncasecmp(type_name, MK_WSTR(JSON_COL_KEYWORD),
+								len) == 0)
+						return SQL_C_CHAR;
+					break;
+			}
 			break;
-		// case sizeof(JSON_COL_DATE):
+		// case sizeof(JSON_COL_DATE) - 1:
 		case sizeof(JSON_COL_TEXT) - 1: 
-			if (wmemncasecmp(type_name, MK_WSTR(JSON_COL_TEXT), len) == 0)
-				// TODO: char/longvarchar/wchar/wvarchar?
-				return SQL_VARCHAR;
-			else if (wmemncasecmp(type_name, MK_WSTR(JSON_COL_DATE), len) == 0)
+			switch(tolower(type_name[0])) {
+				case (wchar_t)'t':
+					if (! wmemncasecmp(type_name, MK_WSTR(JSON_COL_TEXT), len))
+						// TODO: char/longvarchar/wchar/wvarchar?
+						return SQL_C_CHAR;
+					break;
+				case (wchar_t)'d':
+					if (! wmemncasecmp(type_name, MK_WSTR(JSON_COL_DATE), len))
+						// TODO: time/timestamp
+						return SQL_C_TYPE_DATE;
+					break;
+#if 1 // BUG FIXME
+				case (wchar_t)'n':
+					if (! wmemncasecmp(type_name, MK_WSTR("null"), len))
+						// TODO: time/timestamp
+						return SQL_C_SSHORT;
+					break;
+#endif
+			}
+			break;
+		case sizeof(JSON_COL_SHORT) - 1:
+			if (! wmemncasecmp(type_name, MK_WSTR(JSON_COL_SHORT), len))
 				// TODO: time/timestamp
-				return SQL_TYPE_DATE;
+				return SQL_C_SSHORT;
+			break;
 	}
-	ERR("unrecognized Elastic type `" LTPDL "`.", len, type_name);
+	ERR("unrecognized Elastic type `" LTPDL "` (%zd).", len, type_name, len);
 	return SQL_UNKNOWN_TYPE;
 }
 
@@ -165,26 +205,60 @@ SQLRETURN attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 	return attach_columns(stmt, columns);
 }
 
-/* 
- * tlen: lenght in characters of text
- */
-SQLRETURN attach_sqltext(esodbc_stmt_st *stmt, SQLTCHAR *text, size_t tlen)
+
+SQLRETURN attach_sql(esodbc_stmt_st *stmt, 
+		const SQLTCHAR *sql, /* SQL text statement */
+		size_t sqlcnt /* count of chars of 'sql' */)
 {
-	size_t blen; /* Bytes len from Characters len */
+	char *u8;
+	int len;
 
-	assert(stmt->text == NULL);
+	DBG("STMT@0x%p attaching SQL `" LTPDL "` (%zd).", stmt, sqlcnt,sql,sqlcnt);
 
-	blen = tlen * sizeof(SQLTCHAR); /* Bytes len from Characters len */
-	/* attach the SQL textual statement to the handler */
-	stmt->text = (SQLTCHAR *)malloc(blen);
-	if (! stmt->text) {
-		ERR("failed to allocate buffer for SQL text of size %zd.", blen);
+	assert(! stmt->u8sql);
+
+	// TODO: escaping? in UCS2 or UTF8
+
+	len = WideCharToMultiByte(CP_UTF8, WC_NO_BEST_FIT_CHARS, sql, (int)sqlcnt,
+			NULL, 0, NULL, NULL);
+	if (len <= 0) {
+		ERRN("STMT@0x%p: failed to UCS2/UTF8 convert SQL `" LTPDL "` (%zd).", 
+				stmt, sqlcnt, sql, sqlcnt);
+		RET_HDIAG(stmt, SQL_STATE_HY000, "UCS2/UTF8 conversion failure", 0);
+	}
+	DBG("wide char SQL `" LTPDL "`[%zd] converts to UTF8 on %d octets.",
+			sqlcnt, sql, sqlcnt, len);
+
+	u8 = malloc(len);
+	if (! u8) {
+		ERRN("failed to alloc %dB.", len);
 		RET_HDIAGS(stmt, SQL_STATE_HY001);
 	}
-	memcpy(stmt->text, text, blen);
-	stmt->tlen = (SQLINTEGER)tlen;
-	DBG("attached SQL text `" LTPDL "` to statement 0x%p.", tlen, stmt->text);
-	RET_STATE(SQL_STATE_00000);
+
+	len = WideCharToMultiByte(CP_UTF8, WC_NO_BEST_FIT_CHARS, sql, (int)sqlcnt, 
+			u8, len, NULL, NULL);
+	if (len <= 0) { /* can it happen? it's just succeded above */
+		ERRN("STMT@0x%p: failed to UCS2/UTF8 convert SQL `" LTPDL "` (%zd).", 
+				stmt, sqlcnt, sql, sqlcnt);
+		free(u8);
+		RET_HDIAG(stmt, SQL_STATE_HY000, "UCS2/UTF8 conversion failure(2)", 0);
+	}
+
+	stmt->u8sql = u8;
+	stmt->sqllen = (size_t)len;
+	
+	DBG("STMT@0x%p attached SQL `%.*s` (%zd).", stmt, len, u8, len);
+
+	return SQL_SUCCESS;
+}
+
+void detach_sql(esodbc_stmt_st *stmt)
+{
+	if (! stmt->u8sql)
+		return;
+	free(stmt->u8sql);
+	stmt->u8sql = NULL;
+	stmt->sqllen = 0;
 }
 
 
@@ -360,15 +434,44 @@ static void* deferred_address(SQLSMALLINT field_id, size_t pos,
 	return base ? (char *)base + offt + pos * elem_size : NULL;
 }
 
-static SQLRETURN copy_longlong(esodbc_stmt_st *stmt, desc_rec_st *arec,
-		desc_rec_st *irec, SQLULEN pos, long long ll)
+static SQLRETURN copy_longlong(desc_rec_st *arec, desc_rec_st *irec,
+		SQLULEN pos, long long ll)
 {
-	FIXME; // FIXME
-	return SQL_ERROR;
+	esodbc_stmt_st *stmt;
+	void *data_ptr;
+	esodbc_desc_st *ard, *ird;
+	SQLSMALLINT target_type;
+
+	stmt = arec->desc->stmt;
+	ird = stmt->ird;
+	ard = stmt->ard;
+	
+	data_ptr = deferred_address(SQL_DESC_DATA_PTR, pos, ard, arec);
+	if (! data_ptr) {
+		ERR("STMT@0x%p: received integer type, but NULL data ptr.", stmt);
+		RET_HDIAGS(stmt, SQL_STATE_HY009);
+	}
+
+	/* "To use the default mapping, an application specifies the SQL_C_DEFAULT
+	 * type identifier." */
+	target_type = arec->type == SQL_C_DEFAULT ? irec->type : arec->type;
+	DBG("target data type: %d.", target_type);
+	switch (target_type) {
+		case SQL_C_SLONG:
+		case SQL_C_SSHORT:
+			*(SQLINTEGER *)data_ptr = (SQLINTEGER)ll;
+			break;
+		default:
+			FIXME; // FIXME
+			return SQL_ERROR;
+	}
+	DBG("REC@0x%p, data_ptr@0x%p, copied long long: `%d`.", arec, data_ptr,
+			(SQLINTEGER)ll);
+	return SQL_SUCCESS;
 }
 
-static SQLRETURN copy_double(esodbc_stmt_st *stmt, desc_rec_st *arec,
-		desc_rec_st *irec, SQLULEN pos, double dbl)
+static SQLRETURN copy_double(desc_rec_st *arec, desc_rec_st *irec, 
+		SQLULEN pos, double dbl)
 {
 	FIXME; // FIXME
 	return SQL_ERROR;
@@ -438,6 +541,7 @@ static SQLRETURN wstr_to_cstr(desc_rec_st *arec, desc_rec_st *irec,
 			/* the space it would take if target buffer was large
 			 * enough, after _ATTR_MAX_LENGTH truncation, but before
 			 * buffer size truncation. */
+			// FIXME: use WideCharToMultiByte on _WIN32
 			octet_length = wcstombs(NULL, wstr, in_bytes);
 			if (octet_length == (size_t)-1) {
 				ERRN("failed to convert wchar* to char* for string `"
@@ -464,6 +568,7 @@ static SQLRETURN wstr_to_cstr(desc_rec_st *arec, desc_rec_st *irec,
 		 * output string, excluding the terminating NULL (if any)".
 		 * Copies until \0 is met in wstr or buffer runs out.
 		 * If \0 is met, it's copied, but not counted in return. (silly fn) */
+		// FIXME: use WideCharToMultiByte on _WIN32
 		out_bytes = wcstombs(charp, wstr, octet_length);
 		if (out_bytes == (size_t)-1) {
 			ERRN("failed to convert wchar* to char* for string `"
@@ -569,6 +674,8 @@ static SQLRETURN copy_string(desc_rec_st *arec, desc_rec_st *irec,
 	/* pointer to app's buffer */
 	data_ptr = deferred_address(SQL_DESC_DATA_PTR, pos, ard, arec);
 
+	/* "To use the default mapping, an application specifies the SQL_C_DEFAULT
+	 * type identifier." */
 	target_type = arec->type == SQL_C_DEFAULT ? irec->type : arec->type;
 	DBG("target data type: %d.", target_type);
 	switch (target_type) {
@@ -655,10 +762,17 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 		switch (UJGetType(obj)) {
 			case UJT_Null:
 				DBG("value [%zd, %d] is NULL.", rowno, i + 1);
+#if 0
+				if (! arec->nullable) {
+					ERR("STMT@0x%p: received a NULL for a not nullable val.");
+					RET_ROW_DIAG(SQL_STATE_HY003, "NULL value received for non"
+							" nullable data type", i + 1);
+				}
+#endif //0
 				ind_len = deferred_address(SQL_DESC_INDICATOR_PTR, pos, ard, 
 						arec);
 				if (! ind_len) {
-					ERR("no buffer to signal NULL value.");
+					ERR("STMT@0x%p: no buffer to signal NULL value.", stmt);
 					RET_ROW_DIAG(SQL_STATE_22002, "Indicator variable required"
 							" but not supplied", i + 1);
 				}
@@ -689,7 +803,7 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 			case UJT_LongLong:
 				ll = UJNumericLongLong(obj);
 				DBG("value [%zd, %d] is int: %lld.", rowno, i + 1, ll);
-				ret = copy_longlong(stmt, arec, irec, pos, ll);
+				ret = copy_longlong(arec, irec, pos, ll);
 				switch (ret) {
 					case SQL_SUCCESS_WITH_INFO: 
 						with_info = TRUE;
@@ -705,7 +819,7 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 			case UJT_Double:
 				dbl = UJNumericFloat(obj);
 				DBG("value [%zd, %d] is double: %f.", rowno, i + 1, dbl);
-				ret = copy_double(stmt, arec, irec, pos, dbl);
+				ret = copy_double(arec, irec, pos, dbl);
 				switch (ret) {
 					case SQL_SUCCESS_WITH_INFO: 
 						with_info = TRUE;
@@ -807,14 +921,13 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 	ard = stmt->ard;
 	ird = stmt->ird;
 
-	if (stmt->text) // FIXME: remove it, it's just to avoid GetInfoType for now
 	if (! STMT_HAS_RESULTSET(stmt)) {
 		ERR("no resultset available on statement 0x%p.", stmt);
 		RET_HDIAGS(stmt, SQL_STATE_HY010);
 	}
 
-	DBG("fetching on statement 0x%p (`" LTPDL "`); 'cursor' @ %zd / %zd.", 
-			stmt, stmt->tlen, stmt->text, stmt->rset.vrows, stmt->rset.nrows);
+	DBG("STMT@0x%p (`%.*s`); 'cursor' @ %zd / %zd.", stmt, stmt->sqllen,
+			stmt->u8sql, stmt->rset.vrows, stmt->rset.nrows);
 	
 	DBG("rowset max size: %d.", ard->array_size);
 	errors = 0;
@@ -951,3 +1064,96 @@ SQLRETURN EsSQLNumResultCols(SQLHSTMT StatementHandle,
 	return EsSQLGetDescFieldW(STMH(StatementHandle)->ird, NO_REC_NR,
 			SQL_DESC_COUNT, ColumnCount, SQL_IS_SMALLINT, NULL);
 }
+
+/*
+ * "The prepared statement associated with the statement handle can be
+ * re-executed by calling SQLExecute until the application frees the statement
+ * with a call to SQLFreeStmt with the SQL_DROP option or until the statement
+ * handle is used in a call to SQLPrepare, SQLExecDirect, or one of the
+ * catalog functions (SQLColumns, SQLTables, and so on)."
+ */
+SQLRETURN EsSQLPrepareW
+(
+    SQLHSTMT    hstmt,
+    _In_reads_(cchSqlStr) SQLWCHAR* szSqlStr,
+    SQLINTEGER  cchSqlStr
+)
+{
+	esodbc_stmt_st *stmt = STMH(hstmt);
+	SQLRETURN ret;
+
+	DBG("STMT@0x%p preparing `" LTPDL "` (%d)", stmt, cchSqlStr, szSqlStr, 
+			cchSqlStr);
+	
+	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
+	assert(SQL_SUCCEEDED(ret)); /* can't return error */
+	
+	// TODO: escaping?
+	
+	return attach_sql(stmt, szSqlStr, cchSqlStr);
+}
+
+
+/*
+ * "In the IPD, this header field points to a parameter status array
+ * containing status information for each set of parameter values after a call
+ * to SQLExecute or SQLExecDirect." = .array_status_ptr
+ *
+ * "In the APD, this header field points to a parameter operation array of
+ * values that can be set by the application to indicate whether this set of
+ * parameters is to be ignored when SQLExecute or SQLExecDirect is called."
+ * = .array_status_ptr
+ * "If no elements of the array are set, all sets of parameters in the array
+ * are used in the SQLExecute or SQLExecDirect calls."
+ */
+SQLRETURN EsSQLExecute(SQLHSTMT hstmt)
+{
+	esodbc_stmt_st *stmt = STMH(hstmt);
+
+	DBG("STMT@0x%p executing `%.*s` (%zd)", stmt, stmt->sqllen, stmt->u8sql,
+			stmt->sqllen);
+	
+	return post_statement(stmt);
+}
+
+/*
+ * "In the IPD, this header field points to a parameter status array
+ * containing status information for each set of parameter values after a call
+ * to SQLExecute or SQLExecDirect." = .array_status_ptr
+ *
+ * "In the APD, this header field points to a parameter operation array of
+ * values that can be set by the application to indicate whether this set of
+ * parameters is to be ignored when SQLExecute or SQLExecDirect is called."
+ * = .array_status_ptr
+ * "If no elements of the array are set, all sets of parameters in the array
+ * are used in the SQLExecute or SQLExecDirect calls."
+ */
+SQLRETURN EsSQLExecDirectW
+(
+    SQLHSTMT    hstmt,
+    _In_reads_opt_(TextLength) SQLWCHAR* szSqlStr,
+    SQLINTEGER cchSqlStr 
+)
+{
+	esodbc_stmt_st *stmt = STMH(hstmt);
+	SQLRETURN ret;
+
+	DBG("STMT@0x%p directly executing SQL.", stmt);
+	
+	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
+	assert(SQL_SUCCEEDED(ret)); /* can't return error */
+
+	if (stmt->apd->array_size)
+		FIXME; //FIXME: multiple executions?
+
+	// TODO: escaping?
+	
+	ret = attach_sql(stmt, szSqlStr, cchSqlStr);
+	if (SQL_SUCCEEDED(ret)) {
+		ret = post_statement(stmt);
+	}
+	detach_sql(stmt);
+	return ret;
+}
+
+/* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */

@@ -10,6 +10,8 @@
 
 #include "log.h"
 #include "handles.h"
+#include "queries.h"
+#include "connect.h"
 
 
 #if ODBCVER == 0x0380
@@ -185,6 +187,8 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		_Out_opt_ SQLSMALLINT *StringLengthPtr)
 {
 	esodbc_dbc_st *dbc = DBCH(ConnectionHandle);
+	SQLINTEGER string_len;
+	SQLRETURN ret;
 
 	switch (InfoType) {
 		/* Driver Information */
@@ -331,6 +335,14 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			DBG("requested bookmark persistence (none).");
 			*(SQLUINTEGER *)InfoValue = 0; /* no support */
 			break;
+
+		case SQL_DATABASE_NAME:
+			ret = EsSQLGetConnectAttrW(ConnectionHandle,
+					SQL_ATTR_CURRENT_CATALOG, InfoValue,
+					(SQLINTEGER)BufferLength, &string_len);
+			if (StringLengthPtr)
+				*StringLengthPtr = (SQLSMALLINT)string_len;
+			return ret;
 
 		default:
 			ERR("unknown InfoType: %u.", InfoType);
@@ -712,6 +724,11 @@ INTERVAL_PRECISION
  */
 SQLRETURN EsSQLGetTypeInfoW(SQLHSTMT StatementHandle, SQLSMALLINT DataType)
 {
+	SQLRETURN ret;
+	esodbc_stmt_st *stmt = STMH(StatementHandle);
+
+#define SQL_TYPES_STATEMENT	"SYS TYPES"
+
 	switch (DataType) {
 		case SQL_ALL_TYPES:
 			DBG("requested type description for all supported types.");
@@ -722,11 +739,17 @@ SQLRETURN EsSQLGetTypeInfoW(SQLHSTMT StatementHandle, SQLSMALLINT DataType)
 		 * by the driver, then it will return an empty result set." */
 		default:
 			ERR("invalid DataType: %d.", DataType);
+			FIXME; // FIXME : implement filtering..
 			RET_HDIAGS(STMH(StatementHandle), SQL_STATE_HY004);
 	}
 
-	BUG("not (fully) implemented.");
-	RET_STATE(SQL_STATE_00000);
+	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
+	assert(SQL_SUCCEEDED(ret)); /* can't return error */
+	ret = attach_sql(stmt, MK_TSTR(SQL_TYPES_STATEMENT), 
+			sizeof(SQL_TYPES_STATEMENT) - 1);
+	if (SQL_SUCCEEDED(ret))
+		ret = post_statement(stmt);
+	return ret;
 }
 
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */

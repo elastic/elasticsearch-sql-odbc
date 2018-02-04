@@ -45,6 +45,11 @@ typedef struct struct_dbc {
 	/* diagnostic/state keeping */
 	esodbc_diag_st diag;
 	SQLUINTEGER timeout;
+	struct {
+		size_t max; /* max fetch size */
+		char *str; /* as string */
+		char slen; /* string's length (w/o terminator) */
+	} fetch;
 
 	// FIXME: placeholder; used if connection has been established or not
 	// TODO: PROTO
@@ -77,7 +82,7 @@ typedef struct desc_rec {
 
 	/* record fields */
 	SQLSMALLINT		concise_type;
-	SQLSMALLINT		type;
+	SQLSMALLINT		type; /* SQL_C_<type> -> AxD, SQL_<type> -> IxD */
 	SQLSMALLINT		datetime_interval_code;
 
 	SQLPOINTER		data_ptr; /* array, if .array_size > 1 */
@@ -182,8 +187,9 @@ typedef struct struct_stmt {
 	esodbc_dbc_st *dbc;
 	esodbc_diag_st diag;
 
-	SQLTCHAR *text; /* textual SQL */
-	SQLINTEGER tlen; /* characters len of text */
+	/* cache SQL, can be used with varying params */
+	char *u8sql; /* UTF8 JSON serialized buffer */
+	size_t sqllen; /* byte len of SQL statement */
 
 	/* pointers to the current descriptors */
 	esodbc_desc_st *ard;
@@ -200,7 +206,9 @@ typedef struct struct_stmt {
 	SQLULEN bookmarks; //default: SQL_UB_OFF
 	SQLULEN metadata_id; // default: copied from connection
 	SQLULEN async_enable; // default: copied from connection
-	SQLULEN max_length;
+	/* "the maximum amount of data that the driver returns from a character or
+	 * binary column" */
+	SQLULEN max_length; 
 
 	/* result set */
 	resultset_st rset;
@@ -215,8 +223,15 @@ typedef struct struct_stmt {
 #define ESODBC_DEF_ARRAY_SIZE		1
 /* max cols or args to bind */
 #define ESODBC_MAX_DESC_COUNT		128
+/* values for SQL_ATTR_MAX_LENGTH statement attribute */
 #define ESODBC_UP_MAX_LENGTH		0 // USHORT_MAX
 #define ESODBC_LO_MAX_LENGTH		0
+/* max number of rows to request from server */
+#define ESODBC_DEF_FETCH_SIZE		0 // no fetch size
+/* prepare a STMT for a new SQL operation.
+ * To be used with catalog functions, that can be all called with same stmt */
+#define ESODBC_SQL_CLOSE			((SQLUSMALLINT)-1)
+
 
 SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count);
 desc_rec_st* get_record(esodbc_desc_st *desc, SQLSMALLINT rec_no, BOOL grow);
@@ -235,18 +250,6 @@ SQLRETURN SQL_API EsSQLGetEnvAttr(SQLHENV EnvironmentHandle,
 		SQLINTEGER Attribute, 
 		_Out_writes_(_Inexpressible_(BufferLength)) SQLPOINTER Value,
 		SQLINTEGER BufferLength, _Out_opt_ SQLINTEGER *StringLength);
-
-SQLRETURN EsSQLSetConnectAttrW(
-		SQLHDBC ConnectionHandle,
-		SQLINTEGER Attribute,
-		_In_reads_bytes_opt_(StringLength) SQLPOINTER Value,
-		SQLINTEGER StringLength);
-SQLRETURN EsSQLGetConnectAttrW(
-		SQLHDBC        ConnectionHandle,
-		SQLINTEGER     Attribute,
-		_Out_writes_opt_(_Inexpressible_(cbValueMax)) SQLPOINTER ValuePtr,
-		SQLINTEGER     BufferLength,
-		_Out_opt_ SQLINTEGER* StringLengthPtr);
 
 
 SQLRETURN EsSQLSetStmtAttrW(
