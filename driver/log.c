@@ -30,7 +30,7 @@
  * """
  */
 #define LOG_EBUF_LEN	128
-#define LOG_BUF_LEN		1024
+#define LOG_BUF_LEN		4 * 1024
 /* TODO: make settable */
 #define LOG_PATH		"C:\\Users\\bpi\\Temp\\mylog.txt"
 int _esodbc_log_level = LOG_LEVEL_DBG;

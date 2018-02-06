@@ -44,9 +44,11 @@
 
 #define ESODBC_PATTERN_ESCAPE		"\\"
 #define ESODBC_CATALOG_SEPARATOR	"."
+//#define ESODBC_CATALOG_SEPARATOR	""
 #define ESODBC_CATALOG_TERM			"clusterName"
 #define ESODBC_MAX_SCHEMA_LEN		0
 #define ESODBC_QUOTE_CHAR			"\""
+#define ESODBC_SCHEMA_TERM			"schema"
 
 /* max # of active statements for a connection" */
 /* TODO: review@alpha */
@@ -144,7 +146,7 @@ static SQLRETURN write_tstr(esodbc_diag_st *diag,
 		SQLTCHAR *dest, const SQLTCHAR *src,
 		SQLSMALLINT avail, SQLSMALLINT *usedp)
 {
-	size_t src_len, len;
+	size_t src_len, awail;
 	SQLSMALLINT used;
 
 	if (! dest)
@@ -154,31 +156,31 @@ static SQLRETURN write_tstr(esodbc_diag_st *diag,
 		ERR("invalid buffer length provided: %d.", avail);
 		RET_CDIAG(diag, SQL_STATE_HY090, "invalid buffer length provided", 0);
 	}
+	awail = avail/sizeof(SQLTCHAR);
 	src_len = wcslen(src);
+
 	/* return value always set to what it needs to be written. */
 	used = (SQLSMALLINT)src_len * sizeof(SQLTCHAR);
 	if (! usedp) {
-		WARN("invalid used output buffer provided (NULL).");
+		WARN("invalid output buffer provided (NULL) to collect used space.");
 		//RET_cDIAG(diag, SQL_STATE_HY013, "invalid used provided (NULL)", 0);
 	} else {
+		/* how many bytes are available to return (not how many would be
+		 * written into the buffer (which could be less)) */
 		*usedp = used;
 	}
+
 	if (! dest) {
 		/* only return how large of a buffer we need */
 		INFO("NULL out buff: returning needed buffer size only (%d).", used);
 	} else {
-		len = swprintf(dest, avail/sizeof(SQLTCHAR), WPFWP_DESC, src);
-		if (len < 0) {
-			ERRN("failed to print `"LTPD"` in dest: 0x%p, avail: %d.", 
-					src, dest, avail);
-			RET_DIAG(diag, SQL_STATE_HY000, NULL, 0);
-		}
-		DBG("written: `"LTPD"` (%d).", dest, used);
-		/* has the string been trucated? */
-		if (len + /*\0*/1 < src_len) {
-			INFO("not enough buffer size to write required string `"LTPD"`; "
-					"available: %d.", src, avail);
+		if (awail <= src_len) { /* TODO: does it actually need to fit \0? */
+			INFO("not enough buffer size to write required string (plus "
+					"terminator): `" LTPD " [%zd]`; available: %d.", src,
+					src_len, avail);
 			RET_DIAG(diag, SQL_STATE_01004, NULL, 0);
+		} else {
+			wcsncpy(dest, src, src_len + /* 0-term */1);
 		}
 	}
 	RET_STATE(SQL_STATE_00000);
@@ -348,12 +350,19 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			break;
 
 		case SQL_DATABASE_NAME:
+			DBG("requested database name.");
 			ret = EsSQLGetConnectAttrW(ConnectionHandle,
 					SQL_ATTR_CURRENT_CATALOG, InfoValue,
 					(SQLINTEGER)BufferLength, &string_len);
 			if (StringLengthPtr)
 				*StringLengthPtr = (SQLSMALLINT)string_len;
 			return ret;
+
+		case SQL_SCHEMA_TERM:
+			DBG("requested schema term (`%s`).", ESODBC_SCHEMA_TERM);
+			return write_tstr(&dbc->diag, InfoValue,
+					MK_TSTR(ESODBC_SCHEMA_TERM), BufferLength,
+					StringLengthPtr);
 
 		default:
 			ERR("unknown InfoType: %u.", InfoType);
@@ -374,16 +383,18 @@ SQLRETURN EsSQLGetDiagFieldW(
 		_Out_opt_ SQLSMALLINT *StringLengthPtr)
 {
 	esodbc_diag_st *diag, dummy;
+	SQLSMALLINT used;
 	size_t len;
 	SQLTCHAR *tstr;
+	SQLRETURN ret;
 
 	if (RecNumber <= 0) {
 		ERR("record number must be >=1; received: %d.", RecNumber);
 		return SQL_ERROR;
 	}
 	if (1 < RecNumber) {
-		/* XXX: does it make sense to have error FIFOs? (mysql doesn't) */
-		WARN("no error lists supported (yet).");
+		/* XXX: does it make sense to have error FIFOs? see: EsSQLGetDiagRec */
+		// WARN("no error lists supported (yet).");
 		return SQL_NO_DATA;
 	}
 
@@ -525,47 +536,16 @@ SQLRETURN EsSQLGetDiagFieldW(
 				return SQL_NO_DATA;
 			}
 			/* GetDiagField can't set diagnostics itself, so use a dummy */
-			return write_tstr(&dummy, DiagInfoPtr,
-					esodbc_errors[diag->state].code, BufferLength,
-					StringLengthPtr);
-#if 0
-			if (BufferLength % 2) {
-				ERR("BufferLength not an even number: %d.", BufferLength);
-				return SQL_ERROR;
-			}
-#if 0
-			/* always return how many bytes we would need (or used) */
-			*StringLengthPtr = SQL_SQLSTATE_SIZE + /*\0*/1;
-			*StringLengthPtr *= sizeof(SQLTCHAR);
-#endif
-			if (SQL_SQLSTATE_SIZE < BufferLength) {
-				/* no error indicator exists */
-				wcsncpy(DiagInfoPtr, esodbc_errors[diag->state].code, 
-						SQL_SQLSTATE_SIZE);
-				DBG("SQL state for handler of type %d: "LTPD".", 
-						HandleType, DiagInfoPtr);
-				return SQL_SUCCESS;
-			} else {
-				if (BufferLength < 0) {
-					ERR("negative BufferLength rcvd: %d.", BufferLength);
-					return SQL_ERROR;
-				}
-				/* no error indicator exists */
-				wcsncpy(DiagInfoPtr, esodbc_errors[diag->state].code, 
-						BufferLength);
-				INFO("not enough space to copy state; have: %d, need: %d.",
-						BufferLength,
-/* CL trips on this macro -- WTF?? */
-//#if 0
-//							*StringLengthPtr
-//#else
-						(SQL_SQLSTATE_SIZE + /*\0*/1) * sizeof(SQLTCHAR)
-//#endif
-						);
-				return SQL_SUCCESS_WITH_INFO;
-			}
-			break;
-#endif /*0*/
+			ret = write_tstr(&dummy, DiagInfoPtr,
+					esodbc_errors[diag->state].code, BufferLength, &used);
+			if (StringLengthPtr)
+				*StringLengthPtr = used;
+			else
+				/* SQLSTATE is always on 5 chars, but this Identifier sticks
+				 * out, by not being given a buffer to write this into */
+				WARN("SQLSTATE writen on %uB, but no output buffer provided.",
+						used);
+			return ret;
 
 		default:
 			ERR("unknown DiagIdentifier: %d.", DiagIdentifier);
@@ -605,8 +585,9 @@ SQLRETURN EsSQLGetDiagRecW
 		return SQL_ERROR;
 	}
 	if (1 < RecNumber) {
-		/* XXX: does it make sense to have error FIFOs? (mysql doesn't) */
-		WARN("no error lists supported (yet).");
+		/* XXX: does it make sense to have error FIFOs? maybe, for one
+		 * diagnostic per failed fetched row */
+		// WARN("no error lists supported (yet).");
 		return SQL_NO_DATA;
 	}
 

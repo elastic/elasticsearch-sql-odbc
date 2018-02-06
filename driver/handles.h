@@ -68,10 +68,10 @@ typedef struct struct_dbc {
 
 	SQLTCHAR *connstr; /* connection string */ // TODO: IDNA?
 	CURL *curl; /* cURL handle */
-	char *wbuf; /* write buffer for the answer */
-	size_t wlen; /* size of wbuf */
-	size_t wpos; /* current write position in the wbuf */
-	size_t wmax; /* maximum lenght (bytes) that wbuf can grow to */
+	char *abuff; /* buffer holding the answer */
+	size_t alen; /* size of abuff */
+	size_t apos; /* current write position in the abuff */
+	size_t amax; /* maximum lenght (bytes) that abuff can grow to */
 
 	/* "the catalog is a database", "For a single-tier driver, the catalog
 	 * might be a directory" */
@@ -173,6 +173,7 @@ typedef struct struct_desc {
 
 
 typedef struct struct_resultset {
+	long code; /* code of last response */
 	char *buff; /* buffer containing the answer to the last request in a STM */
 	size_t blen; /* lenght of the answer */
 
@@ -346,6 +347,7 @@ SQLRETURN EsSQLSetDescRec(
 /* return the code associated with the given state (and debug-log) */
 #define RET_STATE(_s)	\
 	do { \
+		assert(_s < SQL_STATE_MAX); \
 		SQLRETURN _r = esodbc_errors[_s].retcode; \
 		SQLTCHAR *_c = esodbc_errors[_s].code; \
 		DBG("returning state "LTPD", code %d.", _c, _r); \
@@ -359,6 +361,8 @@ SQLRETURN EsSQLSetDescRec(
 	} while (0)
 
 #define STMT_HAS_RESULTSET(stmt)	((stmt)->rset.buff != NULL)
+#define STMT_FORCE_NODATA(stmt)		(stmt)->rset.blen = (size_t)-1
+#define STMT_NODATA_FORCED(stmt)	((stmt)->rset.blen == (size_t)-1)
 /* "An application can unbind the data buffer for a column but still have a
  * length/indicator buffer bound for the column" */
 #define REC_IS_BOUND(rec)			( \

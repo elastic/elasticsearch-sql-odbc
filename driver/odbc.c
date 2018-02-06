@@ -974,6 +974,7 @@ SQLRETURN SQL_API SQLProceduresW
 {
 	RET_NOT_IMPLEMENTED;
 }
+#endif // WITH_EMPTY
 
 SQLRETURN SQL_API SQLSpecialColumnsW
 (
@@ -989,9 +990,20 @@ SQLRETURN SQL_API SQLSpecialColumnsW
     SQLUSMALLINT       fNullable
 )
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE10(_IN, "pupdpdpduu", hstmt, fColType, szCatalogName,
+		cchCatalogName, szSchemaName, cchSchemaName, szTableName,
+		cchTableName, fScope, fNullable);
+	ret = EsSQLSpecialColumnsW(hstmt, fColType, szCatalogName,
+		cchCatalogName, szSchemaName, cchSchemaName, szTableName,
+		cchTableName, fScope, fNullable);
+	TRACE11(_OUT, "dpuWdWdWduu", ret, hstmt, fColType, szCatalogName,
+		cchCatalogName, szSchemaName, cchSchemaName, szTableName,
+		cchTableName, fScope, fNullable);
+	return ret;
 }
 
+#if WITH_EMPTY
 SQLRETURN SQL_API SQLStatisticsW
 (
     SQLHSTMT           hstmt,

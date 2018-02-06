@@ -21,6 +21,7 @@
 #include "handles.h"
 #include "connect.h"
 
+#define MSG_INV_SRV_ANS		"Invalid server answer"
 
 void clear_resultset(esodbc_stmt_st *stmt)
 {
@@ -136,14 +137,14 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 	if (! iter) {
 		ERR("failed to obtain array iterator: %s.", 
 				UJGetError(stmt->rset.state));
-		RET_HDIAG(stmt, SQL_STATE_HY000, "Invalid server answer", 0);
+		RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
 	}
 	recno = 0;
 	while (UJIterArray(&iter, &col_o)) {
 		if (UJObjectUnpack(col_o, 2, "SS", keys, &name_o, &type_o) < 2) {
 			ERR("failed to decode JSON column: %s.", 
 					UJGetError(stmt->rset.state));
-			RET_HDIAG(stmt, SQL_STATE_HY000, "Invalid server answer", 0);
+			RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
 		}
 
 		col_wname = UJReadString(name_o, &len);
@@ -154,7 +155,7 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 		if (col_stype == SQL_UNKNOWN_TYPE) {
 			ERR("failed to convert Elastic to C SQL type `" LTPDL "`.", 
 					len, col_wtype);
-			RET_HDIAG(stmt, SQL_STATE_HY000, "Invalid server answer", 0);
+			RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
 		}
 		ird->recs[recno].type = col_stype;
 
@@ -194,28 +195,124 @@ SQLRETURN attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 	if (! obj) {
 		ERR("failed to decode JSON answer (`%.*s`): %s.", blen, buff, 
 				stmt->rset.state ? UJGetError(stmt->rset.state) : "<none>");
-		RET_HDIAG(stmt, SQL_STATE_HY000, "Invalid server answer", 0);
+		RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
 	}
 	/* extract the columns and rows objects */
     if (UJObjectUnpack(obj, 2, "AA", keys, &columns, &rows) < 2) {
 		ERR("failed to unpack JSON answer (`%.*s`): %s.", blen, buff, 
-				stmt->rset.state ? UJGetError(stmt->rset.state) : "<none>");
-		RET_HDIAG(stmt, SQL_STATE_HY000, "Invalid server answer", 0);
+				UJGetError(stmt->rset.state));
+		RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
 	}
 
 	/* set the cursor */
 	stmt->rset.rows_iter = UJBeginArray(rows);
+#if 0 /* UJSON4C will return NULL above, for empty array (meh!) */
 	if (! stmt->rset.rows_iter) {
 		ERR("failed to get iterrator on received rows: %s.", 
 				UJGetError(stmt->rset.state));
 		RET_HDIAGS(stmt, SQL_STATE_HY000);
 	}
 	stmt->rset.nrows = (size_t)UJArraySize(rows);
+#else /*0*/
+	DBG("received empty resultset array: forcing nodata.");
+	STMT_FORCE_NODATA(stmt);
+	stmt->rset.nrows = 0;
+#endif /*0*/
 	DBG("rows received in result set: %zd.", stmt->rset.nrows);
 
 	return attach_columns(stmt, columns);
 }
 
+/*
+ * Parse an error and push it as statement diagnostic.
+ */
+SQLRETURN attach_error(esodbc_stmt_st *stmt, char *buff, size_t blen)
+{
+	UJObject obj, o_status, o_error, o_type, o_reason;
+	const wchar_t *wtype, *wreason;
+	size_t tlen, rlen, left;
+	wchar_t wbuf[SQL_MAX_MESSAGE_LENGTH];
+	size_t wbuflen = sizeof(wbuf)/sizeof(wbuf[0]);
+	int n;
+	void *state = NULL;
+	wchar_t *outer_keys[] = {
+		MK_WSTR(JSON_ANSWER_ERROR),
+		MK_WSTR(JSON_ANSWER_STATUS)
+	};
+	wchar_t *err_keys[] = {
+		MK_WSTR(JSON_ANSWER_ERR_TYPE),
+		MK_WSTR(JSON_ANSWER_ERR_REASON)
+	};
+
+	INFO("STMT@0x%p REST request failed with `%.*s` (%zd).", stmt, blen, buff, 
+			blen);
+
+	/* parse the entire JSON answer */
+	obj = UJDecode(buff, blen, NULL, &state);
+	if (! obj) {
+		ERR("failed to decode JSON answer (`%.*s`): %s.", blen, buff, 
+				state ? UJGetError(state) : "<none>");
+		SET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
+		goto end;
+	}
+	/* extract the status and error object */
+	if (UJObjectUnpack(obj, 2, "ON", outer_keys, &o_error, &o_status) < 2) {
+		ERR("failed to unpack JSON answer (`%.*s`): %s.", blen, buff, 
+				UJGetError(state));
+		SET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
+		goto end;
+	}
+	/* unpack error object */
+	if (UJObjectUnpack(o_error, 2, "SS", err_keys, &o_type, &o_reason) < 2) {
+		ERR("failed to unpack error object (`%.*s`): %s.", blen, buff, 
+				UJGetError(state));
+		SET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
+		goto end;
+	}
+
+	wtype = UJReadString(o_type, &tlen);
+	wreason = UJReadString(o_reason, &rlen);
+	/* these return empty string in case of mismatch */
+	assert(wtype && wreason);
+	DBG("Server failures: type: [%zd] `" LTPDL "`, reason: [%zd] `" LTPDL "`, "
+			"status: %d.", tlen, tlen, wtype, rlen, rlen, wreason, 
+			UJNumericInt(o_status));
+
+	/* swprintf will fail if formated string would overrun the buffer size (as
+	 * opposed to write up to its limit) => find out the limit first.*/
+	n = swprintf(NULL, 0, MK_WSTR("%.*s: %.*s"), (int)tlen, wtype, (int)rlen,
+			wreason);
+	if (0 < n) {
+		wbuflen -= /* ": " */2 + /*\0*/1;
+		tlen = wbuflen < tlen ? wbuflen : tlen;
+		left = wbuflen - tlen;
+		rlen = left < rlen ? left : rlen;
+		wbuflen += /* ": " */2 + /*\0*/1;
+		n = swprintf(wbuf, wbuflen, MK_WSTR("%.*s: %.*s"), (int)tlen, wtype,
+				(int)rlen, wreason);
+	}
+	if (n < 0) {
+		ERRN("failed to print error message from server.");
+		assert(sizeof(MSG_INV_SRV_ANS) < sizeof(wbuf));
+		memcpy(wbuf, MK_TSTR(MSG_INV_SRV_ANS),
+				sizeof(MSG_INV_SRV_ANS)*sizeof(SQLTCHAR));
+#if 0 /* this won't happen with swprintf */
+	} else if (wbuflen <= n) { /* add skipped (due to size) 0-term */
+		wbuf[wbuflen - 1] = 0;
+#endif
+	}
+
+	post_diagnostic(&stmt->diag, SQL_STATE_HY000, wbuf, 
+			UJNumericInt(o_status));
+
+end:
+	if (state)
+		UJFree(state);
+	if (buff)
+		free(buff);
+
+	RET_STATE(stmt->diag.state);
+}
 
 SQLRETURN attach_sql(esodbc_stmt_st *stmt, 
 		const SQLTCHAR *sql, /* SQL text statement */
@@ -745,14 +842,14 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 	if (! UJIsArray(row)) {
 		ERR("one '%s' (#%zd) element in result set not array; type: %d.", 
 				JSON_ANSWER_ROWS, stmt->rset.vrows, UJGetType(row));
-		RET_ROW_DIAG(SQL_STATE_01S01, "Invalid server answer", 
+		RET_ROW_DIAG(SQL_STATE_01S01, MSG_INV_SRV_ANS, 
 				SQL_NO_COLUMN_NUMBER);
 	}
 	iter_row = UJBeginArray(row);
 	if (! iter_row) {
 		ERR("Failed to obtain iterator on row (#%zd): %s.", rowno,
 				UJGetError(stmt->rset.state));
-		RET_ROW_DIAG(SQL_STATE_01S01, "Invalid server answer", 
+		RET_ROW_DIAG(SQL_STATE_01S01, MSG_INV_SRV_ANS, 
 				SQL_NO_COLUMN_NUMBER);
 	}
 
@@ -849,7 +946,7 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 			default:
 				ERR("unexpected object of type %d in row L#%zd/T#%zd.",
 						UJGetType(obj), stmt->rset.vrows, stmt->rset.frows);
-				RET_ROW_DIAG(SQL_STATE_01S01, "Invalid server answer", i + 1);
+				RET_ROW_DIAG(SQL_STATE_01S01, MSG_INV_SRV_ANS, i + 1);
 		}
 	}
 
@@ -933,6 +1030,10 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 	ird = stmt->ird;
 
 	if (! STMT_HAS_RESULTSET(stmt)) {
+		if (STMT_NODATA_FORCED(stmt)) {
+			DBG("empty result set flag set - returning no data.");
+			return SQL_NO_DATA;
+		}
 		ERR("no resultset available on statement 0x%p.", stmt);
 		RET_HDIAGS(stmt, SQL_STATE_HY010);
 	}

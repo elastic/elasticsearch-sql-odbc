@@ -32,30 +32,33 @@ void init_diagnostic(esodbc_diag_st *dest)
 SQLRETURN post_diagnostic(esodbc_diag_st *dest, esodbc_state_et state, 
 		SQLTCHAR *text, SQLINTEGER code)
 {
-	int ret;
+	size_t pos, tlen, ebufsz;
 	
+	ebufsz = sizeof(dest->text)/sizeof(dest->text[0]);
+	
+	/* if no text specified, use the default */
+	if (! text)
+		text = esodbc_errors[state].message;
+	tlen = wcslen(text);
+
 	dest->state = state;
 	dest->native_code = code;
 
-	// TODO: this won't make sense for ANSI
-	// wcsncpy() & co will be faster
-	ret = swprintf(dest->text, sizeof(dest->text)/sizeof(dest->text[0]), 
-			WPFWP_DESC WPFWP_DESC, MK_TSTR(ESODBC_DIAG_PREFIX),
-			/* if no text specified, use the default */
-			text ? text : esodbc_errors[state].message);
-	if (ret < 0) {
-		/* chances are this would fail too. */
-		ERRN("failed to copy diagnostic messages (`"LTPD"`, `"LTPD"`).",
-				MK_TSTR(ESODBC_DIAG_PREFIX), text);
-		dest->text_len = 0;
-	} else {
-		dest->text_len = (SQLUSMALLINT)ret;
-		DBG("diagnostic message: `"LTPD"` (%d).", dest->text, 
-				dest->text_len);
-	}
+	pos = sizeof(ESODBC_DIAG_PREFIX) - 1;
+	assert(pos < ebufsz);
+	wcsncpy(dest->text, MK_TSTR(ESODBC_DIAG_PREFIX), pos);
 
-	/* return code associated with state, even if setting the diagnostic log
-	 * might have failed. */
+	if (ebufsz - pos <= tlen) {
+		wcsncpy(dest->text + pos, text, ebufsz - (pos + 1));
+		dest->text[ebufsz - 1] = 0;
+		dest->text_len = (int)ebufsz - 1;
+	} else {
+		wcsncpy(dest->text + pos, text, tlen + /* 0-term */1);
+		dest->text_len = (int)tlen;
+	}
+	DBG("diagnostic message: `" LTPD "` (%d), native code: %d.", dest->text,
+			dest->text_len, dest->native_code);
+
 	RET_STATE(state);
 
 }

@@ -1140,7 +1140,8 @@ SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count)
 	}
 
 	if (desc->count == new_count) {
-		INFO("new descriptor count equals old one, %d.", new_count);
+		LOG(new_count ? LOG_LEVEL_INFO : LOG_LEVEL_DBG, 
+				"new descriptor count equals old one, %d.", new_count);
 		RET_STATE(SQL_STATE_00000);
 	}
 

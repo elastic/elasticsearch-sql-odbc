@@ -111,6 +111,7 @@ SQLRETURN EsSQLTablesW(
 
 empty:
 	RET_HDIAG(stmt, SQL_STATE_HYC00, "Table filtering not supported", 0);
+	// FIXME: add support for it
 }
 
 SQLRETURN EsSQLColumnsW
@@ -169,7 +170,7 @@ SQLRETURN EsSQLColumnsW
 		cn_clen = sizeof("%") - 1;
 	}
 
-	clen = _snwprintf(wbuf, sizeof(wbuf)/sizeof(SQLTCHAR), 
+	clen = swprintf(wbuf, sizeof(wbuf)/sizeof(SQLTCHAR), 
 			MK_TSTR("%s '%.*s' '%.*s'"), MK_TSTR(ESODBC_SQL_COLUMNS), tn_clen,
 			tablename, cn_clen, columnname);
 	if (clen <= 0 || sizeof(wbuf)/sizeof(SQLTCHAR) <= clen) { /* == */
@@ -186,7 +187,28 @@ SQLRETURN EsSQLColumnsW
 
 empty:
 	RET_HDIAG(stmt, SQL_STATE_HYC00, "Table filtering not supported", 0);
+	// FIXME: add support for it
 }
 
+SQLRETURN EsSQLSpecialColumnsW
+(
+    SQLHSTMT           hstmt,
+    SQLUSMALLINT       fColType,
+    _In_reads_opt_(cchCatalogName) SQLWCHAR*    szCatalogName,
+    SQLSMALLINT        cchCatalogName,
+    _In_reads_opt_(cchSchemaName) SQLWCHAR*     szSchemaName,
+    SQLSMALLINT        cchSchemaName,
+    _In_reads_opt_(cchTableName) SQLWCHAR*      szTableName,
+    SQLSMALLINT        cchTableName,
+    SQLUSMALLINT       fScope,
+    SQLUSMALLINT       fNullable
+)
+{
+	// TODO: is there a "rowid" equivalent: ID uniquely a ROW in the table?
+	// or unique indexes equivalents
+	WARN("no special columns available.");
+	STMT_FORCE_NODATA(STMH(hstmt));
+	return SQL_SUCCESS;
+}
 
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */

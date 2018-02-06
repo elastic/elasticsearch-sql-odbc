@@ -158,6 +158,7 @@ typedef enum {
 	SQL_STATE_IM013,
 	SQL_STATE_IM014,
 	SQL_STATE_IM015,
+	SQL_STATE_MAX
 } esodbc_state_et;
 
 
