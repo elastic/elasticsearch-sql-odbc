@@ -32,6 +32,21 @@ SQLRETURN EsSQLColumnsW
     _In_reads_opt_(cchColumnName) SQLWCHAR*     szColumnName,
     SQLSMALLINT        cchColumnName
 );
+
+SQLRETURN EsSQLSpecialColumnsW
+(
+    SQLHSTMT           hstmt,
+    SQLUSMALLINT       fColType,
+    _In_reads_opt_(cchCatalogName) SQLWCHAR*    szCatalogName,
+    SQLSMALLINT        cchCatalogName,
+    _In_reads_opt_(cchSchemaName) SQLWCHAR*     szSchemaName,
+    SQLSMALLINT        cchSchemaName,
+    _In_reads_opt_(cchTableName) SQLWCHAR*      szTableName,
+    SQLSMALLINT        cchTableName,
+    SQLUSMALLINT       fScope,
+    SQLUSMALLINT       fNullable
+);
+
 #endif /* __CATALOGUE_H__ */
 
 

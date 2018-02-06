@@ -28,7 +28,8 @@
 #define ELASTIC_SQL_PATH		"/_xpack/sql"
 #define ELASTIC_SQL_PATH_TABLES		"tables"
 /* default host to connect to */
-#define ESODBC_DEFAULT_HOST		"localhost"
+//#define ESODBC_DEFAULT_HOST		"localhost"
+#define ESODBC_DEFAULT_HOST		"127.0.0.1" /* to capture on Win10 */
 /* Elasticsearch'es default port */
 #define ESODBC_DEFAULT_PORT		9200
 /* default security (TLS) setting */
@@ -36,7 +37,7 @@
 /* default global request timeout */
 #define ESODBC_DEFAULT_TIMEOUT	0
 /* don't follow redirection from the server  */
-#define ESODBC_DEFAULT_FOLLOW	0 // TODO: review@alpha
+#define ESODBC_DEFAULT_FOLLOW	1
 
 /* HTTP headers default for every request */
 #define HTTP_ACCEPT_JSON		"Accept: application/json"
@@ -100,42 +101,49 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb,
 	char *wbuf;
 	size_t need, avail, have;
 
-	assert(dbc->wpos <= dbc->wlen);
-	avail = dbc->wlen - dbc->wpos;
+	assert(dbc->apos <= dbc->alen);
+	avail = dbc->alen - dbc->apos;
 	have = size * nmemb;
 
-	DBG("libcurl: DBC 0x%p, new data chunk of size [%zd] x %zd arrived; "
-			"available buffer: %zd/%zd.", dbc, nmemb, size, avail, dbc->wlen);
+	DBG("libcurl: DBC@0x%p, new data chunk of size [%zd] x %zd arrived; "
+			"available buffer: %zd/%zd.", dbc, nmemb, size, avail, dbc->alen);
 
 	/* do I need to grow the existing buffer? */
 	if (avail < have) {
-		for (need = dbc->wlen ? dbc->wlen : ESODBC_BODY_BUF_START_SIZE; 
+		/* calculate how much space to allocate. start from existing lenght,
+		 * if set, othewise from a constant (on first allocation). */
+		for (need = dbc->alen ? dbc->alen : ESODBC_BODY_BUF_START_SIZE; 
 				need < have; need *= 2)
 			;
 		DBG("libcurl: DBC@0x%p: growing buffer for new chunk of %zd "
-				"from %zd to %zd.", dbc, have, dbc->wlen, need);
-		if (dbc->wmax < need) { /* would I need more than max? */
-			if (dbc->wmax <= (size_t)dbc->wlen) { /* am I at max already? */
+				"from %zd to %zd.", dbc, have, dbc->alen, need);
+		if (dbc->amax < need) { /* would I need more than max? */
+			if (dbc->amax <= (size_t)dbc->alen) { /* am I at max already? */
 				ERR("libcurl: DBC@0x%p: can't grow past max %zd; have: %zd", 
-						dbc, dbc->wmax, have);
+						dbc, dbc->amax, have);
 				return 0;
-			} else {
-				need = dbc->wmax;
+			} else { /* am not: alloc max possible (possibly still < need!) */
+				need = dbc->amax;
 				WARN("libcurl: DBC@0x%p: capped buffer to max: %zd", dbc,need);
+				/* re'eval what I have available... */
+				avail = dbc->amax - dbc->apos;
+				/* ...and how much I could copy (possibly less than received)*/
+				have = have < avail ? have : avail;
 			}
 		}
-		wbuf = realloc(dbc->wbuf, need);
+		wbuf = realloc(dbc->abuff, need);
 		if (! wbuf) {
 			ERRN("libcurl: DBC@0x%p: failed to realloc to %zdB.", dbc, need);
 			return 0;
 		}
-		dbc->wbuf = wbuf;
-		dbc->wlen = need;
+		dbc->abuff = wbuf;
+		dbc->alen = need;
 	}
 
-	memcpy(dbc->wbuf + dbc->wpos, ptr, have);
-	dbc->wpos += have;
-	DBG("libcurl: DBC@0x%p, copied: %zd bytes.", have);
+	memcpy(dbc->abuff + dbc->apos, ptr, have);
+	dbc->apos += have;
+	DBG("libcurl: DBC@0x%p, copied: %zd bytes.", dbc, have);
+	DBG("libcurl: DBC@0x%p, copied: `%.*s`.", dbc, have, ptr);
 
 
 	/*
@@ -304,9 +312,9 @@ static SQLRETURN post_request(esodbc_stmt_st *stmt,
 	// long avail /*size of the answer buffer */)
 	CURLcode res = CURLE_OK;
 	esodbc_dbc_st *dbc = stmt->dbc;
-	char *wbuf = NULL;
-	size_t wpos;
-	long to;
+	char *abuff = NULL;
+	size_t apos;
+	long to, code;
 
 	DBG("STMT@0x%p posting request `%.*s` (%zd).", stmt, blen, u8body, blen);
 
@@ -353,38 +361,143 @@ static SQLRETURN post_request(esodbc_stmt_st *stmt,
 		assert(blen == 0);
 	}
 
-	assert(dbc->wbuf == NULL);
+	assert(dbc->abuff == NULL);
 
 	/* execute the request */
 	res = curl_easy_perform(dbc->curl);
 
-	wbuf = dbc->wbuf;
-	wpos = dbc->wpos;
+	abuff = dbc->abuff;
+	apos = dbc->apos;
 
 	/* clear call-back members for next call */
-	dbc->wbuf = NULL;
-	dbc->wpos = 0;
-	dbc->wlen = 0;
+	dbc->abuff = NULL;
+	dbc->apos = 0;
+	dbc->alen = 0;
 
-	if (res != CURLE_OK) {
+	if (res != CURLE_OK)
 		goto err;
+	res = curl_easy_getinfo(dbc->curl, CURLINFO_RESPONSE_CODE, &code);
+	if (res != CURLE_OK)
+		goto err;
+	DBG("libcurl: request succesfull, received code %ld and %zd bytes back.", 
+			code, apos);
+
+	if (code != 200) {
+		ERR("libcurl: non-200 HTTP response code %ld received.", code);
+		/* expect a 200 with body; everything else is failure (todo?)  */
+		if (400 <= code)
+			return attach_error(stmt, abuff, apos);
+		goto err_net;
 	}
 
-	DBG("libcurl: request succesfull, received %zd bytes back.", wpos);
-	return attach_answer(stmt, wbuf, wpos);
+	return attach_answer(stmt, abuff, apos);
 
 err:
 	ERR("libcurl: request failed STMT@0x%p (timeout:%ld, body:`%.*s`) "
 			"failed: '%s' (%d).", stmt, timeout, blen, u8body, 
 			res != CURLE_OK ? curl_easy_strerror(res) : "<unspecified>", res);
-	if (wbuf)
-		free(wbuf);
+err_net: /* the error occured after the request hit hit the network */
+	if (abuff)
+		free(abuff);
 	cleanup_curl(dbc);
-	if (wbuf) /* if buffer had been set, the error occured in _perform() */
+	if (abuff) /* if buffer had been set, the error occured in _perform() */
 		RET_HDIAG(stmt, SQL_STATE_08S01, "data transfer failure", res);
 	else
 		RET_HDIAG(stmt, SQL_STATE_HY000, "failed to init transport", res);
 }
+
+/* retuns the lenght of a buffer to hold the escaped variant of the unescaped
+ * given json object  */
+static inline size_t json_escaped_len(const char *json, size_t len)
+{
+	size_t i, newlen = 0;
+	unsigned char uchar;
+	for (i = 0; i < len; i ++) {
+		uchar = (unsigned char)json[i];
+		switch(uchar) {
+			case '"':
+			case '\\':
+			case '/':
+			case '\b':
+			case '\f':
+			case '\n':
+			case '\r':
+			case '\t':
+				newlen += /* '\' + json[i] */2;
+				break;
+			default:
+				newlen += (0x20 <= uchar) ? 1 : /* \u00XX */6;
+				// break
+		}
+	}
+	return newlen;
+}
+
+/* 
+ * JSON-escapes a string.
+ * If string len is 0, it assumes a NTS.
+ * If output buffer (jout) is NULL, it returns the buffer size needed for
+ * escaping.
+ * Returns number of used bytes in buffer (which might be less than buffer
+ * size, if some char needs an escaping longer than remaining space).
+ */
+static size_t json_escape(const char *jin, size_t inlen, char *jout, 
+		size_t outlen)
+{
+	size_t i, pos;
+	unsigned char uchar;
+
+#define I16TOA(_x)	(10 <= (_x)) ? 'A' + (_x) - 10 : '0' + (_x)
+
+	if (! inlen)
+		inlen = strlen(jin);
+	if (! jout)
+		return json_escaped_len(jin, inlen);
+
+	for (i = 0, pos = 0; i < inlen; i ++) {
+		uchar = jin[i];
+		switch(uchar) {
+			do {
+			case '\b': uchar = 'b'; break;
+			case '\f': uchar = 'f'; break;
+			case '\n': uchar = 'n'; break;
+			case '\r': uchar = 'r'; break;
+			case '\t': uchar = 't'; break;
+			} while (0);
+			case '"':
+			case '\\':
+			case '/':
+				if (outlen <= pos + 1) {
+					i = inlen; // break the for loop
+					continue;
+				}
+				jout[pos ++] = '\\';
+				jout[pos ++] = (char)uchar;
+				break;
+			default:
+				if (0x20 <= uchar) {
+					if (outlen <= pos) {
+						i = inlen;
+						continue;
+					}
+					jout[pos ++] = uchar;
+				} else { // case 0x00 .. 0x1F
+					if (outlen <= pos + 5) {
+						i = inlen;
+						continue;
+					}
+					memcpy(jout + pos, "\\u00", sizeof("\\u00") - 1);
+					pos += sizeof("\\u00") - 1;
+					jout[pos ++] = I16TOA(uchar >> 4);
+					jout[pos ++] = I16TOA(uchar & 0xF);
+				}
+				break;
+		}
+	}
+	return pos;
+#undef I16TOA
+}
+
 
 SQLRETURN post_statement(esodbc_stmt_st *stmt)
 {
@@ -402,7 +515,8 @@ SQLRETURN post_statement(esodbc_stmt_st *stmt)
 	} else {
 		bodylen += sizeof(JSON_SQL_TEMPLATE_MID_QUERY) - /*\0*/1;
 	}
-	bodylen += stmt->sqllen;
+	//bodylen += stmt->sqllen;
+	bodylen += json_escape(stmt->u8sql, stmt->sqllen, NULL, 0);
 	bodylen += sizeof(JSON_SQL_TEMPLATE_END) - /*\0*/1;
 
 	if (sizeof(buff) < bodylen) {
@@ -420,8 +534,10 @@ SQLRETURN post_statement(esodbc_stmt_st *stmt)
 
 	pos = sizeof(JSON_SQL_TEMPLATE_START) - 1;
 	memcpy(body, JSON_SQL_TEMPLATE_START, pos);
-	memcpy(body + pos, stmt->u8sql, stmt->sqllen);
-	pos += stmt->sqllen;
+	//memcpy(body + pos, stmt->u8sql, stmt->sqllen);
+	//pos += stmt->sqllen;
+	/* TODO: if not adding CBOR, move escaping in attach_sql */
+	pos += json_escape(stmt->u8sql, stmt->sqllen, body + pos, bodylen - pos);
 
 	if (dbc->fetch.slen) {
 		memcpy(body + pos, JSON_SQL_TEMPLATE_MID_FETCH,
@@ -533,7 +649,7 @@ SQLRETURN EsSQLDriverConnectW
 		RET_HDIAGS(dbc, SQL_STATE_HY001);
 	}
 	// FIXME: read from connection string
-	dbc->wmax = ESODBC_DEFAULT_MAX_BODY_SIZE;
+	dbc->amax = ESODBC_DEFAULT_MAX_BODY_SIZE;
 
 	dbc->timeout = ESODBC_TIMEOUT_DEFAULT;
 	dbc->fetch.max = ESODBC_DEF_FETCH_SIZE;

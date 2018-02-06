@@ -11,12 +11,17 @@
 
 void clear_resultset(esodbc_stmt_st *stmt);
 SQLRETURN attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen);
+SQLRETURN attach_error(esodbc_stmt_st *stmt, char *buff, size_t blen);
 SQLRETURN attach_sql(esodbc_stmt_st *stmt, const SQLTCHAR *sql, size_t tlen);
 void detach_sql(esodbc_stmt_st *stmt);
 
 /* key names used in Elastic/SQL REST/JSON answers */
 #define JSON_ANSWER_COLUMNS		"columns"
 #define JSON_ANSWER_ROWS		"rows"
+#define JSON_ANSWER_STATUS		"status"
+#define JSON_ANSWER_ERROR		"error"
+#define JSON_ANSWER_ERR_TYPE	"type"
+#define JSON_ANSWER_ERR_REASON	"reason"
 #define JSON_ANSWER_COL_NAME	"name"
 #define JSON_ANSWER_COL_TYPE	"type"
 /* 4 */
