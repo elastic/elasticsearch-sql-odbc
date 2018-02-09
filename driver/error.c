@@ -48,13 +48,13 @@ SQLRETURN post_diagnostic(esodbc_diag_st *dest, esodbc_state_et state,
 	assert(pos < ebufsz);
 	wcsncpy(dest->text, MK_TSTR(ESODBC_DIAG_PREFIX), pos);
 
-	if (ebufsz - pos <= tlen) {
+	if (ebufsz <= pos + tlen) {
 		wcsncpy(dest->text + pos, text, ebufsz - (pos + 1));
 		dest->text[ebufsz - 1] = 0;
 		dest->text_len = (int)ebufsz - 1;
 	} else {
 		wcsncpy(dest->text + pos, text, tlen + /* 0-term */1);
-		dest->text_len = (int)tlen;
+		dest->text_len = (int)(pos + tlen);
 	}
 	DBG("diagnostic message: `" LTPD "` (%d), native code: %d.", dest->text,
 			dest->text_len, dest->native_code);

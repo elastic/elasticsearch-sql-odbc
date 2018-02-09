@@ -1191,7 +1191,7 @@ desc_rec_st* get_record(esodbc_desc_st *desc, SQLSMALLINT rec_no, BOOL grow)
 	if (desc->count < rec_no) {
 		if (! grow)
 			return NULL;
-		if (! SQL_SUCCEEDED(update_rec_count(desc, rec_no)))
+		else if (! SQL_SUCCEEDED(update_rec_count(desc, rec_no)))
 			return NULL;
 	}
 	return &desc->recs[rec_no - 1];
@@ -1288,7 +1288,7 @@ SQLRETURN EsSQLGetDescFieldW(
 
 		case SQL_DESC_COUNT:
 			*(SQLSMALLINT *)ValuePtr = desc->count;
-			DBG("returning count: %d.", (SQLSMALLINT *)ValuePtr);
+			DBG("returning count: %d.", *(SQLSMALLINT *)ValuePtr);
 			RET_STATE(SQL_STATE_00000);
 
 		case SQL_DESC_ROWS_PROCESSED_PTR:
@@ -1472,85 +1472,86 @@ SQLRETURN EsSQLGetDescRecW(
 /*
  * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/data-type-identifiers-and-descriptors
  *
- * Note: C and SQL are the same for these following defines.
+ * Note: C and SQL types have the same value for these following defines,
+ * so this function will work for both IxD and AxD descriptors. (There is no
+ * SQL_C_DATETIME or SQL_C_CODE_DATE.)
  */
-static void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type, 
+void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type, 
 		SQLSMALLINT *code)
 {
 	switch (concise) {
-		case SQL_C_DATE:
-		case SQL_C_TYPE_DATE:
+		case SQL_DATE:
+		case SQL_TYPE_DATE:
 			*type = SQL_DATETIME;
 			*code = SQL_CODE_DATE;
 			break;
-		case SQL_C_TIME:
-		case SQL_C_TYPE_TIME:
-		//case SQL_C_TYPE_TIME_WITH_TIMEZONE: //4.0
+		case SQL_TIME:
+		case SQL_TYPE_TIME:
+		//case SQL_TYPE_TIME_WITH_TIMEZONE: //4.0
 			*type = SQL_DATETIME;
 			*code = SQL_CODE_TIME;
 			break;
-		case SQL_C_TIMESTAMP:
-		case SQL_C_TYPE_TIMESTAMP:
-		//case SQL_C_TYPE_TIMESTAMP_WITH_TIMEZONE: // 4.0
+		case SQL_TIMESTAMP:
+		case SQL_TYPE_TIMESTAMP:
+		//case SQL_TYPE_TIMESTAMP_WITH_TIMEZONE: // 4.0
 			*type = SQL_DATETIME;
 			*code = SQL_CODE_TIMESTAMP;
 			break;
-		case SQL_C_INTERVAL_MONTH:
+		case SQL_INTERVAL_MONTH:
 			*type = SQL_INTERVAL;
 			*code = SQL_CODE_MONTH;
 			break;
-		case SQL_C_INTERVAL_YEAR:
+		case SQL_INTERVAL_YEAR:
 			*type = SQL_INTERVAL;
 			*code = SQL_CODE_YEAR;
 			break;
-		case SQL_C_INTERVAL_YEAR_TO_MONTH:
+		case SQL_INTERVAL_YEAR_TO_MONTH:
 			*type = SQL_INTERVAL;
 			*code = SQL_CODE_YEAR_TO_MONTH;
 			break;
-		case SQL_C_INTERVAL_DAY:
+		case SQL_INTERVAL_DAY:
 			*type = SQL_INTERVAL;
 			*code = SQL_CODE_DAY;
 			break;
-		case SQL_C_INTERVAL_HOUR:
+		case SQL_INTERVAL_HOUR:
 			*type = SQL_INTERVAL;
 			*code = SQL_CODE_HOUR;
 			break;
-		case SQL_C_INTERVAL_MINUTE:
+		case SQL_INTERVAL_MINUTE:
 			*type = SQL_INTERVAL;
 			*code = SQL_CODE_MINUTE;
 			break;
-		case SQL_C_INTERVAL_SECOND:
+		case SQL_INTERVAL_SECOND:
 			*type = SQL_INTERVAL;
 			*code = SQL_CODE_SECOND;
 			break;
-		case SQL_C_INTERVAL_DAY_TO_HOUR:
+		case SQL_INTERVAL_DAY_TO_HOUR:
 			*type = SQL_INTERVAL;
 			*code = SQL_CODE_DAY_TO_HOUR;
 			break;
-		case SQL_C_INTERVAL_DAY_TO_MINUTE:
+		case SQL_INTERVAL_DAY_TO_MINUTE:
 			*type = SQL_INTERVAL;
 			*code = SQL_CODE_DAY_TO_MINUTE;
 			break;
-		case SQL_C_INTERVAL_DAY_TO_SECOND:
+		case SQL_INTERVAL_DAY_TO_SECOND:
 			*type = SQL_INTERVAL;
 			*code = SQL_CODE_DAY_TO_SECOND;
 			break;
-		case SQL_C_INTERVAL_HOUR_TO_MINUTE:
+		case SQL_INTERVAL_HOUR_TO_MINUTE:
 			*type = SQL_INTERVAL;
 			*code = SQL_CODE_HOUR_TO_MINUTE;
 			break;
-		case SQL_C_INTERVAL_HOUR_TO_SECOND:
+		case SQL_INTERVAL_HOUR_TO_SECOND:
 			*type = SQL_INTERVAL;
 			*code = SQL_CODE_HOUR_TO_SECOND;
 			break;
-		case SQL_C_INTERVAL_MINUTE_TO_SECOND:
+		case SQL_INTERVAL_MINUTE_TO_SECOND:
 			*type = SQL_INTERVAL;
 			*code = SQL_CODE_MINUTE_TO_SECOND;
 			break;
-		default:
-			*type = concise;
-			*code = 0;
 	}
+	*type = concise;
+	*code = 0;
 }
 
 /*
@@ -1558,231 +1559,185 @@ static void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type,
  */
 static void set_defaults_from_type(desc_rec_st *rec)
 {
-	switch (rec->type) {
-		case SQL_CHAR: //case SQL_C_CHAR:
-			assert(SQL_CHAR == SQL_C_CHAR);
-		case SQL_VARCHAR: /* SQL_C_VARCHAR doesn't exist */
-		/* TODO: SQL_ LONGVARCHAR/WCHAR/etc. ? */
+	switch (rec->meta_type) {
+		case METATYPE_STRING:
 			rec->length = 1;
 			rec->precision = 0;
 			break;
-
-		case SQL_DATETIME:
+		case METATYPE_DATETIME:
 			if (rec->datetime_interval_code == SQL_CODE_DATE || 
 					rec->datetime_interval_code == SQL_CODE_TIME)
 				rec->precision = 0;
 			else if (rec->datetime_interval_code == SQL_CODE_TIMESTAMP)
 				rec->precision = 6;
 			break;
-
-		case SQL_DECIMAL:
-		case SQL_NUMERIC: //case SQL_C_NUMERIC:
-			assert(SQL_NUMERIC == SQL_C_NUMERIC);
-
+		case METATYPE_EXACT_NUMERIC:
 			rec->scale = 0;
-			rec->precision = 38; /* TODO: "implementation-defined precision" */
+			rec->precision = 19; /* TODO: "implementation-defined precision" */
 			break;
-
-		case SQL_FLOAT:
-		case SQL_C_FLOAT:
-			rec->precision = 38; /* TODO: "implementation-defined precision" */
+		case METATYPE_FLOAT_NUMERIC:
+			rec->precision = 8; /* TODO: "implementation-defined precision" */
 			break;
-
-		case SQL_INTERVAL:
-			if (rec->datetime_interval_code)
-				rec->datetime_interval_precision = 2;
-			/* TODO: "When the interval has a seconds component, " */
+		case METATYPE_INTERVAL_WSEC:
 			rec->precision = 6;
 			break;
 	}
 }
 
-static inline BOOL is_c_type(SQLSMALLINT type)
-{
-	switch (type) {
-		case SQL_C_CHAR:
-		case SQL_C_WCHAR:
-		case SQL_C_SSHORT:
-		case SQL_C_USHORT:
-		case SQL_C_SLONG:
-		case SQL_C_ULONG:
-		case SQL_C_FLOAT:
-		case SQL_C_DOUBLE:
-		case SQL_C_BIT:
-		case SQL_C_STINYINT:
-		case SQL_C_UTINYINT:
-		case SQL_C_SBIGINT:
-		case SQL_C_UBIGINT:
-		case SQL_C_BINARY:
-		//case SQL_C_BOOKMARK:
-		//case SQL_C_VARBOOKMARK:
 
-		case SQL_C_DEFAULT:
-			return TRUE;
-	}
-	return FALSE;
-}
-
-static inline BOOL is_sql_type(SQLSMALLINT type)
+static esodbc_metatype_et sqltype_to_meta(SQLSMALLINT concise)
 {
-	switch (type) {
+	switch(concise) {
+		/* character */
 		case SQL_CHAR:
 		case SQL_VARCHAR:
 		case SQL_LONGVARCHAR:
 		case SQL_WCHAR:
 		case SQL_WVARCHAR:
 		case SQL_WLONGVARCHAR:
-		case SQL_DECIMAL:
-		case SQL_NUMERIC:
-		case SQL_SMALLINT:
-		case SQL_INTEGER:
-		case SQL_REAL:
-		case SQL_FLOAT:
-		case SQL_DOUBLE:
-		case SQL_BIT:
-		case SQL_TINYINT:
-		case SQL_BIGINT:
+			return METATYPE_STRING;
+		/* binary */
 		case SQL_BINARY:
 		case SQL_VARBINARY:
 		case SQL_LONGVARBINARY:
+			return METATYPE_BIN;
+
+		/* numeric exact */
+		case SQL_DECIMAL:
+		case SQL_INTEGER:
+		case SQL_NUMERIC:
+		case SQL_SMALLINT:
+		case SQL_TINYINT:
+		case SQL_BIGINT:
+			return METATYPE_EXACT_NUMERIC;
+
+		/* numeric floating */
+		case SQL_REAL:
+		case SQL_FLOAT:
+		case SQL_DOUBLE:
+			return METATYPE_FLOAT_NUMERIC;
+
+		/* datetime (note: SQL_DATETIME is verbose, not concise) */
 		case SQL_TYPE_DATE:
 		case SQL_TYPE_TIME:
 		case SQL_TYPE_TIMESTAMP:
-		//case SQL_TYPE_UTCDATETIME:
-		//case SQL_TYPE_UTCTIME:
+		// case SQL_TYPE_UTCDATETIME:
+		// case SQL_TYPE_UTCTIME:
+			return METATYPE_DATETIME;
+
+		/* interval (note: SQL_INTERVAL is verbose, not concise) */
 		case SQL_INTERVAL_MONTH:
 		case SQL_INTERVAL_YEAR:
 		case SQL_INTERVAL_YEAR_TO_MONTH:
 		case SQL_INTERVAL_DAY:
 		case SQL_INTERVAL_HOUR:
 		case SQL_INTERVAL_MINUTE:
-		case SQL_INTERVAL_SECOND:
 		case SQL_INTERVAL_DAY_TO_HOUR:
 		case SQL_INTERVAL_DAY_TO_MINUTE:
-		case SQL_INTERVAL_DAY_TO_SECOND:
 		case SQL_INTERVAL_HOUR_TO_MINUTE:
+			return METATYPE_INTERVAL_WOSEC;
+
+		case SQL_INTERVAL_SECOND:
+		case SQL_INTERVAL_DAY_TO_SECOND:
 		case SQL_INTERVAL_HOUR_TO_SECOND:
 		case SQL_INTERVAL_MINUTE_TO_SECOND:
-		case SQL_GUID:
+			return METATYPE_INTERVAL_WSEC;
 
-		case SQL_DEFAULT:
-			return TRUE;
+		case SQL_BIT:
+			return METATYPE_BIT;
+
+		case SQL_GUID:
+			return METATYPE_UID;
 	}
-	return FALSE;
+
+	return METATYPE_UNKNOWN;
 }
 
-static inline BOOL is_numeric(SQLSMALLINT type)
+static esodbc_metatype_et sqlctype_to_meta(SQLSMALLINT concise)
 {
-	/* C types */
-	switch (type) {
+	switch (concise) {
+		/* character */
+		case SQL_C_CHAR:
+		case SQL_C_WCHAR:
+		// case SQL_C_TCHAR:
+			return METATYPE_STRING;
+		/* binary */
+		case SQL_C_BINARY:
+		case SQL_C_BOOKMARK:
+		//case SQL_C_VARBOOKMARK:
+			return METATYPE_BIN;
+
+		/* numeric exact */
 		case SQL_C_SHORT:
 		case SQL_C_SSHORT:
 		case SQL_C_USHORT:
 		case SQL_C_LONG:
 		case SQL_C_SLONG:
 		case SQL_C_ULONG:
-		case SQL_C_FLOAT:
-		case SQL_C_DOUBLE:
-		case SQL_C_BIT:
 		case SQL_C_TINYINT:
 		case SQL_C_STINYINT:
 		case SQL_C_UTINYINT:
 		case SQL_C_SBIGINT:
-		case SQL_C_UBIGINT:
-			return TRUE;
-	}
+		//case SQL_C_UBIGINT:
+		case SQL_C_NUMERIC:
+			return METATYPE_EXACT_NUMERIC;
 
-	/* XXX: there's an overlap between the two (most C types are defines of
-	 * SQL types), but I might need to split this check by SQL/C group type */
-	/* SQL types */
-	switch (type) {
-		case SQL_DECIMAL:
-		case SQL_NUMERIC:
-		case SQL_SMALLINT:
-		case SQL_INTEGER:
-		case SQL_REAL:
-		case SQL_FLOAT:
-		case SQL_DOUBLE:
-		case SQL_BIT:
-		case SQL_TINYINT:
-		case SQL_BIGINT:
-			return TRUE;
-	}
-	
-	return FALSE;
-}
+		/* numeric floating */
+		case SQL_C_FLOAT:
+		case SQL_C_DOUBLE:
+			return METATYPE_FLOAT_NUMERIC;
 
-static inline BOOL needs_precision(SQLSMALLINT concise)
-{
-	switch (concise) {
-		/* "a time or timestamp data type" */
+		/* datetime */
+		case SQL_C_DATE:
+		case SQL_C_TYPE_DATE:
 		case SQL_C_TIME:
 		case SQL_C_TYPE_TIME:
-		//case SQL_C_TYPE_TIME_WITH_TIMEZONE: //4.0
+		// case SQL_C_TYPE_TIME_WITH_TIMEZONE:
 		case SQL_C_TIMESTAMP:
 		case SQL_C_TYPE_TIMESTAMP:
-		// case SQL_C_TYPE_TIMESTAMP_WITH_TIMEZONE: // 4.0
+		// case SQL_C_TYPE_TIMESTAMP_WITH_TIMEZONE:
+			return METATYPE_DATETIME;
 
-		/* TODO: what's "an interval type with a seconds component"? */
-
-		/* "interval data types with a time component" */
+		/* interval */
 		case SQL_C_INTERVAL_DAY:
 		case SQL_C_INTERVAL_HOUR:
 		case SQL_C_INTERVAL_MINUTE:
-		case SQL_C_INTERVAL_SECOND:
 		case SQL_C_INTERVAL_DAY_TO_HOUR:
 		case SQL_C_INTERVAL_DAY_TO_MINUTE:
-		case SQL_C_INTERVAL_DAY_TO_SECOND:
 		case SQL_C_INTERVAL_HOUR_TO_MINUTE:
-		case SQL_C_INTERVAL_HOUR_TO_SECOND:
-		case SQL_C_INTERVAL_MINUTE_TO_SECOND:
-
-			/* Note: SQL types are the same defines (check if adding extras) */
-
-			return TRUE;
-	}
-	return FALSE;
-}
-
-static inline BOOL is_interval(SQLSMALLINT concise)
-{
-	switch (concise) {
-		case SQL_C_INTERVAL_DAY:
-		case SQL_C_INTERVAL_HOUR:
-		case SQL_C_INTERVAL_MINUTE:
-		case SQL_C_INTERVAL_SECOND:
-		case SQL_C_INTERVAL_DAY_TO_HOUR:
-		case SQL_C_INTERVAL_DAY_TO_MINUTE:
-		case SQL_C_INTERVAL_DAY_TO_SECOND:
-		case SQL_C_INTERVAL_HOUR_TO_MINUTE:
-		case SQL_C_INTERVAL_HOUR_TO_SECOND:
-		case SQL_C_INTERVAL_MINUTE_TO_SECOND:
 		case SQL_C_INTERVAL_MONTH:
 		case SQL_C_INTERVAL_YEAR:
 		case SQL_C_INTERVAL_YEAR_TO_MONTH:
+			return METATYPE_INTERVAL_WOSEC;
 
-			/* Note: SQL types are the same defines (check if adding extras) */
+		case SQL_C_INTERVAL_SECOND:
+		case SQL_C_INTERVAL_DAY_TO_SECOND:
+		case SQL_C_INTERVAL_HOUR_TO_SECOND:
+		case SQL_C_INTERVAL_MINUTE_TO_SECOND:
+			return METATYPE_INTERVAL_WSEC;
+		
+		case SQL_C_BIT:
+			return METATYPE_BIT;
 
-			return TRUE;
+		case SQL_C_GUID:
+			return METATYPE_UID;
+
+		case SQL_C_DEFAULT:
+			return METATYPE_MAX;
 	}
-	return FALSE;
+
+	return METATYPE_UNKNOWN;
 }
 
+/*
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetdescrec-function#consistency-checks
+ */
 static BOOL consistency_check(esodbc_desc_st *desc, desc_rec_st *rec)
 {
 
 	SQLSMALLINT type, code; 
 
-	if ((! is_c_type(rec->type)) && (! is_sql_type(rec->type))) {
-		ERR("record 0x%p type %d is neither C nor SQL type.", rec, rec->type);
-		return FALSE;
-	}
-	if ((! is_c_type(rec->concise_type)) && 
-			(! is_sql_type(rec->concise_type))) {
-		ERR("record 0x%p concise type %d is neither C nor SQL type.", 
-				rec, rec->type);
-		return FALSE;
-	}
+	/* validity of C / SQL datatypes is checked when setting the meta_type */
 
 	concise_to_type_code(rec->concise_type, &type, &code);
 	if (rec->type != type || rec->datetime_interval_code != code) {
@@ -1792,7 +1747,10 @@ static BOOL consistency_check(esodbc_desc_st *desc, desc_rec_st *rec)
 		return FALSE;
 	}
 
-	if (is_numeric(rec->type)) {
+	/* TODO: use the get_rec_size/get_rec_decdigits() (below)? */
+
+	//if (rec->meta_type == METATYPE_NUMERIC) {
+	if (0) { // FIXME
 		/* TODO: actually check validity of precision/scale for data type */
 		if ((! rec->precision) || (! rec->scale)) {
 			ERR("invalid numeric precision/scale: %d/%d for data type %d.", 
@@ -1801,8 +1759,16 @@ static BOOL consistency_check(esodbc_desc_st *desc, desc_rec_st *rec)
 		}
 	}
 
-	if (needs_precision(rec->concise_type)) {
+	if (rec->meta_type == METATYPE_DATETIME || 0) { // FIXME
+//			rec->meta_type == METATYPE_INTERVAL) {
 		/* TODO: actually check validity of precision for data type */
+		/* 
+		 * TODO: this should be rec->length, acc to:
+		 * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/column-size 
+		 * but rec->precision, acc to:
+		 * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetdescrec-function#consistency-checks
+		 * ???
+		 */
 		if (! rec->precision) {
 			ERR("invalid time/timestamp/interval with seconds/time "
 					"precision %d for concise type %d.", 
@@ -1811,7 +1777,8 @@ static BOOL consistency_check(esodbc_desc_st *desc, desc_rec_st *rec)
 		}
 	}
 
-	if (is_interval(rec->concise_type)) {
+	// if (rec->meta_type == METATYPE_INTERVAL) {
+	if (0) { // FIXME
 		/* TODO: actually check the validity of dt_i_precision for data type */
 		if (! rec->datetime_interval_precision) {
 			ERR("invalid datetime_interval_precision %d for interval concise "
@@ -1822,6 +1789,57 @@ static BOOL consistency_check(esodbc_desc_st *desc, desc_rec_st *rec)
 	}
 
 	return TRUE;
+}
+
+static inline esodbc_metatype_et concise_to_meta(SQLSMALLINT concise_type, 
+		desc_type_et desc_type)
+{
+	switch (desc_type) {
+		case DESC_TYPE_ARD:
+		case DESC_TYPE_APD:
+			return sqlctype_to_meta(concise_type);
+
+		case DESC_TYPE_IRD:
+		case DESC_TYPE_IPD:
+			return sqltype_to_meta(concise_type);
+
+		default:
+			BUG("can't use anonymous record type");
+	}
+
+	return METATYPE_UNKNOWN;
+}
+
+/*
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/column-size
+ */
+SQLULEN get_rec_size(desc_rec_st *rec)
+{
+	if (rec->meta_type == METATYPE_EXACT_NUMERIC || 
+			rec->meta_type == METATYPE_FLOAT_NUMERIC) {
+		if (rec->precision < 0) {
+			BUG("precision can't be negative.");
+			return 0;
+		}
+		return (SQLULEN)rec->precision;
+	} else {
+		return rec->length;
+	}
+}
+
+SQLULEN get_rec_decdigits(desc_rec_st *rec)
+{
+	switch (rec->meta_type) {
+		case METATYPE_DATETIME:
+		case METATYPE_INTERVAL_WSEC:
+			return rec->precision;
+		case METATYPE_EXACT_NUMERIC:
+			return rec->scale;
+	}
+	/* 0 to be returned for unknown case:
+	 * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqldescribecol-function#syntax
+	 */
+	return 0;
 }
 
 /*
@@ -1860,7 +1878,7 @@ SQLRETURN EsSQLSetDescFieldW(
 	SQLTCHAR **tstrp, *tstr;
 	SQLSMALLINT *wordp;
 	SQLINTEGER *intp;
-	SQLSMALLINT count;
+	SQLSMALLINT count, type;
 	SQLULEN ulen;
 	size_t wlen;
 
@@ -1985,27 +2003,27 @@ SQLRETURN EsSQLSetDescFieldW(
 
 	/* record fields */
 	switch (FieldIdentifier) {
+		case SQL_DESC_TYPE:
+			type = (SQLSMALLINT)(intptr_t)ValuePtr;
+			DBG("setting type of rec 0x%p to %d.", rec, type);
+			if (type == SQL_DATETIME || type == SQL_INTERVAL)
+				RET_HDIAGS(desc, SQL_STATE_HY021);
+			/* no break */
 		case SQL_DESC_CONCISE_TYPE:
 			DBG("setting concise type of rec 0x%p to %d.", rec, 
 					(SQLSMALLINT)(intptr_t)ValuePtr); 
 			rec->concise_type = (SQLSMALLINT)(intptr_t)ValuePtr;
+
 			concise_to_type_code(rec->concise_type, &rec->type, 
 					&rec->datetime_interval_code);
-			set_defaults_from_type(rec);
-			DBG("rec 0x%p types: concise: %d, verbose: %d, code: %d.", rec,
-					rec->concise_type, rec->type, rec->datetime_interval_code);
-			break;
-
-		case SQL_DESC_TYPE:
-			DBG("setting type of rec 0x%p to %d.", rec, 
-					(SQLSMALLINT)(intptr_t)ValuePtr);
-			rec->type = (SQLSMALLINT)(intptr_t)ValuePtr;
-			if (rec->type == SQL_DATETIME || rec->type == SQL_INTERVAL)
+			rec->meta_type = concise_to_meta(rec->concise_type, desc->type);
+			if (rec->meta_type == METATYPE_UNKNOWN) {
+				ERR("REC@0x%p: incorrect concise type %d for rec #%d.", rec, 
+						rec->concise_type, RecNumber);
 				RET_HDIAGS(desc, SQL_STATE_HY021);
-			rec->concise_type = rec->type;
-			rec->datetime_interval_code = 0;
+			}
 			set_defaults_from_type(rec);
-			DBG("rec 0x%p types: concise: %d, verbose: %d, code: %d.", rec,
+			DBG("REC@0x%p types: concise: %d, verbose: %d, code: %d.", rec,
 					rec->concise_type, rec->type, rec->datetime_interval_code);
 			break;
 
@@ -2016,7 +2034,7 @@ SQLRETURN EsSQLSetDescFieldW(
 			if (rec->data_ptr) {
 				if (
 #if 1
-						0 /* FIXME! */ && 
+						0 /* FIXME when adding data defs! */ && 
 #endif //1
 						(desc->type != DESC_TYPE_IRD) && 
 						(! consistency_check(desc, rec))) {

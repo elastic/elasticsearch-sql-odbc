@@ -15,11 +15,13 @@
  * from Elasticsearch Incorporated.
  */
 
+#include <inttypes.h>
 #include <windows.h> /* WideCharToMultiByte() */
 
 #include "queries.h"
 #include "handles.h"
 #include "connect.h"
+#include "info.h"
 
 #define MSG_INV_SRV_ANS		"Invalid server answer"
 
@@ -109,6 +111,7 @@ static SQLSMALLINT type_elastic2csql(const wchar_t *type_name, size_t len)
 
 static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 {
+	desc_rec_st *rec;
 	SQLRETURN ret;
 	SQLSMALLINT recno;
 	void *iter;
@@ -125,7 +128,7 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 
 
 	ncols = UJArraySize(columns);
-	DBG("columns received: %zd.", ncols);
+	DBG("STMT@0x%p: columns received: %zd.", stmt, ncols);
 	ret = update_rec_count(ird, (SQLSMALLINT)ncols);
 	if (! SQL_SUCCEEDED(ret)) {
 		ERR("failed to set IRD's record count to %d.", ncols);
@@ -146,21 +149,35 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 					UJGetError(stmt->rset.state));
 			RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
 		}
+		rec = &ird->recs[recno]; // +recno
 
 		col_wname = UJReadString(name_o, &len);
-		ird->recs[recno].base_column_name = (SQLTCHAR *)col_wname;
+		assert(sizeof(*col_wname) == sizeof(SQLTCHAR)); /* TODO: no ANSI */
+		rec->name = (SQLTCHAR *)col_wname;
+		rec->unnamed = SQL_NAMED;
 
 		col_wtype = UJReadString(type_o, &len);
+		/* 
+		 * TODO: to ELASTIC types, rather?
+		 * TODO: Read size (precision/lenght) and dec-dig(scale/precision)
+		 * from received type.
+		 */
 		col_stype = type_elastic2csql(col_wtype, len);
 		if (col_stype == SQL_UNKNOWN_TYPE) {
 			ERR("failed to convert Elastic to C SQL type `" LTPDL "`.", 
 					len, col_wtype);
 			RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
 		}
-		ird->recs[recno].type = col_stype;
+		rec->concise_type = col_stype;
+		concise_to_type_code(col_stype, &rec->type, 
+				&rec->datetime_interval_code);
 
-		DBG("column #%d: name=`" LTPD "`, type=%d (`" LTPD "`).", recno, 
-				col_wname, col_stype, col_wtype);
+		/* TODO: set all settable fields */
+		rec->base_column_name = MK_TSTR("");
+		rec->display_size = 256;
+
+		DBG("STMT@0x%p: column #%d: name=`" LTPD "`, type=%d (`" LTPD "`).", 
+				stmt, recno, col_wname, col_stype, col_wtype);
 		recno ++;
 	}
 
@@ -206,18 +223,19 @@ SQLRETURN attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 
 	/* set the cursor */
 	stmt->rset.rows_iter = UJBeginArray(rows);
-#if 0 /* UJSON4C will return NULL above, for empty array (meh!) */
 	if (! stmt->rset.rows_iter) {
+#if 0 /* UJSON4C will return NULL above, for empty array (meh!) */
 		ERR("failed to get iterrator on received rows: %s.", 
 				UJGetError(stmt->rset.state));
 		RET_HDIAGS(stmt, SQL_STATE_HY000);
-	}
-	stmt->rset.nrows = (size_t)UJArraySize(rows);
 #else /*0*/
-	DBG("received empty resultset array: forcing nodata.");
-	STMT_FORCE_NODATA(stmt);
-	stmt->rset.nrows = 0;
+		DBG("received empty resultset array: forcing nodata.");
+		STMT_FORCE_NODATA(stmt);
+		stmt->rset.nrows = 0;
 #endif /*0*/
+	} else {
+		stmt->rset.nrows = (size_t)UJArraySize(rows);
+	}
 	DBG("rows received in result set: %zd.", stmt->rset.nrows);
 
 	return attach_columns(stmt, columns);
@@ -315,17 +333,27 @@ end:
 }
 
 SQLRETURN attach_sql(esodbc_stmt_st *stmt, 
-		const SQLTCHAR *sql, /* SQL text statement */
+//		const SQLTCHAR *sql, /* SQL text statement */
+		const SQLTCHAR *_sql, /* SQL text statement */
 		size_t sqlcnt /* count of chars of 'sql' */)
 {
 	char *u8;
 	int len;
 
+#if 1 // FIXME
+	DBG("STMT@0x%p orig attaching SQL `" LTPDL "` (%zd).", stmt, sqlcnt,
+			_sql, sqlcnt);
+	SQLTCHAR *sql = _sql;
+	if (wcslen(sql) < 1256) {
+		if (wcsstr(sql, L"FROM test_emp")) {
+			sql = L"SELECT emp_no, first_name, birth_date, 2+3 AS foo FROM test_emp";
+			sqlcnt = wcslen(sql);
+		}
+	}
+#endif
 	DBG("STMT@0x%p attaching SQL `" LTPDL "` (%zd).", stmt, sqlcnt,sql,sqlcnt);
 
 	assert(! stmt->u8sql);
-
-	// TODO: escaping? in UCS2 or UTF8
 
 	len = WideCharToMultiByte(CP_UTF8, WC_NO_BEST_FIT_CHARS, sql, (int)sqlcnt,
 			NULL, 0, NULL, NULL);
@@ -486,14 +514,15 @@ copy_ret:
 
 /*
  * field: SQL_DESC_: DATA_PTR / INDICATOR_PTR / OCTET_LENGTH_PTR
- * pos: position in array/rowset (not result set)
+ * pos: position in array/row_set (not result_set)
  */
 static void* deferred_address(SQLSMALLINT field_id, size_t pos,
-		esodbc_desc_st *desc, desc_rec_st *rec)
+		desc_rec_st *rec)
 {
 	size_t elem_size;
 	SQLLEN offt;
 	void *base;
+	esodbc_desc_st *desc = rec->desc;
 
 #define ROW_OFFSETS \
 	do { \
@@ -523,7 +552,7 @@ static void* deferred_address(SQLSMALLINT field_id, size_t pos,
 		case SQL_DESC_OCTET_LENGTH_PTR: 
 			base = rec->octet_length_ptr; 
 			if (desc->bind_type == SQL_BIND_BY_COLUMN) {
-				elem_size = sizeof(*rec->indicator_ptr);
+				elem_size = sizeof(*rec->octet_length_ptr);
 				offt = 0;
 			} else { /* by row */
 				ROW_OFFSETS;
@@ -542,19 +571,78 @@ static void* deferred_address(SQLSMALLINT field_id, size_t pos,
 	return base ? (char *)base + offt + pos * elem_size : NULL;
 }
 
+static inline void get_deferred_buffers(desc_rec_st *rec, size_t pos,
+		void **data_ptr, void **octet_len_ptr)
+{
+	/* only indicate length if have dedicated buffer for it */
+	if (rec->octet_length_ptr == rec->indicator_ptr)
+		*octet_len_ptr = NULL;
+	else
+		/* pointer where to write how many characters we will/would use */
+		*octet_len_ptr = deferred_address(SQL_DESC_OCTET_LENGTH_PTR, pos, rec);
+	/* pointer to app's buffer */
+	*data_ptr = deferred_address(SQL_DESC_DATA_PTR, pos, rec);
+}
+
+/*
+ * Returns the amount of bytes to copy (in the data_ptr), taking into account
+ * the bytes of the data 'have', buffer size 'available' and statement
+ * attribute SQL_ATTR_MAX_LENGTH 'max'.
+ * Sets the octet len pointer and indicates truncation into 'state'.
+ */
+static inline size_t bytes_to_copy(size_t have, size_t available, size_t max,
+		SQLLEN *octet_len_ptr, esodbc_state_et *state)
+{
+	size_t to_copy;
+
+	/* apply "network" truncation first, if limitation exists */
+	if (0 < max && max < have) {
+		to_copy = max;
+		/* no truncation indicated for this case */
+	} else {
+		to_copy = have;
+	}
+
+	/* is target buffer to small? adjust size if so and indicate truncation */
+	if (available < to_copy) {
+		to_copy = available;
+		*state = SQL_STATE_22001;
+	}
+
+	if (octet_len_ptr) {
+		if (0 < max)
+			/* put the value of SQL_ATTR_MAX_LENGTH attribute..  even
+			 * if this would be larger than what the data actually
+			 * occupies after conversion: "the driver has no way of
+			 * figuring out what the actual length is" */
+			*octet_len_ptr = max;
+		else
+			/* if no "network" truncation done, indicate data's lenght, no
+			 * matter if truncated to buffer's size or not */
+			*octet_len_ptr = have;
+	}
+
+	return to_copy;
+}
+
 static SQLRETURN copy_longlong(desc_rec_st *arec, desc_rec_st *irec,
 		SQLULEN pos, long long ll)
 {
 	esodbc_stmt_st *stmt;
 	void *data_ptr;
+	SQLLEN *octet_len_ptr;
 	esodbc_desc_st *ard, *ird;
 	SQLSMALLINT target_type;
+	char buff[sizeof("18446744073709551616")]; /* = 1 << 8*8 */
+	SQLTCHAR wbuff[sizeof("18446744073709551616")]; /* = 1 << 8*8 */
+	size_t tocopy;
+	esodbc_state_et state = SQL_STATE_00000;
 
 	stmt = arec->desc->stmt;
 	ird = stmt->ird;
 	ard = stmt->ard;
-	
-	data_ptr = deferred_address(SQL_DESC_DATA_PTR, pos, ard, arec);
+
+	get_deferred_buffers(arec, pos, &data_ptr, (void **)&octet_len_ptr);
 	if (! data_ptr) {
 		ERR("STMT@0x%p: received integer type, but NULL data ptr.", stmt);
 		RET_HDIAGS(stmt, SQL_STATE_HY009);
@@ -565,6 +653,14 @@ static SQLRETURN copy_longlong(desc_rec_st *arec, desc_rec_st *irec,
 	target_type = arec->type == SQL_C_DEFAULT ? irec->type : arec->type;
 	DBG("target data type: %d.", target_type);
 	switch (target_type) {
+		case SQL_C_CHAR:
+			_i64toa((int64_t)ll, buff, /*radix*/10);
+			/* TODO: find/write a function that returns len of conversion? */
+			tocopy = bytes_to_copy(strlen(buff) + /* \0 */1, 
+					arec->octet_length, stmt->max_length, octet_len_ptr, 
+					&state);
+			memcpy(data_ptr, buff, tocopy);
+			break;
 		case SQL_C_SLONG:
 		case SQL_C_SSHORT:
 			*(SQLINTEGER *)data_ptr = (SQLINTEGER)ll;
@@ -575,7 +671,8 @@ static SQLRETURN copy_longlong(desc_rec_st *arec, desc_rec_st *irec,
 	}
 	DBG("REC@0x%p, data_ptr@0x%p, copied long long: `%d`.", arec, data_ptr,
 			(SQLINTEGER)ll);
-	return SQL_SUCCESS;
+
+	RET_STATE(state);
 }
 
 static SQLRETURN copy_double(desc_rec_st *arec, desc_rec_st *irec, 
@@ -632,7 +729,7 @@ static SQLRETURN wstr_to_cstr(desc_rec_st *arec, desc_rec_st *irec,
 	char *charp;
 	size_t in_bytes, out_bytes;
 	size_t octet_length; /* need it for comparision to -1 (w/o int promotion)*/
-	BOOL was_truncated;
+	BOOL was_truncated; /* TODO: use bytes_to_copy() */
 
 
 	stmt = arec->desc->stmt;
@@ -765,7 +862,7 @@ static SQLRETURN copy_string(desc_rec_st *arec, desc_rec_st *irec,
 {
 	esodbc_stmt_st *stmt;
 	void *data_ptr;
-	SQLLEN *octet_len_ptr, *indicator_ptr;
+	SQLLEN *octet_len_ptr;
 	esodbc_desc_st *ard, *ird;
 	SQLSMALLINT target_type;
 
@@ -773,14 +870,7 @@ static SQLRETURN copy_string(desc_rec_st *arec, desc_rec_st *irec,
 	ird = stmt->ird;
 	ard = stmt->ard;
 	
-	/* pointer where to write how many characters we will/would use */
-	octet_len_ptr = deferred_address(SQL_DESC_OCTET_LENGTH_PTR, pos, ard,arec);
-	indicator_ptr = deferred_address(SQL_DESC_INDICATOR_PTR, pos, ard, arec);
-	/* only indicate length if have dedicated buffer for it */
-	if (octet_len_ptr == indicator_ptr)
-		octet_len_ptr = NULL;
-	/* pointer to app's buffer */
-	data_ptr = deferred_address(SQL_DESC_DATA_PTR, pos, ard, arec);
+	get_deferred_buffers(arec, pos, &data_ptr, (void **)&octet_len_ptr);
 
 	/* "To use the default mapping, an application specifies the SQL_C_DEFAULT
 	 * type identifier." */
@@ -877,8 +967,7 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 							" nullable data type", i + 1);
 				}
 #endif //0
-				ind_len = deferred_address(SQL_DESC_INDICATOR_PTR, pos, ard, 
-						arec);
+				ind_len = deferred_address(SQL_DESC_INDICATOR_PTR, pos, arec);
 				if (! ind_len) {
 					ERR("STMT@0x%p: no buffer to signal NULL value.", stmt);
 					RET_ROW_DIAG(SQL_STATE_22002, "Indicator variable required"
@@ -1186,9 +1275,9 @@ SQLRETURN EsSQLNumResultCols(SQLHSTMT StatementHandle,
  */
 SQLRETURN EsSQLPrepareW
 (
-    SQLHSTMT    hstmt,
-    _In_reads_(cchSqlStr) SQLWCHAR* szSqlStr,
-    SQLINTEGER  cchSqlStr
+		SQLHSTMT    hstmt,
+		_In_reads_(cchSqlStr) SQLWCHAR* szSqlStr,
+		SQLINTEGER  cchSqlStr
 )
 {
 	esodbc_stmt_st *stmt = STMH(hstmt);
@@ -1199,8 +1288,6 @@ SQLRETURN EsSQLPrepareW
 	
 	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
 	assert(SQL_SUCCEEDED(ret)); /* can't return error */
-	
-	// TODO: escaping?
 	
 	return attach_sql(stmt, szSqlStr, cchSqlStr);
 }
@@ -1242,9 +1329,9 @@ SQLRETURN EsSQLExecute(SQLHSTMT hstmt)
  */
 SQLRETURN EsSQLExecDirectW
 (
-    SQLHSTMT    hstmt,
-    _In_reads_opt_(TextLength) SQLWCHAR* szSqlStr,
-    SQLINTEGER cchSqlStr 
+		SQLHSTMT    hstmt,
+		_In_reads_opt_(TextLength) SQLWCHAR* szSqlStr,
+		SQLINTEGER cchSqlStr 
 )
 {
 	esodbc_stmt_st *stmt = STMH(hstmt);
@@ -1258,14 +1345,233 @@ SQLRETURN EsSQLExecDirectW
 	if (stmt->apd->array_size)
 		FIXME; //FIXME: multiple executions?
 
-	// TODO: escaping?
-	
 	ret = attach_sql(stmt, szSqlStr, cchSqlStr);
 	if (SQL_SUCCEEDED(ret)) {
 		ret = post_statement(stmt);
 	}
 	detach_sql(stmt);
 	return ret;
+}
+
+
+SQLRETURN EsSQLDescribeColW(
+		SQLHSTMT            hstmt,
+		SQLUSMALLINT        icol,
+		_Out_writes_opt_(cchColNameMax) 
+		SQLWCHAR            *szColName,
+		SQLSMALLINT         cchColNameMax,
+		_Out_opt_
+		SQLSMALLINT*        pcchColName,
+		_Out_opt_
+		SQLSMALLINT*        pfSqlType,
+		_Out_opt_
+		SQLULEN*            pcbColDef,
+		_Out_opt_
+		SQLSMALLINT*        pibScale,
+		_Out_opt_
+		SQLSMALLINT*        pfNullable)
+{
+	esodbc_stmt_st *stmt = STMH(hstmt);
+	desc_rec_st *rec;
+	SQLRETURN ret;
+	SQLSMALLINT col_len = -1;
+
+	DBG("STMT@0x%p, IRD@0x%p, column #%d.", stmt, stmt->ird, icol);
+
+	if (! STMT_HAS_RESULTSET(stmt)) {
+		ERR("no resultset available on statement 0x%p.", stmt);
+		RET_HDIAGS(stmt, SQL_STATE_HY010);
+	}
+
+	if (icol < 1) {
+		/* TODO: if implementing bookmarks */
+		RET_HDIAGS(stmt, SQL_STATE_HYC00);
+	}
+	
+	rec = get_record(stmt->ird, icol, FALSE);
+	if (! rec) {
+		ERR("STMT@0x%p: no record for columns #%d.", stmt, icol);
+		RET_HDIAGS(stmt, SQL_STATE_07009);
+	}
+
+	if (szColName) {
+		ret = write_tstr(&stmt->diag, szColName, rec->name, 
+				cchColNameMax * sizeof(SQLTCHAR), &col_len);
+		if (! SQL_SUCCEEDED(ret)) {
+			ERR("STMT@0x%p: failed to copy column name `" LTPD "`.", stmt, 
+					rec->name);
+			return ret;
+		}
+	} else {
+		DBG("STMT@0x%p: NULL column name buffer provided.", stmt);
+	}
+
+	if (! pcchColName) {
+		/* TODO: STMT_ERR -> ERR("STMT@...", stmt, ...) */
+		ERR("STMT@0x%p, no column name lenght buffer provided.");
+		RET_HDIAG(stmt, SQL_STATE_HY090, 
+				"no column name lenght buffer provided", 0);
+	}
+	*pcchColName = 0 <= col_len ? col_len : (SQLSMALLINT)wcslen(rec->name);
+
+	if (! pfSqlType) {
+		ERR("STMT@0x%p, no column data type buffer provided.");
+		RET_HDIAG(stmt, SQL_STATE_HY090, 
+				"no column data type buffer provided", 0);
+	}
+	*pfSqlType = rec->concise_type;
+
+	if (! pcbColDef) {
+		ERR("STMT@0x%p, no column size buffer provided.");
+		RET_HDIAG(stmt, SQL_STATE_HY090, "no column size buffer provided", 0);
+	}
+	*pcbColDef = 0; // TODO: concise to size
+
+	if (! pibScale) {
+		ERR("STMT@0x%p, no column decimal digits buffer provided.");
+		RET_HDIAG(stmt, SQL_STATE_HY090, 
+				"no column decimal digits buffer provided", 0);
+	}
+	*pibScale = 0; // TODO: concise to decimal digits
+
+	if (! pfNullable) {
+		ERR("STMT@0x%p, no column decimal digits buffer provided.");
+		RET_HDIAG(stmt, SQL_STATE_HY090, 
+				"no column decimal digits buffer provided", 0);
+	}
+	/* TODO: this would be available in SQLColumns resultset. */
+	*pfNullable = SQL_NULLABLE_UNKNOWN;
+
+	return SQL_SUCCESS;
+}
+
+
+SQLRETURN EsSQLColAttributeW(
+    SQLHSTMT        hstmt,
+    SQLUSMALLINT    iCol,
+    SQLUSMALLINT    iField,
+    _Out_writes_bytes_opt_(cbDescMax)
+    SQLPOINTER      pCharAttr, /* [out] value, if string; can be NULL */
+    SQLSMALLINT     cbDescMax, /* [in] byte len of pCharAttr */
+    _Out_opt_
+    SQLSMALLINT     *pcbCharAttr, /* [out] len written in pCharAttr (w/o \0 */
+    _Out_opt_
+#ifdef _WIN64
+    SQLLEN          *pNumAttr /* [out] value, if numeric */
+#else /* _WIN64 */
+    SQLPOINTER      pNumAttr
+#endif /* _WIN64 */
+)
+{
+	esodbc_stmt_st *stmt = STMH(hstmt);
+	esodbc_desc_st *ird = stmt->ird;
+	desc_rec_st *rec;
+	SQLSMALLINT sint;
+	SQLTCHAR *tstr;
+	SQLLEN len;
+	SQLINTEGER iint;
+
+#ifdef _WIN64
+#define PNUMATTR_ASSIGN(type, value) *pNumAttr = (SQLLEN)(value)
+#else /* _WIN64 */
+#define PNUMATTR_ASSIGN(type, value) *(type *)pNumAttr = (type)(value)
+#endif /* _WIN64 */
+
+	DBG("STMT@0x%p, IRD@0x%p, column #%d, field: %d.", stmt, ird, iCol,iField);
+
+	if (! STMT_HAS_RESULTSET(stmt)) {
+		ERR("no resultset available on statement 0x%p.", stmt);
+		RET_HDIAGS(stmt, SQL_STATE_HY010);
+	}
+
+	if (iCol < 1) {
+		/* TODO: if implementing bookmarks */
+		RET_HDIAGS(stmt, SQL_STATE_HYC00);
+	}
+	
+	rec = get_record(ird, iCol, FALSE);
+	if (! rec) {
+		ERR("STMT@0x%p: no record for columns #%d.", stmt, iCol);
+		RET_HDIAGS(stmt, SQL_STATE_07009);
+	}
+
+	switch (iField) {
+		/* SQLSMALLINT */
+		do {
+		case SQL_DESC_CONCISE_TYPE: sint = rec->concise_type; break;
+		case SQL_DESC_TYPE: sint = rec->type; break;
+		case SQL_DESC_FIXED_PREC_SCALE: sint = rec->fixed_prec_scale; break;
+		case SQL_DESC_NULLABLE: sint = rec->nullable; break;
+		case SQL_DESC_PRECISION: sint = rec->precision; break;
+		case SQL_DESC_SCALE: sint = rec->scale; break;
+		case SQL_DESC_SEARCHABLE: sint = rec->searchable; break;
+		case SQL_DESC_UNNAMED: sint = rec->unnamed; break;
+		case SQL_DESC_UNSIGNED: sint = rec->usigned; break;
+		case SQL_DESC_UPDATABLE: sint = rec->updatable; break;
+		} while (0);
+			PNUMATTR_ASSIGN(SQLSMALLINT, sint);
+			break;
+
+		/* SQLTCHAR* */
+		do {
+		case SQL_DESC_BASE_COLUMN_NAME: tstr = rec->base_column_name; break;
+		case SQL_DESC_BASE_TABLE_NAME: tstr = rec->base_table_name; break;
+		case SQL_DESC_CATALOG_NAME: tstr = rec->catalog_name; break;
+		case SQL_DESC_LABEL: tstr = rec->label; break;
+		case SQL_DESC_LITERAL_PREFIX: tstr = rec->literal_prefix; break;
+		case SQL_DESC_LITERAL_SUFFIX: tstr = rec->literal_suffix; break;
+		case SQL_DESC_LOCAL_TYPE_NAME: tstr = rec->type_name; break;
+		case SQL_DESC_NAME: tstr = rec->name; break;
+		case SQL_DESC_SCHEMA_NAME: tstr = rec->schema_name; break;
+		case SQL_DESC_TABLE_NAME: tstr = rec->table_name; break;
+		case SQL_DESC_TYPE_NAME: tstr = rec->type_name; break;
+		} while (0);
+			if (! tstr) {
+				//BUG -- TODO: re-eval, once type handling is decided.
+				ERR("STMT@0x%p IRD@0x%p record field type %d not initialized.",
+						stmt, ird, iField);
+				*(SQLTCHAR **)pCharAttr = MK_TSTR("");
+				*pcbCharAttr = 0;
+			} else {
+				return write_tstr(&stmt->diag, pcbCharAttr, tstr, cbDescMax,
+						pcbCharAttr);
+			}
+			break;
+	
+		/* SQLLEN */
+		do {
+		case SQL_DESC_DISPLAY_SIZE: len = rec->display_size; break;
+		case SQL_DESC_OCTET_LENGTH: len = rec->octet_length; break;
+		} while (0);
+			PNUMATTR_ASSIGN(SQLLEN, len);
+			break;
+	
+		/* SQLULEN */
+		case SQL_DESC_LENGTH:
+			PNUMATTR_ASSIGN(SQLULEN, rec->length);
+			break;
+
+		/* SQLINTEGER */
+		do {
+		case SQL_DESC_AUTO_UNIQUE_VALUE: iint = rec->auto_unique_value;
+		case SQL_DESC_CASE_SENSITIVE: iint = rec->case_sensitive;
+		case SQL_DESC_NUM_PREC_RADIX: iint = rec->num_prec_radix;
+		} while (0);
+			PNUMATTR_ASSIGN(SQLINTEGER, iint);
+			break;
+
+
+		case SQL_DESC_COUNT:
+			PNUMATTR_ASSIGN(SQLSMALLINT, ird->count);
+			break;
+
+		default:
+			ERR("STMT@0x%p: unknown field type %d.", stmt, iField);
+			RET_HDIAGS(stmt, SQL_STATE_HY091);
+	}
+
+	return SQL_SUCCESS;
+#undef PNUMATTR_ASSIGN
 }
 
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */

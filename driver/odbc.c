@@ -120,11 +120,11 @@ SQLRETURN SQL_API SQLDriverConnectW
 )
 {
 	SQLRETURN ret;
-	TRACE8(_IN, "ppWdpdpd", hdbc, hwnd, szConnStrIn, cchConnStrIn, 
+	TRACE8(_IN, "pppdpdpd", hdbc, hwnd, szConnStrIn, cchConnStrIn, 
 			szConnStrOut, cchConnStrOutMax, pcchConnStrOut, fDriverCompletion);
 	ret = EsSQLDriverConnectW(hdbc, hwnd, szConnStrIn, cchConnStrIn, 
 			szConnStrOut, cchConnStrOutMax, pcchConnStrOut, fDriverCompletion);
-	TRACE9(_OUT, "dppWdWdpd", ret, hdbc, hwnd, szConnStrIn, cchConnStrIn, 
+	TRACE9(_OUT, "dppWdWdtd", ret, hdbc, hwnd, szConnStrIn, cchConnStrIn, 
 			szConnStrOut, cchConnStrOutMax, pcchConnStrOut, fDriverCompletion);
 	return ret;
 }
@@ -196,12 +196,12 @@ SQLRETURN  SQL_API SQLGetInfoW(SQLHDBC ConnectionHandle,
 		_Out_opt_ SQLSMALLINT *StringLengthPtr)
 {
 	SQLRETURN ret;
-	TRACE6(_IN, "pupUdp", ConnectionHandle, InfoType, InfoValue, InfoValue, 
+	TRACE5(_IN, "pupdp", ConnectionHandle, InfoType, InfoValue,
 			BufferLength, StringLengthPtr);
-	ret = EsSQLGetInfoW(ConnectionHandle, InfoType, InfoValue, BufferLength, 
-			StringLengthPtr);
-	TRACE7(_OUT, "dpupUdD", ret, ConnectionHandle, InfoType, 
-			InfoValue, InfoValue, BufferLength, StringLengthPtr);
+	ret = EsSQLGetInfoW(ConnectionHandle, InfoType, InfoValue, 
+			BufferLength, StringLengthPtr);
+	TRACE6(_OUT, "dpupdt", ret, ConnectionHandle, InfoType, 
+			InfoValue, BufferLength, StringLengthPtr);
 	return ret;
 }
 
@@ -210,9 +210,9 @@ SQLRETURN  SQL_API SQLGetFunctions(SQLHDBC ConnectionHandle,
 		_Out_writes_opt_(_Inexpressible_("Buffer length pfExists points to depends on fFunction value.")) SQLUSMALLINT *Supported)
 {
 	SQLRETURN ret;
-	TRACE3(_IN, "pdU", ConnectionHandle, FunctionId, Supported);
+	TRACE3(_IN, "pdp", ConnectionHandle, FunctionId, Supported);
 	ret = EsSQLGetFunctions(ConnectionHandle, FunctionId, Supported);
-	TRACE4(_IN, "dpdU", ret, ConnectionHandle, FunctionId, Supported);
+	TRACE4(_IN, "dpdT", ret, ConnectionHandle, FunctionId, Supported);
 	return ret;
 }
 
@@ -262,7 +262,7 @@ SQLRETURN SQL_API SQLGetConnectAttrW(
 		BufferLength, StringLengthPtr);
 	ret = EsSQLGetConnectAttrW(ConnectionHandle, Attribute, ValuePtr, 
 			BufferLength, StringLengthPtr);
-	TRACE6(_OUT, "dpdpdD", ret, ConnectionHandle, Attribute, ValuePtr,
+	TRACE6(_OUT, "dpdpdg", ret, ConnectionHandle, Attribute, ValuePtr,
 		BufferLength, StringLengthPtr);
 	return ret;
 }
@@ -291,7 +291,7 @@ SQLRETURN  SQL_API SQLGetEnvAttr(SQLHENV EnvironmentHandle,
 			StringLength);
 	ret = EsSQLGetEnvAttr(EnvironmentHandle, Attribute, Value, BufferLength, 
 			StringLength);
-	TRACE6(_OUT, "dpdpdD", ret, EnvironmentHandle, Attribute, Value, 
+	TRACE6(_OUT, "dpdpdg", ret, EnvironmentHandle, Attribute, Value, 
 			BufferLength, StringLength);
 	return ret;
 }
@@ -323,7 +323,7 @@ SQLRETURN SQL_API SQLGetStmtAttrW(
 			StringLengthPtr);
 	ret = EsSQLGetStmtAttrW(StatementHandle, Attribute, ValuePtr, BufferLength,
 			StringLengthPtr);
-	TRACE6(_OUT, "dpdpdD", ret, StatementHandle, Attribute, ValuePtr, 
+	TRACE6(_OUT, "dpdpdg", ret, StatementHandle, Attribute, ValuePtr, 
 			BufferLength, StringLengthPtr);
 	return ret;
 }
@@ -349,7 +349,7 @@ SQLRETURN SQL_API SQLGetDescFieldW(
 			ValuePtr, BufferLength, StringLengthPtr);
 	ret = EsSQLGetDescFieldW(DescriptorHandle, RecNumber, FieldIdentifier,
 			ValuePtr, BufferLength, StringLengthPtr);
-	TRACE7(_OUT, "dpddpdD", ret, DescriptorHandle, RecNumber, FieldIdentifier,
+	TRACE7(_OUT, "dpddpdg", ret, DescriptorHandle, RecNumber, FieldIdentifier,
 			ValuePtr, BufferLength, StringLengthPtr);
 	return ret;
 }
@@ -383,7 +383,7 @@ SQLRETURN SQL_API SQLGetDescRecW(
 	ret = EsSQLGetDescRecW(DescriptorHandle, RecNumber, Name, 
 			BufferLength, StringLengthPtr, TypePtr, SubTypePtr, LengthPtr, 
 			PrecisionPtr, ScalePtr, NullablePtr);
-	TRACE12(_OUT, "dpdWdDDDDDDD", ret, DescriptorHandle, RecNumber, Name, 
+	TRACE12(_OUT, "dpdWdttttttt", ret, DescriptorHandle, RecNumber, Name, 
 			BufferLength, StringLengthPtr, TypePtr, SubTypePtr, LengthPtr, 
 			PrecisionPtr, ScalePtr, NullablePtr);
 	return ret;
@@ -426,7 +426,7 @@ SQLRETURN  SQL_API SQLSetDescRec(
 			Length, Precision, Scale, Data, StringLength, Indicator);
 	ret = EsSQLSetDescRec(DescriptorHandle, RecNumber, Type, SubType,
 			Length, Precision, Scale, Data, StringLength, Indicator);
-	TRACE11(_OUT, "dpddddddpDD", ret, DescriptorHandle, RecNumber, Type, 
+	TRACE11(_OUT, "dpddddddpnn", ret, DescriptorHandle, RecNumber, Type, 
 			SubType, Length, Precision, Scale, Data, StringLength, Indicator);
 	return ret;
 }
@@ -468,7 +468,7 @@ SQLRETURN SQL_API SQLPrepareW
 	SQLRETURN ret;
 	TRACE3(_IN, "ppd", hstmt, szSqlStr, cchSqlStr);
 	ret = EsSQLPrepareW(hstmt, szSqlStr, cchSqlStr);
-	TRACE4(_OUT, "dpSd", ret, hstmt, szSqlStr, cchSqlStr);
+	TRACE4(_OUT, "dpWd", ret, hstmt, szSqlStr, cchSqlStr);
 	return ret;
 }
 
@@ -574,7 +574,7 @@ SQLRETURN SQL_API SQLExecDirectW
 	SQLRETURN ret;
 	TRACE3(_IN, "ppd", hstmt, szSqlStr, cchSqlStr);
 	ret = EsSQLExecDirectW(hstmt, szSqlStr, cchSqlStr);
-	TRACE4(_OUT, "dpSd", ret, hstmt, szSqlStr, cchSqlStr);
+	TRACE4(_OUT, "dpWd", ret, hstmt, szSqlStr, cchSqlStr);
 	return ret;
 }
 
@@ -653,17 +653,17 @@ SQLRETURN  SQL_API SQLNumResultCols(SQLHSTMT StatementHandle,
 	SQLRETURN ret;
 	TRACE2(_IN, "pp", StatementHandle, ColumnCount);
 	ret = EsSQLNumResultCols(StatementHandle, ColumnCount);
-	TRACE3(_OUT, "dpD", ret, StatementHandle, ColumnCount);
+	TRACE3(_OUT, "dpt", ret, StatementHandle, ColumnCount);
 	return ret;
 }
 
-#if WITH_EMPTY
 
 SQLRETURN SQL_API SQLDescribeColW
 (
     SQLHSTMT            hstmt,
     SQLUSMALLINT        icol,
-    _Out_writes_opt_(cchColNameMax) SQLWCHAR* szColName,
+    _Out_writes_opt_(cchColNameMax) 
+    SQLWCHAR            *szColName,
     SQLSMALLINT         cchColNameMax,
     _Out_opt_
     SQLSMALLINT*        pcchColName,
@@ -677,10 +677,16 @@ SQLRETURN SQL_API SQLDescribeColW
     SQLSMALLINT*        pfNullable
 )
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE9(_IN, "pupdppppp", hstmt, icol, szColName, cchColNameMax,
+			pcchColName, pfSqlType, pcbColDef, pibScale, pfNullable);
+	ret = EsSQLDescribeColW(hstmt, icol, szColName, cchColNameMax,
+			pcchColName, pfSqlType, pcbColDef, pibScale, pfNullable);
+	TRACE10(_OUT, "dpuWdttNtt", ret, hstmt, icol, szColName, cchColNameMax,
+			pcchColName, pfSqlType, pcbColDef, pibScale, pfNullable);
+	return ret;
 }
 
-#ifdef _WIN64
 SQLRETURN SQL_API SQLColAttributeW
 (
     SQLHSTMT        hstmt,
@@ -692,41 +698,41 @@ SQLRETURN SQL_API SQLColAttributeW
     _Out_opt_
     SQLSMALLINT     *pcbCharAttr,
     _Out_opt_
+#ifdef _WIN64
     SQLLEN          *pNumAttr
+#else /* _WIN64 */
+    SQLPOINTER      pNumAttr
+#endif /* _WIN64 */
 )
 {
-	RET_NOT_IMPLEMENTED;
-}
+	SQLRETURN ret;
+	TRACE7(_IN, "pddpdtp", hstmt, iCol, iField, pCharAttr, cbDescMax,
+			pcbCharAttr, pNumAttr);
+	ret = EsSQLColAttributeW(hstmt, iCol, iField, pCharAttr, cbDescMax,
+			pcbCharAttr, pNumAttr);
+#ifdef _WIN64
+	TRACE8(_OUT, "dpddpdtn", ret, hstmt, iCol, iField, pCharAttr, cbDescMax,
+			pcbCharAttr, pNumAttr);
 #else /* _WIN64 */
-SQLRETURN SQL_API SQLColAttributeW(
-    SQLHSTMT        hstmt,
-    SQLUSMALLINT    iCol,
-    SQLUSMALLINT    iField,
-    _Out_writes_bytes_opt_(cbDescMax)
-    SQLPOINTER      pCharAttr,
-    SQLSMALLINT     cbDescMax,
-    _Out_opt_
-    SQLSMALLINT     *pcbCharAttr,
-    _Out_opt_
-    SQLPOINTER      pNumAttr)
-{
-	RET_NOT_IMPLEMENTED;
-}
+	TRACE8(_OUT, "dpddpdtp", ret, hstmt, iCol, iField, pCharAttr, cbDescMax,
+			pcbCharAttr, pNumAttr);
 #endif /* _WIN64 */
+	return ret;
+}
 
-#endif /*WITH_EMPTY*/
 
 SQLRETURN  SQL_API SQLBindCol(SQLHSTMT StatementHandle,
-           SQLUSMALLINT ColumnNumber, SQLSMALLINT TargetType,
-           _Inout_updates_opt_(_Inexpressible_(BufferLength)) SQLPOINTER TargetValue, 
-           SQLLEN BufferLength, _Inout_opt_ SQLLEN *StrLen_or_Ind)
+		SQLUSMALLINT ColumnNumber, SQLSMALLINT TargetType,
+		_Inout_updates_opt_(_Inexpressible_(BufferLength)) 
+		SQLPOINTER TargetValue, 
+		SQLLEN BufferLength, _Inout_opt_ SQLLEN *StrLen_or_Ind)
 {
 	SQLRETURN ret;
 	TRACE6(_IN, "pddpdp", StatementHandle, ColumnNumber, TargetType,
 			TargetValue, BufferLength, StrLen_or_Ind);
 	ret = EsSQLBindCol(StatementHandle, ColumnNumber, TargetType,
 			TargetValue, BufferLength, StrLen_or_Ind);
-	TRACE7(_OUT, "dpddpdD", ret, StatementHandle, ColumnNumber, TargetType,
+	TRACE7(_OUT, "dpddpdn", ret, StatementHandle, ColumnNumber, TargetType,
 			TargetValue, BufferLength, StrLen_or_Ind);
 	return ret;
 }
@@ -832,7 +838,7 @@ SQLRETURN  SQL_API SQLGetDiagFieldW(
 			DiagInfoPtr, BufferLength, StringLengthPtr);
 	ret = EsSQLGetDiagFieldW(HandleType, Handle, RecNumber, DiagIdentifier,
 			DiagInfoPtr, BufferLength, StringLengthPtr);
-	TRACE8(_OUT, "ddpddpdD", ret, HandleType, Handle, RecNumber, 
+	TRACE8(_OUT, "ddpddpdt", ret, HandleType, Handle, RecNumber, 
 			DiagIdentifier, DiagInfoPtr, BufferLength, StringLengthPtr);
 	return ret;
 }
@@ -854,7 +860,7 @@ SQLRETURN  SQL_API SQLGetDiagRecW
 			NativeError, MessageText, BufferLength, TextLength);
 	ret = EsSQLGetDiagRecW(HandleType, Handle, RecNumber, Sqlstate, 
 			NativeError, MessageText, BufferLength, TextLength);
-	TRACE9(_OUT, "ddpdWDWdD", ret, HandleType, Handle, RecNumber, Sqlstate, 
+	TRACE9(_OUT, "ddpdWgWdt", ret, HandleType, Handle, RecNumber, Sqlstate, 
 			NativeError, MessageText, BufferLength, TextLength);
 	return ret;
 }
