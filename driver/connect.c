@@ -11,6 +11,7 @@
 #include "connect.h"
 #include "queries.h"
 #include "log.h"
+#include "info.h"
 
 /*
  * Not authoriative (there's no formal limit), but pretty informed:
@@ -143,7 +144,7 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb,
 	memcpy(dbc->abuff + dbc->apos, ptr, have);
 	dbc->apos += have;
 	DBG("libcurl: DBC@0x%p, copied: %zd bytes.", dbc, have);
-	DBG("libcurl: DBC@0x%p, copied: `%.*s`.", dbc, have, ptr);
+	//DBG("libcurl: DBC@0x%p, copied: `%.*s`.", dbc, have, ptr);
 
 
 	/*
@@ -837,6 +838,8 @@ SQLRETURN EsSQLGetConnectAttrW(
 		_Out_opt_ SQLINTEGER* StringLengthPtr)
 {
 	esodbc_dbc_st *dbc = DBCH(ConnectionHandle);
+	SQLRETURN ret;
+	SQLSMALLINT used;
 //	SQLTCHAR *val;
 
 	switch(Attribute) {
@@ -870,8 +873,11 @@ SQLRETURN EsSQLGetConnectAttrW(
 			*(SQLTCHAR **)ValuePtr = val;
 #else //0
 			// FIXME;
-			memcpy(ValuePtr, MK_TSTR("NulL"), 8);
-			((SQLTCHAR *)ValuePtr)[5] = 0;
+			ret = write_tstr(&dbc->diag, (SQLTCHAR *)ValuePtr, 
+					MK_TSTR("NulL"), (SQLSMALLINT)BufferLength, &used);
+			if (StringLengthPtr);
+				*StringLengthPtr = (SQLINTEGER)used;
+			return ret;
 			
 #endif //0
 			break;

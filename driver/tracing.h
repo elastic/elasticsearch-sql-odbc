@@ -14,6 +14,7 @@
 
 #define _AVAIL	sizeof(_bf) - _ps
 
+#if 0
 #define _PRINT_PARAM_VAL(type, val) \
 	do { \
 		switch(type) { \
@@ -36,11 +37,109 @@
 		if (0 < _n) \
 			_ps += _n; \
 	} while (0)
+#else
+/* TODO: the SQL[U]LEN for _WIN32 */
+#define _PRINT_PARAM_VAL(type, val) \
+	do { \
+		switch(type) { \
+			/* numeric pointers */ \
+			/* SQLNUMERIC/SQLDATE/SQLDECIMAL/SQLCHAR/etc. = unsigned char */ \
+			/* SQLSCHAR = char */ \
+			case 'c': /* char signed */ \
+				_n = snprintf(_bf + _ps, _AVAIL, "%hhd", \
+							  val ? *(char *)(uintptr_t)val : 0); \
+				break; \
+			case 'C': /* char unsigned */ \
+				_n = snprintf(_bf + _ps, _AVAIL, "%hhu", \
+							  val ? *(unsigned char *)(uintptr_t)val : 0); \
+				break; \
+			/* SQL[U]SMALLINT = [unsigned] short */ \
+			case 't': /* short signed */ \
+				_n = snprintf(_bf + _ps, _AVAIL, "%hd", \
+							  val ? *(short *)(uintptr_t)val : 0); \
+				break; \
+			case 'T': /* short unsigned */ \
+				_n = snprintf(_bf + _ps, _AVAIL, "%hu", \
+							  val ? *(unsigned short *)(uintptr_t)val : 0); \
+				break; \
+			/* SQL[U]INTEGER = [unsigned] long */ \
+			case 'g': /* long signed */ \
+				_n = snprintf(_bf + _ps, _AVAIL, "%ld", \
+							  val ? *(long *)(uintptr_t)val : 0); \
+				break; \
+			case 'G': /* long unsigned */ \
+				_n = snprintf(_bf + _ps, _AVAIL, "%lu", \
+							  val ? *(unsigned long *)(uintptr_t)val : 0); \
+				break; \
+			/* SQL[U]LEN = [unsigned] long OR [u]int64_t (64b _WIN32) */ \
+			case 'n': /* long/int64_t signed */ \
+				_n = snprintf(_bf + _ps, _AVAIL, "%lld", \
+							  val ? *(int64_t *)(uintptr_t)val : 0); \
+				break; \
+			case 'N': /* long/int64_t unsigned */ \
+				_n = snprintf(_bf + _ps, _AVAIL, "%llu", \
+							  val ? *(uint64_t *)(uintptr_t)val : 0); \
+			/* non-numeric pointers */ \
+			case 'p': /* void* */ \
+				_n = snprintf(_bf + _ps, _AVAIL, "@0x%p", \
+						(void *)(uintptr_t)val); \
+				break; \
+			case 'W': /* wchar_t* */ \
+				/* TODO: this can be problematic, for untouched buffs: add
+				 * len! */ \
+				_n = snprintf(_bf + _ps, _AVAIL, "`" LTPD "`[%zd]", \
+							  val ? (wchar_t *)(uintptr_t)val : \
+							  		MK_WSTR("<null>"), \
+							  val ? wcslen((wchar_t *)(uintptr_t)val) : 0); \
+				break; \
+			/* imediat values */ \
+			/* longs */ \
+			case 'l': /* long signed */ \
+				_n = snprintf(_bf + _ps, _AVAIL, "%ld", \
+						(long)(intptr_t)val); \
+				break;\
+			case 'L': /* long unsigned */ \
+				_n = snprintf(_bf + _ps, _AVAIL, "%lu", \
+						(unsigned long)(uintptr_t)val); \
+				break;\
+			/* ints */ \
+			case 'd': /* int signed */ \
+				_n = snprintf(_bf + _ps, _AVAIL, "%d", \
+						(int)(intptr_t)val); \
+				break;\
+			case 'u': /* int unsigned */ \
+				_n = snprintf(_bf + _ps, _AVAIL, "%u", \
+						(unsigned)(uintptr_t)val); \
+				break;\
+			default: \
+				_n = snprintf(_bf+_ps, _AVAIL, "BUG! unknown type: %d",type); \
+				break; \
+		} \
+		if (0 < _n) \
+			_ps += _n; \
+	} while (0)
+#endif
+
+#define _IS_PTR(type, _is_ptr) \
+	do {\
+		switch (type) { \
+			case 'l': \
+			case 'L': \
+			case 'd': \
+			case 'u': \
+				_is_ptr = FALSE; \
+				break; \
+			default: \
+				_is_ptr = TRUE; \
+		} \
+	} while (0)
 
 #define _PRINT_PARAM(type, param, add_comma) \
 	do { \
+		BOOL _is_ptr; \
+		_IS_PTR(type, _is_ptr); \
 		int _n = snprintf(_bf + _ps, _AVAIL, "%s%s%s=", add_comma ? ", " : "",\
-				type&0x20 ? "" : "*", # param); \
+				_is_ptr ? "*" : "", # param); \
 		if (0 < _n) /* no proper err check */ \
 			_ps += _n; \
 		_PRINT_PARAM_VAL(type, param); \

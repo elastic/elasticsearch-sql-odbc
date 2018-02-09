@@ -13,6 +13,15 @@
 /* TODO: review@alpha */
 #define ESODBC_MAX_IDENTIFIER_LEN	128
 
+/* 
+ * TODO: move into a util.h 
+ * TODO: change sign to ...src, lsrc, dst, dlen... (lsrc is nearly always
+ * known)
+ */
+SQLRETURN write_tstr(esodbc_diag_st *diag,
+		SQLTCHAR *dest, const SQLTCHAR *src,
+		SQLSMALLINT /*B*/avail, SQLSMALLINT *usedp);
+
 SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		SQLUSMALLINT InfoType, 
 		_Out_writes_bytes_opt_(BufferLength) SQLPOINTER InfoValue,

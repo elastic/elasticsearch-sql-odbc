@@ -76,9 +76,26 @@ typedef struct struct_dbc {
 struct struct_desc;
 struct struct_stmt;
 
+typedef enum {
+	METATYPE_UNKNOWN = 0,
+	METATYPE_EXACT_NUMERIC,
+	METATYPE_FLOAT_NUMERIC,
+	METATYPE_STRING,
+	METATYPE_BIN,
+	METATYPE_DATETIME,
+	METATYPE_INTERVAL_WSEC,
+	METATYPE_INTERVAL_WOSEC,
+	METATYPE_BIT,
+	METATYPE_UID,
+	METATYPE_MAX // SQL_C_DEFAULT
+} esodbc_metatype_et;
+
 typedef struct desc_rec {
 	/* back ref to owning descriptor */
-	struct struct_desc *desc;
+	struct struct_desc	*desc;
+
+	/* helper member, to characterize the type */
+	esodbc_metatype_et	meta_type;
 
 	/* record fields */
 	SQLSMALLINT		concise_type;
@@ -87,15 +104,16 @@ typedef struct desc_rec {
 
 	SQLPOINTER		data_ptr; /* array, if .array_size > 1 */
 
+	/* TODO: add (& use) the lenghts */
 	SQLTCHAR		*base_column_name; /* read-only */
 	SQLTCHAR		*base_table_name; /* r/o */
 	SQLTCHAR		*catalog_name; /* r/o */
 	SQLTCHAR		*label; /* r/o */
-	SQLTCHAR		*literal_prefix; /* r/o */
-	SQLTCHAR		*literal_suffix; /* r/o */
+	SQLTCHAR		*literal_prefix; /* r/o */ // TODO: static?
+	SQLTCHAR		*literal_suffix; /* r/o */ // TODO: static?
 	SQLTCHAR		*local_type_name; /* r/o */
 	SQLTCHAR		*name;
-	SQLTCHAR		*schema_name; /* r/o */
+	SQLTCHAR		*schema_name; /* r/o */ // TODO: static?
 	SQLTCHAR		*table_name; /* r/o */
 	SQLTCHAR		*type_name; /* r/o */
 
@@ -123,7 +141,7 @@ typedef struct desc_rec {
 	SQLSMALLINT		usigned;
 	SQLSMALLINT		updatable;
 	/* /record fields */
-} desc_rec_st;
+} desc_rec_st; /* TODO: -> esodbc_rec_st */
 
 
 typedef enum {
@@ -237,6 +255,9 @@ typedef struct struct_stmt {
 SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count);
 desc_rec_st* get_record(esodbc_desc_st *desc, SQLSMALLINT rec_no, BOOL grow);
 
+/* TODO: move to some utils.h */
+void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type, 
+		SQLSMALLINT *code);
 
 SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 	SQLHANDLE InputHandle, _Out_ SQLHANDLE *OutputHandle);

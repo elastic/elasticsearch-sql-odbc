@@ -32,8 +32,7 @@
 #endif /* win32 */
 
 #define ESODBC_PATTERN_ESCAPE		"\\"
-#define ESODBC_CATALOG_SEPARATOR	"."
-//#define ESODBC_CATALOG_SEPARATOR	""
+#define ESODBC_CATALOG_SEPARATOR	":"
 #define ESODBC_CATALOG_TERM			"clusterName"
 #define ESODBC_MAX_SCHEMA_LEN		0
 #define ESODBC_QUOTE_CHAR			"\""
@@ -131,9 +130,9 @@ static SQLUSMALLINT esodbc_functions[] = {
 	*(((UWORD*) (pfExists)) + ((uwAPI) >> 4)) |= (1 << ((uwAPI) & 0x000F))
 #define SQL_API_ODBC2_ALL_FUNCTIONS_SIZE	100
 
-static SQLRETURN write_tstr(esodbc_diag_st *diag,
+SQLRETURN write_tstr(esodbc_diag_st *diag,
 		SQLTCHAR *dest, const SQLTCHAR *src,
-		SQLSMALLINT avail, SQLSMALLINT *usedp)
+		SQLSMALLINT /*B*/avail, SQLSMALLINT *usedp)
 {
 	size_t src_len, awail;
 	SQLSMALLINT used;
@@ -623,7 +622,7 @@ SQLRETURN EsSQLGetDiagRecW
 			}
 			/* no error indication exists */
 			wcsncpy(MessageText, diag->text, diag->text_len);
-			DBG("diagnostic text: '"LTPD"' (%d).", MessageText,diag->text_len);
+			DBG("diagnostic text: `"LTPD"` (%d).", MessageText,diag->text_len);
 			return SQL_SUCCESS;
 		} else {
 			if (BufferLength  < 0) {
