@@ -254,10 +254,13 @@ typedef struct struct_stmt {
 
 SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count);
 desc_rec_st* get_record(esodbc_desc_st *desc, SQLSMALLINT rec_no, BOOL grow);
+void dump_record(desc_rec_st *rec);
 
 /* TODO: move to some utils.h */
 void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type, 
 		SQLSMALLINT *code);
+esodbc_metatype_et concise_to_meta(SQLSMALLINT concise_type, 
+		desc_type_et desc_type);
 
 SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 	SQLHANDLE InputHandle, _Out_ SQLHANDLE *OutputHandle);

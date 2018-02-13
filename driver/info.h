@@ -20,7 +20,7 @@
  */
 SQLRETURN write_tstr(esodbc_diag_st *diag,
 		SQLTCHAR *dest, const SQLTCHAR *src,
-		SQLSMALLINT /*B*/avail, SQLSMALLINT *usedp);
+		SQLSMALLINT /*B*/avail, SQLSMALLINT /*B*/*usedp);
 
 SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		SQLUSMALLINT InfoType, 

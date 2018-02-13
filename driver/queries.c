@@ -7,12 +7,52 @@
 #include <inttypes.h>
 #include <windows.h> /* WideCharToMultiByte() */
 
+#include "timestamp.h"
+
 #include "queries.h"
 #include "handles.h"
 #include "connect.h"
 #include "info.h"
 
 #define MSG_INV_SRV_ANS		"Invalid server answer"
+
+#ifdef _WIN32
+/* "[D]oes not null-terminate an output string if the input string length is
+ * explicitly specified without a terminating null character. To
+ * null-terminate an output string for this function, the application should
+ * pass in -1 or explicitly count the terminating null character for the input
+ * string." */
+#define WCS2U8(_wstr, _wchars, _u8, _ubytes) \
+	WideCharToMultiByte(CP_UTF8, WC_NO_BEST_FIT_CHARS, \
+			_wstr, _wchars, _u8, _ubytes, \
+			NULL, NULL)
+
+#define WCS2UB_BUFF_INSUFFICIENT \
+	(GetLastError() == ERROR_INSUFFICIENT_BUFFER)
+
+#else /* _WIN32 */
+#error "unsupported platform" /* TODO */
+	/* "[R]eturns the number of bytes written into the multibyte output
+	 * string, excluding the terminating NULL (if any)".  Copies until \0 is
+	 * met in wstr or buffer runs out.  If \0 is met, it's copied, but not
+	 * counted in return. (silly fn) */
+	/* "[T]he multibyte character string at mbstr is null-terminated
+	 * only if wcstombs encounters a wide-character null character
+	 * during conversion." */
+	// wcstombs(charp, wstr, octet_length);
+#endif /* _WIN32 */
+
+#define ISO8601_TEMPLATE	"yyyy-mm-ddThh:mm:ss.sss+hh:mm"
+#define TM_TO_TIMESTAMP_STRUCT(_tmp/*src*/, _tsp/*dst*/) \
+	do { \
+		(_tsp)->year = (_tmp)->tm_year + 1900; \
+		(_tsp)->month = (_tmp)->tm_mon + 1; \
+		(_tsp)->day = (_tmp)->tm_mday; \
+		(_tsp)->hour = (_tmp)->tm_hour; \
+		(_tsp)->minute = (_tmp)->tm_min; \
+		(_tsp)->second = (_tmp)->tm_sec; \
+	} while (0);
+
 
 void clear_resultset(esodbc_stmt_st *stmt)
 {
@@ -23,6 +63,33 @@ void clear_resultset(esodbc_stmt_st *stmt)
 	if (stmt->rset.state)
 		UJFree(stmt->rset.state);
 	memset(&stmt->rset, 0, sizeof(stmt->rset));
+}
+
+/*
+ * Converts a wchar_t string to a C string.
+ * 'dst' should be as character-long as 'src', if 'src' is not 0-terminated,
+ * one character longer (for the 0-term) otherwise.
+ * 'dst' will always be 0-term'd.
+ * Returns negative if conversion fails or number of converted wchars,
+ * including the 0-term.
+ *
+ */
+int ansi_w2c(const SQLTCHAR *src, char *dst, size_t chars)
+{
+	int i = 0;
+	
+	do {
+		if (CHAR_MAX < src[i])
+			return -(i + 1);
+		dst[i] = (char)src[i];
+	} while (src[i] && (++i < chars));
+
+	if (chars <= i) {
+		/* loop stopped b/c of lenght -> src is not 0-term'd */
+		dst[i - 1] = 0;
+		return i;
+	}
+	return i + 1;
 }
 
 static int wmemncasecmp(const wchar_t *a, const wchar_t *b, size_t len)
@@ -97,6 +164,49 @@ static SQLSMALLINT type_elastic2csql(const wchar_t *type_name, size_t len)
 	return SQL_UNKNOWN_TYPE;
 }
 
+static void set_col_size(desc_rec_st *rec)
+{
+	switch (rec->concise_type) {
+		/* .precision */
+		// TODO: lifted from SYS TYPES: automate this?
+		case SQL_C_SLONG: rec->precision = 19; break;
+		case SQL_C_UTINYINT: rec->precision = 3; break;
+		case SQL_C_SSHORT: rec->precision = 5; break;
+
+		/* .length */
+		case SQL_C_CHAR: 
+			rec->length = 256;  /*TODO: max TEXT size */
+			break;
+
+		case SQL_C_TYPE_DATE: 
+			rec->length = sizeof(ISO8601_TEMPLATE)/*+\0*/;
+			break;
+		
+		default:
+			FIXME; // FIXME
+	}
+}
+
+static void set_col_decdigits(desc_rec_st *rec)
+{
+	switch (rec->concise_type) {
+		case SQL_C_SLONG:
+		case SQL_C_UTINYINT:
+		case SQL_C_SSHORT:
+			rec->scale = 0;
+			break;
+
+		case SQL_C_TYPE_DATE:
+			rec->precision = 3; /* [seconds].xxx of ISO 8601 */
+			break;
+		
+		case SQL_C_CHAR: break; /* n/a */
+
+		default:
+			FIXME; // FIXME
+	}
+
+}
 
 static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 {
@@ -160,10 +270,18 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 		rec->concise_type = col_stype;
 		concise_to_type_code(col_stype, &rec->type, 
 				&rec->datetime_interval_code);
+		/* TODO: here it should be 'ird->type'. But we're setting C SQL types
+		 * for IRD as well for now. */
+		rec->meta_type = concise_to_meta(rec->concise_type, DESC_TYPE_ARD);
+
+		set_col_size(rec);
+		set_col_decdigits(rec);
 
 		/* TODO: set all settable fields */
 		rec->base_column_name = MK_TSTR("");
 		rec->display_size = 256;
+
+		dump_record(rec);
 
 		DBG("STMT@0x%p: column #%d: name=`" LTPD "`, type=%d (`" LTPD "`).", 
 				stmt, recno, col_wname, col_stype, col_wtype);
@@ -329,7 +447,7 @@ SQLRETURN attach_sql(esodbc_stmt_st *stmt,
 	char *u8;
 	int len;
 
-#if 1 // FIXME
+#if 0 // FIXME
 	DBG("STMT@0x%p orig attaching SQL `" LTPDL "` (%zd).", stmt, sqlcnt,
 			_sql, sqlcnt);
 	SQLTCHAR *sql = _sql;
@@ -344,8 +462,7 @@ SQLRETURN attach_sql(esodbc_stmt_st *stmt,
 
 	assert(! stmt->u8sql);
 
-	len = WideCharToMultiByte(CP_UTF8, WC_NO_BEST_FIT_CHARS, sql, (int)sqlcnt,
-			NULL, 0, NULL, NULL);
+	len = WCS2U8(sql, (int)sqlcnt, NULL, 0);
 	if (len <= 0) {
 		ERRN("STMT@0x%p: failed to UCS2/UTF8 convert SQL `" LTPDL "` (%zd).", 
 				stmt, sqlcnt, sql, sqlcnt);
@@ -360,8 +477,7 @@ SQLRETURN attach_sql(esodbc_stmt_st *stmt,
 		RET_HDIAGS(stmt, SQL_STATE_HY001);
 	}
 
-	len = WideCharToMultiByte(CP_UTF8, WC_NO_BEST_FIT_CHARS, sql, (int)sqlcnt, 
-			u8, len, NULL, NULL);
+	len = WCS2U8(sql, (int)sqlcnt, u8, len);
 	if (len <= 0) { /* can it happen? it's just succeded above */
 		ERRN("STMT@0x%p: failed to UCS2/UTF8 convert SQL `" LTPDL "` (%zd).", 
 				stmt, sqlcnt, sql, sqlcnt);
@@ -554,64 +670,84 @@ static void* deferred_address(SQLSMALLINT field_id, size_t pos,
 	}
 #undef ROW_OFFSETS
 
-	DBG("rec@0x%p, field_id:%d : base@0x%p, offt=%d, esize=%zd", 
+	DBG("rec@0x%p, field_id:%d : base@0x%p, offset=%d, elem_size=%zd", 
 			rec, field_id, base, offt, elem_size);
 
 	return base ? (char *)base + offt + pos * elem_size : NULL;
 }
 
-static inline void get_deferred_buffers(desc_rec_st *rec, size_t pos,
-		void **data_ptr, void **octet_len_ptr)
-{
-	/* only indicate length if have dedicated buffer for it */
-	if (rec->octet_length_ptr == rec->indicator_ptr)
-		*octet_len_ptr = NULL;
-	else
-		/* pointer where to write how many characters we will/would use */
-		*octet_len_ptr = deferred_address(SQL_DESC_OCTET_LENGTH_PTR, pos, rec);
-	/* pointer to app's buffer */
-	*data_ptr = deferred_address(SQL_DESC_DATA_PTR, pos, rec);
-}
-
 /*
- * Returns the amount of bytes to copy (in the data_ptr), taking into account
- * the bytes of the data 'have', buffer size 'available' and statement
- * attribute SQL_ATTR_MAX_LENGTH 'max'.
- * Sets the octet len pointer and indicates truncation into 'state'.
+ * Handles the lenghts of the data to copy out to the application:
+ * (1) returns the max amount of bytes to copy (in the data_ptr), taking into
+ *     account:
+ *     - the bytes of the data 'avail',
+ *     - buffer size 'room',
+ *     - statement attribute SQL_ATTR_MAX_LENGTH 'attr_max' and
+ *     - required byte alignment (potentially to wchar_t size);
+ * (2) indicates if truncation occured into 'state'.
+ * Only to be used with ARD.meta_type == STR || BIN (as it can truncate).
  */
-static inline size_t bytes_to_copy(size_t have, size_t available, size_t max,
-		SQLLEN *octet_len_ptr, esodbc_state_et *state)
+static size_t buff_octet_size(
+		size_t avail, size_t room, size_t attr_max, size_t unit_size,
+		esodbc_metatype_et ird_mt, esodbc_state_et *state)
 {
-	size_t to_copy;
+	size_t max_copy, max;
 
-	/* apply "network" truncation first, if limitation exists */
-	if (0 < max && max < have) {
-		to_copy = max;
+	/* truncate to statment max bytes, only if "the column contains character
+	 * or binary data" */
+	max = (ird_mt == METATYPE_STRING || ird_mt == METATYPE_BIN) ? attr_max : 0;
+
+	/* apply "network" truncation first, if need to */
+	if (0 < max && max < avail) {
+		INFO("applying 'network' truncation %zd -> %zd.", avail, max);
+		max_copy = max;
 		/* no truncation indicated for this case */
 	} else {
-		to_copy = have;
+		max_copy = avail;
 	}
 
 	/* is target buffer to small? adjust size if so and indicate truncation */
-	if (available < to_copy) {
-		to_copy = available;
-		*state = SQL_STATE_22001;
+	/* Note: this should only be tested/applied if ARD.meta_type == STR||BIN */
+	if (room < max_copy) {
+		INFO("applying buffer truncation %zd -> %zd.", max_copy, room);
+		max_copy = room;
+		*state = SQL_STATE_01004;
 	}
 
-	if (octet_len_ptr) {
-		if (0 < max)
-			/* put the value of SQL_ATTR_MAX_LENGTH attribute..  even
-			 * if this would be larger than what the data actually
-			 * occupies after conversion: "the driver has no way of
-			 * figuring out what the actual length is" */
-			*octet_len_ptr = max;
-		else
-			/* if no "network" truncation done, indicate data's lenght, no
-			 * matter if truncated to buffer's size or not */
-			*octet_len_ptr = have;
+	/* adjust to align to target buffer unit */
+	if (max_copy % unit_size)
+		max_copy -= max_copy % unit_size;
+
+	DBG("avail=%zd, room=%zd, attr_max=%zd, metatype:%d => "
+			"max_copy=%zd, state=%d.", 
+			avail, room, attr_max, ird_mt, max_copy, *state);
+	return max_copy;
+}
+
+static inline void write_copied_octets(SQLLEN *octet_len_ptr, size_t copied, 
+		size_t attr_max, esodbc_metatype_et ird_mt)
+{
+	size_t max;
+
+	if (! octet_len_ptr) {
+		DBG("NULL octet len pointer, length (%zd) not indicated.", copied);
+		return;
 	}
 
-	return to_copy;
+	/* truncate to statment max bytes, only if "the column contains character
+	 * or binary data" */
+	max = (ird_mt == METATYPE_STRING || ird_mt == METATYPE_BIN) ? attr_max : 0;
+
+	if (0 < max)
+		/* put the value of SQL_ATTR_MAX_LENGTH attribute..  even
+		 * if this would be larger than what the data actually
+		 * occupies after conversion: "the driver has no way of
+		 * figuring out what the actual length is" */
+		*octet_len_ptr = max;
+	else
+		/* if no "network" truncation done, indicate data's lenght, no
+		 * matter if truncated to buffer's size or not */
+		*octet_len_ptr = copied;
 }
 
 static SQLRETURN copy_longlong(desc_rec_st *arec, desc_rec_st *irec,
@@ -624,16 +760,19 @@ static SQLRETURN copy_longlong(desc_rec_st *arec, desc_rec_st *irec,
 	SQLSMALLINT target_type;
 	char buff[sizeof("18446744073709551616")]; /* = 1 << 8*8 */
 	SQLTCHAR wbuff[sizeof("18446744073709551616")]; /* = 1 << 8*8 */
-	size_t tocopy;
+	size_t tocopy, blen;
 	esodbc_state_et state = SQL_STATE_00000;
 
 	stmt = arec->desc->stmt;
 	ird = stmt->ird;
 	ard = stmt->ard;
 
-	get_deferred_buffers(arec, pos, &data_ptr, (void **)&octet_len_ptr);
+	/* pointer where to write how many characters we will/would use */
+	octet_len_ptr = deferred_address(SQL_DESC_OCTET_LENGTH_PTR, pos, arec);
+	/* pointer to app's buffer */
+	data_ptr = deferred_address(SQL_DESC_DATA_PTR, pos, arec);
 	if (! data_ptr) {
-		ERR("STMT@0x%p: received integer type, but NULL data ptr.", stmt);
+		ERR("STMT@0x%p: received numeric type, but NULL data ptr.", stmt);
 		RET_HDIAGS(stmt, SQL_STATE_HY009);
 	}
 
@@ -645,15 +784,31 @@ static SQLRETURN copy_longlong(desc_rec_st *arec, desc_rec_st *irec,
 		case SQL_C_CHAR:
 			_i64toa((int64_t)ll, buff, /*radix*/10);
 			/* TODO: find/write a function that returns len of conversion? */
-			tocopy = bytes_to_copy(strlen(buff) + /* \0 */1, 
-					arec->octet_length, stmt->max_length, octet_len_ptr, 
-					&state);
+			blen = strlen(buff) + /* \0 */1;
+			tocopy = buff_octet_size(blen, arec->octet_length,
+					stmt->max_length, sizeof(*buff), irec->meta_type, &state);
 			memcpy(data_ptr, buff, tocopy);
+			write_copied_octets(octet_len_ptr, blen, stmt->max_length, 
+					irec->meta_type);
 			break;
+		case SQL_C_WCHAR:
+			_i64tow((int64_t)ll, wbuff, /*radix*/10);
+			/* TODO: find/write a function that returns len of conversion? */
+			blen = (wcslen(wbuff) + /* \0 */1) * sizeof(*wbuff);
+			tocopy = buff_octet_size(blen, arec->octet_length, 
+					stmt->max_length, sizeof(*wbuff), irec->meta_type, &state);
+			memcpy(data_ptr, wbuff, tocopy);
+			write_copied_octets(octet_len_ptr, blen, stmt->max_length, 
+					irec->meta_type);
+			break;
+
 		case SQL_C_SLONG:
 		case SQL_C_SSHORT:
 			*(SQLINTEGER *)data_ptr = (SQLINTEGER)ll;
+			write_copied_octets(octet_len_ptr, sizeof(SQLINTEGER), 
+					stmt->max_length, irec->meta_type);
 			break;
+
 		default:
 			FIXME; // FIXME
 			return SQL_ERROR;
@@ -671,176 +826,156 @@ static SQLRETURN copy_double(desc_rec_st *arec, desc_rec_st *irec,
 	return SQL_ERROR;
 }
 
-/* convert count of wchar characters to count of bytes, taking into account the
- * truncation requried by SQL_ATTR_MAX_LENGTH statement attribute */
-static size_t trunc_len_w2b(desc_rec_st *irec, size_t chars, BOOL *trunc)
-{
-	esodbc_stmt_st *stmt = irec->desc->stmt;
-	size_t in_bytes = chars * sizeof(wchar_t);
-	/* truncate to statment max bytes, if "the column contains character or
-	 * binary data" */
-	if (stmt->max_length && stmt->max_length < in_bytes) {
-		switch (irec->type) {
-			case SQL_CHAR:
-			case SQL_VARCHAR:
-			case SQL_LONGVARCHAR:
-			case SQL_WCHAR:
-			case SQL_WVARCHAR:
-			case SQL_WLONGVARCHAR:
-			case SQL_BINARY:
-			case SQL_VARBINARY:
-			case SQL_LONGVARBINARY:
-				DBG("STMT@0x%p truncation: from %d bytes...", stmt, in_bytes);
-				in_bytes = stmt->max_length;
-				/* discard left bytes that otherwise wouldn't make a complete
-				 * wchar_t */
-				if (in_bytes % sizeof(wchar_t))
-					in_bytes -= in_bytes % sizeof(wchar_t);
-				DBG("STMT@0x%p truncation: ...to %d bytes", stmt, in_bytes);
-				*trunc = TRUE;
-				break;
-			default:
-				*trunc = FALSE;
-		}
-	} else {
-		*trunc = FALSE;
-	}
-
-	return in_bytes;
-}
-
+/*
+ * -> SQL_C_CHAR
+ */
 static SQLRETURN wstr_to_cstr(desc_rec_st *arec, desc_rec_st *irec, 
 		void *data_ptr, SQLLEN *octet_len_ptr,
 		const wchar_t *wstr, size_t chars)
 {
 	esodbc_state_et state = SQL_STATE_00000;
-	esodbc_stmt_st *stmt;
+	esodbc_stmt_st *stmt = arec->desc->stmt;
 	char *charp;
-	size_t in_bytes, out_bytes;
-	size_t octet_length; /* need it for comparision to -1 (w/o int promotion)*/
-	BOOL was_truncated; /* TODO: use bytes_to_copy() */
-
-
-	stmt = arec->desc->stmt;
-	in_bytes = trunc_len_w2b(irec, chars, &was_truncated);
-
-	if (octet_len_ptr) {
-		if (was_truncated) {
-			/* put the value of SQL_ATTR_MAX_LENGTH attribute..  even
-			 * if this would be larger than what the data actually
-			 * occupies after conversion: "the driver has no way of
-			 * figuring out what the actual length is" */
-			octet_length = stmt->max_length;
-		} else {
-			/* the space it would take if target buffer was large
-			 * enough, after _ATTR_MAX_LENGTH truncation, but before
-			 * buffer size truncation. */
-			// FIXME: use WideCharToMultiByte on _WIN32
-			octet_length = wcstombs(NULL, wstr, in_bytes);
-			if (octet_length == (size_t)-1) {
-				ERRN("failed to convert wchar* to char* for string `"
-						LTPDL "`.", chars, wstr);
-				RET_HDIAGS(stmt, SQL_STATE_22018);
-			}
-			octet_length ++; /* wcstombs doesn't count the \0 */
-		}
-		*octet_len_ptr = octet_length;
-		DBG("REC@0x%p, octet_lenght_ptr@0x%p, value=%zd.",
-				arec, octet_len_ptr, octet_length);
-	} else {
-		DBG("REC@0X%p: NULL octet_length_ptr.", arec);
-	}
+	int in_bytes, out_bytes, c;
 
 	if (data_ptr) {
 		charp = (char *)data_ptr;
 
 		/* type is signed, driver should not allow a negative to this point. */
 		assert(0 <= arec->octet_length);
-		octet_length = (size_t)arec->octet_length;
-
-		/* "[R]eturns the number of bytes written into the multibyte
-		 * output string, excluding the terminating NULL (if any)".
-		 * Copies until \0 is met in wstr or buffer runs out.
-		 * If \0 is met, it's copied, but not counted in return. (silly fn) */
-		// FIXME: use WideCharToMultiByte on _WIN32
-		out_bytes = wcstombs(charp, wstr, octet_length);
-		if (out_bytes == (size_t)-1) {
-			ERRN("failed to convert wchar* to char* for string `"
-					LTPDL "`.", chars, wstr);
-			RET_HDIAGS(stmt, SQL_STATE_22018);
+		in_bytes = (int)buff_octet_size(chars * sizeof(*wstr),
+				(size_t)arec->octet_length, stmt->max_length, sizeof(*charp),
+				irec->meta_type, &state);
+		/* trim the original string until it fits in output buffer, with given
+		 * length limitation */
+		for (c = (int)chars; 0 < c; c --) {
+			out_bytes = WCS2U8(wstr, c, charp, in_bytes);
+			if (out_bytes <= 0) {
+				if (WCS2UB_BUFF_INSUFFICIENT)
+					continue;
+				ERRN("failed to convert wchar* to char* for string `" LTPDL 
+						"`.", chars, wstr);
+				RET_HDIAGS(stmt, SQL_STATE_22018);
+			} else {
+				/* conversion succeeded */
+				break;
+			}
 		}
-		/* 0-terminate, if not done */
-		/* "[T]he multibyte character string at mbstr is null-terminated
-		 * only if wcstombs encounters a wide-character null character
-		 * during conversion." */
-		if (octet_length <= out_bytes) { /* == */
+
+		if (charp[out_bytes - 1]) {
 			/* ran out of buffer => not 0-terminated and truncated already */
-			state = SQL_STATE_01004; /* indicate truncation */
-			/* truncate further, by 'attr max len', if needed */
-			out_bytes = in_bytes < octet_length ? in_bytes : octet_length;
 			charp[out_bytes - 1] = 0;
-		} else {
-			/* buffer was enough => 0-term'd already, BUT: must truncate? */
-			out_bytes ++; /* b/c wcstombs doesn't count the 0-term */
-			if (in_bytes < out_bytes) { /* yes, truncate by 'attr max len' */
-				state = SQL_STATE_01004; /* indicate truncation */
-				out_bytes = in_bytes;
-				charp[out_bytes - 1] = 0;
-			} /* else: no */
+			state = SQL_STATE_01004; /* indicate truncation */
 		}
 
-		DBG("REC@0x%p, data_ptr@0x%p, copied %zd bytes: `%s`.", arec,
+		DBG("REC@0x%p, data_ptr@0x%p, copied %zd bytes: `" LTPD "`.", arec,
 				data_ptr, out_bytes, charp);
 	} else {
-		DBG("REC@0x%p, NULL data_ptr", arec);
+		DBG("REC@0x%p, NULL data_ptr.", arec);
 	}
 
-	RET_HDIAGS(stmt, state);
+	/* if length needs to be given, calculate  it not truncated & converted */
+	if (octet_len_ptr) {
+		out_bytes = (size_t)WCS2U8(wstr, (int)chars, NULL, 0);
+		if (out_bytes <= 0) {
+			ERRN("failed to convert wchar* to char* for string `" LTPDL "`.", 
+					chars, wstr);
+			RET_HDIAGS(stmt, SQL_STATE_22018);
+		}
+		write_copied_octets(octet_len_ptr, out_bytes, stmt->max_length,
+				irec->meta_type);
+	} else {
+		DBG("REC@0x%p, NULL octet_len_ptr.", arec);
+	}
+
+	if (state != SQL_STATE_00000)
+		RET_HDIAGS(stmt, state);
+	return SQL_SUCCESS;
 }
 
-
+/*
+ * -> SQL_C_WCHAR
+ */
 static SQLRETURN wstr_to_wstr(desc_rec_st *arec, desc_rec_st *irec, 
 		void *data_ptr, SQLLEN *octet_len_ptr,
 		const wchar_t *wstr, size_t chars)
 {
-	esodbc_stmt_st *stmt;
 	esodbc_state_et state = SQL_STATE_00000;
+	esodbc_stmt_st *stmt = arec->desc->stmt;
 	size_t in_bytes, out_bytes;
-	size_t octet_length;
-	BOOL was_truncated;
 	wchar_t *widep;
 
 
-	stmt = arec->desc->stmt;
-	in_bytes = trunc_len_w2b(irec, chars, &was_truncated);
-
-	if (octet_len_ptr) {
-		/* see explanations from wstr_to_cstr */
-		*octet_len_ptr = was_truncated ? stmt->max_length : in_bytes;
-	}
-
 	if (data_ptr) {
 		widep = (wchar_t *)data_ptr;
-
+		
 		assert(0 <= arec->octet_length);
-		octet_length = (size_t)arec->octet_length;
+		in_bytes = buff_octet_size(chars * sizeof(*wstr),
+				(size_t)arec->octet_length, stmt->max_length, sizeof(*wstr),
+				irec->meta_type, &state);
 
-		if (in_bytes < octet_length) { /* enough buffer */
-			out_bytes = in_bytes;
-			memcpy(widep, wstr, out_bytes);
-			if (was_truncated)
-				state = SQL_STATE_01004; /* indicate truncation */
-		} else {
-			out_bytes = octet_length - /* space for 0-term */sizeof(wchar_t);
-			memcpy(widep, wstr, out_bytes);
-			widep[out_bytes] = 0;
+		memcpy(widep, wstr, in_bytes);
+		out_bytes = in_bytes / sizeof(*widep);
+		/* if buffer too small to accomodate original, 0-term it */
+		if (widep[out_bytes - 1]) {
+			widep[out_bytes - 1] = 0;
 			state = SQL_STATE_01004; /* indicate truncation */
 		}
-		DBG("REC@0x%p, data_ptr@0x%p, copied %zd bytes: `%s`.", arec,
+
+		DBG("REC@0x%p, data_ptr@0x%p, copied %zd bytes: `" LTPD "`.", arec,
 				data_ptr, out_bytes, widep);
+	} else {
+		DBG("REC@0x%p, NULL data_ptr", arec);
 	}
 	
-	RET_HDIAGS(stmt, state);
+	write_copied_octets(octet_len_ptr, chars * sizeof(*wstr), stmt->max_length,
+			irec->meta_type);
+	
+	if (state != SQL_STATE_00000)
+		RET_HDIAGS(stmt, state);
+	return SQL_SUCCESS;
+}
+
+
+/*
+ * -> SQL_C_TYPE_TIMESTAMP
+ */
+static SQLRETURN wstr_to_timestamp(desc_rec_st *arec, desc_rec_st *irec, 
+		void *data_ptr, SQLLEN *octet_len_ptr,
+		const wchar_t *wstr, size_t chars)
+{
+	esodbc_stmt_st *stmt = arec->desc->stmt;
+	TIMESTAMP_STRUCT *tss = (TIMESTAMP_STRUCT *)data_ptr;
+	char buff[sizeof(ISO8601_TEMPLATE)/*+\0*/];
+	int len;
+	timestamp_t tsp;
+	struct tm tmp;
+
+	DBG("converting ISO 8601 `" LTPDL "` to timestamp.", chars, wstr);
+
+	if (octet_len_ptr)
+		*octet_len_ptr = sizeof(*tss);
+
+	if (data_ptr) {
+		len = (int)(chars < sizeof(buff) - 1 ? chars : sizeof(buff) - 1);
+		len = ansi_w2c(wstr, buff, len);
+		if (len <= 0 || timestamp_parse(buff, len - 1, &tsp) || 
+				(! timestamp_to_tm_local(&tsp, &tmp))) {
+			ERR("data `" LTPDL "` not an ANSI ISO 8601 format.", chars, wstr);
+			RET_HDIAGS(stmt, SQL_STATE_07006);
+		}
+		TM_TO_TIMESTAMP_STRUCT(&tmp, tss);
+		tss->fraction = tsp.nsec / 1000000;
+
+		DBG("parsed ISO 8601: `%d-%d-%dT%d:%d:%d.%u+%dm`.", 
+				tss->year, tss->month, tss->day, 
+				tss->hour, tss->minute, tss->second, tss->fraction, 
+				tsp.offset);
+	} else {
+		DBG("REC@0x%p, NULL data_ptr", arec);
+	}
+
+	return SQL_SUCCESS;
 }
 
 /*
@@ -858,8 +993,11 @@ static SQLRETURN copy_string(desc_rec_st *arec, desc_rec_st *irec,
 	stmt = arec->desc->stmt;
 	ird = stmt->ird;
 	ard = stmt->ard;
-	
-	get_deferred_buffers(arec, pos, &data_ptr, (void **)&octet_len_ptr);
+
+	/* pointer where to write how many characters we will/would use */
+	octet_len_ptr = deferred_address(SQL_DESC_OCTET_LENGTH_PTR, pos, arec);
+	/* pointer to app's buffer */
+	data_ptr = deferred_address(SQL_DESC_DATA_PTR, pos, arec);
 
 	/* "To use the default mapping, an application specifies the SQL_C_DEFAULT
 	 * type identifier." */
@@ -871,6 +1009,9 @@ static SQLRETURN copy_string(desc_rec_st *arec, desc_rec_st *irec,
 					wstr, chars);
 		case SQL_C_WCHAR:
 			return wstr_to_wstr(arec, irec, data_ptr, octet_len_ptr, 
+					wstr, chars);
+		case SQL_C_TYPE_TIMESTAMP:
+			return wstr_to_timestamp(arec, irec, data_ptr, octet_len_ptr, 
 					wstr, chars);
 		default:
 			// FIXME: convert data
@@ -988,7 +1129,7 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 			case UJT_Long:
 			case UJT_LongLong:
 				ll = UJNumericLongLong(obj);
-				DBG("value [%zd, %d] is int: %lld.", rowno, i + 1, ll);
+				DBG("value [%zd, %d] is numeric: %lld.", rowno, i + 1, ll);
 				ret = copy_longlong(arec, irec, pos, ll);
 				switch (ret) {
 					case SQL_SUCCESS_WITH_INFO: 
@@ -1116,7 +1257,7 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 		RET_HDIAGS(stmt, SQL_STATE_HY010);
 	}
 
-	DBG("STMT@0x%p (`%.*s`); 'cursor' @ %zd / %zd.", stmt, stmt->sqllen,
+	DBG("STMT@0x%p (`%.*s`); cursor @ %zd / %zd.", stmt, stmt->sqllen,
 			stmt->u8sql, stmt->rset.vrows, stmt->rset.nrows);
 	
 	DBG("rowset max size: %d.", ard->array_size);
@@ -1331,7 +1472,7 @@ SQLRETURN EsSQLExecDirectW
 	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
 	assert(SQL_SUCCEEDED(ret)); /* can't return error */
 
-	if (stmt->apd->array_size)
+	if (1 < stmt->apd->array_size) // & param marker is set!
 		FIXME; //FIXME: multiple executions?
 
 	ret = attach_sql(stmt, szSqlStr, cchSqlStr);
@@ -1342,6 +1483,38 @@ SQLRETURN EsSQLExecDirectW
 	return ret;
 }
 
+static inline SQLULEN get_col_size(desc_rec_st *rec)
+{
+	assert(rec->desc->type == DESC_TYPE_IRD);
+	switch (rec->meta_type) {
+		case METATYPE_EXACT_NUMERIC:
+		case METATYPE_FLOAT_NUMERIC:
+			return rec->precision;
+		
+		case METATYPE_STRING:
+		case METATYPE_BIN:
+		case METATYPE_DATETIME:
+		case METATYPE_INTERVAL_WSEC:
+		case METATYPE_INTERVAL_WOSEC:
+		case METATYPE_BIT:
+			return rec->length;
+	}
+	return 0;
+}
+
+static inline SQLSMALLINT get_col_decdigits(desc_rec_st *rec)
+{
+	assert(rec->desc->type == DESC_TYPE_IRD);
+	switch (rec->meta_type) {
+		case METATYPE_DATETIME:
+		case METATYPE_INTERVAL_WSEC:
+			return rec->precision;
+		
+		case METATYPE_EXACT_NUMERIC:
+			return rec->scale;
+	}
+	return 0;
+}
 
 SQLRETURN EsSQLDescribeColW(
 		SQLHSTMT            hstmt,
@@ -1363,7 +1536,7 @@ SQLRETURN EsSQLDescribeColW(
 	esodbc_stmt_st *stmt = STMH(hstmt);
 	desc_rec_st *rec;
 	SQLRETURN ret;
-	SQLSMALLINT col_len = -1;
+	SQLSMALLINT col_blen = -1;
 
 	DBG("STMT@0x%p, IRD@0x%p, column #%d.", stmt, stmt->ird, icol);
 
@@ -1382,10 +1555,11 @@ SQLRETURN EsSQLDescribeColW(
 		ERR("STMT@0x%p: no record for columns #%d.", stmt, icol);
 		RET_HDIAGS(stmt, SQL_STATE_07009);
 	}
+	dump_record(rec);
 
 	if (szColName) {
 		ret = write_tstr(&stmt->diag, szColName, rec->name, 
-				cchColNameMax * sizeof(SQLTCHAR), &col_len);
+				cchColNameMax * sizeof(SQLTCHAR), &col_blen);
 		if (! SQL_SUCCEEDED(ret)) {
 			ERR("STMT@0x%p: failed to copy column name `" LTPD "`.", stmt, 
 					rec->name);
@@ -1401,7 +1575,9 @@ SQLRETURN EsSQLDescribeColW(
 		RET_HDIAG(stmt, SQL_STATE_HY090, 
 				"no column name lenght buffer provided", 0);
 	}
-	*pcchColName = 0 <= col_len ? col_len : (SQLSMALLINT)wcslen(rec->name);
+	*pcchColName = 0 <= col_blen ? (col_blen / sizeof(SQLTCHAR)) : 
+		(SQLSMALLINT)wcslen(rec->name);
+	DBG("STMT@0x%p: col #%d name has %d chars.", stmt, icol, *pcchColName);
 
 	if (! pfSqlType) {
 		ERR("STMT@0x%p, no column data type buffer provided.");
@@ -1409,19 +1585,24 @@ SQLRETURN EsSQLDescribeColW(
 				"no column data type buffer provided", 0);
 	}
 	*pfSqlType = rec->concise_type;
+	DBG("STMT@0x%p: col #%d has concise type=%d.", stmt, icol, *pfSqlType);
 
 	if (! pcbColDef) {
 		ERR("STMT@0x%p, no column size buffer provided.");
 		RET_HDIAG(stmt, SQL_STATE_HY090, "no column size buffer provided", 0);
 	}
-	*pcbColDef = 0; // TODO: concise to size
+	*pcbColDef = get_col_size(rec); // TODO: set "size" of columns from type
+	DBG("STMT@0x%p: col #%d of meta type %d has size=%llu.", 
+			stmt, icol, rec->meta_type, *pcbColDef);
 
 	if (! pibScale) {
 		ERR("STMT@0x%p, no column decimal digits buffer provided.");
 		RET_HDIAG(stmt, SQL_STATE_HY090, 
 				"no column decimal digits buffer provided", 0);
 	}
-	*pibScale = 0; // TODO: concise to decimal digits
+	*pibScale = get_col_decdigits(rec); // TODO: set "decimal digits" from type
+	DBG("STMT@0x%p: col #%d of meta type %d has decimal digits=%d.", 
+			stmt, icol, rec->meta_type, *pibScale);
 
 	if (! pfNullable) {
 		ERR("STMT@0x%p, no column decimal digits buffer provided.");
@@ -1429,7 +1610,8 @@ SQLRETURN EsSQLDescribeColW(
 				"no column decimal digits buffer provided", 0);
 	}
 	/* TODO: this would be available in SQLColumns resultset. */
-	*pfNullable = SQL_NULLABLE_UNKNOWN;
+	*pfNullable = rec->nullable;
+	DBG("STMT@0x%p: col #%d nullable=%d.", stmt, icol, *pfNullable);
 
 	return SQL_SUCCESS;
 }
@@ -1542,9 +1724,9 @@ SQLRETURN EsSQLColAttributeW(
 
 		/* SQLINTEGER */
 		do {
-		case SQL_DESC_AUTO_UNIQUE_VALUE: iint = rec->auto_unique_value;
-		case SQL_DESC_CASE_SENSITIVE: iint = rec->case_sensitive;
-		case SQL_DESC_NUM_PREC_RADIX: iint = rec->num_prec_radix;
+		case SQL_DESC_AUTO_UNIQUE_VALUE: iint = rec->auto_unique_value; break;
+		case SQL_DESC_CASE_SENSITIVE: iint = rec->case_sensitive; break;
+		case SQL_DESC_NUM_PREC_RADIX: iint = rec->num_prec_radix; break;
 		} while (0);
 			PNUMATTR_ASSIGN(SQLINTEGER, iint);
 			break;

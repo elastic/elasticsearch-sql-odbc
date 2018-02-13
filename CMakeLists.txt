@@ -148,8 +148,28 @@ else (${WIN32})
 		${LIBCURL_PATH_BUILD}/lib/libcurl.so)
 endif (${WIN32})
 
+#
+# add c-timestamp to the project
+#
+if (IS_DIRECTORY $ENV{CTIMESTAMP_PATH_SRC})
+	set(CTIMESTAMP_PATH_SRC $ENV{CTIMESTAMP_PATH_SRC})
+else (IS_DIRECTORY $ENV{CTIMESTAMP_PATH_SRC})
+	if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/c-timestamp)
+		set(CTIMESTAMP_PATH_SRC ${CMAKE_SOURCE_DIR}/c-timestamp)
+	else (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/c-timestamp)
+		message(FATAL_ERROR "No c-timestamp directory found: set environment"
+				" var CTIMESTAMP_PATH_SRC or place an export into "
+				"'c-timestamp' dir in local source tree.")
+	endif (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/c-timestamp)
+endif (IS_DIRECTORY $ENV{CTIMESTAMP_PATH_SRC})
+message("Lib c-timestamp source path: ${CTIMESTAMP_PATH_SRC} .")
+aux_source_directory(${CTIMESTAMP_PATH_SRC}/ DRV_SRC)
+set(CTIMESTAMP_INC ${CTIMESTAMP_PATH_SRC}/ )
+
+
 message("Driver source files: ${DRV_SRC} .")
-message("Driver include paths: " ${DRV_SRC_DIR} ${LIBCURL_INC} ${UJSON4C_INC})
+message("Driver include paths: " ${DRV_SRC_DIR} ${LIBCURL_INC} ${UJSON4C_INC}
+	${CTIMESTAMP_INC})
 
 #
 # finally, set destination library
@@ -158,7 +178,8 @@ add_library(${DRV_NAME} SHARED ${DRV_SRC} ${DRV_BUILD_DIR}/${DRV_NAME}.def)
 #generate_export_header(${DRV_NAME})
 
 #include_directories(${DRV_SRC_DIR} ${DRV_BUILD_DIR})
-include_directories(${DRV_SRC_DIR} ${LIBCURL_INC} ${UJSON4C_INC})
+include_directories(${DRV_SRC_DIR} ${LIBCURL_INC} ${UJSON4C_INC} 
+	${CTIMESTAMP_INC})
 
 
 target_link_libraries(${DRV_NAME} libcurl)
