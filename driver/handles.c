@@ -116,6 +116,59 @@ static void clear_desc(esodbc_stmt_st *stmt, desc_type_et dtype, BOOL reinit)
 		init_desc(desc, desc->stmt, desc->type, desc->alloc_type);
 }
 
+void dump_record(desc_rec_st *rec)
+{
+	DBG("Dumping REC@0x%p", rec);
+#define DUMP_FIELD(_strp, _name, _desc) \
+	DBG("0x%p->%s: `" _desc "`.", _strp, # _name, (_strp)->_name)
+
+	DUMP_FIELD(rec, desc, "0x%p");
+	DUMP_FIELD(rec, meta_type, "%d");
+	
+	DUMP_FIELD(rec, concise_type, "%d");
+	DUMP_FIELD(rec, type, "%d");
+	DUMP_FIELD(rec, datetime_interval_code, "%d");
+	
+	DUMP_FIELD(rec, data_ptr, "0x%p");
+	
+	DUMP_FIELD(rec, base_column_name, LTPD);
+	DUMP_FIELD(rec, base_table_name, LTPD);
+	DUMP_FIELD(rec, catalog_name, LTPD);
+	DUMP_FIELD(rec, label, LTPD);
+	DUMP_FIELD(rec, literal_prefix, LTPD);
+	DUMP_FIELD(rec, literal_suffix, LTPD);
+	DUMP_FIELD(rec, local_type_name, LTPD);
+	DUMP_FIELD(rec, name, LTPD);
+	DUMP_FIELD(rec, schema_name, LTPD);
+	DUMP_FIELD(rec, table_name, LTPD);
+	DUMP_FIELD(rec, type_name, LTPD);
+
+	DUMP_FIELD(rec, indicator_ptr, "0x%p");
+	DUMP_FIELD(rec, octet_length_ptr, "0x%p");
+	
+	DUMP_FIELD(rec, display_size, "%lld");
+	DUMP_FIELD(rec, octet_length, "%lld");
+	
+	DUMP_FIELD(rec, length, "%llu");
+	
+	DUMP_FIELD(rec, auto_unique_value, "%d");
+	DUMP_FIELD(rec, case_sensitive, "%d");
+	DUMP_FIELD(rec, datetime_interval_precision, "%d");
+	DUMP_FIELD(rec, num_prec_radix, "%d");
+	
+	DUMP_FIELD(rec, fixed_prec_scale, "%d");
+	DUMP_FIELD(rec, nullable, "%d");
+	DUMP_FIELD(rec, parameter_type, "%d");
+	DUMP_FIELD(rec, precision, "%d");
+	DUMP_FIELD(rec, rowver, "%d");
+	DUMP_FIELD(rec, scale, "%d");
+	DUMP_FIELD(rec, searchable, "%d");
+	DUMP_FIELD(rec, unnamed, "%d");
+	DUMP_FIELD(rec, usigned, "%d");
+	DUMP_FIELD(rec, updatable, "%d");
+#undef DUMP_FIELD
+}
+
 /*
  * The Driver Manager does not call the driver-level environment handle
  * allocation function until the application calls SQLConnect,
@@ -1650,6 +1703,8 @@ static esodbc_metatype_et sqltype_to_meta(SQLSMALLINT concise)
 			return METATYPE_UID;
 	}
 
+	// BUG?
+	WARN("unknown meta type for concise SQL type %d.", concise);
 	return METATYPE_UNKNOWN;
 }
 
@@ -1726,6 +1781,8 @@ static esodbc_metatype_et sqlctype_to_meta(SQLSMALLINT concise)
 			return METATYPE_MAX;
 	}
 
+	// BUG?
+	WARN("unknown meta type for concise C SQL type %d.", concise);
 	return METATYPE_UNKNOWN;
 }
 
@@ -1791,7 +1848,7 @@ static BOOL consistency_check(esodbc_desc_st *desc, desc_rec_st *rec)
 	return TRUE;
 }
 
-static inline esodbc_metatype_et concise_to_meta(SQLSMALLINT concise_type, 
+esodbc_metatype_et concise_to_meta(SQLSMALLINT concise_type, 
 		desc_type_et desc_type)
 {
 	switch (desc_type) {

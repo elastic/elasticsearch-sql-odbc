@@ -90,6 +90,7 @@
 			case 'N': /* long/int64_t unsigned */ \
 				_n = snprintf(_bf + _ps, _AVAIL, "%llu", \
 							  val ? *(uint64_t *)(uintptr_t)val : 0); \
+				break; \
 			/* non-numeric pointers */ \
 			case 'p': /* void* */ \
 				_n = snprintf(_bf + _ps, _AVAIL, "@0x%p", \

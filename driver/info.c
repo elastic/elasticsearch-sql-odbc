@@ -143,7 +143,7 @@ static SQLUSMALLINT esodbc_functions[] = {
 
 SQLRETURN write_tstr(esodbc_diag_st *diag,
 		SQLTCHAR *dest, const SQLTCHAR *src,
-		SQLSMALLINT /*B*/avail, SQLSMALLINT *usedp)
+		SQLSMALLINT /*B*/avail, SQLSMALLINT /*B*/*usedp)
 {
 	size_t src_len, awail;
 	SQLSMALLINT used;
