@@ -134,6 +134,10 @@ extern int _esodbc_log_level;
 #define INFO(fmt, ...)	LOG(LOG_LEVEL_INFO, fmt, __VA_ARGS__)
 #define DBG(fmt, ...)	LOG(LOG_LEVEL_DBG, fmt, __VA_ARGS__)
 
+#define ERRSTMT(stmt, fmt, ...)		ERR("STMT@0x%p: " fmt, stmt, __VA_ARGS__)
+#define WARNSTMT(stmt, fmt, ...)	WARN("STMT@0x%p: " fmt, stmt, __VA_ARGS__)
+#define DBGSTMT(stmt, fmt, ...)		DBG("STMT@0x%p: " fmt, stmt, __VA_ARGS__)
+
 #define BUG(fmt, ...) \
 	do { \
 		LOG(LOG_LEVEL_ERR, fmt, __VA_ARGS__); \

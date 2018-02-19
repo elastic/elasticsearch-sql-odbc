@@ -577,7 +577,7 @@ SQLRETURN EsSQLGetDiagRecW
 	_Out_opt_ SQLSMALLINT *TextLength
 )
 {
-	esodbc_diag_st *diag;
+	esodbc_diag_st *diag, dummy;
 
 	if (RecNumber <= 0) {
 		ERR("record number must be >=1; received: %d.", RecNumber);
@@ -616,42 +616,12 @@ SQLRETURN EsSQLGetDiagRecW
 	/* API assumes there's always enough buffer here.. */
 	/* no err indicator */
 	if (Sqlstate)
-		wcsncpy(Sqlstate, esodbc_errors[diag->state].code, SQL_SQLSTATE_SIZE);
+		wcscpy(Sqlstate, esodbc_errors[diag->state].code);
 	if (NativeError)
 		*NativeError = diag->native_code;
 
-	/* always return how many we would need, or have used */
-	*TextLength = diag->text_len; /* count needed in characters */
-
-	if (MessageText && diag->text_len) {
-		if (diag->text_len < BufferLength) {
-			if ((BufferLength % 2) && (1 < sizeof(SQLTCHAR))) {
-				/* not specified in API for this function, but pretty much for
-				 * any other wide-char using ones */
-				ERR("BufferLength not an even number: %d.", BufferLength);
-				return SQL_ERROR;
-			}
-			/* no error indication exists */
-			wcsncpy(MessageText, diag->text, diag->text_len);
-			DBG("diagnostic text: `"LTPD"` (%d).", MessageText,diag->text_len);
-			return SQL_SUCCESS;
-		} else {
-			if (BufferLength  < 0) {
-				ERR("buffer length must be non-negative; received: %d.", 
-						BufferLength);
-				return SQL_ERROR;
-			}
-			/* no error indication exists */
-			wcsncpy(MessageText, diag->text, BufferLength);
-			INFO("not enough space to copy diagnostic message; "
-					"have: %d, need: %d.", BufferLength, *TextLength);
-			return SQL_SUCCESS_WITH_INFO;
-		}
-	}
-
-	DBG("call only asking for available diagnostic characters to return (%d).",
-			*TextLength);
-	return SQL_SUCCESS;
+	return write_tstr(&dummy, MessageText, diag->text, BufferLength, 
+			TextLength);
 }
 
 

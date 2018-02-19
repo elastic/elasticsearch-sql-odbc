@@ -197,6 +197,8 @@ typedef struct struct_resultset {
 
 	void *state; /* top UJSON decoder state */
 	void *rows_iter; /* UJSON array with the result set */
+	const wchar_t *ecurs; /* Elastic's cursor object */
+	size_t eccnt; /* cursor char count */
 
 	size_t nrows; /* (count of) number of rows in current result set */
 	size_t vrows; /* (count of) visited rows in current result set  */

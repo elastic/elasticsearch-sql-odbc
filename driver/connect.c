@@ -55,11 +55,12 @@
 #define HTTP_ACCEPT_JSON		"Accept: application/json"
 #define HTTP_CONTENT_TYPE_JSON	"Content-Type: application/json; charset=utf-8"
 
-#define JSON_SQL_TEMPLATE_START "{\"query\":\""
-#define JSON_SQL_TEMPLATE_MID_QUERY "\""
-#define JSON_SQL_TEMPLATE_MID_FETCH \
-	JSON_SQL_TEMPLATE_MID_QUERY ",\"fetch_size\":"
-#define JSON_SQL_TEMPLATE_END "}"
+#define JSON_SQL_QUERY_START		"{\"query\":\""
+#define JSON_SQL_QUERY_MID			"\""
+#define JSON_SQL_QUERY_MID_FETCH	JSON_SQL_QUERY_MID ",\"fetch_size\":"
+#define JSON_SQL_QUERY_END			"}"
+#define JSON_SQL_CURSOR_START		"{\"cursor\":\""
+#define JSON_SQL_CURSOR_END			"\"}"
 
 /*
  * HTTP headers used for all requests (Content-Type, Accept).
@@ -155,7 +156,7 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb,
 	memcpy(dbc->abuff + dbc->apos, ptr, have);
 	dbc->apos += have;
 	DBG("libcurl: DBC@0x%p, copied: %zd bytes.", dbc, have);
-	//DBG("libcurl: DBC@0x%p, copied: `%.*s`.", dbc, have, ptr);
+	DBG("libcurl: DBC@0x%p, copied: `%.*s`.", dbc, have, ptr);
 
 
 	/*
@@ -328,7 +329,7 @@ static SQLRETURN post_request(esodbc_stmt_st *stmt,
 	size_t apos;
 	long to, code;
 
-	DBG("STMT@0x%p posting request `%.*s` (%zd).", stmt, blen, u8body, blen);
+	DBGSTMT(stmt, "posting request `%.*s` (%zd).", blen, u8body, blen);
 
 	if (! dbc->curl)
 		init_curl(dbc);
@@ -405,8 +406,8 @@ static SQLRETURN post_request(esodbc_stmt_st *stmt,
 	return attach_answer(stmt, abuff, apos);
 
 err:
-	ERR("libcurl: request failed STMT@0x%p (timeout:%ld, body:`%.*s`) "
-			"failed: '%s' (%d).", stmt, timeout, blen, u8body, 
+	ERRSTMT(stmt, "libcurl: request failed (timeout:%ld, body:`%.*s`) "
+			"failed: '%s' (%d).", timeout, blen, u8body, 
 			res != CURLE_OK ? curl_easy_strerror(res) : "<unspecified>", res);
 err_net: /* the error occured after the request hit hit the network */
 	if (abuff)
@@ -510,27 +511,54 @@ static size_t json_escape(const char *jin, size_t inlen, char *jout,
 #undef I16TOA
 }
 
-
+/*
+ * Build a JSON query or cursor object (if statment having one) and send it as
+ * the body of a REST POST requrest.
+ */
 SQLRETURN post_statement(esodbc_stmt_st *stmt)
 {
 	SQLRETURN ret;
 	esodbc_dbc_st *dbc = stmt->dbc;
-	size_t bodylen, pos;
+	size_t bodylen, pos, u8len;
 	char *body, buff[ESODBC_BODY_BUF_START_SIZE];
+	char u8curs[ESODBC_BODY_BUF_START_SIZE];
 
 	// TODO: add params (if any)
 
-	bodylen = sizeof(JSON_SQL_TEMPLATE_START) - /*\0*/1;
-	if (dbc->fetch.slen) {
-		bodylen += sizeof(JSON_SQL_TEMPLATE_MID_FETCH) - /*\0*/1;
-		bodylen += dbc->fetch.slen;
-	} else {
-		bodylen += sizeof(JSON_SQL_TEMPLATE_MID_QUERY) - /*\0*/1;
-	}
-	//bodylen += stmt->sqllen;
-	bodylen += json_escape(stmt->u8sql, stmt->sqllen, NULL, 0);
-	bodylen += sizeof(JSON_SQL_TEMPLATE_END) - /*\0*/1;
+	/* TODO: move escaping/x-coding (to JSON or CBOR) in attach_sql() and/or
+	 * attach_answer() to avoid these operations for each execution of the
+	 * statement (especially for the SQL statement; the cursor might not
+	 * always be used - if app decides to no longer fetch - but would then
+	 * clean this function). */
 
+	/* evaluate how long the stringified REST object will be */
+	if (stmt->rset.eccnt) { /* eval CURSOR object lenght */
+		/* convert cursor to C [mb]string. */
+		/* TODO: ansi_w2c() fits better for Base64 encoded cursors. */
+		u8len = WCS2U8(stmt->rset.ecurs, (int)stmt->rset.eccnt, u8curs,
+				sizeof(u8curs));
+		if (u8len <= 0) {
+			ERRSTMT(stmt, "failed to convert cursor `" LTPDL "` to UTF8: %d.",
+					stmt->rset.eccnt, stmt->rset.ecurs, WCS2U8_ERRNO());
+			RET_HDIAGS(stmt, SQL_STATE_24000);
+		}
+
+		bodylen = sizeof(JSON_SQL_CURSOR_START) - /*\0*/1;
+		bodylen += json_escape(u8curs, u8len, NULL, 0);
+		bodylen += sizeof(JSON_SQL_CURSOR_END) - /*\0*/1;
+	} else { /* eval QUERY object lenght */
+		bodylen = sizeof(JSON_SQL_QUERY_START) - /*\0*/1;
+		if (dbc->fetch.slen) {
+			bodylen += sizeof(JSON_SQL_QUERY_MID_FETCH) - /*\0*/1;
+			bodylen += dbc->fetch.slen;
+		} else {
+			bodylen += sizeof(JSON_SQL_QUERY_MID) - /*\0*/1;
+		}
+		bodylen += json_escape(stmt->u8sql, stmt->sqllen, NULL, 0);
+		bodylen += sizeof(JSON_SQL_QUERY_END) - /*\0*/1;
+	}
+
+	/* allocate memory for the stringified buffer, if needed */
 	if (sizeof(buff) < bodylen) {
 		WARN("local buffer too small (%zd), need %zdB; will alloc.", 
 				sizeof(buff), bodylen);
@@ -544,28 +572,35 @@ SQLRETURN post_statement(esodbc_stmt_st *stmt)
 		body = buff;
 	}
 
-	pos = sizeof(JSON_SQL_TEMPLATE_START) - 1;
-	memcpy(body, JSON_SQL_TEMPLATE_START, pos);
-	//memcpy(body + pos, stmt->u8sql, stmt->sqllen);
-	//pos += stmt->sqllen;
-	/* TODO: if not adding CBOR, move escaping in attach_sql */
-	pos += json_escape(stmt->u8sql, stmt->sqllen, body + pos, bodylen - pos);
+	/* build the actual stringified JSON object */
+	if (stmt->rset.eccnt) { /* copy CURSOR object */
+		pos = sizeof(JSON_SQL_CURSOR_START) - /*\0*/1;
+		memcpy(body, JSON_SQL_CURSOR_START, pos);
+		pos += json_escape(u8curs, u8len, body + pos, bodylen - pos);
+		memcpy(body + pos, JSON_SQL_CURSOR_END,
+				sizeof(JSON_SQL_CURSOR_END) - /*WITH \0*/0);
+		pos += sizeof(JSON_SQL_CURSOR_END) - /* but don't account for it */1;
+	} else { /* copy QUERY object */
+		pos = sizeof(JSON_SQL_QUERY_START) - 1;
+		memcpy(body, JSON_SQL_QUERY_START, pos);
+		pos += json_escape(stmt->u8sql, stmt->sqllen, body + pos, bodylen-pos);
 
-	if (dbc->fetch.slen) {
-		memcpy(body + pos, JSON_SQL_TEMPLATE_MID_FETCH,
-				sizeof(JSON_SQL_TEMPLATE_MID_FETCH) - 1);
-		pos += sizeof(JSON_SQL_TEMPLATE_MID_FETCH) - 1;
-		memcpy(body + pos, dbc->fetch.str, dbc->fetch.slen);
-		pos += dbc->fetch.slen;
-	} else {
-		memcpy(body + pos, JSON_SQL_TEMPLATE_MID_QUERY,
-				sizeof(JSON_SQL_TEMPLATE_MID_QUERY) - 1);
-		pos += sizeof(JSON_SQL_TEMPLATE_MID_QUERY) - 1;
+		if (dbc->fetch.slen) {
+			memcpy(body + pos, JSON_SQL_QUERY_MID_FETCH,
+					sizeof(JSON_SQL_QUERY_MID_FETCH) - 1);
+			pos += sizeof(JSON_SQL_QUERY_MID_FETCH) - 1;
+			memcpy(body + pos, dbc->fetch.str, dbc->fetch.slen);
+			pos += dbc->fetch.slen;
+		} else {
+			memcpy(body + pos, JSON_SQL_QUERY_MID,
+					sizeof(JSON_SQL_QUERY_MID) - 1);
+			pos += sizeof(JSON_SQL_QUERY_MID) - 1;
+		}
+
+		memcpy(body + pos, JSON_SQL_QUERY_END,
+				sizeof(JSON_SQL_QUERY_END) - /*WITH \0*/0);
+		pos += sizeof(JSON_SQL_QUERY_END) - /* but don't account for it */1;
 	}
-
-	memcpy(body + pos, JSON_SQL_TEMPLATE_END,
-			sizeof(JSON_SQL_TEMPLATE_END) - /*WITH \0*/0);
-	pos += sizeof(JSON_SQL_TEMPLATE_END) - /* but don't account for it */1;
 
 	ret = post_request(stmt, ESODBC_DEFAULT_TIMEOUT, body, pos);
 
@@ -574,6 +609,7 @@ SQLRETURN post_statement(esodbc_stmt_st *stmt)
 
 	return ret;
 }
+
 
 static SQLRETURN test_connect(CURL *curl)
 {

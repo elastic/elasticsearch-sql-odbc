@@ -56,7 +56,7 @@ SQLRETURN post_diagnostic(esodbc_diag_st *dest, esodbc_state_et state,
 		wcsncpy(dest->text + pos, text, tlen + /* 0-term */1);
 		dest->text_len = (int)(pos + tlen);
 	}
-	DBG("diagnostic message: `" LTPD "` (%d), native code: %d.", dest->text,
+	DBG("diagnostic message: `" LTPD "` [%d], native code: %d.", dest->text,
 			dest->text_len, dest->native_code);
 
 	RET_STATE(state);
