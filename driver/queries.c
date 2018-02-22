@@ -1454,7 +1454,13 @@ SQLRETURN EsSQLPrepareW
 	esodbc_stmt_st *stmt = STMH(hstmt);
 	SQLRETURN ret;
 
-	DBGSTMT(stmt, "preparing `" LTPDL "` (%d)", cchSqlStr, szSqlStr, 
+	if (cchSqlStr == SQL_NTS) {
+		cchSqlStr = (SQLINTEGER)wcslen(szSqlStr);
+	} else if (cchSqlStr <= 0) {
+		ERRSTMT(stmt, "invalid statment lenght: %d.", cchSqlStr);
+		RET_HDIAGS(stmt, SQL_STATE_HY090);
+	}
+	DBGSTMT(stmt, "preparing `" LTPDL "` [%d]", cchSqlStr, szSqlStr, 
 			cchSqlStr);
 	
 	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
@@ -1508,7 +1514,14 @@ SQLRETURN EsSQLExecDirectW
 	esodbc_stmt_st *stmt = STMH(hstmt);
 	SQLRETURN ret;
 
-	DBGSTMT(stmt, "directly executing SQL.");
+	if (cchSqlStr == SQL_NTS) {
+		cchSqlStr = (SQLINTEGER)wcslen(szSqlStr);
+	} else if (cchSqlStr <= 0) {
+		ERRSTMT(stmt, "invalid statment lenght: %d.", cchSqlStr);
+		RET_HDIAGS(stmt, SQL_STATE_HY090);
+	}
+	DBGSTMT(stmt, "directly executing SQL: `" LTPDL "` [%d].", cchSqlStr,
+			szSqlStr, cchSqlStr);
 	
 	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
 	assert(SQL_SUCCEEDED(ret)); /* can't return error */
