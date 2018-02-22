@@ -32,14 +32,14 @@ void init_diagnostic(esodbc_diag_st *dest)
 SQLRETURN post_diagnostic(esodbc_diag_st *dest, esodbc_state_et state, 
 		SQLTCHAR *text, SQLINTEGER code)
 {
-	size_t pos, tlen, ebufsz;
+	size_t pos, tcnt, ebufsz;
 	
 	ebufsz = sizeof(dest->text)/sizeof(dest->text[0]);
 	
 	/* if no text specified, use the default */
 	if (! text)
 		text = esodbc_errors[state].message;
-	tlen = wcslen(text);
+	tcnt = wcslen(text);
 
 	dest->state = state;
 	dest->native_code = code;
@@ -48,13 +48,13 @@ SQLRETURN post_diagnostic(esodbc_diag_st *dest, esodbc_state_et state,
 	assert(pos < ebufsz);
 	wcsncpy(dest->text, MK_TSTR(ESODBC_DIAG_PREFIX), pos);
 
-	if (ebufsz <= pos + tlen) {
+	if (ebufsz <= pos + tcnt) {
 		wcsncpy(dest->text + pos, text, ebufsz - (pos + 1));
 		dest->text[ebufsz - 1] = 0;
 		dest->text_len = (int)ebufsz - 1;
 	} else {
-		wcsncpy(dest->text + pos, text, tlen + /* 0-term */1);
-		dest->text_len = (int)(pos + tlen);
+		wcsncpy(dest->text + pos, text, tcnt + /* 0-term */1);
+		dest->text_len = (int)(pos + tcnt);
 	}
 	DBG("diagnostic message: `" LTPD "` [%d], native code: %d.", dest->text,
 			dest->text_len, dest->native_code);
