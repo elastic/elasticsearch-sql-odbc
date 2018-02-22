@@ -141,11 +141,15 @@ static SQLUSMALLINT esodbc_functions[] = {
 	*(((UWORD*) (pfExists)) + ((uwAPI) >> 4)) |= (1 << ((uwAPI) & 0x000F))
 #define SQL_API_ODBC2_ALL_FUNCTIONS_SIZE	100
 
+/* Note: for input/output size indication (avail/usedp), some functions
+ * require character count (eg. SQLGetDiagRec, SQLDescribeCol), some others
+ * bytes length (eg.  SQLGetInfo, SQLGetDiagField, SQLGetConnectAttr,
+ * EsSQLColAttributeW). */
 SQLRETURN write_tstr(esodbc_diag_st *diag,
 		SQLTCHAR *dest, const SQLTCHAR *src,
 		SQLSMALLINT /*B*/avail, SQLSMALLINT /*B*/*usedp)
 {
-	size_t src_len, awail;
+	size_t src_cnt, awail;
 	SQLSMALLINT used;
 
 	if (! dest)
@@ -156,10 +160,10 @@ SQLRETURN write_tstr(esodbc_diag_st *diag,
 		RET_CDIAG(diag, SQL_STATE_HY090, "invalid buffer length provided", 0);
 	}
 	awail = avail/sizeof(SQLTCHAR);
-	src_len = wcslen(src);
+	src_cnt = wcslen(src);
 
-	/* return value always set to what it needs to be written. */
-	used = (SQLSMALLINT)src_len * sizeof(SQLTCHAR);
+	/* return value always set to what it needs to be written (excluding \0).*/
+	used = (SQLSMALLINT)src_cnt * sizeof(SQLTCHAR);
 	if (! usedp) {
 		WARN("invalid output buffer provided (NULL) to collect used space.");
 		//RET_cDIAG(diag, SQL_STATE_HY013, "invalid used provided (NULL)", 0);
@@ -173,16 +177,20 @@ SQLRETURN write_tstr(esodbc_diag_st *diag,
 		/* only return how large of a buffer we need */
 		INFO("NULL out buff: returning needed buffer size only (%d).", used);
 	} else {
-		if (awail <= src_len) { /* TODO: does it actually need to fit \0? */
+		if (awail <= src_cnt) { /* =, since src_cnt doesn't count the \0 */
+			wcsncpy(dest, src, awail - /* 0-term */1);
+			dest[awail - 1] = 0;
+
 			INFO("not enough buffer size to write required string (plus "
-					"terminator): `" LTPD " [%zd]`; available: %d.", src,
-					src_len, avail);
+					"terminator): `" LTPD "` [%zd]; available: %d.", src,
+					src_cnt, awail);
 			RET_DIAG(diag, SQL_STATE_01004, NULL, 0);
 		} else {
-			wcsncpy(dest, src, src_len + /* 0-term */1);
+			wcsncpy(dest, src, src_cnt + /* 0-term */1);
 		}
 	}
-	RET_STATE(SQL_STATE_00000);
+
+	return SQL_SUCCESS;
 }
 
 // [0] x-p-es/sql/jdbc/src/main/java/org/elasticsearch/xpack/sql/jdbc/jdbc/JdbcDatabaseMetaData.java : DatabaseMetaData
