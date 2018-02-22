@@ -13,6 +13,7 @@
 
 #include "error.h"
 #include "log.h"
+#include "defs.h"
 
 /*
  * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/environment-handles :
@@ -235,23 +236,6 @@ typedef struct struct_stmt {
 	resultset_st rset;
 } esodbc_stmt_st;
 
-
-/* leave the timeout to default value (0: don't timeout, pos: seconds) */
-#define ESODBC_TIMEOUT_DEFAULT		-1
-// FIXME: review@alpha
-/* TODO: should there be a max? */
-#define ESODBC_MAX_ROW_ARRAY_SIZE	128
-#define ESODBC_DEF_ARRAY_SIZE		1
-/* max cols or args to bind */
-#define ESODBC_MAX_DESC_COUNT		128
-/* values for SQL_ATTR_MAX_LENGTH statement attribute */
-#define ESODBC_UP_MAX_LENGTH		0 // USHORT_MAX
-#define ESODBC_LO_MAX_LENGTH		0
-/* max number of rows to request from server */
-#define ESODBC_DEF_FETCH_SIZE		0 // no fetch size
-/* prepare a STMT for a new SQL operation.
- * To be used with catalog functions, that can be all called with same stmt */
-#define ESODBC_SQL_CLOSE			((SQLUSMALLINT)-1)
 
 
 SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count);

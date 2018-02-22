@@ -13,33 +13,6 @@
 #include "log.h"
 #include "info.h"
 
-/*
- * Not authoriative (there's no formal limit), but pretty informed:
- * https://stackoverflow.com/questions/417142/what-is-the-maximum-length-of-a-url-in-different-browsers
- */
-/* maximum URL size */
-#define ESODBC_MAX_URL_LEN		2048
-/* maximum DNS name */
-#define ESODBC_MAX_DNS_LEN		255 /* SQL_MAX_DSN_LENGTH=32 < IPv6 len */
-/* default maximum amount of bytes to accept as answer */
-#define ESODBC_DEFAULT_MAX_BODY_SIZE	10 * 1024 * 1024
-/* initial size of  */
-#define ESODBC_BODY_BUF_START_SIZE		4 * 1024
-/* SQL plugin's REST endpoint for SQL */
-#define ELASTIC_SQL_PATH		"/_xpack/sql"
-#define ELASTIC_SQL_PATH_TABLES		"tables"
-/* default host to connect to */
-//#define ESODBC_DEFAULT_HOST		"localhost"
-#define ESODBC_DEFAULT_HOST		"127.0.0.1" /* to capture on Win10 */
-/* Elasticsearch'es default port */
-#define ESODBC_DEFAULT_PORT		9200
-/* default security (TLS) setting */
-#define ESODBC_DEFAULT_SEC		0
-/* default global request timeout */
-#define ESODBC_DEFAULT_TIMEOUT	0
-/* don't follow redirection from the server  */
-#define ESODBC_DEFAULT_FOLLOW	1
-
 /* HTTP headers default for every request */
 #define HTTP_ACCEPT_JSON		"Accept: application/json"
 #define HTTP_CONTENT_TYPE_JSON	"Content-Type: application/json; charset=utf-8"

@@ -11,9 +11,6 @@
 #include "log.h"
 #include "queries.h"
 
-#define TS_NULL						MK_TSTR("<NULL>")
-#define ESODBC_MAX_IDENTIFIER_LEN	128 /* TODO: review@alpha */
-
 
 static void free_rec_fields(desc_rec_st *rec)
 {

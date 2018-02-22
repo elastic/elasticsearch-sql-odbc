@@ -17,13 +17,9 @@
 #include "info.h"
 #include "queries.h"
 
-#if 1
 #define SQL_TABLES_START	"SYS TABLES LIKE '"
 #define SQL_TABLES_END		"'"
-//#define SQL_TABLES_END		"';"
-#endif
 
-#define ESODBC_SQL_TABLES	"SYS TABLES LIKE"
 #define ESODBC_SQL_COLUMNS	"SYS COLUMNS TABLES LIKE"
 
 SQLRETURN EsSQLTablesW(
