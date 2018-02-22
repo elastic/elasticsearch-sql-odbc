@@ -453,6 +453,7 @@ SQLRETURN attach_error(esodbc_stmt_st *stmt, char *buff, size_t blen)
 		left = wbuflen - tlen;
 		rlen = left < rlen ? left : rlen;
 		wbuflen += /* ": " */2 + /*\0*/1;
+		/* swprintf will add the 0-term (or fail, if it can't) */
 		n = swprintf(wbuf, wbuflen, MK_WSTR("%.*s: %.*s"), (int)tlen, wtype,
 				(int)rlen, wreason);
 	}
@@ -461,10 +462,6 @@ SQLRETURN attach_error(esodbc_stmt_st *stmt, char *buff, size_t blen)
 		assert(sizeof(MSG_INV_SRV_ANS) < sizeof(wbuf));
 		memcpy(wbuf, MK_TSTR(MSG_INV_SRV_ANS),
 				sizeof(MSG_INV_SRV_ANS)*sizeof(SQLTCHAR));
-#if 0 /* this won't happen with swprintf */
-	} else if (wbuflen <= n) { /* add skipped (due to size) 0-term */
-		wbuf[wbuflen - 1] = 0;
-#endif
 	}
 
 	post_diagnostic(&stmt->diag, SQL_STATE_HY000, wbuf, 
