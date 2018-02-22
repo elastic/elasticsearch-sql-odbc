@@ -130,6 +130,10 @@ static SQLSMALLINT type_elastic2csql(const wchar_t *type_name, size_t len)
 						// TODO: time/timestamp
 						return SQL_C_TYPE_DATE;
 					break;
+				case (wchar_t)'b':
+					if (! wmemncasecmp(type_name, MK_WSTR(JSON_COL_BYTE), len))
+						return SQL_C_STINYINT;
+					break;
 #if 1 // BUG FIXME
 				case (wchar_t)'n':
 					if (! wmemncasecmp(type_name, MK_WSTR("null"), len))
@@ -155,7 +159,8 @@ static void set_col_size(desc_rec_st *rec)
 		/* .precision */
 		// TODO: lifted from SYS TYPES: automate this?
 		case SQL_C_SLONG: rec->precision = 19; break;
-		case SQL_C_UTINYINT: rec->precision = 3; break;
+		case SQL_C_UTINYINT:
+		case SQL_C_STINYINT: rec->precision = 3; break;
 		case SQL_C_SSHORT: rec->precision = 5; break;
 
 		/* .length */
@@ -177,6 +182,7 @@ static void set_col_decdigits(desc_rec_st *rec)
 	switch (rec->concise_type) {
 		case SQL_C_SLONG:
 		case SQL_C_UTINYINT:
+		case SQL_C_STINYINT:
 		case SQL_C_SSHORT:
 			rec->scale = 0;
 			break;
