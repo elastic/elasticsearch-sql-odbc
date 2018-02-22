@@ -79,46 +79,6 @@ enum osodbc_log_levels {
 	LOG_LEVEL_DBG,
 };
 
-#if 0
-void _esodbc_log(int lvl, const char *fmt, ...);
-
-#define LOG(lvl, fmt, ...) \
-	if (lvl <= LOG_LEVEL_CRR) \
-		_esodbc_log(lvl, "[%s] %s()@%s:%d: " fmt, \
-				__ESODBC_LVL2STR[lvl], __func__, __FILE__, __LINE__, \
-				__VA_ARGS__)
-
-/* FIXME: 4!WINx */
-/*
- * https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/strerror-s-strerror-s-wcserror-s-wcserror-s :
- * """
- * Your string message can be, at most, 94 characters long.
- * 
- * """
- */
-#define __ESODBC_STRERROR_BUF_LEN	128
-#define ELOG(lvl, fmt, ...) \
-	do { \
-		char buff[__ESODBC_STRERROR_BUF_LEN]; \
-		if (lvl <= LOG_LEVEL_CRR) \
-			break; \
-		if (strerror_s(buff, sizeof(buff), errno)) \
-			buff[0] = 0; \
-		_esodbc_log(lvl, "[%s] %s()@%s:%d (%d:%s): " fmt, \
-				__ESODBC_LVL2STR[lvl], __func__, __FILE__, __LINE__, \
-				errno, buff, __VA_ARGS__); \
-	} while (0)
-
-/* TODO: X(...) Y(lvl, __VA_ARGS__) ?? */
-#define BUG(fmt, ...)	LOG(LOG_LEVEL_ERR, fmt, __VA_ARGS__)
-#define ERR(fmt, ...)	LOG(LOG_LEVEL_ERR, fmt, __VA_ARGS__)
-#define ERRN(fmt, ...)	ELOG(LOG_LEVEL_ERR, fmt, __VA_ARGS__)
-#define WARN(fmt, ...)	LOG(LOG_LEVEL_WARN, fmt, __VA_ARGS__)
-#define INFO(fmt, ...)	LOG(LOG_LEVEL_INFO, fmt, __VA_ARGS__)
-#define DBG(fmt, ...)	LOG(LOG_LEVEL_DBG, fmt, __VA_ARGS__)
-#define TRACE			LOG(LOG_LEVEL_DBG, "===== TR4C3 =====")
-
-#else
 void _esodbc_log(int lvl, int werrno, const char *func, 
 		const char *srcfile, int lineno, const char *fmt, ...);
 extern int _esodbc_log_level;
@@ -146,8 +106,6 @@ extern int _esodbc_log_level;
 
 #define FIXME	BUG("not yet implemented")
 #define TRACE	DBG("===== TR4C3 =====");
-
-#endif
 
 #endif /* __LOG_H__ */
 

@@ -784,17 +784,6 @@ SQLRETURN EsSQLGetStmtAttrW(
 		case SQL_ATTR_IMP_ROW_DESC: desc = stmt->ird; break;
 		case SQL_ATTR_IMP_PARAM_DESC: desc = stmt->ipd; break;
 		} while (0);
-#if 0
-			/* probably not needed, just undocumented behavior this check
-			 * trips on. */
-			if (BufferLength < 0 || BufferLength < sizeof(SQLPOINTER)) {
-				WARN("Not enough buffer space to return result: ""have %d"
-						", need: %zd.", BufferLength, sizeof(SQLPOINTER));
-				/* bail out, don't just copy half of the pointer size */
-				//RET_HDIAGS(stmt, SQL_STATE_01004);
-			}
-#endif
-			/* what a silly API! */
 			*(SQLPOINTER *)ValuePtr = desc;
 			break;
 
@@ -1371,13 +1360,9 @@ SQLRETURN EsSQLGetDescFieldW(
 		 */
 		rec = get_record(desc, RecNumber, FALSE);
 		if (! rec) {
-#if 0
-			RET_HDIAGS(desc, SQL_STATE_07009);
-#else /* 0 */
-		WARN("record #%d not yet set; returning defaults.", RecNumber);
-		get_rec_default(FieldIdentifier, BufferLength, ValuePtr);
-		RET_STATE(SQL_STATE_00000);
-#endif /* 0 */
+			WARN("record #%d not yet set; returning defaults.", RecNumber);
+			get_rec_default(FieldIdentifier, BufferLength, ValuePtr);
+			RET_STATE(SQL_STATE_00000);
 		}
 		DBG("getting field %d of record #%d @ 0x%p.", FieldIdentifier, 
 				RecNumber, rec);
@@ -1967,12 +1952,9 @@ SQLRETURN EsSQLSetDescFieldW(
 						ESODBC_MAX_ROW_ARRAY_SIZE);
 				desc->array_size = ESODBC_MAX_ROW_ARRAY_SIZE;
 				RET_HDIAGS(desc, SQL_STATE_01S02);
-#if 0 // TODO: can it actually be set to 0? just to advance the cursor?
 			} else if (ulen < 1) {
-				ERR("can't set the array size to less than 1; attempted: %u.",
-						ulen);
+				ERR("can't set the array size to less than 1.");
 				RET_HDIAGS(desc, SQL_STATE_HY092);
-#endif //0
 			} else {
 				desc->array_size = ulen;
 			}

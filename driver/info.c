@@ -395,6 +395,7 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 }
 
 /* TODO: see error.h: esodbc_errors definition note (2.x apps support) */
+/* Note: with SQL_DIAG_SQLSTATE DM provides a NULL StringLengthPtr */
 SQLRETURN EsSQLGetDiagFieldW(
 		SQLSMALLINT HandleType, 
 		SQLHANDLE Handle,
@@ -424,14 +425,6 @@ SQLRETURN EsSQLGetDiagFieldW(
 		ERR("null handle provided.");
 		return SQL_INVALID_HANDLE;
 	}
-#if 0
-	// FIXME: true for all cases?
-	// NO: with SQL_DIAG_SQLSTATE DM provides a NULL ptr here... WTF?!
-	if (! StringLengthPtr) { 
-		ERR("null StringLengthPtr pointer provided.");
-		return SQL_ERROR;
-	}
-#endif
 
 	GET_DIAG(Handle, HandleType, diag);
 
@@ -685,28 +678,6 @@ SQLRETURN EsSQLGetFunctions(SQLHDBC ConnectionHandle,
 	// TODO: does this require connecting to the server?
 	RET_STATE(SQL_STATE_00000);
 }
-
-#if 0
-TYPE_NAME
-DATA_TYPE
-COLUMN_SIZE
-LITERAL_PREFIX
-LITERAL_SUFFIX
-CREATE_PARAMS
-NULLABLE
-CASE_SENSITIVE
-SEARCHABLE
-UNSIGNED_ATTRIBUTE
-FIXED_PREC_SCALE
-AUTO_UNIQUE_VALUE
-LOCAL_TYPE_NAME
-MINIMUM_SCALE
-MAXIMUM_SCALE
-SQL_DATA_TYPE
-SQL_DATETIME_SUB
-NUM_PREC_RADIX
-INTERVAL_PRECISION
-#endif
 
 /*
  * Equivalent of JDBC's getTypeInfo() ([0]:900)
