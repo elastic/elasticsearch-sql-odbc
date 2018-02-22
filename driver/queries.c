@@ -1794,4 +1794,27 @@ SQLRETURN EsSQLColAttributeW(
 #undef PNUMATTR_ASSIGN
 }
 
+SQLRETURN EsSQLRowCount(_In_ SQLHSTMT StatementHandle, _Out_ SQLLEN* RowCount)
+{
+	esodbc_stmt_st *stmt = STMH(StatementHandle);
+	
+	if (! STMT_HAS_RESULTSET(stmt)) {
+		ERRSTMT(stmt, "no resultset available on statement.");
+		RET_HDIAGS(stmt, SQL_STATE_HY010);
+	}
+	
+	DBGSTMT(stmt, "current resultset rows count: %zd.", stmt->rset.nrows);
+	*RowCount = (SQLLEN)stmt->rset.nrows;
+
+	if (stmt->rset.eccnt) {
+		/* fetch_size or scroller size chunks the result */
+		WARN("this function will only return the row count of the partial "
+				"result set available.");
+		/* returning a _WITH_INFO here will fail the query for MSQRY32.. */
+		//RET_HDIAG(stmt, SQL_STATE_01000, "row count is for partial result "
+		//		"only", 0);
+	}
+	return SQL_SUCCESS;
+}
+
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */
