@@ -360,6 +360,21 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 					MK_TSTR(ESODBC_SCHEMA_TERM), BufferLength,
 					StringLengthPtr);
 
+		/* no procedures support */
+		case SQL_PROCEDURES:
+		case SQL_ACCESSIBLE_PROCEDURES:
+			DBG("requested: procedures support (`N`).");
+			return write_tstr(&dbc->diag, InfoValue, MK_TSTR("N"),
+					BufferLength, StringLengthPtr);
+		case SQL_MAX_PROCEDURE_NAME_LEN:
+			DBG("requested max procedure name len (0).");
+			*(SQLUSMALLINT *)InfoValue = 0; /* no support */
+			break;
+		case SQL_PROCEDURE_TERM:
+			DBG("requested: procedure term (``).");
+			return write_tstr(&dbc->diag, InfoValue, MK_TSTR(""),
+					BufferLength, StringLengthPtr);
+
 		default:
 			ERR("unknown InfoType: %u.", InfoType);
 			RET_HDIAGS(dbc, SQL_STATE_HYC00/*096?*/);
