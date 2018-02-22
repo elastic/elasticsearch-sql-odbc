@@ -559,7 +559,6 @@ SQLRETURN SQL_API SQLExecDirectW
     SQLINTEGER cchSqlStr 
 )
 {
-	// TODO: set .stmt_curs = 0; in resultset
 	SQLRETURN ret;
 	TRACE3(_IN, "ppd", hstmt, szSqlStr, cchSqlStr);
 	ret = EsSQLExecDirectW(hstmt, szSqlStr, cchSqlStr);
@@ -622,6 +621,7 @@ SQLRETURN  SQL_API SQLPutData(SQLHSTMT StatementHandle,
 {
 	RET_NOT_IMPLEMENTED;
 }
+#endif /* WITH_EMPTY */
 
 /*
  *
@@ -632,9 +632,12 @@ SQLRETURN  SQL_API SQLPutData(SQLHSTMT StatementHandle,
 SQLRETURN  SQL_API SQLRowCount(_In_ SQLHSTMT StatementHandle,
                                _Out_ SQLLEN* RowCount)
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE2(_IN, "pp", StatementHandle, RowCount);
+	ret = EsSQLRowCount(StatementHandle, RowCount);
+	TRACE3(_OUT, "dpn", ret, StatementHandle, RowCount);
+	return ret;
 }
-#endif /* WITH_EMPTY */
 
 SQLRETURN  SQL_API SQLNumResultCols(SQLHSTMT StatementHandle,
            _Out_ SQLSMALLINT *ColumnCount)
