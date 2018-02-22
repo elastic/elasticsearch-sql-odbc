@@ -107,6 +107,8 @@ extern int _esodbc_log_level;
 #define FIXME	BUG("not yet implemented")
 #define TRACE	DBG("===== TR4C3 =====");
 
+#define TS_NULL	MK_TSTR("<null>")
+
 #endif /* __LOG_H__ */
 
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */

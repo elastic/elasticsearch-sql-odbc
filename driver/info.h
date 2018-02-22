@@ -20,10 +20,6 @@
 
 #include "sqlext.h"
 
-
-/* TODO: review@alpha */
-#define ESODBC_MAX_IDENTIFIER_LEN	128
-
 /* 
  * TODO: move into a util.h 
  * TODO: change sign to ...src, lsrc, dst, dlen... (lsrc is nearly always

@@ -76,8 +76,7 @@
 				/* TODO: this can be problematic, for untouched buffs: add
 				 * len! */ \
 				_n = snprintf(_bf + _ps, _AVAIL, "`" LTPD "`[%zd]", \
-							  val ? (wchar_t *)(uintptr_t)val : \
-							  		MK_WSTR("<null>"), \
+							  val ? (wchar_t *)(uintptr_t)val : TS_NULL, \
 							  val ? wcslen((wchar_t *)(uintptr_t)val) : 0); \
 				break; \
 			/* imediat values */ \

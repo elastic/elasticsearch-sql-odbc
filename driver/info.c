@@ -42,17 +42,6 @@
 #else /* win32 */
 #endif /* win32 */
 
-#define ESODBC_PATTERN_ESCAPE		"\\"
-#define ESODBC_CATALOG_SEPARATOR	":"
-#define ESODBC_CATALOG_TERM			"clusterName"
-#define ESODBC_MAX_SCHEMA_LEN		0
-#define ESODBC_QUOTE_CHAR			"\""
-#define ESODBC_SCHEMA_TERM			"schema"
-
-/* max # of active statements for a connection" */
-/* TODO: review@alpha */
-#define ESODBC_MAX_CONCURRENT_ACTIVITIES	16
-
 
 #define GET_DIAG(_h/*handle*/, _ht/*~type*/, _d/*diagnostic*/) \
 	do { \

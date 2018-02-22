@@ -57,27 +57,6 @@ void detach_sql(esodbc_stmt_st *stmt);
 	// wcstombs(charp, wstr, octet_length);
 #endif /* _WIN32 */
 
-/* key names used in Elastic/SQL REST/JSON answers */
-#define JSON_ANSWER_COLUMNS		"columns"
-#define JSON_ANSWER_ROWS		"rows"
-#define JSON_ANSWER_CURSOR		"cursor"
-#define JSON_ANSWER_STATUS		"status"
-#define JSON_ANSWER_ERROR		"error"
-#define JSON_ANSWER_ERR_TYPE	"type"
-#define JSON_ANSWER_ERR_REASON	"reason"
-#define JSON_ANSWER_COL_NAME	"name"
-#define JSON_ANSWER_COL_TYPE	"type"
-/* 4 */
-#define JSON_COL_TEXT			"text"
-#define JSON_COL_DATE			"date"
-#define JSON_COL_BYTE			"byte"
-/* 5 */
-#define JSON_COL_SHORT			"short"
-/* 7 */
-#define JSON_COL_BOOLEAN		"boolean"
-#define JSON_COL_INTEGER		"integer"
-#define JSON_COL_KEYWORD		"keyword"
-
 SQLRETURN EsSQLBindCol(
 		SQLHSTMT StatementHandle,
 		SQLUSMALLINT ColumnNumber,
