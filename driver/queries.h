@@ -59,6 +59,7 @@ void detach_sql(esodbc_stmt_st *stmt);
 /* 4 */
 #define JSON_COL_TEXT			"text"
 #define JSON_COL_DATE			"date"
+#define JSON_COL_BYTE			"byte"
 /* 5 */
 #define JSON_COL_SHORT			"short"
 /* 7 */
@@ -129,6 +130,7 @@ SQLRETURN EsSQLColAttributeW(
     SQLPOINTER      pNumAttr
 #endif /* _WIN64 */
 );
+SQLRETURN EsSQLRowCount(_In_ SQLHSTMT StatementHandle, _Out_ SQLLEN* RowCount);
 
 
 #endif /* __QUERIES_H__ */
