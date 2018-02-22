@@ -601,6 +601,8 @@ SQLRETURN EsSQLGetDiagRecW
 )
 {
 	esodbc_diag_st *diag, dummy;
+	SQLRETURN ret;
+	SQLSMALLINT used;
 
 	if (RecNumber <= 0) {
 		ERR("record number must be >=1; received: %d.", RecNumber);
@@ -643,8 +645,11 @@ SQLRETURN EsSQLGetDiagRecW
 	if (NativeError)
 		*NativeError = diag->native_code;
 
-	return write_tstr(&dummy, MessageText, diag->text, BufferLength, 
-			TextLength);
+	ret = write_tstr(&dummy, MessageText, diag->text, 
+			BufferLength * sizeof(*MessageText), &used);
+	if (TextLength)
+		*TextLength = used / sizeof(*MessageText);
+	return ret;
 }
 
 
