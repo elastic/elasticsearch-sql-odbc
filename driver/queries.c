@@ -406,8 +406,9 @@ SQLRETURN attach_error(esodbc_stmt_st *stmt, char *buff, size_t blen)
 	UJObject obj, o_status, o_error, o_type, o_reason;
 	const wchar_t *wtype, *wreason;
 	size_t tlen, rlen, left;
-	wchar_t wbuf[SQL_MAX_MESSAGE_LENGTH];
-	size_t wbuflen = sizeof(wbuf)/sizeof(wbuf[0]);
+	wchar_t wbuf[sizeof(((esodbc_diag_st*)NULL)->text) / 
+		sizeof(*((esodbc_diag_st*)NULL)->text)];
+	size_t wbuflen = sizeof(wbuf)/sizeof(*wbuf);
 	int n;
 	void *state = NULL;
 	wchar_t *outer_keys[] = {
@@ -1629,7 +1630,7 @@ SQLRETURN EsSQLDescribeColW(
 
 	if (szColName) {
 		ret = write_tstr(&stmt->diag, szColName, rec->name, 
-				cchColNameMax * sizeof(SQLTCHAR), &col_blen);
+				cchColNameMax * sizeof(*szColName), &col_blen);
 		if (! SQL_SUCCEEDED(ret)) {
 			ERRSTMT(stmt, "failed to copy column name `" LTPD "`.", rec->name);
 			return ret;
@@ -1643,7 +1644,7 @@ SQLRETURN EsSQLDescribeColW(
 		RET_HDIAG(stmt, SQL_STATE_HY090, 
 				"no column name lenght buffer provided", 0);
 	}
-	*pcchColName = 0 <= col_blen ? (col_blen / sizeof(SQLTCHAR)) : 
+	*pcchColName = 0 <= col_blen ? (col_blen / sizeof(*szColName)) : 
 		(SQLSMALLINT)wcslen(rec->name);
 	DBGSTMT(stmt, "col #%d name has %d chars.", icol, *pcchColName);
 
