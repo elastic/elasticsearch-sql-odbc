@@ -5,23 +5,45 @@ cls
 
 SET ARG="%1"
 
+REM
+REM  List of variables that can be customized
+REM
+
 if "%SRC_PATH%" == "" (
-	SET SRC_PATH=\RnD\elastic\odbc
+	SET SRC_PATH=%~dp0
 )
 if "%BUILD_DIR%" == "" (
-	SET BUILD_DIR=%USERPROFILE%\%SRC_PATH%\cbuild
+	SET BUILD_DIR=%SRC_PATH%\builds
 )
 if "%LOGGING_DIR%" == "" (
-	SET LOGGING_DIR=%USERPROFILE%\Temp\
+	if EXIST %USERPROFILE%\AppData\Local\Temp\ (
+		SET LOGGING_DIR=%USERPROFILE%\AppData\Local\Temp\
+	) else (
+		SET LOGGING_DIR="%USERPROFILE%\Local Settings\Temp\"
+	)
 )
 if "%INSTALL_DIR%" == "" (
 	REM change to lib
-	SET INSTALL_DIR=%USERPROFILE%\Temp\
+	if EXIST %USERPROFILE%\AppData\Local\Temp\ (
+		SET INSTALL_DIR=%USERPROFILE%\AppData\Local\Temp\
+	) else (
+		SET INSTALL_DIR="%USERPROFILE%\Local Settings\Temp\"
+	)
 )
 
 if "%LIBCURL_PATH_BUILD%" == "" (
-	SET LIBCURL_PATH_BUILD=%USERPROFILE%\RnD\oss\curl\builds\libcurl-vc-x64-release-dll-ipv6-sspi-winssl
+	SET LIBCURL_PATH_BUILD=%SRC_PATH%\libs\curl\builds\libcurl-vc-x64-release-dll-ipv6-sspi-winssl
 )
+
+if "%CMAKE_BIN_PATH%" == "" (
+	SET CMAKE_BIN_PATH="C:\Program Files\CMake\bin"
+)
+
+
+
+REM
+REM Perform the building steps
+REM
 
 pushd .
 cd %BUILD_DIR%
@@ -36,8 +58,9 @@ if not _%ARG:1=% == _%ARG% (
 REM absence of 2: build
 if _%ARG:2=% == _%ARG% (
 	echo Generate the MSVC .sln project and build
-	cmake ..
-	MSBuild .\ALL_BUILD.vcxproj /t:rebuild
+	%CMAKE_BIN_PATH%\%cmake ..
+	REM MSBuild .\ALL_BUILD.vcxproj /t:rebuild
+	MSBuild .\ALL_BUILD.vcxproj
 )
 
 REM absence of 3: copy

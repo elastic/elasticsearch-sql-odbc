@@ -101,18 +101,36 @@ endif (${CMD_RETURN})
 
 
 #
+# add ODBC-Specification to the project
+#
+if (IS_DIRECTORY $ENV{ODBC_PATH_SRC})
+	set(ODBC_PATH_SRC $ENV{ODBC_PATH_SRC})
+else (IS_DIRECTORY $ENV{ODBC_PATH_SRC})
+	if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/libs/ODBC-Specification)
+		set(ODBC_PATH_SRC ${CMAKE_SOURCE_DIR}/libs/ODBC-Specification)
+	else (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/libs/ODBC-Specification)
+		message(FATAL_ERROR "No ODBC-Specification directory found: set "
+				"environment var ODBC_PATH_SRC or place an "
+				"'ODBC-Specification' export into local 'lib' dir.")
+	endif (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/libs/ODBC-Specification)
+endif (IS_DIRECTORY $ENV{ODBC_PATH_SRC})
+message("ODBC-Specification source path: ${ODBC_PATH_SRC} .")
+set(ODBC_INC ${ODBC_PATH_SRC}/Windows/inc )
+
+
+#
 # add ujson4c to the project
 #
 if (IS_DIRECTORY $ENV{UJSON4C_PATH_SRC})
 	set(UJSON4C_PATH_SRC $ENV{UJSON4C_PATH_SRC})
 else (IS_DIRECTORY $ENV{UJSON4C_PATH_SRC})
-	if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/ujson4c)
-		set(UJSON4C_PATH_SRC ${CMAKE_SOURCE_DIR}/ujson4c)
-	else (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/ujson4c)
+	if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/libs/ujson4c)
+		set(UJSON4C_PATH_SRC ${CMAKE_SOURCE_DIR}/libs/ujson4c)
+	else (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/libs/ujson4c)
 		message(FATAL_ERROR "No ujson4c directory found: set environment var "
-				"UJSON4C_PATH_SRC or place an export into 'ujson4c' dir in "
-				"local source tree.")
-	endif (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/ujson4c)
+				"UJSON4C_PATH_SRC or place an 'ujson4c' export into local "
+				"'libs' dir.")
+	endif (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/libs/ujson4c)
 endif (IS_DIRECTORY $ENV{UJSON4C_PATH_SRC})
 message("Lib ujson4c source path: ${UJSON4C_PATH_SRC} .")
 aux_source_directory(${UJSON4C_PATH_SRC}/src DRV_SRC)
@@ -126,13 +144,13 @@ set(UJSON4C_INC ${UJSON4C_PATH_SRC}/src ${UJSON4C_PATH_SRC}/3rdparty )
 if (IS_DIRECTORY $ENV{LIBCURL_PATH_BUILD})
 	set(LIBCURL_PATH_BUILD $ENV{LIBCURL_PATH_BUILD})
 else (IS_DIRECTORY $ENV{LIBCURL_PATH_BUILD})
-	if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/libcurl)
-		set(LIBCURL_PATH_BUILD libcurl)
-	else (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/libcurl)
+	if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/libs/libcurl)
+		set(LIBCURL_PATH_BUILD ${CMAKE_SOURCE_DIR}/libs/libcurl)
+	else (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/libs/libcurl)
 		message(FATAL_ERROR "No libcurl directory found: set environment var "
 				"LIBCURL_PATH_BUILD or place a 'libcurl' dir in local source"
 				"tree, with 'bin' and 'include' subdirs.")
-	endif (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/libcurl)
+	endif (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/libs/libcurl)
 endif (IS_DIRECTORY $ENV{LIBCURL_PATH_BUILD})
 message("Lib libcurl build path: ${LIBCURL_PATH_BUILD} .")
 # add libcurl as dependency
@@ -154,13 +172,13 @@ endif (${WIN32})
 if (IS_DIRECTORY $ENV{CTIMESTAMP_PATH_SRC})
 	set(CTIMESTAMP_PATH_SRC $ENV{CTIMESTAMP_PATH_SRC})
 else (IS_DIRECTORY $ENV{CTIMESTAMP_PATH_SRC})
-	if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/c-timestamp)
-		set(CTIMESTAMP_PATH_SRC ${CMAKE_SOURCE_DIR}/c-timestamp)
-	else (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/c-timestamp)
+	if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/libs/c-timestamp)
+		set(CTIMESTAMP_PATH_SRC ${CMAKE_SOURCE_DIR}/libs/c-timestamp)
+	else (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/libs/c-timestamp)
 		message(FATAL_ERROR "No c-timestamp directory found: set environment"
 				" var CTIMESTAMP_PATH_SRC or place an export into "
 				"'c-timestamp' dir in local source tree.")
-	endif (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/c-timestamp)
+	endif (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/libs/c-timestamp)
 endif (IS_DIRECTORY $ENV{CTIMESTAMP_PATH_SRC})
 message("Lib c-timestamp source path: ${CTIMESTAMP_PATH_SRC} .")
 aux_source_directory(${CTIMESTAMP_PATH_SRC}/ DRV_SRC)
@@ -168,8 +186,8 @@ set(CTIMESTAMP_INC ${CTIMESTAMP_PATH_SRC}/ )
 
 
 message("Driver source files: ${DRV_SRC} .")
-message("Driver include paths: " ${DRV_SRC_DIR} ${LIBCURL_INC} ${UJSON4C_INC}
-	${CTIMESTAMP_INC})
+message("Driver include paths: " ${ODBC_INC} ${DRV_SRC_DIR} ${LIBCURL_INC} 
+	${UJSON4C_INC} ${CTIMESTAMP_INC})
 
 #
 # finally, set destination library
@@ -178,7 +196,7 @@ add_library(${DRV_NAME} SHARED ${DRV_SRC} ${DRV_BUILD_DIR}/${DRV_NAME}.def)
 #generate_export_header(${DRV_NAME})
 
 #include_directories(${DRV_SRC_DIR} ${DRV_BUILD_DIR})
-include_directories(${DRV_SRC_DIR} ${LIBCURL_INC} ${UJSON4C_INC} 
+include_directories(${ODBC_INC} ${DRV_SRC_DIR} ${LIBCURL_INC} ${UJSON4C_INC} 
 	${CTIMESTAMP_INC})
 
 
