@@ -1,4 +1,4 @@
-cbuild/*
-lib/*
+builds/*
+libs/*
 *.swp
 driver/*.swp
