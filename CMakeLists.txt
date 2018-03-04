@@ -77,7 +77,7 @@ message("C flags: ${CMAKE_C_FLAGS} .")
 
 set(DRV_SRC_DIR driver)
 set(DRV_LIB_DIR lib)
-set(DRV_BUILD_DIR cbuild)
+set(DRV_BUILD_DIR builds)
 message("Directories: source: '${DRV_SRC_DIR}', output: '${DRV_LIB_DIR}'.")
 
 aux_source_directory(${DRV_SRC_DIR} DRV_SRC)
