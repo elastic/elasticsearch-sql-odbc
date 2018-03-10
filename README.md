@@ -29,29 +29,40 @@ make).
 
 The driver makes use of the following libraries/headers:
 
- * ODBC-Specification : this is the project that currently contains the ODBC
-   specification, including the headers defining the ODBC C API.
- * libcurl : the library is used for the HTTP(S) communication with
-   Elasticsearch REST endpoints.
- * c-timestamp : the library is used for parsing the ISO 8601 formated
-   timestamps received from Elasticsearch.
- * ujson4c : fast scanner library for JSON.
+ * ODBC-Specification 
+   - this is the project that currently contains the ODBC specification,
+   including the headers defining the ODBC C API;
+ * libcurl
+   - the library is used for the HTTP(S) communication with Elasticsearch REST
+   endpoints;
+ * c-timestamp
+   - the library is used for parsing the ISO 8601 formated timestamps received
+   from Elasticsearch;
+ * ujson4c
+   - fast scanner library for JSON.
 
 
 ### Windows
 
 #### MSVC 
 
-Building the driver requires the installation of Microsoft Visual Studio. 
-Version 2017 Enterprize 15.5.2 is used to develop against, older versions
+Building the driver requires the installation of Microsoft tools. These can be
+from the Visual Studio pack or with the [standalone tools](http://landinghub.visualstudio.com/visual-cpp-build-tools).
+
+Version 2017 Enterprize 15.5.2 is used to develop with, older versions
 should work fine too, with their corresponding modules. The lists of packages
 for MSVC 2017 are given below.
 
 Required packages:
 
- * Windows [10] SDK for UWP: C++
- * C++/CLI support
  * MSBuild
+   - as the build tool;
+ * Windows SDK for UWP: C++
+   - for the CRT headers;
+ * VC++ toolset
+   - for the compiler;
+ * C++/CLI support
+   - for the command line environment and building.
 
 Optional packages:
 
