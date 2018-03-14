@@ -152,9 +152,16 @@ Once the file is read and imported, a new menu top item will appear, CMake. Menu
 
 ### Windows CLI 
 
-The project contains a simple BAT script - build.bat - that can be invoked and
-that will sequentially execute CMake and MSBuild. Some environment parameters
-can be customized (see start of the script).
+The project contains a BAT script - ```build.bat``` - that can run different
+steps for building the ODBC driver.
+
+Some environment parameters can be set to customized its behavior (see start
+of script).
+
+The script can also take a set of parameters, run ```build.bat help``` to see
+what they mean. ```build.bat fetch``` will fetch all required libraries, patch
+and build them, where necessary, then build the driver itself, by invoking
+CMake and MSBuild, as needed.
 
 ## Installation
 
