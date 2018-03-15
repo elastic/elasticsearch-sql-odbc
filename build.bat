@@ -26,9 +26,9 @@ if "%LOGGING_DIR%" == "" (
 if "%INSTALL_DIR%" == "" (
 	REM change to lib
 	if exist %USERPROFILE%\AppData\Local\Temp\ (
-		SET INSTALL_DIR=%USERPROFILE%\AppData\Local\Temp\
+		SET INSTALL_DIR=%USERPROFILE%\AppData\Local\Temp
 	) else (
-		SET INSTALL_DIR="%USERPROFILE%\Local Settings\Temp\"
+		SET INSTALL_DIR="%USERPROFILE%\Local Settings\Temp"
 	)
 )
 
@@ -48,17 +48,22 @@ REM
 
 REM presence of 'help': output a usage message
 if not _%ARG:help=% == _%ARG% (
-	echo Usage: %0 [help^|clean^|proper^|fetch^|nobuild^|copy^|trunclogs]
-	echo Where:
+	echo Usage: %0 [argument(s^)]
+	echo.
+	echo The following arguments are supported:
 	echo       help      : output this message and exit.
 	echo       clean     : clean the build dir files.
 	echo       proper    : clean both the build and libs dir and exit.
 	echo       fetch     : fetch, patch and build the dependency libs.
 	echo       nobuild   : don't build the project (the default is to build^).
-	echo       copy      : "install" the DLL into the test dir.
+	echo       copy      : copy the DLL into the test dir.
+	echo       regadd    : register the driver into the registry (run as Administrator^).
+	echo       regdel    : deregister the driver from the registry (run as Administrator^).
 	echo       trunclogs : truncate the logs.
+	echo.
 	echo Multiple arguments can be used concurrently.
 	echo Invoked with no arguments, the script will only initiate a build.
+	echo.
 	
 	goto end
 )
@@ -137,12 +142,48 @@ if _%ARG:nobuild=% == _%ARG% (
 REM presence of copy: copy DLLs (libcurl, odbc) to the test "install" dir
 if not _%ARG:copy=% == _%ARG% (
 	echo Dumping exported DLL symbols and copying into test install folder.
-	dumpbin /exports .\Debug\elasticodbc*.dll
+	rem dumpbin /exports .\Debug\elasticodbc*.dll
 
 	copy .\Debug\elasticodbc*.dll %INSTALL_DIR%\
 	copy %LIBCURL_PATH_BUILD%\bin\libcurl.dll %INSTALL_DIR%\
 ) else (
-	echo Invoked without 'copy': DLLs test installation skipped.
+	REM Invoked without 'copy': DLLs test installation skipped.
+)
+
+REM presence of regadd: add driver into the registry
+if not _%ARG:regadd=% == _%ARG% (
+	echo Adding driver into the registry.
+
+	REM check if driver exists, otherwise the filename is unknown
+	if not exist .\Debug\elasticodbc*.dll (
+		echo Error: Driver can only be added into the registry once built.
+		goto end
+	)
+	for /f %%i in (".\Debug\elasticodbc*.dll") do set DRVNAME=%%~nxi
+
+	reg add "HKLM\SOFTWARE\ODBC\ODBCINST.INI\ODBC Drivers" ^
+		/v "Elasticsearch ODBC" /t REG_SZ /d Installed /f /reg:64
+
+	reg add "HKLM\SOFTWARE\ODBC\ODBCINST.INI\Elasticsearch ODBC" /f /reg:64
+	reg add "HKLM\SOFTWARE\ODBC\ODBCINST.INI\Elasticsearch ODBC" /v Driver ^
+		/t REG_SZ /d %INSTALL_DIR%\!DRVNAME! /f /reg:64
+	reg add "HKLM\SOFTWARE\ODBC\ODBCINST.INI\Elasticsearch ODBC" /v Setup ^
+		/t REG_SZ /d %INSTALL_DIR%\!DRVNAME! /f /reg:64
+	reg add "HKLM\SOFTWARE\ODBC\ODBCINST.INI\Elasticsearch ODBC" /v UsageCount^
+		/t REG_DWORD /d 1 /f /reg:64
+) else (
+	REM Invoked without 'regadd': registry adding skipped.
+)
+
+REM presence of regdel: remove driver from the registry
+if not _%ARG:regdel=% == _%ARG% (
+	echo Removing driver from the registry.
+
+	reg delete "HKLM\SOFTWARE\ODBC\ODBCINST.INI\ODBC Drivers" ^
+		/v "Elasticsearch ODBC" /f /reg:64
+	reg delete "HKLM\SOFTWARE\ODBC\ODBCINST.INI\Elasticsearch ODBC" /f /reg:64
+) else (
+	REM Invoked without 'regadd': registry adding skipped.
 )
 
 REM presence of keeplogs: empty logs files
@@ -152,7 +193,7 @@ if not _%ARG:trunclogs=% == _%ARG% (
 	echo.>%LOGGING_DIR%\SQL32.LOG
 	echo.>%LOGGING_DIR%\SQL.LOG
 ) else (
-	echo Invoked without 'trunclogs', logs not truncated.
+	REM Invoked without 'trunclogs', logs not truncated.
 )
 
 :end
