@@ -16,6 +16,9 @@ SQLRETURN attach_sql(esodbc_stmt_st *stmt, const SQLTCHAR *sql, size_t tlen);
 void detach_sql(esodbc_stmt_st *stmt);
 
 // TODO: move to util.h
+int ansi_w2c(const SQLTCHAR *src, char *dst, size_t chars);
+int wmemncasecmp(const wchar_t *a, const wchar_t *b, size_t len);
+
 #ifdef _WIN32
 /* 
  * "[D]oes not null-terminate an output string if the input string length is

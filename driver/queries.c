@@ -64,9 +64,9 @@ void clear_resultset(esodbc_stmt_st *stmt)
 /*
  * Converts a wchar_t string to a C string for ANSI characters.
  * 'dst' should be as character-long as 'src', if 'src' is not 0-terminated,
- * OR one character longer (for the 0-term) otherwise.
+ * OR one character longer otherwise (for the 0-term).
  * 'dst' will always be 0-term'd.
- * Returns negative if conversion fails or number of converted wchars,
+ * Returns negative if conversion fails, OR number of converted wchars,
  * including the 0-term.
  *
  */
@@ -88,7 +88,7 @@ int ansi_w2c(const SQLTCHAR *src, char *dst, size_t chars)
 	return i + 1;
 }
 
-static int wmemncasecmp(const wchar_t *a, const wchar_t *b, size_t len)
+int wmemncasecmp(const wchar_t *a, const wchar_t *b, size_t len)
 {
 	size_t i;
 	int diff = 0; /* if len == 0 */
@@ -368,10 +368,9 @@ SQLRETURN attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 	if (cursor) {
 		wcurs = UJReadString(cursor, &eccnt);
 		if (eccnt) {
-			/* TODO: can this happen automatically anyways if hitting
-			 * Elastic's scroller size? */
+			/* this can happen automatically if hitting scroller size */
 			if (! stmt->dbc->fetch.max)
-				WARN("STMT@0x%p: no fetch size defined, but cursor returned.");
+				INFO("STMT@0x%p: no fetch size defined, but cursor returned.");
 			if (stmt->rset.ecurs)
 				DBGSTMT(stmt, "replacing old cursor `" LTPDL "`.", 
 						stmt->rset.eccnt, stmt->rset.ecurs);

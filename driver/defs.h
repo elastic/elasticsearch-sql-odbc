@@ -11,8 +11,6 @@
  * DEFaultS
  */
 
-/* leave the timeout to default value (0: don't timeout, pos: seconds) */
-#define ESODBC_TIMEOUT_DEFAULT		-1
 // FIXME: review@alpha
 /* TODO: should there be a max? */
 #define ESODBC_MAX_ROW_ARRAY_SIZE	128
@@ -61,16 +59,18 @@
 #define ELASTIC_SQL_PATH_TABLES			"tables"
 /* default host to connect to */
 //#define ESODBC_DEFAULT_HOST			"localhost"
-/* to loopback capture on Win10 */
+/* to allow loopback capture on Win10 */
 #define ESODBC_DEFAULT_HOST				"127.0.0.1"
 /* Elasticsearch'es default port */
-#define ESODBC_DEFAULT_PORT				9200
+#define ESODBC_DEFAULT_PORT				"9200"
 /* default security (TLS) setting */
 #define ESODBC_DEFAULT_SEC				0
-/* default global request timeout */
+/* default global request timeout (0: no timeout) */
 #define ESODBC_DEFAULT_TIMEOUT			0
 /* don't follow redirection from the server  */
 #define ESODBC_DEFAULT_FOLLOW			1
+/* use JSON packing of REST bodies (vs CBOR) */
+#define ESODBC_DEFAULT_USE_JSON			TRUE
 
 
 
