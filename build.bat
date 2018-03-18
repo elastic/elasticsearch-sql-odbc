@@ -2,7 +2,7 @@ REM This is just a helper script for building the ODBC driver in development.
 @echo off
 
 setlocal EnableExtensions EnableDelayedExpansion
-cls
+REM cls
 
 SET ARG="%*"
 
@@ -131,20 +131,24 @@ cd %BUILD_DIR%
 
 REM absence of nobuild: run the build
 if _%ARG:nobuild=% == _%ARG% (
-	echo Generating the MSVC .sln for the project and building it.
-	%CMAKE_BIN_PATH%\%cmake ..
-	REM MSBuild .\ALL_BUILD.vcxproj /t:rebuild
-	MSBuild .\ALL_BUILD.vcxproj
+	echo Building the driver:
+	if not exist ALL_BUILD.vcxproj (
+		echo Generating the project files.
+		%CMAKE_BIN_PATH%\%cmake ..
+	)
+	echo Building the project.
+	REM MSBuild ALL_BUILD.vcxproj /t:rebuild
+	MSBuild ALL_BUILD.vcxproj
 ) else (
 	echo Invoked with 'nobuild', building skipped.
 )
 
 REM presence of copy: copy DLLs (libcurl, odbc) to the test "install" dir
 if not _%ARG:copy=% == _%ARG% (
-	echo Dumping exported DLL symbols and copying into test install folder.
-	rem dumpbin /exports .\Debug\elasticodbc*.dll
+	echo Copying into test install folder %INSTALL_DIR%.
+	rem dumpbin /exports Debug\elasticodbc*.dll
 
-	copy .\Debug\elasticodbc*.dll %INSTALL_DIR%\
+	copy Debug\elasticodbc*.dll %INSTALL_DIR%\
 	copy %LIBCURL_PATH_BUILD%\bin\libcurl.dll %INSTALL_DIR%\
 ) else (
 	REM Invoked without 'copy': DLLs test installation skipped.
@@ -155,11 +159,13 @@ if not _%ARG:regadd=% == _%ARG% (
 	echo Adding driver into the registry.
 
 	REM check if driver exists, otherwise the filename is unknown
-	if not exist .\Debug\elasticodbc*.dll (
+	if not exist Debug\elasticodbc*.dll (
 		echo Error: Driver can only be added into the registry once built.
 		goto end
 	)
-	for /f %%i in (".\Debug\elasticodbc*.dll") do set DRVNAME=%%~nxi
+	for /f %%i in ("Debug\elasticodbc*.dll") do set DRVNAME=%%~nxi
+
+	echo Registering driver in registry under: %INSTALL_DIR%\!DRVNAME!
 
 	reg add "HKLM\SOFTWARE\ODBC\ODBCINST.INI\ODBC Drivers" ^
 		/v "Elasticsearch ODBC" /t REG_SZ /d Installed /f /reg:64
@@ -188,7 +194,7 @@ if not _%ARG:regdel=% == _%ARG% (
 
 REM presence of keeplogs: empty logs files
 if not _%ARG:trunclogs=% == _%ARG% (
-	echo Truncating all logs.
+	echo Truncating logs in %LOGGING_DIR%.
 	echo.>%LOGGING_DIR%\mylog.txt
 	echo.>%LOGGING_DIR%\SQL32.LOG
 	echo.>%LOGGING_DIR%\SQL.LOG
