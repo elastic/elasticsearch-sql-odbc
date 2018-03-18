@@ -241,6 +241,9 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 				RET_HDIAGS(ENVH(InputHandle), SQL_STATE_HY001);
 			}
 			init_diagnostic(&dbc->diag);
+			dbc->metadata_id = SQL_FALSE;
+			dbc->async_enable = SQL_ASYNC_ENABLE_OFF;
+
 			dbc->env = ENVH(InputHandle);
 			/* rest of initialization done at connect time */
 
@@ -325,6 +328,8 @@ SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 			// TODO: remove from (potential) list?
 			if (DBCH(Handle)->fetch.str)
 				free(DBCH(Handle)->fetch.str);
+			if (DBCH(Handle)->url)
+				free(DBCH(Handle)->url);
 			free(Handle);
 			break;
 		case SQL_HANDLE_STMT:

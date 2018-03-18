@@ -56,12 +56,15 @@ typedef struct struct_dbc {
 	esodbc_env_st *env;
 	/* diagnostic/state keeping */
 	esodbc_diag_st diag;
+	char *url;
 	SQLUINTEGER timeout;
+	BOOL follow;
 	struct {
 		size_t max; /* max fetch size */
 		char *str; /* as string */
 		char slen; /* string's length (w/o terminator) */
 	} fetch;
+	BOOL pack_json; /* should JSON be used in REST bodies? (vs. CBOR) *///TODO
 
 	// FIXME: placeholder; used if connection has been established or not
 	// TODO: PROTO

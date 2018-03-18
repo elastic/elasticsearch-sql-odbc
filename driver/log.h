@@ -22,6 +22,7 @@
 #include <string.h>
 #include <assert.h>
 
+#include "error.h"
 
 /*
  * w/printf() desriptors for char/wchar_t *
