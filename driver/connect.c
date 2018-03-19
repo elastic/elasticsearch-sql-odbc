@@ -56,22 +56,22 @@
 /* stucture to collect all attributes in a connection string */
 typedef struct {
 	struct {
-		SQLTCHAR *str;
+		SQLWCHAR *str;
 		size_t cnt;
 	} address;
 	struct {
-		SQLTCHAR *str;
+		SQLWCHAR *str;
 		size_t cnt;
 	} port;
 	BOOL secure;
 	long timeout;
 	BOOL follow;
 	struct {
-		SQLTCHAR *str;
+		SQLWCHAR *str;
 		size_t cnt;
 	} catalog;
 	struct {
-		SQLTCHAR *str;
+		SQLWCHAR *str;
 		size_t cnt;
 	} packing;
 	struct {
@@ -81,11 +81,11 @@ typedef struct {
 	} fetch;
 	long max_body_size;
 	struct {
-		SQLTCHAR *str;
+		SQLWCHAR *str;
 		size_t cnt;
 	} trace_file;
 	struct {
-		SQLTCHAR *str;
+		SQLWCHAR *str;
 		size_t cnt;
 	} trace_level;
 } conn_str_attr_st;
@@ -520,7 +520,7 @@ SQLRETURN post_statement(esodbc_stmt_st *stmt)
 		u8len = WCS2U8(stmt->rset.ecurs, (int)stmt->rset.eccnt, u8curs,
 				sizeof(u8curs));
 		if (u8len <= 0) {
-			ERRSTMT(stmt, "failed to convert cursor `" LTPDL "` to UTF8: %d.",
+			ERRSTMT(stmt, "failed to convert cursor `" LWPDL "` to UTF8: %d.",
 					stmt->rset.eccnt, stmt->rset.ecurs, WCS2U8_ERRNO());
 			RET_HDIAGS(stmt, SQL_STATE_24000);
 		}
@@ -625,9 +625,9 @@ static SQLRETURN test_connect(CURL *curl)
 
 static BOOL as_bool(size_t cnt, SQLWCHAR *val)
 {
-	if (cnt == 5 && wmemncasecmp(val, MK_TSTR("false"), 5) == 0)
+	if (cnt == 5 && wmemncasecmp(val, MK_WPTR("false"), 5) == 0)
 		return FALSE;
-	else if (cnt == 2 && wmemncasecmp(val, MK_TSTR("no"), 2) == 0)
+	else if (cnt == 2 && wmemncasecmp(val, MK_WPTR("no"), 2) == 0)
 		return FALSE;
 	else if (cnt == 1 && *val == '0')
 		return FALSE;
@@ -665,7 +665,7 @@ static BOOL as_long(size_t cnt, SQLWCHAR *val, long *out)
 	*out = res;
 	return TRUE;
 err:
-	ERR("failed to convert all characters in `" LTPDL "`[%zd] to long.", 
+	ERR("failed to convert all characters in `" LWPDL "`[%zd] to long.", 
 			cnt, val, cnt);
 	return FALSE;
 }
@@ -675,10 +675,10 @@ static BOOL assign_conn_attr(conn_str_attr_st *attrs,
 {
 #define KEYWORD_EQUALS(_kw) \
 	(kw_cnt == sizeof(_kw) - 1) && \
-	(wmemncasecmp(keyword, MK_TSTR(_kw), kw_cnt) == 0)
+	(wmemncasecmp(keyword, MK_WPTR(_kw), kw_cnt) == 0)
 	
 	if (KEYWORD_EQUALS(CONNSTR_KW_DRIVER)) {
-		DBG("config values for driver: " LTPDL ".", val_cnt, value);
+		DBG("config values for driver: " LWPDL ".", val_cnt, value);
 	} else if (KEYWORD_EQUALS(CONNSTR_KW_PWD)) {
 		// TODO: useful?
 	} else if (KEYWORD_EQUALS(CONNSTR_KW_UID)) {
@@ -917,7 +917,7 @@ static BOOL parse_connstr(conn_str_attr_st *attr,
 			return FALSE;
 		}
 
-		DBG("read connection string attribute: `" LTPDL "` = `" LTPDL "`.", 
+		DBG("read connection string attribute: `" LWPDL "` = `" LWPDL "`.", 
 				kw_cnt, keyword, val_cnt, value);
 		if (! assign_conn_attr(attr, kw_cnt, keyword, val_cnt, value))
 			return FALSE;
@@ -936,9 +936,9 @@ static SQLRETURN process_connstr(esodbc_dbc_st *dbc,
 
 	/* init struct with defaults (where applicable) */
 	memset(&attrs, 0, sizeof(attrs));
-	attrs.address.str = MK_TSTR(ESODBC_DEFAULT_HOST);
+	attrs.address.str = MK_WPTR(ESODBC_DEFAULT_HOST);
 	attrs.address.cnt = sizeof(ESODBC_DEFAULT_HOST) - 1;
-	attrs.port.str = MK_TSTR(ESODBC_DEFAULT_PORT);
+	attrs.port.str = MK_WPTR(ESODBC_DEFAULT_PORT);
 	attrs.port.cnt = sizeof(ESODBC_DEFAULT_PORT) - 1;
 	attrs.secure = ESODBC_DEFAULT_SEC;
 	attrs.timeout = ESODBC_DEFAULT_TIMEOUT;
@@ -961,8 +961,8 @@ static SQLRETURN process_connstr(esodbc_dbc_st *dbc,
 			(int)attrs.address.cnt, attrs.address.str,
 			(int)attrs.port.cnt, attrs.port.str);
 	if (cnt < 0) {
-		ERRN("failed to print URL out of address: `" LTPDL "` [%zd], "
-				"port: `" LTPDL "` [%zd].",
+		ERRN("failed to print URL out of address: `" LWPDL "` [%zd], "
+				"port: `" LWPDL "` [%zd].",
 				attrs.address.cnt, attrs.address.str,
 				attrs.port.cnt, attrs.port.str);
 		goto err;
@@ -971,7 +971,7 @@ static SQLRETURN process_connstr(esodbc_dbc_st *dbc,
 	n = WCS2U8(urlw, cnt, NULL, 0);
 	if (! n) {
 		ERRN("failed to estimate U8 conversion space necessary for `" 
-				LTPDL " [%d]`.", cnt, urlw, cnt);
+				LWPDL " [%d]`.", cnt, urlw, cnt);
 		goto err;
 	}
 	dbc->url = malloc(n + /*0-term*/1);
@@ -982,7 +982,7 @@ static SQLRETURN process_connstr(esodbc_dbc_st *dbc,
 	}
 	n = WCS2U8(urlw, cnt, dbc->url, n);
 	if (! n) {
-		ERRN("failed to U8 convert URL `" LTPDL "` [%d].", cnt, urlw, cnt);
+		ERRN("failed to U8 convert URL `" LWPDL "` [%d].", cnt, urlw, cnt);
 		goto err;
 	}
 	dbc->url[n] = 0;
@@ -1032,7 +1032,7 @@ static SQLRETURN process_connstr(esodbc_dbc_st *dbc,
 	/* set the REST body format: JSON/CBOR */
 	if (attrs.packing.cnt) {
 		if (attrs.packing.cnt != sizeof("JSON") - 1) { /* == CBOR */
-			ERR("unknown packing method `" LTPDL "`.", attrs.packing.cnt, 
+			ERR("unknown packing method `" LWPDL "`.", attrs.packing.cnt, 
 					attrs.packing.str);
 			goto err;
 		}
@@ -1042,7 +1042,7 @@ static SQLRETURN process_connstr(esodbc_dbc_st *dbc,
 					attrs.packing.cnt)) {
 			dbc->pack_json = FALSE;
 		} else {
-			ERR("unknown packing method `" LTPDL "`.", attrs.packing.cnt, 
+			ERR("unknown packing method `" LWPDL "`.", attrs.packing.cnt, 
 					attrs.packing.str);
 			goto err;
 		}
@@ -1056,7 +1056,7 @@ static SQLRETURN process_connstr(esodbc_dbc_st *dbc,
 
 	return SQL_SUCCESS;
 err:
-	ERR("failed to process connection string `" LTPDL "`.",
+	ERR("failed to process connection string `" LWPDL "`.",
 			cchConnStrIn < 0 ? wcslen(szConnStrIn) : cchConnStrIn,szConnStrIn);
 	if (state == SQL_STATE_HY000)
 		RET_HDIAG(dbc, state, "invalid connection string", 0);
@@ -1091,11 +1091,11 @@ SQLRETURN EsSQLDriverConnectW
 {
 	esodbc_dbc_st *dbc = DBCH(hdbc);
 	SQLRETURN ret;
-	SQLTCHAR *connstr;
+	SQLWCHAR *connstr;
 	size_t n;
 	char *url = NULL;
 
-	DBG("Input connection string: '"LTPD"'[%d].", szConnStrIn, cchConnStrIn);
+	DBG("Input connection string: '"LWPD"'[%d].", szConnStrIn, cchConnStrIn);
 	if (! pcchConnStrOut) {
 		ERR("null pcchConnStrOut parameter");
 		RET_HDIAGS(dbc, SQL_STATE_HY000);
@@ -1116,7 +1116,7 @@ SQLRETURN EsSQLDriverConnectW
 #endif
 
 	// FIXME: set the proper connection string;
-	connstr = MK_TSTR("connection string placeholder");
+	connstr = MK_WPTR("connection string placeholder");
 	dbc->connstr = _wcsdup(connstr);
 	if (! dbc->connstr) {
 		ERRN("failed to dup string `%s`.", connstr);
@@ -1290,7 +1290,7 @@ SQLRETURN EsSQLGetConnectAttrW(
 	esodbc_dbc_st *dbc = DBCH(ConnectionHandle);
 	SQLRETURN ret;
 	SQLSMALLINT used;
-//	SQLTCHAR *val;
+//	SQLWCHAR *val;
 
 	switch(Attribute) {
 		/* https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/automatic-population-of-the-ipd */
@@ -1317,14 +1317,14 @@ SQLRETURN EsSQLGetConnectAttrW(
 			}
 #endif //0
 #if 0
-			val = dbc->catalog ? dbc->catalog : MK_TSTR("null");
-			*StringLengthPtr = wcslen(*(SQLTCHAR **)ValuePtr);
-			*StringLengthPtr *= sizeof(SQLTCHAR);
-			*(SQLTCHAR **)ValuePtr = val;
+			val = dbc->catalog ? dbc->catalog : MK_WPTR("null");
+			*StringLengthPtr = wcslen(*(SQLWCHAR **)ValuePtr);
+			*StringLengthPtr *= sizeof(SQLWCHAR);
+			*(SQLWCHAR **)ValuePtr = val;
 #else //0
 			// FIXME;
-			ret = write_tstr(&dbc->diag, (SQLTCHAR *)ValuePtr, 
-					MK_TSTR("NulL"), (SQLSMALLINT)BufferLength, &used);
+			ret = write_wptr(&dbc->diag, (SQLWCHAR *)ValuePtr, 
+					MK_WPTR("NulL"), (SQLSMALLINT)BufferLength, &used);
 			if (StringLengthPtr);
 				*StringLengthPtr = (SQLINTEGER)used;
 			return ret;
