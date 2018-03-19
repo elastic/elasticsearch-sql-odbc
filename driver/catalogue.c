@@ -24,20 +24,20 @@
 
 SQLRETURN EsSQLTablesW(
 		SQLHSTMT StatementHandle,
-		_In_reads_opt_(NameLength1) SQLTCHAR *CatalogName, 
+		_In_reads_opt_(NameLength1) SQLWCHAR *CatalogName, 
 		SQLSMALLINT NameLength1,
-		_In_reads_opt_(NameLength2) SQLTCHAR *SchemaName, 
+		_In_reads_opt_(NameLength2) SQLWCHAR *SchemaName, 
 		SQLSMALLINT NameLength2,
-		_In_reads_opt_(NameLength3) SQLTCHAR *TableName, 
+		_In_reads_opt_(NameLength3) SQLWCHAR *TableName, 
 		SQLSMALLINT NameLength3,
-		_In_reads_opt_(NameLength4) SQLTCHAR *TableType, 
+		_In_reads_opt_(NameLength4) SQLWCHAR *TableType, 
 		SQLSMALLINT NameLength4)
 {
 	esodbc_stmt_st *stmt = STMH(StatementHandle);
 	SQLRETURN ret;
-	SQLTCHAR wbuf[ESODBC_MAX_IDENTIFIER_LEN + sizeof(SQL_TABLES_START) + 
+	SQLWCHAR wbuf[ESODBC_MAX_IDENTIFIER_LEN + sizeof(SQL_TABLES_START) + 
 		sizeof(SQL_TABLES_END)]; /*includes 2x\0*/
-	SQLTCHAR *table_type, *table_name;
+	SQLWCHAR *table_type, *table_name;
 	size_t count, pos;
 
 	if (stmt->metadata_id == SQL_TRUE)
@@ -45,27 +45,27 @@ SQLRETURN EsSQLTablesW(
 
 	/* TODO: server support needed for cat. & sch. name filtering */
 
-	if (CatalogName && (wmemcmp(CatalogName, MK_TSTR(SQL_ALL_CATALOGS), 
+	if (CatalogName && (wmemcmp(CatalogName, MK_WPTR(SQL_ALL_CATALOGS), 
 					NameLength1) != 0)) {
 		ERR("filtering by catalog is not supported.");
 		RET_HDIAG(stmt, SQL_STATE_IM001, "catalog filtering not supported", 0);
 	}
-	if (SchemaName && (wmemcmp(SchemaName, MK_TSTR(SQL_ALL_SCHEMAS), 
+	if (SchemaName && (wmemcmp(SchemaName, MK_WPTR(SQL_ALL_SCHEMAS), 
 					NameLength2) != 0)) {
 		ERR("filtering by schemas is not supported.");
 		RET_HDIAG(stmt, SQL_STATE_IM001, "schema filtering not supported", 0);
 	}
 	if (TableType) {
 		table_type = _wcsupr(TableType);
-		if ((! wcsstr(table_type, MK_TSTR("TABLE"))) && 
-				(! wcsstr(table_type, MK_TSTR("ALIAS")))) {
-			WARN("no 'TABLE' or 'ALIAS' type fond in filter `"LTPD"`: "
+		if ((! wcsstr(table_type, MK_WPTR("TABLE"))) && 
+				(! wcsstr(table_type, MK_WPTR("ALIAS")))) {
+			WARN("no 'TABLE' or 'ALIAS' type fond in filter `"LWPD"`: "
 					"empty result set");
 			goto empty;
 		}
 	}
 	if (TableName) {
-		DBG("filtering by table name `"LTPD"`.", TableName);
+		DBG("filtering by table name `"LWPD"`.", TableName);
 		if (stmt->metadata_id == SQL_TRUE) {
 			// FIXME: string needs escaping of % \\ _
 			FIXME;
@@ -73,23 +73,23 @@ SQLRETURN EsSQLTablesW(
 		table_name = TableName;
 		count = NameLength3;
 	} else {
-		table_name = MK_TSTR("%");
+		table_name = MK_WPTR("%");
 		count = sizeof("%") - 1;
 	}
 
 	if (ESODBC_MAX_IDENTIFIER_LEN < NameLength3) {
-		ERR("TableName `" LTPDL "` too long (limit: %zd).", NameLength3,
+		ERR("TableName `" LWPDL "` too long (limit: %zd).", NameLength3,
 				TableName, ESODBC_MAX_IDENTIFIER_LEN);
 		RET_HDIAG(stmt, SQL_STATE_HY000, "TableName too long", 0);
 	}
 	/* print SQL to send to server */
 	/* count/pos always indicate number of characters (not bytes) */
 	pos = sizeof(SQL_TABLES_START) - 1;
-	memcpy(wbuf, MK_TSTR(SQL_TABLES_START), pos * sizeof(SQLTCHAR));
-	memcpy(&wbuf[pos], table_name, count * sizeof(SQLTCHAR));
+	memcpy(wbuf, MK_WPTR(SQL_TABLES_START), pos * sizeof(SQLWCHAR));
+	memcpy(&wbuf[pos], table_name, count * sizeof(SQLWCHAR));
 	pos += count;
 	count = sizeof(SQL_TABLES_END) - 1;
-	memcpy(&wbuf[pos], MK_TSTR(SQL_TABLES_END), count * sizeof(SQLTCHAR));
+	memcpy(&wbuf[pos], MK_WPTR(SQL_TABLES_END), count * sizeof(SQLWCHAR));
 	pos += count;
 
 	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
@@ -118,10 +118,11 @@ SQLRETURN EsSQLColumnsW
 )
 {
 	esodbc_stmt_st *stmt = STMH(hstmt);
-	SQLTCHAR *tablename, *columnname;
+	SQLWCHAR *tablename, *columnname;
 	SQLSMALLINT tn_clen, cn_clen;
 	/* 8 for \' and spaces and extra */
-	SQLTCHAR wbuf[sizeof(ESODBC_SQL_COLUMNS) + 2 * ESODBC_MAX_IDENTIFIER_LEN + 8];
+	SQLWCHAR wbuf[sizeof(ESODBC_SQL_COLUMNS) + 
+		2 * ESODBC_MAX_IDENTIFIER_LEN + 8];
 	int clen;
 	SQLRETURN ret;
 
@@ -130,12 +131,12 @@ SQLRETURN EsSQLColumnsW
 	
 	/* TODO: server support needed for cat. & sch. name filtering */
 
-	if (szCatalogName && (wmemcmp(szCatalogName, MK_TSTR(SQL_ALL_CATALOGS), 
+	if (szCatalogName && (wmemcmp(szCatalogName, MK_WPTR(SQL_ALL_CATALOGS), 
 					cchCatalogName) != 0)) {
 		ERR("filtering by catalog is not supported."); /* TODO? */
 		RET_HDIAG(stmt, SQL_STATE_IM001, "catalog filtering not supported", 0);
 	}
-	if (szSchemaName && (wmemcmp(szSchemaName, MK_TSTR(SQL_ALL_SCHEMAS), 
+	if (szSchemaName && (wmemcmp(szSchemaName, MK_WPTR(SQL_ALL_SCHEMAS), 
 					cchSchemaName) != 0)) {
 		ERR("filtering by schemas is not supported.");
 		RET_HDIAG(stmt, SQL_STATE_IM001, "schema filtering not supported", 0);
@@ -143,35 +144,35 @@ SQLRETURN EsSQLColumnsW
 
 	if (szTableName && cchTableName) {
 		if (ESODBC_MAX_IDENTIFIER_LEN < cchTableName) {
-			ERR("TableName `" LTPDL "` too long (limit: %zd).", cchTableName,
+			ERR("TableName `" LWPDL "` too long (limit: %zd).", cchTableName,
 					szTableName, ESODBC_MAX_IDENTIFIER_LEN);
 			RET_HDIAG(stmt, SQL_STATE_HY000, "TableName too long", 0);
 		}
 		tablename = szTableName;
 		tn_clen = cchTableName;
 	} else {
-		tablename = MK_TSTR("%");
+		tablename = MK_WPTR("%");
 		tn_clen = sizeof("%") - 1;
 	}
 	if (szColumnName && cchColumnName) {
 		if (ESODBC_MAX_IDENTIFIER_LEN < cchColumnName) {
-			ERR("ColumnName `" LTPDL "` too long (limit: %zd).", cchColumnName,
+			ERR("ColumnName `" LWPDL "` too long (limit: %zd).", cchColumnName,
 					szColumnName, ESODBC_MAX_IDENTIFIER_LEN);
 			RET_HDIAG(stmt, SQL_STATE_HY000, "ColumnName too long", 0);
 		}
 		columnname = szColumnName;
 		cn_clen = cchColumnName;
 	} else {
-		columnname = MK_TSTR("%");
+		columnname = MK_WPTR("%");
 		cn_clen = sizeof("%") - 1;
 	}
 
-	clen = swprintf(wbuf, sizeof(wbuf)/sizeof(SQLTCHAR), 
-			MK_TSTR("%s '%.*s' ESCAPE '" ESODBC_PATTERN_ESCAPE "' "
+	clen = swprintf(wbuf, sizeof(wbuf)/sizeof(SQLWCHAR), 
+			MK_WPTR("%s '%.*s' ESCAPE '" ESODBC_PATTERN_ESCAPE "' "
 				"'%.*s' ESCAPE '" ESODBC_PATTERN_ESCAPE "'"), 
-			MK_TSTR(ESODBC_SQL_COLUMNS), 
+			MK_WPTR(ESODBC_SQL_COLUMNS), 
 			tn_clen, tablename, cn_clen, columnname);
-	if (clen <= 0 || sizeof(wbuf)/sizeof(SQLTCHAR) <= clen) { /* == */
+	if (clen <= 0 || sizeof(wbuf)/sizeof(SQLWCHAR) <= clen) { /* == */
 		ERRN("SQL printing failed (buffer too small (%zdB)?).", sizeof(wbuf));
 		RET_HDIAGS(stmt, SQL_STATE_HY000);
 	}

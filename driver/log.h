@@ -48,15 +48,15 @@
 #endif /* _WIN32 */
 
 /*
- * Descriptors to be used with logging with SQLTCHAR pointer type.
- * "Log Tchar Pointer Descriptor [with Lenght]"
+ * Descriptors to be used with logging with SQLWCHAR pointer type.
+ * "Log Wchar Pointer Descriptor [with Lenght]"
  */
 #ifdef UNICODE
-#define LTPD	PFWP_DESC
-#define LTPDL	PFWP_LDESC
+#define LWPD	PFWP_DESC
+#define LWPDL	PFWP_LDESC
 #else /* UNICODE */
-#define LTPD	PFCP_DESC
-#define LTPDL	PFCP_LDESC
+#define LWPD	PFCP_DESC
+#define LWPDL	PFCP_LDESC
 #endif /* UNICODE */
 
 
@@ -97,7 +97,7 @@ extern int _esodbc_log_level;
 #define FIXME	BUG("not yet implemented")
 #define TRACE	DBG("===== TR4C3 =====");
 
-#define TS_NULL	MK_TSTR("<null>")
+#define TS_NULL	MK_WPTR("<null>")
 
 #endif /* __LOG_H__ */
 

@@ -123,8 +123,8 @@ static SQLUSMALLINT esodbc_functions[] = {
  * require character count (eg. SQLGetDiagRec, SQLDescribeCol), some others
  * bytes length (eg.  SQLGetInfo, SQLGetDiagField, SQLGetConnectAttr,
  * EsSQLColAttributeW). */
-SQLRETURN write_tstr(esodbc_diag_st *diag,
-		SQLTCHAR *dest, const SQLTCHAR *src,
+SQLRETURN write_wptr(esodbc_diag_st *diag,
+		SQLWCHAR *dest, const SQLWCHAR *src,
 		SQLSMALLINT /*B*/avail, SQLSMALLINT /*B*/*usedp)
 {
 	size_t src_cnt, awail;
@@ -132,16 +132,16 @@ SQLRETURN write_tstr(esodbc_diag_st *diag,
 
 	if (! dest)
 		avail = 0;
-	/* needs to be multiple of SQLTCHAR units (2 on Win) */
-	if (avail % sizeof(SQLTCHAR)) {
+	/* needs to be multiple of SQLWCHAR units (2 on Win) */
+	if (avail % sizeof(SQLWCHAR)) {
 		ERR("invalid buffer length provided: %d.", avail);
 		RET_CDIAG(diag, SQL_STATE_HY090, "invalid buffer length provided", 0);
 	}
-	awail = avail/sizeof(SQLTCHAR);
+	awail = avail/sizeof(SQLWCHAR);
 	src_cnt = wcslen(src);
 
 	/* return value always set to what it needs to be written (excluding \0).*/
-	used = (SQLSMALLINT)src_cnt * sizeof(SQLTCHAR);
+	used = (SQLSMALLINT)src_cnt * sizeof(SQLWCHAR);
 	if (! usedp) {
 		WARN("invalid output buffer provided (NULL) to collect used space.");
 		//RET_cDIAG(diag, SQL_STATE_HY013, "invalid used provided (NULL)", 0);
@@ -160,7 +160,7 @@ SQLRETURN write_tstr(esodbc_diag_st *diag,
 			dest[awail - 1] = 0;
 
 			INFO("not enough buffer size to write required string (plus "
-					"terminator): `" LTPD "` [%zd]; available: %d.", src,
+					"terminator): `" LWPD "` [%zd]; available: %d.", src,
 					src_cnt, awail);
 			RET_DIAG(diag, SQL_STATE_01004, NULL, 0);
 		} else {
@@ -192,8 +192,8 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		/* Driver Information */
 		/* "what version of odbc a driver complies with" */
 		case SQL_DRIVER_ODBC_VER:
-			return write_tstr(&dbc->diag, InfoValue,
-					MK_TSTR(ESODBC_SQL_SPEC_STRING), BufferLength,
+			return write_wptr(&dbc->diag, InfoValue,
+					MK_WPTR(ESODBC_SQL_SPEC_STRING), BufferLength,
 					StringLengthPtr);
 
 		/* "if the driver can execute functions asynchronously on the
@@ -238,25 +238,25 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			break;
 
 		case SQL_DATA_SOURCE_NAME:
-			DBG("requested: data source name: `"LTPD"`.", dbc->connstr);
-			return write_tstr(&dbc->diag, InfoValue, dbc->connstr,
+			DBG("requested: data source name: `"LWPD"`.", dbc->connstr);
+			return write_wptr(&dbc->diag, InfoValue, dbc->connstr,
 					BufferLength, StringLengthPtr);
 
 		case SQL_DRIVER_NAME:
 			DBG("requested: driver (file) name: %s.", DRIVER_NAME);
-			return write_tstr(&dbc->diag, InfoValue, 
-					MK_TSTR(DRIVER_NAME), BufferLength, StringLengthPtr);
+			return write_wptr(&dbc->diag, InfoValue, 
+					MK_WPTR(DRIVER_NAME), BufferLength, StringLengthPtr);
 			break;
 
 		case SQL_DATA_SOURCE_READ_ONLY:
 			DBG("requested: if data source is read only (`Y`es, it is).");
-			return write_tstr(&dbc->diag, InfoValue, MK_TSTR("Y"),
+			return write_wptr(&dbc->diag, InfoValue, MK_WPTR("Y"),
 					BufferLength, StringLengthPtr);
 
 		case SQL_SEARCH_PATTERN_ESCAPE:
 			DBG("requested: escape character (`%s`).", ESODBC_PATTERN_ESCAPE);
-			return write_tstr(&dbc->diag, InfoValue,
-					MK_TSTR(ESODBC_PATTERN_ESCAPE), BufferLength,
+			return write_wptr(&dbc->diag, InfoValue,
+					MK_WPTR(ESODBC_PATTERN_ESCAPE), BufferLength,
 					StringLengthPtr);
 
 		case SQL_CORRELATION_NAME:
@@ -277,8 +277,8 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			/* JDBC[0]: getCatalogSeparator() */
 			DBG("requested: catalogue separator (`%s`).", 
 					ESODBC_CATALOG_SEPARATOR);
-			return write_tstr(&dbc->diag, InfoValue,
-					MK_TSTR(ESODBC_CATALOG_SEPARATOR), BufferLength,
+			return write_wptr(&dbc->diag, InfoValue,
+					MK_WPTR(ESODBC_CATALOG_SEPARATOR), BufferLength,
 					StringLengthPtr);
 
 		case SQL_FILE_USAGE:
@@ -293,8 +293,8 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		case SQL_CATALOG_TERM: /* SQL_QUALIFIER_TERM */
 			/* JDBC[0]: getCatalogSeparator() */
 			DBG("requested: catalogue term (`%s`).", ESODBC_CATALOG_TERM);
-			return write_tstr(&dbc->diag, InfoValue,
-					MK_TSTR(ESODBC_CATALOG_TERM), BufferLength,
+			return write_wptr(&dbc->diag, InfoValue,
+					MK_WPTR(ESODBC_CATALOG_TERM), BufferLength,
 					StringLengthPtr);
 
 		case SQL_MAX_SCHEMA_NAME_LEN: /* SQL_MAX_OWNER_NAME_LEN */
@@ -306,8 +306,8 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		case SQL_IDENTIFIER_QUOTE_CHAR:
 			/* JDBC[0]: getIdentifierQuoteString() */
 			DBG("requested: quoting char (`%s`).", ESODBC_QUOTE_CHAR);
-			return write_tstr(&dbc->diag, InfoValue,
-					MK_TSTR(ESODBC_QUOTE_CHAR), BufferLength,
+			return write_wptr(&dbc->diag, InfoValue,
+					MK_WPTR(ESODBC_QUOTE_CHAR), BufferLength,
 					StringLengthPtr);
 
 		/* what Operations are supported by SQLSetPos  */
@@ -345,15 +345,15 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 
 		case SQL_SCHEMA_TERM:
 			DBG("requested schema term (`%s`).", ESODBC_SCHEMA_TERM);
-			return write_tstr(&dbc->diag, InfoValue,
-					MK_TSTR(ESODBC_SCHEMA_TERM), BufferLength,
+			return write_wptr(&dbc->diag, InfoValue,
+					MK_WPTR(ESODBC_SCHEMA_TERM), BufferLength,
 					StringLengthPtr);
 
 		/* no procedures support */
 		case SQL_PROCEDURES:
 		case SQL_ACCESSIBLE_PROCEDURES:
 			DBG("requested: procedures support (`N`).");
-			return write_tstr(&dbc->diag, InfoValue, MK_TSTR("N"),
+			return write_wptr(&dbc->diag, InfoValue, MK_WPTR("N"),
 					BufferLength, StringLengthPtr);
 		case SQL_MAX_PROCEDURE_NAME_LEN:
 			DBG("requested max procedure name len (0).");
@@ -361,7 +361,7 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			break;
 		case SQL_PROCEDURE_TERM:
 			DBG("requested: procedure term (``).");
-			return write_tstr(&dbc->diag, InfoValue, MK_TSTR(""),
+			return write_wptr(&dbc->diag, InfoValue, MK_WPTR(""),
 					BufferLength, StringLengthPtr);
 
 		default:
@@ -386,7 +386,7 @@ SQLRETURN EsSQLGetDiagFieldW(
 	esodbc_diag_st *diag, dummy;
 	SQLSMALLINT used;
 	size_t len;
-	SQLTCHAR *tstr;
+	SQLWCHAR *wptr;
 	SQLRETURN ret;
 
 	if (RecNumber <= 0) {
@@ -438,13 +438,13 @@ SQLRETURN EsSQLGetDiagFieldW(
 		/* Record Fields */
 		do {
 		case SQL_DIAG_CLASS_ORIGIN:
-			len = (sizeof(ORIG_DISCRIM) - 1) * sizeof (SQLTCHAR);
+			len = (sizeof(ORIG_DISCRIM) - 1) * sizeof (SQLWCHAR);
 			assert(len <= sizeof(esodbc_errors[diag->state].code));
-			if (memcmp(esodbc_errors[diag->state].code, MK_TSTR(ORIG_DISCRIM),
+			if (memcmp(esodbc_errors[diag->state].code, MK_WPTR(ORIG_DISCRIM),
 						len) == 0) {
-				tstr = MK_TSTR(ORIG_CLASS_ODBC);
+				wptr = MK_WPTR(ORIG_CLASS_ODBC);
 			} else {
-				tstr = MK_TSTR(ORIG_CLASS_ISO);
+				wptr = MK_WPTR(ORIG_CLASS_ISO);
 			}
 			break;
 		case SQL_DIAG_SUBCLASS_ORIGIN:
@@ -491,29 +491,29 @@ SQLRETURN EsSQLGetDiagFieldW(
 				case SQL_STATE_IM010:
 				case SQL_STATE_IM011:
 				case SQL_STATE_IM012:
-					tstr = MK_TSTR(ORIG_CLASS_ODBC);
+					wptr = MK_WPTR(ORIG_CLASS_ODBC);
 					break;
 				default:
-					tstr = MK_TSTR(ORIG_CLASS_ISO);
+					wptr = MK_WPTR(ORIG_CLASS_ISO);
 			}
 			break;
 		} while (0);
-			DBG("diagnostic code '"LTPD"' is of class '"LTPD"'.",
-					esodbc_errors[diag->state].code, tstr);
-			return write_tstr(&dummy, DiagInfoPtr, tstr, BufferLength,
+			DBG("diagnostic code '"LWPD"' is of class '"LWPD"'.",
+					esodbc_errors[diag->state].code, wptr);
+			return write_wptr(&dummy, DiagInfoPtr, wptr, BufferLength,
 					StringLengthPtr);
 		
 		case SQL_DIAG_CONNECTION_NAME:
 		/* same as SQLGetInfo(SQL_DATA_SOURCE_NAME) */
 		case SQL_DIAG_SERVER_NAME: /* TODO: keep same as _CONNECTION_NAME? */
 			switch (HandleType) {
-				case SQL_HANDLE_DBC: tstr = DBCH(Handle)->connstr; break;
+				case SQL_HANDLE_DBC: wptr = DBCH(Handle)->connstr; break;
 				case SQL_HANDLE_DESC: // FIXME: once have db-stmt-desc link
 				case SQL_HANDLE_STMT: FIXME; break;
-				default: tstr = MK_TSTR("");
+				default: wptr = MK_WPTR("");
 			}
-			DBG("inquired connection name (`"LTPD"`)", tstr);
-			return write_tstr(&dummy, DiagInfoPtr, tstr, BufferLength,
+			DBG("inquired connection name (`"LWPD"`)", wptr);
+			return write_wptr(&dummy, DiagInfoPtr, wptr, BufferLength,
 					StringLengthPtr);
 		
 
@@ -529,7 +529,7 @@ SQLRETURN EsSQLGetDiagFieldW(
 				return SQL_NO_DATA;
 			}
 			/* GetDiagField can't set diagnostics itself, so use a dummy */
-			ret = write_tstr(&dummy, DiagInfoPtr,
+			ret = write_wptr(&dummy, DiagInfoPtr,
 					esodbc_errors[diag->state].code, BufferLength, &used);
 			if (StringLengthPtr)
 				*StringLengthPtr = used;
@@ -616,7 +616,7 @@ SQLRETURN EsSQLGetDiagRecW
 	if (NativeError)
 		*NativeError = diag->native_code;
 
-	ret = write_tstr(&dummy, MessageText, diag->text, 
+	ret = write_wptr(&dummy, MessageText, diag->text, 
 			BufferLength * sizeof(*MessageText), &used);
 	if (TextLength)
 		*TextLength = used / sizeof(*MessageText);
@@ -683,7 +683,7 @@ SQLRETURN EsSQLGetTypeInfoW(SQLHSTMT StatementHandle, SQLSMALLINT DataType)
 
 	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
 	assert(SQL_SUCCEEDED(ret)); /* can't return error */
-	ret = attach_sql(stmt, MK_TSTR(SQL_TYPES_STATEMENT), 
+	ret = attach_sql(stmt, MK_WPTR(SQL_TYPES_STATEMENT), 
 			sizeof(SQL_TYPES_STATEMENT) - 1);
 	if (SQL_SUCCEEDED(ret))
 		ret = post_statement(stmt);

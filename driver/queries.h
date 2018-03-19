@@ -12,11 +12,11 @@
 void clear_resultset(esodbc_stmt_st *stmt);
 SQLRETURN attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen);
 SQLRETURN attach_error(esodbc_stmt_st *stmt, char *buff, size_t blen);
-SQLRETURN attach_sql(esodbc_stmt_st *stmt, const SQLTCHAR *sql, size_t tlen);
+SQLRETURN attach_sql(esodbc_stmt_st *stmt, const SQLWCHAR *sql, size_t tlen);
 void detach_sql(esodbc_stmt_st *stmt);
 
 // TODO: move to util.h
-int ansi_w2c(const SQLTCHAR *src, char *dst, size_t chars);
+int ansi_w2c(const SQLWCHAR *src, char *dst, size_t chars);
 int wmemncasecmp(const wchar_t *a, const wchar_t *b, size_t len);
 
 #ifdef _WIN32
