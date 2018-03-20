@@ -4,6 +4,8 @@
  * you may not use this file except in compliance with the Elastic License.
  */
 
+#include <string.h>
+
 #include "util.h"
 
 
@@ -95,5 +97,97 @@ int wmemncasecmp(const wchar_t *a, const wchar_t *b, size_t len)
 	//		len, a, len, b, diff, len, i);
 	return diff;
 }
+
+/* retuns the lenght of a buffer to hold the escaped variant of the unescaped
+ * given json object  */
+static inline size_t json_escaped_len(const char *json, size_t len)
+{
+	size_t i, newlen = 0;
+	unsigned char uchar;
+	for (i = 0; i < len; i ++) {
+		uchar = (unsigned char)json[i];
+		switch(uchar) {
+			case '"':
+			case '\\':
+			case '/':
+			case '\b':
+			case '\f':
+			case '\n':
+			case '\r':
+			case '\t':
+				newlen += /* '\' + json[i] */2;
+				break;
+			default:
+				newlen += (0x20 <= uchar) ? 1 : /* \u00XX */6;
+				// break
+		}
+	}
+	return newlen;
+}
+
+/* 
+ * JSON-escapes a string.
+ * If string len is 0, it assumes a NTS.
+ * If output buffer (jout) is NULL, it returns the buffer size needed for
+ * escaping.
+ * Returns number of used bytes in buffer (which might be less than buffer
+ * size, if some char needs an escaping longer than remaining space).
+ */
+size_t json_escape(const char *jin, size_t inlen, char *jout, size_t outlen)
+{
+	size_t i, pos;
+	unsigned char uchar;
+
+#define I16TOA(_x)	(10 <= (_x)) ? 'A' + (_x) - 10 : '0' + (_x)
+
+	if (! inlen)
+		inlen = strlen(jin);
+	if (! jout)
+		return json_escaped_len(jin, inlen);
+
+	for (i = 0, pos = 0; i < inlen; i ++) {
+		uchar = jin[i];
+		switch(uchar) {
+			do {
+			case '\b': uchar = 'b'; break;
+			case '\f': uchar = 'f'; break;
+			case '\n': uchar = 'n'; break;
+			case '\r': uchar = 'r'; break;
+			case '\t': uchar = 't'; break;
+			} while (0);
+			case '"':
+			case '\\':
+			case '/':
+				if (outlen <= pos + 1) {
+					i = inlen; // break the for loop
+					continue;
+				}
+				jout[pos ++] = '\\';
+				jout[pos ++] = (char)uchar;
+				break;
+			default:
+				if (0x20 <= uchar) {
+					if (outlen <= pos) {
+						i = inlen;
+						continue;
+					}
+					jout[pos ++] = uchar;
+				} else { // case 0x00 .. 0x1F
+					if (outlen <= pos + 5) {
+						i = inlen;
+						continue;
+					}
+					memcpy(jout + pos, "\\u00", sizeof("\\u00") - 1);
+					pos += sizeof("\\u00") - 1;
+					jout[pos ++] = I16TOA(uchar >> 4);
+					jout[pos ++] = I16TOA(uchar & 0xF);
+				}
+				break;
+		}
+	}
+	return pos;
+#undef I16TOA
+}
+
 
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */
