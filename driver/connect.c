@@ -28,6 +28,7 @@
 
 /* attribute keywords used in connection strings */
 #define CONNSTR_KW_DRIVER			"Driver"
+#define CONNSTR_KW_DSN				"DSN"
 #define CONNSTR_KW_PWD				"PWD"
 #define CONNSTR_KW_UID				"UID"
 #define CONNSTR_KW_ADDRESS			"Address"
@@ -38,46 +39,43 @@
 #define CONNSTR_KW_CATALOG			"Catalog"
 #define CONNSTR_KW_PACKING			"Packing"
 #define CONNSTR_KW_MAX_FETCH_SIZE	"MaxFetchSize"
-#define CONNSTR_KW_MAX_BODY_SIZE	"MaxBodySize"
+#define CONNSTR_KW_MAX_BODY_SIZE_MB	"MaxBodySizeMB"
 #define CONNSTR_KW_TRACE_FILE		"TraceFile"
 #define CONNSTR_KW_TRACE_LEVEL		"TraceLevel"
 
+typedef struct wstr {
+	SQLWCHAR *str;
+	size_t cnt;
+} wstr_st;
+
+#define MK_WSTR(_s) \
+	((wstr_st){.str = MK_WPTR(_s), .cnt = sizeof(_s) - 1})
+#define EQ_WSTR(s1, s2) \
+	((s1)->cnt == (s2)->cnt && wmemcmp((s1)->str, (s2)->str, (s1)->cnt) == 0)
+#define EQ_CASE_WSTR(s1, s2) \
+	((s1)->cnt == (s2)->cnt && \
+	 wmemncasecmp((s1)->str, (s2)->str, (s1)->cnt) == 0)
+
+	
+
 /* stucture to collect all attributes in a connection string */
 typedef struct {
-	struct {
-		SQLWCHAR *str;
-		size_t cnt;
-	} address;
-	struct {
-		SQLWCHAR *str;
-		size_t cnt;
-	} port;
-	BOOL secure;
-	long timeout;
-	BOOL follow;
-	struct {
-		SQLWCHAR *str;
-		size_t cnt;
-	} catalog;
-	struct {
-		SQLWCHAR *str;
-		size_t cnt;
-	} packing;
-	struct {
-		long max;
-		SQLWCHAR *str;
-		char slen;
-	} fetch;
-	long max_body_size;
-	struct {
-		SQLWCHAR *str;
-		size_t cnt;
-	} trace_file;
-	struct {
-		SQLWCHAR *str;
-		size_t cnt;
-	} trace_level;
-} conn_str_attr_st;
+	wstr_st driver;
+	wstr_st dsn;
+	wstr_st pwd;
+	wstr_st uid;
+	wstr_st address;
+	wstr_st port;
+	wstr_st secure;
+	wstr_st timeout;
+	wstr_st follow;
+	wstr_st catalog;
+	wstr_st packing;
+	wstr_st max_fetch_size;
+	wstr_st max_body_size;
+	wstr_st trace_file;
+	wstr_st trace_level;
+} connstr_attr_st;
 
 /*
  * HTTP headers used for all requests (Content-Type, Accept).
@@ -612,101 +610,111 @@ static SQLRETURN test_connect(CURL *curl)
 	return SQL_SUCCESS;
 }
 
-static BOOL as_bool(size_t cnt, SQLWCHAR *val)
+static BOOL wstr2bool(wstr_st *val)
 {
-	if (cnt == 5 && wmemncasecmp(val, MK_WPTR("false"), 5) == 0)
-		return FALSE;
-	else if (cnt == 2 && wmemncasecmp(val, MK_WPTR("no"), 2) == 0)
-		return FALSE;
-	else if (cnt == 1 && *val == '0')
-		return FALSE;
+	switch (val->cnt) {
+		case 1: return ! EQ_CASE_WSTR(val, &MK_WSTR("0"));
+		case 2: return ! EQ_CASE_WSTR(val, &MK_WSTR("no"));
+		case 5: return ! EQ_CASE_WSTR(val, &MK_WSTR("false"));
+	}
 	return TRUE;
 }
 
-static BOOL as_long(size_t cnt, SQLWCHAR *val, long *out)
+static BOOL wstr2long(wstr_st *val, long *out)
 {
-	wchar_t *endptr;
-	long res;
-	wchar_t *wl64p = L"9223372036854775808";
-	wchar_t *wl64n = L"-9223372036854775808";
-	wchar_t *wl32p = L"2147483648";
-	wchar_t *wl32n = L"-2147483648";
-	wchar_t *wlongp = sizeof(long) == sizeof(uint64_t) ? wl64p : wl32p;
-	wchar_t *wlongn = sizeof(long) == sizeof(uint64_t) ? wl64n : wl32n;
+	long res = 0, digit;
+	int i = 0;
+	BOOL negative;
 
-	res = wcstol(val, &endptr, /*base*/10);
-	/* did it use all available chars? */
-	if (endptr != val + cnt)
-		goto err;
-	
-	/* was there an under/over flow? */
-	switch (res) {
-		case LONG_MIN:
-			if (cnt != wcslen(wlongn) || wcsncmp(val, wlongn, cnt))
-				goto err;
+	if (val->cnt < 1)
+		return FALSE;
+
+	switch (val->str[0]) {
+		case '-':
+			negative = TRUE;
+			i ++;
 			break;
-		case LONG_MAX:
-			if (cnt != wcslen(wlongp) || wcsncmp(val, wlongp, cnt))
-				goto err;
+		case '+':
+			negative = FALSE;
+			i ++;
 			break;
+		default:
+			negative = FALSE;
 	}
 
-	*out = res;
+	for ( ; i < val->cnt; i ++) {
+		/* is it a number? */
+		if (val->str[i] < '0' || '9' < val->str[i])
+			return FALSE;
+		digit = val->str[i] - '0';
+		/* would it overflow?*/
+		if (LONG_MAX - res < digit)
+			return FALSE;
+		res *= 10;
+		res += digit;
+	}
+	*out = negative ? - res : res;
 	return TRUE;
-err:
-	ERR("failed to convert all characters in `" LWPDL "`[%zd] to long.", 
-			cnt, val, cnt);
+}
+
+
+static BOOL assign_connstr_attr(connstr_attr_st *attrs,
+		wstr_st *keyword, wstr_st *value)
+{
+	struct {
+		wchar_t *kw;
+		size_t cnt;
+		wstr_st *val;
+	} *iter, map[] = {
+		{MK_WPTR(CONNSTR_KW_DRIVER), sizeof(CONNSTR_KW_DRIVER) - 1,
+			&attrs->driver},
+		{MK_WPTR(CONNSTR_KW_DSN), sizeof(CONNSTR_KW_DSN) - 1,
+			&attrs->dsn},
+		{MK_WPTR(CONNSTR_KW_PWD), sizeof(CONNSTR_KW_PWD) - 1,
+			&attrs->pwd},
+		{MK_WPTR(CONNSTR_KW_UID), sizeof(CONNSTR_KW_UID) - 1,
+			&attrs->uid},
+		{MK_WPTR(CONNSTR_KW_ADDRESS), sizeof(CONNSTR_KW_ADDRESS) - 1,
+			&attrs->address},
+		{MK_WPTR(CONNSTR_KW_PORT), sizeof(CONNSTR_KW_PORT) - 1,
+			&attrs->port},
+		{MK_WPTR(CONNSTR_KW_SECURE), sizeof(CONNSTR_KW_SECURE) - 1,
+			&attrs->secure},
+		{MK_WPTR(CONNSTR_KW_TIMEOUT), sizeof(CONNSTR_KW_TIMEOUT) - 1,
+			&attrs->timeout},
+		{MK_WPTR(CONNSTR_KW_FOLLOW), sizeof(CONNSTR_KW_FOLLOW) - 1,
+			&attrs->follow},
+		{MK_WPTR(CONNSTR_KW_CATALOG), sizeof(CONNSTR_KW_CATALOG) - 1,
+			&attrs->catalog},
+		{MK_WPTR(CONNSTR_KW_PACKING), sizeof(CONNSTR_KW_PACKING) - 1,
+			&attrs->packing},
+		{MK_WPTR(CONNSTR_KW_MAX_FETCH_SIZE), 
+			sizeof(CONNSTR_KW_MAX_FETCH_SIZE) - 1, &attrs->max_fetch_size},
+		{MK_WPTR(CONNSTR_KW_MAX_BODY_SIZE_MB), 
+			sizeof(CONNSTR_KW_MAX_BODY_SIZE_MB) - 1, &attrs->max_body_size},
+		{MK_WPTR(CONNSTR_KW_TRACE_FILE), sizeof(CONNSTR_KW_TRACE_FILE) - 1, 
+			&attrs->trace_file},
+		{MK_WPTR(CONNSTR_KW_TRACE_LEVEL), sizeof(CONNSTR_KW_TRACE_LEVEL) - 1, 
+			&attrs->trace_level},
+		{NULL, 0, NULL}
+	};
+
+	for (iter = &map[0]; iter->kw; iter ++) {
+		if (keyword->cnt != iter->cnt)
+			continue;
+		if (wmemncasecmp(keyword->str, iter->kw, iter->cnt))
+			continue;
+		/* it's a match: has it been assigned already? */
+		if (iter->val->cnt) {
+			WARN("multiple occurances of keyword '" LWPDL "'; "
+					"ignoring new value!", iter->cnt, iter->kw);
+			continue;
+		}
+		*iter->val = *value;
+		return TRUE;
+	}
+
 	return FALSE;
-}
-
-static BOOL assign_conn_attr(conn_str_attr_st *attrs,
-		size_t kw_cnt, SQLWCHAR *keyword, size_t val_cnt, SQLWCHAR *value)
-{
-#define KEYWORD_EQUALS(_kw) \
-	(kw_cnt == sizeof(_kw) - 1) && \
-	(wmemncasecmp(keyword, MK_WPTR(_kw), kw_cnt) == 0)
-	
-	if (KEYWORD_EQUALS(CONNSTR_KW_DRIVER)) {
-		DBG("config values for driver: " LWPDL ".", val_cnt, value);
-	} else if (KEYWORD_EQUALS(CONNSTR_KW_PWD)) {
-		// TODO: useful?
-	} else if (KEYWORD_EQUALS(CONNSTR_KW_UID)) {
-		// TODO: useful?
-	} else if (KEYWORD_EQUALS(CONNSTR_KW_ADDRESS)) {
-		attrs->address.str = value;
-		attrs->address.cnt = val_cnt;
-	} else if (KEYWORD_EQUALS(CONNSTR_KW_PORT)) {
-		attrs->port.str = value;
-		attrs->port.cnt = val_cnt;
-	} else if (KEYWORD_EQUALS(CONNSTR_KW_SECURE)) {
-		attrs->secure = as_bool(val_cnt, value);
-	} else if (KEYWORD_EQUALS(CONNSTR_KW_TIMEOUT)) {
-		return as_long(val_cnt, value, &attrs->timeout);
-	} else if (KEYWORD_EQUALS(CONNSTR_KW_FOLLOW)) {
-		attrs->follow = as_bool(val_cnt, value);
-	} else if (KEYWORD_EQUALS(CONNSTR_KW_CATALOG)) {
-		attrs->catalog.str = value;
-		attrs->catalog.cnt = val_cnt;
-	} else if (KEYWORD_EQUALS(CONNSTR_KW_PACKING)) {
-		attrs->packing.str = value;
-		attrs->packing.cnt = val_cnt;
-	} else if (KEYWORD_EQUALS(CONNSTR_KW_MAX_FETCH_SIZE)) {
-		/* as_long will fail if the conversion truncates */
-		attrs->fetch.slen = (char)val_cnt; 
-		attrs->fetch.str = value;
-		return as_long(val_cnt, value, &attrs->fetch.max);
-	} else if (KEYWORD_EQUALS(CONNSTR_KW_MAX_BODY_SIZE)) {
-		return as_long(val_cnt, value, &attrs->max_body_size);
-	} else if (KEYWORD_EQUALS(CONNSTR_KW_TRACE_FILE)) {
-		attrs->trace_file.str = value;
-		attrs->trace_file.cnt = val_cnt;
-	} else if (KEYWORD_EQUALS(CONNSTR_KW_TRACE_LEVEL)) {
-		attrs->trace_level.str = value;
-		attrs->trace_level.cnt = val_cnt;
-	}
-
-	return TRUE;
-#undef KEYWORD_EQUALS
 }
 
 /*
@@ -749,8 +757,8 @@ static SQLWCHAR* skip_ws(SQLWCHAR **pos, SQLWCHAR *end, BOOL extended)
  * is supported as keyword or value).
  * Braces within braces are allowed.
  */
-static SQLWCHAR* parse_token(BOOL is_value, SQLWCHAR **pos, SQLWCHAR *end, 
-		size_t *cnt)
+static BOOL parse_token(BOOL is_value, SQLWCHAR **pos, SQLWCHAR *end, 
+		wstr_st *token)
 {
 	BOOL brace_escaped = FALSE;
 	int open_braces = 0;
@@ -763,7 +771,7 @@ static SQLWCHAR* parse_token(BOOL is_value, SQLWCHAR **pos, SQLWCHAR *end,
 				if (! is_value) {
 					ERR("keywords and data source names cannot contain "
 							"the backslash.");
-					return NULL;
+					return FALSE;
 				}
 				(*pos)++;
 				break;
@@ -792,17 +800,17 @@ static SQLWCHAR* parse_token(BOOL is_value, SQLWCHAR **pos, SQLWCHAR *end,
 					stop  = TRUE;
 				} else {
 					ERR("';' found while parsing keyword");
-					return NULL;
+					return FALSE;
 				}
 				break;
 
 			case '\0':
 				if (open_braces) {
 					ERR("null terminator found while within braces");
-					return NULL;
+					return FALSE;
 				} else if (! is_value) {
 					ERR("null terminator found while parsing keyword.");
-					return NULL;
+					return FALSE;
 				} /* else: \0 used as delimiter of value string */
 				stop = TRUE;
 				break;
@@ -813,7 +821,7 @@ static SQLWCHAR* parse_token(BOOL is_value, SQLWCHAR **pos, SQLWCHAR *end,
 				else if (open_braces) {
 					ERR("token started with opening brace, so can't use "
 							"inner braces");
-					return NULL;
+					return FALSE;
 				}
 				(*pos)++;
 				break;
@@ -834,11 +842,12 @@ static SQLWCHAR* parse_token(BOOL is_value, SQLWCHAR **pos, SQLWCHAR *end,
 
 	if (open_braces) {
 		ERR("string finished with open braces.");
-		return NULL;
+		return FALSE;
 	}
 
-	*cnt = (*pos - start) - (brace_escaped ? 2 : 0);
-	return start + (brace_escaped ? 1 : 0);
+	token->str = start + (brace_escaped ? 1 : 0);
+	token->cnt = (*pos - start) - (brace_escaped ? 2 : 0);
+	return TRUE;
 }
 
 static SQLWCHAR* parse_separator(SQLWCHAR **pos, SQLWCHAR *end)
@@ -868,22 +877,20 @@ static SQLWCHAR* parse_separator(SQLWCHAR **pos, SQLWCHAR *end)
  *  * `{` and `}` allowed within {}
  *  * brances need to be returned to out-str;
  */
-static BOOL parse_connstr(conn_str_attr_st *attr,
+static BOOL parse_connstr(connstr_attr_st *attrs,
 		SQLWCHAR* szConnStrIn, SQLSMALLINT cchConnStrIn)
 {
 
 	SQLWCHAR *pos;
 	SQLWCHAR *end;
-	SQLWCHAR *keyword, *value;
-	size_t kw_cnt, val_cnt;
+	wstr_st keyword, value;
 
 	/* parse and assign attributes in connection string */
 	pos = szConnStrIn;
 	end = pos + (cchConnStrIn == SQL_NTS ? SHRT_MAX : cchConnStrIn);
 
 	while (skip_ws(&pos, end, TRUE)) {
-		keyword = parse_token(FALSE, &pos, end, &kw_cnt);
-		if (! keyword) {
+		if (! parse_token(FALSE, &pos, end, &keyword)) {
 			ERR("failed to parse keyword at position %zd", pos - szConnStrIn);
 			return FALSE;
 		}
@@ -900,16 +907,16 @@ static BOOL parse_connstr(conn_str_attr_st *attr,
 		if (! skip_ws(&pos, end, FALSE))
 			return FALSE;
 
-		value = parse_token(TRUE, &pos, end, &val_cnt);
-		if (! value) {
+		if (! parse_token(TRUE, &pos, end, &value)) {
 			ERR("failed to parse value at position %zd", pos - szConnStrIn);
 			return FALSE;
 		}
 
 		DBG("read connection string attribute: `" LWPDL "` = `" LWPDL "`.", 
-				kw_cnt, keyword, val_cnt, value);
-		if (! assign_conn_attr(attr, kw_cnt, keyword, val_cnt, value))
-			return FALSE;
+				keyword.cnt, keyword.str, value.cnt, value.str);
+		if (! assign_connstr_attr(attrs, &keyword, &value))
+			ERR("keyword '" LWPDL "' is unknown, ignoring it.", 
+					keyword.cnt, keyword.str);
 	}
 
 	return TRUE;
@@ -918,42 +925,55 @@ static BOOL parse_connstr(conn_str_attr_st *attr,
 static SQLRETURN process_connstr(esodbc_dbc_st *dbc,
 		SQLWCHAR* szConnStrIn, SQLSMALLINT cchConnStrIn)
 {
-	conn_str_attr_st attrs;
+	connstr_attr_st attrs;
 	esodbc_state_et state = SQL_STATE_HY000;
 	int n, cnt;
 	SQLWCHAR urlw[ESODBC_MAX_URL_LEN];
+	BOOL secure;
+	long timeout, max_body_size, max_fetch_size;
 
-	/* init struct with defaults (where applicable) */
+	/* parse conn str into attrs */
 	memset(&attrs, 0, sizeof(attrs));
-	attrs.address.str = MK_WPTR(ESODBC_DEFAULT_HOST);
-	attrs.address.cnt = sizeof(ESODBC_DEFAULT_HOST) - 1;
-	attrs.port.str = MK_WPTR(ESODBC_DEFAULT_PORT);
-	attrs.port.cnt = sizeof(ESODBC_DEFAULT_PORT) - 1;
-	attrs.secure = ESODBC_DEFAULT_SEC;
-	attrs.timeout = ESODBC_DEFAULT_TIMEOUT;
-	attrs.follow = ESODBC_DEFAULT_FOLLOW;
-	attrs.max_body_size = ESODBC_DEFAULT_MAX_BODY_SIZE;
-	attrs.fetch.max = ESODBC_DEF_FETCH_SIZE;
-	/* default: no trace file */
-
 	if (! parse_connstr(&attrs, szConnStrIn, cchConnStrIn))
 		goto err;
 
+	/* assign defaults where not assigned and applicable */
+	if (! attrs.address.cnt)
+		attrs.address = MK_WSTR(ESODBC_DEF_HOST);
+	if (! attrs.port.cnt)
+		attrs.port = MK_WSTR(ESODBC_DEF_PORT);
+	if (! attrs.secure.cnt)
+		attrs.port = MK_WSTR(ESODBC_DEF_SECURE);
+	if (! attrs.timeout.cnt)
+		attrs.timeout = MK_WSTR(ESODBC_DEF_TIMEOUT);
+	if (! attrs.follow.cnt)
+		attrs.follow = MK_WSTR(ESODBC_DEF_FOLLOW);
+	if (! attrs.max_fetch_size.cnt)
+		attrs.max_fetch_size = MK_WSTR(ESODBC_DEF_FETCH_SIZE);
+	if (! attrs.max_body_size.cnt)
+		attrs.max_body_size = MK_WSTR(ESODBC_DEF_MAX_BODY_SIZE_MB);
+	/* default: no trace file */
+	if (! attrs.trace_level.cnt)
+		attrs.trace_level = MK_WSTR(ESODBC_DEF_TRACE_LEVEL);
+	
 	/*
 	 * init dbc from configured attributes
 	 */
 
-	/* build connection URL */
+	/*
+	 * build connection URL 
+	 */
+	secure = wstr2bool(&attrs.secure);
 	cnt = swprintf(urlw, sizeof(urlw)/sizeof(urlw[0]),
-			L"http" WPFCP_DESC "://" WPFWP_LDESC ":" WPFWP_LDESC ELASTIC_SQL_PATH,
-			attrs.secure ? "s" : "", 
+			L"http" WPFCP_DESC "://" WPFWP_LDESC ":" WPFWP_LDESC
+				ELASTIC_SQL_PATH, secure ? "s" : "",
 			(int)attrs.address.cnt, attrs.address.str,
 			(int)attrs.port.cnt, attrs.port.str);
 	if (cnt < 0) {
 		ERRN("failed to print URL out of address: `" LWPDL "` [%zd], "
 				"port: `" LWPDL "` [%zd].",
-				attrs.address.cnt, attrs.address.str,
-				attrs.port.cnt, attrs.port.str);
+				(int)attrs.address.cnt, attrs.address.str,
+				(int)attrs.port.cnt, attrs.port.str);
 		goto err;
 	}
 	/* lenght of URL converted to U8 */
@@ -979,64 +999,84 @@ static SQLRETURN process_connstr(esodbc_dbc_st *dbc,
 	INFO("DBC@0x%p: connection URL: `%s`.", dbc, dbc->url);
 
 	/* follow param for liburl */
-	dbc->follow = attrs.follow;
+	dbc->follow = wstr2bool(&attrs.follow);
 	INFO("DBC@0x%p: follow: %s.", dbc, dbc->follow ? "true" : "false");
 
-	/* request timeout for liburl: negative means 0 */
-	if (attrs.timeout < 0) {
-		WARN("DBC@0x%p: set timeout is negative (%ld), normalized to 0.", dbc,
-				attrs.timeout);
-		attrs.timeout = 0;
+	/* 
+	 * request timeout for liburl: negative reset to 0
+	 */
+	if (! wstr2long(&attrs.timeout, &timeout)) {
+		ERR("failed to convert '" LWPDL "' to long.", attrs.timeout.cnt, 
+				attrs.timeout.str);
+		goto err;
 	}
-	dbc->timeout = (SQLUINTEGER)attrs.timeout;
+	if (timeout < 0) {
+		WARN("DBC@0x%p: set timeout is negative (%ld), normalized to 0.", dbc,
+				timeout);
+		timeout = 0;
+	}
+	dbc->timeout = (SQLUINTEGER)timeout;
 	INFO("DBC@0x%p: timeout: %lu.", dbc, dbc->timeout);
 
-	/* set max body size */
-	if (attrs.max_body_size < 0) {
-		ERR("'%s' setting can't be negative (%ld).", CONNSTR_KW_MAX_BODY_SIZE,
-				attrs.max_body_size);
+	/* 
+	 * set max body size 
+	 */
+	if (! wstr2long(&attrs.max_body_size, &max_body_size)) {
+		ERR("failed to convert '" LWPDL "' to long.", attrs.max_body_size.cnt,
+				attrs.max_body_size.str);
+		goto err;
+	}
+	if (max_body_size < 0) {
+		ERR("'%s' setting can't be negative (%ld).", 
+				CONNSTR_KW_MAX_BODY_SIZE_MB, max_body_size);
 		goto err;
 	} else {
-		dbc->amax = attrs.max_body_size;
+		dbc->amax = max_body_size * 1024 * 1024;
 	}
 	INFO("DBC@0x%p: max body size: %zd.", dbc, dbc->amax);
 
+	/* 
+	 * set max fetch size 
+	 */
+	if (! wstr2long(&attrs.max_fetch_size, &max_fetch_size)) {
+		ERR("failed to convert '" LWPDL "' to long.", attrs.max_fetch_size.cnt,
+				attrs.max_fetch_size.str);
+		goto err;
+	}
+	if (max_fetch_size < 0) {
+		ERR("'%s' setting can't be negative (%ld).", CONNSTR_KW_MAX_FETCH_SIZE,
+				max_fetch_size);
+		goto err;
+	} else {
+		dbc->fetch.max = max_fetch_size;
+	}
 	/* set the string representation of fetch_size, once for all STMTs */
-	if (attrs.fetch.max) {
-		dbc->fetch.max = attrs.fetch.max;
-		dbc->fetch.slen = attrs.fetch.slen;
+	if (dbc->fetch.max) {
+		dbc->fetch.slen = (char)attrs.max_fetch_size.cnt;
 		dbc->fetch.str = malloc(dbc->fetch.slen + /*\0*/1);
 		if (! dbc->fetch.str) {
 			ERRN("failed to alloc %zdB.", dbc->fetch.slen);
 			RET_HDIAGS(dbc, SQL_STATE_HY001);
 		}
 		dbc->fetch.str[dbc->fetch.slen] = 0;
-		ansi_w2c(attrs.fetch.str, dbc->fetch.str, attrs.fetch.slen);
+		ansi_w2c(attrs.max_fetch_size.str, dbc->fetch.str, dbc->fetch.slen);
 	}
 	INFO("DBC@0x%p: fetch_size: %s.", dbc, 
 			dbc->fetch.str ? dbc->fetch.str : "none" );
 
 	// TODO: catalog handling
 
-	/* set the REST body format: JSON/CBOR */
-	if (attrs.packing.cnt) {
-		if (attrs.packing.cnt != sizeof("JSON") - 1) { /* == CBOR */
-			ERR("unknown packing method `" LWPDL "`.", attrs.packing.cnt, 
-					attrs.packing.str);
-			goto err;
-		}
-		if (! wmemncasecmp(attrs.packing.str, L"JSON", attrs.packing.cnt)) {
-			dbc->pack_json = TRUE;
-		} else if (! wmemncasecmp(attrs.packing.str, L"CBOR", 
-					attrs.packing.cnt)) {
-			dbc->pack_json = FALSE;
-		} else {
-			ERR("unknown packing method `" LWPDL "`.", attrs.packing.cnt, 
-					attrs.packing.str);
-			goto err;
-		}
+	/* 
+	 * set the REST body format: JSON/CBOR 
+	 */
+	if (EQ_CASE_WSTR(&attrs.packing, &MK_WSTR("JSON"))) {
+		dbc->pack_json = TRUE;
+	} else if (EQ_CASE_WSTR(&attrs.packing, &MK_WSTR("CBOR"))) {
+		dbc->pack_json = FALSE;
 	} else {
-		dbc->pack_json = ESODBC_DEFAULT_USE_JSON;
+		ERR("unknown packing encoding '" LWPDL "'.", attrs.packing.cnt,
+				attrs.packing.str);
+		goto err;
 	}
 	INFO("DBC@0x%p: pack JSON: %s.", dbc, dbc->pack_json ? "true" : "false");
 
