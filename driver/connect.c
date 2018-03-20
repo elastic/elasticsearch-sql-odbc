@@ -24,6 +24,7 @@
 #include "queries.h"
 #include "log.h"
 #include "info.h"
+#include "util.h"
 
 /* HTTP headers default for every request */
 #define HTTP_ACCEPT_JSON		"Accept: application/json"
@@ -54,20 +55,6 @@
 #define CONNSTR_KW_TRACE_FILE		"TraceFile"
 #define CONNSTR_KW_TRACE_LEVEL		"TraceLevel"
 
-typedef struct wstr {
-	SQLWCHAR *str;
-	size_t cnt;
-} wstr_st;
-
-#define MK_WSTR(_s) \
-	((wstr_st){.str = MK_WPTR(_s), .cnt = sizeof(_s) - 1})
-#define EQ_WSTR(s1, s2) \
-	((s1)->cnt == (s2)->cnt && wmemcmp((s1)->str, (s2)->str, (s1)->cnt) == 0)
-#define EQ_CASE_WSTR(s1, s2) \
-	((s1)->cnt == (s2)->cnt && \
-	 wmemncasecmp((s1)->str, (s2)->str, (s1)->cnt) == 0)
-
-	
 
 /* stucture to collect all attributes in a connection string */
 typedef struct {
@@ -619,53 +606,6 @@ static SQLRETURN test_connect(CURL *curl)
 
 	DBG("successfully connected to server.");
 	return SQL_SUCCESS;
-}
-
-static BOOL wstr2bool(wstr_st *val)
-{
-	switch (val->cnt) {
-		case 1: return ! EQ_CASE_WSTR(val, &MK_WSTR("0"));
-		case 2: return ! EQ_CASE_WSTR(val, &MK_WSTR("no"));
-		case 5: return ! EQ_CASE_WSTR(val, &MK_WSTR("false"));
-	}
-	return TRUE;
-}
-
-static BOOL wstr2long(wstr_st *val, long *out)
-{
-	long res = 0, digit;
-	int i = 0;
-	BOOL negative;
-
-	if (val->cnt < 1)
-		return FALSE;
-
-	switch (val->str[0]) {
-		case '-':
-			negative = TRUE;
-			i ++;
-			break;
-		case '+':
-			negative = FALSE;
-			i ++;
-			break;
-		default:
-			negative = FALSE;
-	}
-
-	for ( ; i < val->cnt; i ++) {
-		/* is it a number? */
-		if (val->str[i] < '0' || '9' < val->str[i])
-			return FALSE;
-		digit = val->str[i] - '0';
-		/* would it overflow?*/
-		if (LONG_MAX - res < digit)
-			return FALSE;
-		res *= 10;
-		res += digit;
-	}
-	*out = negative ? - res : res;
-	return TRUE;
 }
 
 

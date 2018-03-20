@@ -18,16 +18,7 @@
 #ifndef __ERROR_H__
 #define __ERROR_H__
 
-/* NOTE: this must be included in "top level" file (wherever SQL types are
- * used  */
-#if defined(_WIN32) || defined (WIN32)
-/* FIXME: why isn't this included in sql/~ext.h???? */
-/* win function parameter attributes */
-#include <windows.h>
-#endif /* _WIN32/WIN32 */
-
-#include "sql.h"
-#include "sqlext.h"
+#include "util.h"
 
 typedef struct {
 	SQLSTATE code;
@@ -161,9 +152,6 @@ typedef enum {
 	SQL_STATE_MAX
 } esodbc_state_et;
 
-
-#define _MK_WPTR(_cstr_)	(L ## _cstr_)
-#define MK_WPTR(_cstr_)		_MK_WPTR(_cstr_)
 
 
 /*
@@ -442,10 +430,6 @@ static esodbc_errors_st esodbc_errors[] = {
 		SQL_ERROR},
 };
 
-
-/* stringifying in two preproc. passes */
-#define _STR(_x)	# _x
-#define STR(_x)		_STR(_x)
 
 /* driver version ex. 1.2(u) */
 #define ESODBC_DRIVER_VER	\
