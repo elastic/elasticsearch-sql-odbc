@@ -18,8 +18,6 @@
 #ifndef __UTIL_H__
 #define __UTIL_H__
 
-#include <inttypes.h>
-
 /* NOTE: this must be included in "top level" file (wherever SQL types are
  * used  */
 #if defined(_WIN32) || defined (WIN32)
@@ -27,6 +25,9 @@
 /* win function parameter attributes */
 #include <windows.h>
 #endif /* _WIN32/WIN32 */
+
+#include <inttypes.h>
+#include <wchar.h>
 
 #include "sql.h"
 #include "sqlext.h"
@@ -107,6 +108,18 @@ BOOL wstr2long(wstr_st *val, long *out);
 	 * during conversion." */
 	// wcstombs(charp, wstr, octet_length);
 #endif /* _WIN32 */
+
+
+/* 
+ * JSON-escapes a string.
+ * If string len is 0, it assumes a NTS.
+ * If output buffer (jout) is NULL, it returns the buffer size needed for
+ * escaping.
+ * Returns number of used bytes in buffer (which might be less than buffer
+ * size, if some char needs an escaping longer than remaining space).
+ */
+size_t json_escape(const char *jin, size_t inlen, char *jout, size_t outlen);
+
 
 #endif /* __UTIL_H__ */
 
