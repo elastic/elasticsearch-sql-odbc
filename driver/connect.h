@@ -14,6 +14,7 @@ BOOL connect_init();
 void connect_cleanup();
 
 SQLRETURN post_statement(esodbc_stmt_st *stmt);
+void cleanup_dbc(esodbc_dbc_st *dbc);
 
 SQLRETURN EsSQLDriverConnectW
 (

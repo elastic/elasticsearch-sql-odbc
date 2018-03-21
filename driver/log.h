@@ -59,6 +59,9 @@
 #define LWPDL	PFCP_LDESC
 #endif /* UNICODE */
 
+/* macro for logging of wstr_st objects */
+#define LWSTR(_wptr)	(int)(_wptr)->cnt, (_wptr)->str
+
 
 
 /* Note: keep in sync with __ESODBC_LVL2STR */

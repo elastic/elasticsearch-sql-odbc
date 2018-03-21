@@ -10,6 +10,7 @@
 #include "handles.h"
 #include "log.h"
 #include "queries.h"
+#include "connect.h"
 
 
 static void free_rec_fields(desc_rec_st *rec)
@@ -315,10 +316,8 @@ SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 			break;
 		case SQL_HANDLE_DBC: /* Connection Handle */
 			// TODO: remove from (potential) list?
-			if (DBCH(Handle)->fetch.str)
-				free(DBCH(Handle)->fetch.str);
-			if (DBCH(Handle)->url)
-				free(DBCH(Handle)->url);
+			/* app/DM should have SQLDisconnect'ed, but just in case  */
+			cleanup_dbc(DBCH(Handle));
 			free(Handle);
 			break;
 		case SQL_HANDLE_STMT:
