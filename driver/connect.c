@@ -73,7 +73,7 @@ typedef struct {
 	wstr_st max_body_size;
 	wstr_st trace_file;
 	wstr_st trace_level;
-} connstr_attr_st;
+} config_attrs_st;
 
 /*
  * HTTP headers used for all requests (Content-Type, Accept).
@@ -207,7 +207,6 @@ static SQLRETURN init_curl(esodbc_dbc_st *dbc)
 		/* not fatal */
 	}
 #endif /* NDEBUG */
-
 
 	/* set URL to connect to */
 	res = curl_easy_setopt(curl, CURLOPT_URL, dbc->url);
@@ -377,13 +376,13 @@ err:
 			"failed: '%s' (%d).", timeout, blen, u8body, 
 			res != CURLE_OK ? curl_easy_strerror(res) : "<unspecified>", res);
 err_net: /* the error occured after the request hit hit the network */
-	if (abuff)
-		free(abuff);
 	cleanup_curl(dbc);
-	if (abuff) /* if buffer had been set, the error occured in _perform() */
+	if (abuff) {
+		free(abuff);
+		/* if buffer had been set, the error occured in _perform() */
 		RET_HDIAG(stmt, SQL_STATE_08S01, "data transfer failure", res);
-	else
-		RET_HDIAG(stmt, SQL_STATE_HY000, "failed to init transport", res);
+	}
+	RET_HDIAG(stmt, SQL_STATE_HY000, "failed to init transport", res);
 }
 
 /*
@@ -517,7 +516,7 @@ static SQLRETURN test_connect(CURL *curl)
 }
 
 
-static BOOL assign_connstr_attr(connstr_attr_st *attrs,
+static BOOL assign_config_attr(config_attrs_st *attrs,
 		wstr_st *keyword, wstr_st *value)
 {
 	struct {
@@ -680,6 +679,7 @@ static BOOL parse_token(BOOL is_value, SQLWCHAR **pos, SQLWCHAR *end,
 				else if (open_braces) {
 					ERR("token started with opening brace, so can't use "
 							"inner braces");
+					/* b/c: `{foo{ = }}bar} = val`; `foo{bar}baz` is fine */
 					return FALSE;
 				}
 				(*pos)++;
@@ -736,7 +736,7 @@ static SQLWCHAR* parse_separator(SQLWCHAR **pos, SQLWCHAR *end)
  *  * `{` and `}` allowed within {}
  *  * brances need to be returned to out-str;
  */
-static BOOL parse_connstr(connstr_attr_st *attrs,
+static BOOL parse_connection_string(config_attrs_st *attrs,
 		SQLWCHAR* szConnStrIn, SQLSMALLINT cchConnStrIn)
 {
 
@@ -772,67 +772,128 @@ static BOOL parse_connstr(connstr_attr_st *attrs,
 		}
 
 		DBG("read connection string attribute: `" LWPDL "` = `" LWPDL "`.", 
-				keyword.cnt, keyword.str, value.cnt, value.str);
-		if (! assign_connstr_attr(attrs, &keyword, &value))
+				LWSTR(&keyword), LWSTR(&value));
+		if (! assign_config_attr(attrs, &keyword, &value))
 			ERR("keyword '" LWPDL "' is unknown, ignoring it.", 
-					keyword.cnt, keyword.str);
+					LWSTR(&keyword));
 	}
 
 	return TRUE;
 }
 
-static SQLRETURN process_connstr(esodbc_dbc_st *dbc,
-		SQLWCHAR* szConnStrIn, SQLSMALLINT cchConnStrIn)
+static inline BOOL needs_braces(wstr_st *token)
 {
-	connstr_attr_st attrs;
+	int i;
+
+	for (i = 0; i < token->cnt; i ++) {
+		switch(token->str[i]) {
+			case ' ':
+			case '\t':
+			case '\r':
+			case '\n':
+			case '=':
+			case ';':
+				return TRUE;
+		}
+	}
+	return FALSE;
+}
+
+/* build a connection string to be written in the DSN files */
+static BOOL write_connection_string(config_attrs_st *attrs, 
+		SQLWCHAR *szConnStrOut, SQLSMALLINT cchConnStrOutMax, 
+		SQLSMALLINT *pcchConnStrOut)
+{
+	int n, braces;
+	size_t pos;
+	wchar_t *format;
+	struct {
+		wstr_st *val;
+		char *kw;
+	} *iter, map[] = {
+		{&attrs->driver, CONNSTR_KW_DRIVER},
+		{&attrs->dsn, CONNSTR_KW_DSN},
+		{&attrs->pwd, CONNSTR_KW_PWD},
+		{&attrs->uid, CONNSTR_KW_UID},
+		{&attrs->address, CONNSTR_KW_ADDRESS},
+		{&attrs->port, CONNSTR_KW_PORT},
+		{&attrs->secure, CONNSTR_KW_SECURE},
+		{&attrs->timeout, CONNSTR_KW_TIMEOUT},
+		{&attrs->follow, CONNSTR_KW_FOLLOW},
+		{&attrs->catalog, CONNSTR_KW_CATALOG},
+		{&attrs->packing, CONNSTR_KW_PACKING},
+		{&attrs->max_fetch_size, CONNSTR_KW_MAX_FETCH_SIZE},
+		{&attrs->max_body_size, CONNSTR_KW_MAX_BODY_SIZE_MB},
+		{&attrs->trace_file, CONNSTR_KW_TRACE_FILE},
+		{&attrs->trace_level, CONNSTR_KW_TRACE_LEVEL},
+		{NULL, NULL}
+	};
+
+	for (iter = &map[0], pos = 0; iter->val; iter ++) {
+		if (iter->val->cnt) {
+			braces = needs_braces(iter->val) ? 2 : 0;
+			if (cchConnStrOutMax && szConnStrOut) {
+				/* swprintf will fail if formated string would overrun the
+				 * buffer size */
+				if (cchConnStrOutMax - pos < iter->val->cnt + braces) {
+					/* indicate that we've reached buffer limits: only account
+					 * for how long the string would be */
+					cchConnStrOutMax = 0;
+					pos += iter->val->cnt + braces;
+					continue;
+				}
+				if (braces)
+					format = WPFCP_DESC "={" WPFWP_LDESC "};";
+				else
+					format = WPFCP_DESC "=" WPFWP_LDESC ";";
+				n = swprintf(szConnStrOut + pos, cchConnStrOutMax - pos, 
+						format, iter->kw, LWSTR(iter->val));
+				if (n < 0) {
+					ERRN("failed to outprint connection string (space left:"
+							" %d; needed: %d).", cchConnStrOutMax - pos, 
+							iter->val->cnt);
+					return FALSE;
+				} else {
+					pos += n;
+				}
+			} else {
+				/* simply increment the counter, since the untruncated lenght
+				 * need to be returned to the app */
+				pos += iter->val->cnt + braces;
+			}
+		}
+	}
+
+	*pcchConnStrOut = (SQLSMALLINT)pos;
+
+	DBG("Output connection string: `" LWPD "`; out len: %d.", szConnStrOut, 
+			pos);
+	return TRUE;
+}
+
+/*
+ * init dbc from configured attributes
+ */
+static SQLRETURN process_config(esodbc_dbc_st *dbc, config_attrs_st *attrs)
+{
 	esodbc_state_et state = SQL_STATE_HY000;
 	int n, cnt;
 	SQLWCHAR urlw[ESODBC_MAX_URL_LEN];
 	BOOL secure;
 	long timeout, max_body_size, max_fetch_size;
 
-	/* parse conn str into attrs */
-	memset(&attrs, 0, sizeof(attrs));
-	if (! parse_connstr(&attrs, szConnStrIn, cchConnStrIn))
-		goto err;
-
-	/* assign defaults where not assigned and applicable */
-	if (! attrs.address.cnt)
-		attrs.address = MK_WSTR(ESODBC_DEF_HOST);
-	if (! attrs.port.cnt)
-		attrs.port = MK_WSTR(ESODBC_DEF_PORT);
-	if (! attrs.secure.cnt)
-		attrs.port = MK_WSTR(ESODBC_DEF_SECURE);
-	if (! attrs.timeout.cnt)
-		attrs.timeout = MK_WSTR(ESODBC_DEF_TIMEOUT);
-	if (! attrs.follow.cnt)
-		attrs.follow = MK_WSTR(ESODBC_DEF_FOLLOW);
-	if (! attrs.max_fetch_size.cnt)
-		attrs.max_fetch_size = MK_WSTR(ESODBC_DEF_FETCH_SIZE);
-	if (! attrs.max_body_size.cnt)
-		attrs.max_body_size = MK_WSTR(ESODBC_DEF_MAX_BODY_SIZE_MB);
-	/* default: no trace file */
-	if (! attrs.trace_level.cnt)
-		attrs.trace_level = MK_WSTR(ESODBC_DEF_TRACE_LEVEL);
-	
-	/*
-	 * init dbc from configured attributes
-	 */
-
 	/*
 	 * build connection URL 
 	 */
-	secure = wstr2bool(&attrs.secure);
+	secure = wstr2bool(&attrs->secure);
 	cnt = swprintf(urlw, sizeof(urlw)/sizeof(urlw[0]),
 			L"http" WPFCP_DESC "://" WPFWP_LDESC ":" WPFWP_LDESC
-				ELASTIC_SQL_PATH, secure ? "s" : "",
-			(int)attrs.address.cnt, attrs.address.str,
-			(int)attrs.port.cnt, attrs.port.str);
+				ELASTIC_SQL_PATH, secure ? "s" : "", LWSTR(&attrs->address),
+				LWSTR(&attrs->port));
 	if (cnt < 0) {
 		ERRN("failed to print URL out of address: `" LWPDL "` [%zd], "
-				"port: `" LWPDL "` [%zd].",
-				(int)attrs.address.cnt, attrs.address.str,
-				(int)attrs.port.cnt, attrs.port.str);
+				"port: `" LWPDL "` [%zd].", LWSTR(&attrs->address),
+				LWSTR(&attrs->port));
 		goto err;
 	}
 	/* lenght of URL converted to U8 */
@@ -858,15 +919,14 @@ static SQLRETURN process_connstr(esodbc_dbc_st *dbc,
 	INFO("DBC@0x%p: connection URL: `%s`.", dbc, dbc->url);
 
 	/* follow param for liburl */
-	dbc->follow = wstr2bool(&attrs.follow);
+	dbc->follow = wstr2bool(&attrs->follow);
 	INFO("DBC@0x%p: follow: %s.", dbc, dbc->follow ? "true" : "false");
 
 	/* 
 	 * request timeout for liburl: negative reset to 0
 	 */
-	if (! wstr2long(&attrs.timeout, &timeout)) {
-		ERR("failed to convert '" LWPDL "' to long.", attrs.timeout.cnt, 
-				attrs.timeout.str);
+	if (! wstr2long(&attrs->timeout, &timeout)) {
+		ERR("failed to convert '" LWPDL "' to long.", LWSTR(&attrs->timeout));
 		goto err;
 	}
 	if (timeout < 0) {
@@ -880,9 +940,9 @@ static SQLRETURN process_connstr(esodbc_dbc_st *dbc,
 	/* 
 	 * set max body size 
 	 */
-	if (! wstr2long(&attrs.max_body_size, &max_body_size)) {
-		ERR("failed to convert '" LWPDL "' to long.", attrs.max_body_size.cnt,
-				attrs.max_body_size.str);
+	if (! wstr2long(&attrs->max_body_size, &max_body_size)) {
+		ERR("failed to convert '" LWPDL "' to long.", 
+				LWSTR(&attrs->max_body_size));
 		goto err;
 	}
 	if (max_body_size < 0) {
@@ -897,9 +957,9 @@ static SQLRETURN process_connstr(esodbc_dbc_st *dbc,
 	/* 
 	 * set max fetch size 
 	 */
-	if (! wstr2long(&attrs.max_fetch_size, &max_fetch_size)) {
-		ERR("failed to convert '" LWPDL "' to long.", attrs.max_fetch_size.cnt,
-				attrs.max_fetch_size.str);
+	if (! wstr2long(&attrs->max_fetch_size, &max_fetch_size)) {
+		ERR("failed to convert '" LWPDL "' to long.", 
+				LWSTR(&attrs->max_fetch_size));
 		goto err;
 	}
 	if (max_fetch_size < 0) {
@@ -911,14 +971,14 @@ static SQLRETURN process_connstr(esodbc_dbc_st *dbc,
 	}
 	/* set the string representation of fetch_size, once for all STMTs */
 	if (dbc->fetch.max) {
-		dbc->fetch.slen = (char)attrs.max_fetch_size.cnt;
+		dbc->fetch.slen = (char)attrs->max_fetch_size.cnt;
 		dbc->fetch.str = malloc(dbc->fetch.slen + /*\0*/1);
 		if (! dbc->fetch.str) {
 			ERRN("failed to alloc %zdB.", dbc->fetch.slen);
 			RET_HDIAGS(dbc, SQL_STATE_HY001);
 		}
 		dbc->fetch.str[dbc->fetch.slen] = 0;
-		ansi_w2c(attrs.max_fetch_size.str, dbc->fetch.str, dbc->fetch.slen);
+		ansi_w2c(attrs->max_fetch_size.str, dbc->fetch.str, dbc->fetch.slen);
 	}
 	INFO("DBC@0x%p: fetch_size: %s.", dbc, 
 			dbc->fetch.str ? dbc->fetch.str : "none" );
@@ -928,13 +988,12 @@ static SQLRETURN process_connstr(esodbc_dbc_st *dbc,
 	/* 
 	 * set the REST body format: JSON/CBOR 
 	 */
-	if (EQ_CASE_WSTR(&attrs.packing, &MK_WSTR("JSON"))) {
+	if (EQ_CASE_WSTR(&attrs->packing, &MK_WSTR("JSON"))) {
 		dbc->pack_json = TRUE;
-	} else if (EQ_CASE_WSTR(&attrs.packing, &MK_WSTR("CBOR"))) {
+	} else if (EQ_CASE_WSTR(&attrs->packing, &MK_WSTR("CBOR"))) {
 		dbc->pack_json = FALSE;
 	} else {
-		ERR("unknown packing encoding '" LWPDL "'.", attrs.packing.cnt,
-				attrs.packing.str);
+		ERR("unknown packing encoding '" LWPDL "'.", LWSTR(&attrs->packing));
 		goto err;
 	}
 	INFO("DBC@0x%p: pack JSON: %s.", dbc, dbc->pack_json ? "true" : "false");
@@ -944,13 +1003,104 @@ static SQLRETURN process_connstr(esodbc_dbc_st *dbc,
 
 	return SQL_SUCCESS;
 err:
-	ERR("failed to process connection string `" LWPDL "`.",
-			cchConnStrIn < 0 ? wcslen(szConnStrIn) : cchConnStrIn,szConnStrIn);
 	if (state == SQL_STATE_HY000)
-		RET_HDIAG(dbc, state, "invalid connection string", 0);
+		RET_HDIAG(dbc, state, "invalid configuration parameter", 0);
 	RET_HDIAGS(dbc, state);
 }
 
+static inline void assign_defaults(config_attrs_st *attrs)
+{
+	/* assign defaults where not assigned and applicable */
+	if (! attrs->address.cnt)
+		attrs->address = MK_WSTR(ESODBC_DEF_HOST);
+	if (! attrs->port.cnt)
+		attrs->port = MK_WSTR(ESODBC_DEF_PORT);
+	if (! attrs->secure.cnt)
+		attrs->port = MK_WSTR(ESODBC_DEF_SECURE);
+	if (! attrs->timeout.cnt)
+		attrs->timeout = MK_WSTR(ESODBC_DEF_TIMEOUT);
+	if (! attrs->follow.cnt)
+		attrs->follow = MK_WSTR(ESODBC_DEF_FOLLOW);
+	if (! attrs->max_fetch_size.cnt)
+		attrs->max_fetch_size = MK_WSTR(ESODBC_DEF_FETCH_SIZE);
+	if (! attrs->max_body_size.cnt)
+		attrs->max_body_size = MK_WSTR(ESODBC_DEF_MAX_BODY_SIZE_MB);
+	/* default: no trace file */
+	if (! attrs->trace_level.cnt)
+		attrs->trace_level = MK_WSTR(ESODBC_DEF_TRACE_LEVEL);
+}
+
+/* release all resources, except the handler itself */
+void cleanup_dbc(esodbc_dbc_st *dbc)
+{
+	if (dbc->url) {
+		free(dbc->url);
+		dbc->url = NULL;
+	}
+	if (dbc->fetch.str) {
+		free(dbc->fetch.str);
+		dbc->fetch.str = NULL;
+		dbc->fetch.slen = 0;
+	}
+	if (dbc->dsn) {
+		free(dbc->dsn);
+		dbc->dsn = NULL;
+	}
+	assert(dbc->abuff == NULL); /* reminder for when going multithreaded */
+	cleanup_curl(dbc);
+}
+
+static SQLRETURN do_connect(esodbc_dbc_st *dbc, config_attrs_st *attrs)
+{
+	SQLRETURN ret;
+	char *url = NULL;
+
+	/* multiple connection attempts are possible (when prompting user) */
+	cleanup_dbc(dbc);
+
+	ret = process_config(dbc, attrs);
+	if (! SQL_SUCCEEDED(ret))
+		return ret;
+
+	/* init libcurl objects */
+	ret = init_curl(dbc);
+	if (! SQL_SUCCEEDED(ret)) {
+		ERR("failed to init transport for DBC 0x%p.", dbc);
+		return ret;
+	}
+
+	/* perform a connection test, to fail quickly if wrong address/port AND
+	 * populate the DNS cache; this won't guarantee succesful post'ing, tho! */
+	ret = test_connect(dbc->curl);
+	/* still ok if fails */
+	curl_easy_getinfo(dbc->curl, CURLINFO_EFFECTIVE_URL, &url);
+	if (! SQL_SUCCEEDED(ret)) {
+		ERR("test connection to URL %s failed!", url);
+		cleanup_curl(dbc);
+		RET_HDIAG(dbc, SQL_STATE_HYT01, "connection test failed", 0);
+	} else {
+		DBG("test connection to URL %s OK.", url);
+	}
+
+	return SQL_SUCCESS;
+}
+
+static BOOL read_system_info(config_attrs_st *attrs)
+{
+	//
+	// TODO: read system info
+	//
+	return FALSE;
+}
+
+static BOOL prompt_user(config_attrs_st *attrs, BOOL disable_conn)
+{
+	//
+	// TODO: display settings dialog box;
+	// An error message (if popping it more than once) might be needed.
+	//
+	return FALSE;
+}
 
 SQLRETURN EsSQLDriverConnectW
 (
@@ -979,84 +1129,121 @@ SQLRETURN EsSQLDriverConnectW
 {
 	esodbc_dbc_st *dbc = DBCH(hdbc);
 	SQLRETURN ret;
-	SQLWCHAR *connstr;
-	size_t n;
-	char *url = NULL;
+	config_attrs_st attrs;
+	wstr_st orig_dsn;
+	BOOL disable_conn = FALSE;
+	BOOL user_canceled = FALSE;
 
-	DBG("Input connection string: '"LWPD"'[%d].", szConnStrIn, cchConnStrIn);
-	if (! pcchConnStrOut) {
-		ERR("null pcchConnStrOut parameter");
-		RET_HDIAGS(dbc, SQL_STATE_HY000);
-	}
+
+	memset(&attrs, 0, sizeof(attrs));
 
 	if (szConnStrIn) {
-		ret = process_connstr(dbc, szConnStrIn, cchConnStrIn);
-		if (! SQL_SUCCEEDED(ret))
-			return ret;
+		DBG("Input connection string: '"LWPD"'[%d].", szConnStrIn,
+				cchConnStrIn);
+		/* parse conn str into attrs */
+		if (! parse_connection_string(&attrs, szConnStrIn, cchConnStrIn)) {
+			ERR("failed to parse connection string `" LWPDL "`.",
+					cchConnStrIn < 0 ? wcslen(szConnStrIn) : cchConnStrIn,
+					szConnStrIn);
+			RET_HDIAGS(dbc, SQL_STATE_HY000);
+		}
+		/* original received DSN saved for later query by the app */
+		orig_dsn = attrs.dsn;
+
+		/* set DSN (to DEFAULT) only if both DSN and Driver kw are missing */
+		if ((! attrs.driver.cnt) && (! attrs.dsn.cnt)) {
+			/* If the connection string does not contain the DSN keyword, the
+			 * specified data source is not found, or the DSN keyword is set
+			 * to "DEFAULT", the driver retrieves the information for the
+			 * Default data source. */
+			INFO("no DRIVER or DSN keyword found in connection string: "
+					"using the \"DEFAULT\" DSN.");
+			attrs.dsn = MK_WSTR("DEFAULT");
+		}
+	} else {
+		INFO("empty connection string: using the \"DEFAULT\" DSN.");
+		attrs.dsn = MK_WSTR("DEFAULT");
+	}
+	assert(attrs.driver.cnt || attrs.dsn.cnt);
+
+	if (attrs.dsn.cnt) {
+		/* "The driver uses any information it retrieves from the system
+		 * information to augment the information passed to it in the
+		 * connection string. If the information in the system information
+		 * duplicates information in the connection string, the driver uses
+		 * the information in the connection string." */
+		INFO("configuring the driver by DSN '" LWPDL "'.", LWSTR(&attrs.dsn));
+		if (! read_system_info(&attrs))
+			/* warn, but try to carry on */
+			WARN("failed to read system info for DSN '" LWPDL "' data.",
+					LWSTR(&attrs.dsn));
+	} else {
+		/* "If the connection string contains the DRIVER keyword, the driver
+		 * cannot retrieve information about the data source from the system
+		 * information." */
+		INFO("configuring the driver '" LWPDL "'.", LWSTR(&attrs.driver));
 	}
 
-#if 0
-/* Options for SQLDriverConnect */
-#define SQL_DRIVER_NOPROMPT             0
-#define SQL_DRIVER_COMPLETE             1
-#define SQL_DRIVER_PROMPT               2
-#define SQL_DRIVER_COMPLETE_REQUIRED    3
-#endif
+	/* whatever attributes haven't yet been set, init them with defaults */
+	assign_defaults(&attrs);
 
-	// FIXME: set the proper connection string;
-	connstr = MK_WPTR("connection string placeholder");
-	dbc->connstr = _wcsdup(connstr);
-	if (! dbc->connstr) {
-		ERRN("failed to dup string `%s`.", connstr);
+	switch (fDriverCompletion) {
+		case SQL_DRIVER_NOPROMPT:
+			ret = do_connect(dbc, &attrs);
+			if (! SQL_SUCCEEDED(ret))
+				return ret;
+			break;
+
+		case SQL_DRIVER_COMPLETE_REQUIRED:
+			disable_conn = TRUE;
+			//no break;
+		case SQL_DRIVER_COMPLETE:
+			/* try connect first, then, if that fails, prompt user */
+			while (! SQL_SUCCEEDED(do_connect(dbc, &attrs))) {
+				if (! prompt_user(&attrs, disable_conn))
+					/* user canceled */
+					return SQL_NO_DATA;
+			}
+			break;
+
+		case SQL_DRIVER_PROMPT:
+			do {
+				/* prompt user first, then try connect */
+				if (! prompt_user(&attrs, FALSE))
+					/* user canceled */
+					return SQL_NO_DATA;
+			} while (! SQL_SUCCEEDED(do_connect(dbc, &attrs)));
+			break;
+
+		default:
+			ERR("DBC@0x%p: unknown driver completion mode: %d", dbc, 
+					fDriverCompletion);
+			RET_HDIAGS(dbc, SQL_STATE_HY110);
+	}
+
+
+	/* save the original DSN for later inquiry by app */
+	dbc->dsn = malloc((orig_dsn.cnt + /*0*/1) * sizeof(SQLWCHAR));
+	if (! dbc->dsn) {
+		ERRN("OOM for %zdB.", (orig_dsn.cnt + /*0*/1) * sizeof(SQLWCHAR));
 		RET_HDIAGS(dbc, SQL_STATE_HY001);
 	}
-
-	ret = init_curl(dbc);
-	if (! SQL_SUCCEEDED(ret)) {
-		ERR("failed to init transport for DBC 0x%p.", dbc);
-		return ret;
-	}
-
-	/* perform a connection test, to fail quickly if wrong address/port AND
-	 * populate the DNS cache; this won't guarantee succesful post'ing, tho! */
-	ret = test_connect(dbc->curl);
-	/* still ok if fails */
-	curl_easy_getinfo(dbc->curl, CURLINFO_EFFECTIVE_URL, &url);
-	if (! SQL_SUCCEEDED(ret)) {
-		ERR("test connection to URL %s failed!", url);
-		cleanup_curl(dbc);
-		RET_HDIAG(dbc, SQL_STATE_HYT01, "connection test failed", 0);
-	} else {
-		DBG("test connection to URL %s OK.", url);
-	}
+	dbc->dsn[orig_dsn.cnt] = '\0';
+	wcsncpy(dbc->dsn, orig_dsn.str, orig_dsn.cnt);
 
 	/* return the final connection string */
-	if (szConnStrOut) {
-		// TODO: Driver param
-		n = swprintf(szConnStrOut, cchConnStrOutMax, WPFWP_DESC ";"
-				"Address="WPFCP_DESC";"
-				"Port=%d;"
-				"Secure=%d;"
-				"Packing="WPFCP_DESC";"
-				"MaxFetchSize=%d;"
-				"MaxBodySize="WPFCP_DESC";"
-				"Timeout=%d;"
-				"Follow=%d;"
-				"TraceFile="WPFCP_DESC";"
-				"TraceLevel="WPFCP_DESC";"
-				"Catalog=cat;"
-				"UID=user;PWD=pass;",
-				szConnStrIn, "host", 9200, 0, "json", 100, "10M", -1, 0, 
-				"C:\\foo.txt", "DEBUG");
-		if (n < 0) {
-			ERRN("failed to outprint connection string.");
-			RET_HDIAGS(dbc, SQL_STATE_HY000);
-		} else {
-			*pcchConnStrOut = (SQLSMALLINT)n;
+	if (szConnStrOut || pcchConnStrOut) {
+		/* might have been reset to DEFAULT, if orig was not found */
+		attrs.dsn = orig_dsn; 
+		if (! write_connection_string(&attrs, szConnStrOut, cchConnStrOutMax,
+				pcchConnStrOut)) {
+			ERR("DBC@0x%p: failed to build output connection string.");
+			RET_HDIAG(dbc, SQL_STATE_HY000, "failed to build connection "
+					"string", 0);
 		}
 	}
 
-	RET_STATE(SQL_STATE_00000);
+	return SQL_SUCCESS;
 }
 
 /* "Implicitly allocated descriptors can be freed only by calling
@@ -1065,17 +1252,8 @@ SQLRETURN EsSQLDriverConnectW
 SQLRETURN EsSQLDisconnect(SQLHDBC ConnectionHandle)
 {
 	esodbc_dbc_st *dbc = DBCH(ConnectionHandle);
-	// FIXME: disconnect
-	DBG("disconnecting from 0x%p", dbc);
-
-	if (dbc->connstr) {
-		free(dbc->connstr);
-		dbc->connstr = NULL;
-	}
-
-	cleanup_curl(dbc);
-
-	RET_STATE(SQL_STATE_00000);
+	cleanup_dbc(dbc);
+	return SQL_SUCCESS;
 }
 
 

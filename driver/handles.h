@@ -56,6 +56,7 @@ typedef struct struct_dbc {
 	esodbc_env_st *env;
 	/* diagnostic/state keeping */
 	esodbc_diag_st diag;
+	SQLWCHAR *dsn; /* data source name */
 	char *url;
 	SQLUINTEGER timeout;
 	BOOL follow;
@@ -70,7 +71,6 @@ typedef struct struct_dbc {
 	// TODO: PROTO
 	void *conn;
 
-	SQLWCHAR *connstr; /* connection string */ // TODO: IDNA?
 	CURL *curl; /* cURL handle */
 	char *abuff; /* buffer holding the answer */
 	size_t alen; /* size of abuff */
