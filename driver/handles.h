@@ -45,7 +45,7 @@ typedef struct struct_dbc {
 	esodbc_env_st *env;
 	/* diagnostic/state keeping */
 	esodbc_diag_st diag;
-	SQLWCHAR *dsn; /* data source name */
+	wstr_st dsn; /* data source name */
 	char *url;
 	SQLUINTEGER timeout;
 	BOOL follow;

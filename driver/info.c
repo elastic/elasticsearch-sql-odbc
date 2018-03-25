@@ -238,8 +238,8 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			break;
 
 		case SQL_DATA_SOURCE_NAME:
-			DBG("requested: data source name: `"LWPD"`.", dbc->dsn);
-			return write_wptr(&dbc->diag, InfoValue, dbc->dsn,
+			DBG("requested: data source name: `"LWPD"`.", dbc->dsn.str);
+			return write_wptr(&dbc->diag, InfoValue, dbc->dsn.str,
 					BufferLength, StringLengthPtr);
 
 		case SQL_DRIVER_NAME:
@@ -508,13 +508,13 @@ SQLRETURN EsSQLGetDiagFieldW(
 		case SQL_DIAG_SERVER_NAME: /* TODO: keep same as _CONNECTION_NAME? */
 			switch (HandleType) {
 				case SQL_HANDLE_DBC: 
-					wptr = DBCH(Handle)->dsn;
+					wptr = DBCH(Handle)->dsn.str;
 					break;
 				case SQL_HANDLE_STMT:
-					wptr = STMH(Handle)->dbc->dsn;
+					wptr = STMH(Handle)->dbc->dsn.str;
 					break;
 				case SQL_HANDLE_DESC:
-					wptr = DSCH(Handle)->stmt->dbc->dsn;
+					wptr = DSCH(Handle)->stmt->dbc->dsn.str;
 					break;
 				default: 
 					wptr = MK_WPTR("");

@@ -231,6 +231,7 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 				RET_HDIAGS(ENVH(InputHandle), SQL_STATE_HY001);
 			}
 			init_diagnostic(&dbc->diag);
+			dbc->dsn.str = MK_WPTR(""); /* see explanation in cleanup_dbc() */
 			dbc->metadata_id = SQL_FALSE;
 			dbc->async_enable = SQL_ASYNC_ENABLE_OFF;
 
