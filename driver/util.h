@@ -44,6 +44,10 @@
 #define _MK_WPTR(_cstr_)	(L ## _cstr_)
 #define MK_WPTR(_cstr_)		_MK_WPTR(_cstr_)
 
+typedef struct cstr {
+	SQLCHAR *str;
+	size_t cnt;
+} cstr_st;
 
 /*
  * Copy converted strings from SQLWCHAR to char, for ANSI strings.
@@ -108,6 +112,12 @@ BOOL wstr2long(wstr_st *val, long *out);
 	 * during conversion." */
 	// wcstombs(charp, wstr, octet_length);
 #endif /* _WIN32 */
+
+#ifdef UNICODE
+typedef wstr_st tstr_st;
+#else /* UNICODE */
+typedef cstr_st tstr_st;
+#endif /* UNICODE */
 
 
 /* 

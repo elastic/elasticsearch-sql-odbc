@@ -70,8 +70,21 @@
 #define LWPDL	PFCP_LDESC
 #endif /* UNICODE */
 
+/*
+ * Descriptors to be used with logging with SQLWCHAR pointer type.
+ * "Log Wchar Pointer Descriptor [with Lenght]"
+ */
+#ifdef UNICODE
+#define LTPD	PFWP_DESC
+#define LTPDL	PFWP_LDESC
+#else /* UNICODE */
+#define LTPD	PFCP_DESC
+#define LTPDL	PFCP_LDESC
+#endif /* UNICODE */
+
 /* macro for logging of wstr_st objects */
 #define LWSTR(_wptr)	(int)(_wptr)->cnt, (_wptr)->str
+#define LTSTR(_wptr)	(int)(_wptr)->cnt, (_wptr)->str
 
 
 
