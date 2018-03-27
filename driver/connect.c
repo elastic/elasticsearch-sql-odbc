@@ -388,6 +388,7 @@ err_net: /* the error occured after the request hit hit the network */
 	cleanup_curl(dbc);
 	if (abuff) {
 		free(abuff);
+		abuff = NULL;
 		/* if buffer had been set, the error occured in _perform() */
 		RET_HDIAG(stmt, SQL_STATE_08S01, "data transfer failure", res);
 	}
