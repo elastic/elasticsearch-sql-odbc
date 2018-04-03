@@ -18,7 +18,7 @@ void init_diagnostic(esodbc_diag_st *dest)
 
 /* TODO: must the diagnostic be "cleared" after a succesful invokation?? */
 SQLRETURN post_diagnostic(esodbc_diag_st *dest, esodbc_state_et state, 
-		SQLTCHAR *text, SQLINTEGER code)
+		SQLWCHAR *text, SQLINTEGER code)
 {
 	size_t pos, tcnt, ebufsz;
 	
@@ -34,7 +34,7 @@ SQLRETURN post_diagnostic(esodbc_diag_st *dest, esodbc_state_et state,
 
 	pos = sizeof(ESODBC_DIAG_PREFIX) - 1;
 	assert(pos < ebufsz);
-	wcsncpy(dest->text, MK_TSTR(ESODBC_DIAG_PREFIX), pos);
+	wcsncpy(dest->text, MK_WPTR(ESODBC_DIAG_PREFIX), pos);
 
 	if (ebufsz <= pos + tcnt) {
 		wcsncpy(dest->text + pos, text, ebufsz - (pos + 1));
@@ -44,7 +44,7 @@ SQLRETURN post_diagnostic(esodbc_diag_st *dest, esodbc_state_et state,
 		wcsncpy(dest->text + pos, text, tcnt + /* 0-term */1);
 		dest->text_len = (int)(pos + tcnt);
 	}
-	DBG("diagnostic message: `" LTPD "` [%d], native code: %d.", dest->text,
+	DBG("diagnostic message: `" LWPD "` [%d], native code: %d.", dest->text,
 			dest->text_len, dest->native_code);
 
 	RET_STATE(state);
@@ -52,7 +52,7 @@ SQLRETURN post_diagnostic(esodbc_diag_st *dest, esodbc_state_et state,
 }
 
 SQLRETURN post_row_diagnostic(esodbc_diag_st *dest, esodbc_state_et state, 
-		SQLTCHAR *text, SQLINTEGER code, SQLLEN nrow, SQLINTEGER ncol)
+		SQLWCHAR *text, SQLINTEGER code, SQLLEN nrow, SQLINTEGER ncol)
 {
 	dest->row_number = nrow;
 	dest->column_number = ncol;

@@ -45,18 +45,21 @@ typedef struct struct_dbc {
 	esodbc_env_st *env;
 	/* diagnostic/state keeping */
 	esodbc_diag_st diag;
+	wstr_st dsn; /* data source name */
+	char *url;
 	SQLUINTEGER timeout;
+	BOOL follow;
 	struct {
 		size_t max; /* max fetch size */
 		char *str; /* as string */
 		char slen; /* string's length (w/o terminator) */
 	} fetch;
+	BOOL pack_json; /* should JSON be used in REST bodies? (vs. CBOR) *///TODO
 
 	// FIXME: placeholder; used if connection has been established or not
 	// TODO: PROTO
 	void *conn;
 
-	SQLTCHAR *connstr; /* connection string */ // TODO: IDNA?
 	CURL *curl; /* cURL handle */
 	char *abuff; /* buffer holding the answer */
 	size_t alen; /* size of abuff */
@@ -65,7 +68,7 @@ typedef struct struct_dbc {
 
 	/* "the catalog is a database", "For a single-tier driver, the catalog
 	 * might be a directory" */
-	SQLTCHAR *catalog; 
+	SQLWCHAR *catalog; 
 	// TODO: statements?
 	
 	/* options */
@@ -106,17 +109,17 @@ typedef struct desc_rec {
 	SQLPOINTER		data_ptr; /* array, if .array_size > 1 */
 
 	/* TODO: add (& use) the lenghts */
-	SQLTCHAR		*base_column_name; /* read-only */
-	SQLTCHAR		*base_table_name; /* r/o */
-	SQLTCHAR		*catalog_name; /* r/o */
-	SQLTCHAR		*label; /* r/o */
-	SQLTCHAR		*literal_prefix; /* r/o */ // TODO: static?
-	SQLTCHAR		*literal_suffix; /* r/o */ // TODO: static?
-	SQLTCHAR		*local_type_name; /* r/o */
-	SQLTCHAR		*name;
-	SQLTCHAR		*schema_name; /* r/o */ // TODO: static?
-	SQLTCHAR		*table_name; /* r/o */
-	SQLTCHAR		*type_name; /* r/o */
+	SQLWCHAR		*base_column_name; /* read-only */
+	SQLWCHAR		*base_table_name; /* r/o */
+	SQLWCHAR		*catalog_name; /* r/o */
+	SQLWCHAR		*label; /* r/o */
+	SQLWCHAR		*literal_prefix; /* r/o */ // TODO: static?
+	SQLWCHAR		*literal_suffix; /* r/o */ // TODO: static?
+	SQLWCHAR		*local_type_name; /* r/o */
+	SQLWCHAR		*name;
+	SQLWCHAR		*schema_name; /* r/o */ // TODO: static?
+	SQLWCHAR		*table_name; /* r/o */
+	SQLWCHAR		*type_name; /* r/o */
 
 	SQLLEN			*indicator_ptr; /* array, if .array_size > 1 */
 	SQLLEN			*octet_length_ptr; /* array, if .array_size > 1 */
@@ -341,15 +344,15 @@ SQLRETURN EsSQLSetDescRec(
 #define HDIAG_COPY(_s, _d)	(_s)->diag = (_d)->diag
 /* set a diagnostic to a(ny) handle */
 #define SET_HDIAG(_hp/*handle ptr*/, _s/*tate*/, _t/*char text*/, _c/*ode*/) \
-	post_diagnostic(&(_hp)->diag, _s, MK_TSTR(_t), _c)
+	post_diagnostic(&(_hp)->diag, _s, MK_WPTR(_t), _c)
 
 /* return the code associated with the given state (and debug-log) */
 #define RET_STATE(_s)	\
 	do { \
 		assert(_s < SQL_STATE_MAX); \
 		SQLRETURN _r = esodbc_errors[_s].retcode; \
-		SQLTCHAR *_c = esodbc_errors[_s].code; \
-		DBG("returning state "LTPD", code %d.", _c, _r); \
+		SQLWCHAR *_c = esodbc_errors[_s].code; \
+		DBG("returning state "LWPD", code %d.", _c, _r); \
 		return _r; \
 	} while (0)
 
