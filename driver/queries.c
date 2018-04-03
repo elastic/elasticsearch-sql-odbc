@@ -72,47 +72,6 @@ void clear_resultset(esodbc_stmt_st *stmt)
 	memset(&stmt->rset, 0, sizeof(stmt->rset));
 }
 
-/*
- * Converts a wchar_t string to a C string for ANSI characters.
- * 'dst' should be as character-long as 'src', if 'src' is not 0-terminated,
- * OR one character longer (for the 0-term) otherwise.
- * 'dst' will always be 0-term'd.
- * Returns negative if conversion fails or number of converted wchars,
- * including the 0-term.
- *
- */
-int ansi_w2c(const SQLTCHAR *src, char *dst, size_t chars)
-{
-	int i = 0;
-	
-	do {
-		if (CHAR_MAX < src[i])
-			return -(i + 1);
-		dst[i] = (char)src[i];
-	} while (src[i] && (++i < chars));
-
-	if (chars <= i) {
-		/* loop stopped b/c of lenght -> src is not 0-term'd */
-		dst[i - 1] = 0;
-		return i;
-	}
-	return i + 1;
-}
-
-static int wmemncasecmp(const wchar_t *a, const wchar_t *b, size_t len)
-{
-	size_t i;
-	int diff = 0; /* if len == 0 */
-	for (i = 0; i < len; i ++) {
-		diff = towlower(a[i]) - towlower(b[i]);
-		if (diff)
-			break;
-	}
-	//DBG("`" LTPDL "` vs `" LTPDL "` => %d (len=%zd, i=%d).", 
-	//		len, a, len, b, diff, len, i);
-	return diff;
-}
-
 static SQLSMALLINT type_elastic2csql(const wchar_t *type_name, size_t len)
 {
 	switch (len) {
@@ -123,17 +82,17 @@ static SQLSMALLINT type_elastic2csql(const wchar_t *type_name, size_t len)
 		case sizeof(JSON_COL_INTEGER) - 1:
 			switch(tolower(type_name[0])) {
 				case (wchar_t)'i': /* integer */
-					if (wmemncasecmp(type_name, MK_WSTR(JSON_COL_INTEGER),
+					if (wmemncasecmp(type_name, MK_WPTR(JSON_COL_INTEGER),
 								len) == 0)
 						return SQL_C_SLONG;
 					break;
 				case (wchar_t)'b': /* boolean */
-					if (wmemncasecmp(type_name, MK_WSTR(JSON_COL_BOOLEAN),
+					if (wmemncasecmp(type_name, MK_WPTR(JSON_COL_BOOLEAN),
 								len) == 0)
 						return SQL_C_UTINYINT;
 					break;
 				case (wchar_t)'k': /* keyword */
-					if (wmemncasecmp(type_name, MK_WSTR(JSON_COL_KEYWORD),
+					if (wmemncasecmp(type_name, MK_WPTR(JSON_COL_KEYWORD),
 								len) == 0)
 						return SQL_C_CHAR;
 					break;
@@ -143,22 +102,22 @@ static SQLSMALLINT type_elastic2csql(const wchar_t *type_name, size_t len)
 		case sizeof(JSON_COL_TEXT) - 1: 
 			switch(tolower(type_name[0])) {
 				case (wchar_t)'t':
-					if (! wmemncasecmp(type_name, MK_WSTR(JSON_COL_TEXT), len))
+					if (! wmemncasecmp(type_name, MK_WPTR(JSON_COL_TEXT), len))
 						// TODO: char/longvarchar/wchar/wvarchar?
 						return SQL_C_CHAR;
 					break;
 				case (wchar_t)'d':
-					if (! wmemncasecmp(type_name, MK_WSTR(JSON_COL_DATE), len))
+					if (! wmemncasecmp(type_name, MK_WPTR(JSON_COL_DATE), len))
 						// TODO: time/timestamp
 						return SQL_C_TYPE_DATE;
 					break;
 				case (wchar_t)'b':
-					if (! wmemncasecmp(type_name, MK_WSTR(JSON_COL_BYTE), len))
+					if (! wmemncasecmp(type_name, MK_WPTR(JSON_COL_BYTE), len))
 						return SQL_C_STINYINT;
 					break;
 #if 1 // BUG FIXME
 				case (wchar_t)'n':
-					if (! wmemncasecmp(type_name, MK_WSTR("null"), len))
+					if (! wmemncasecmp(type_name, MK_WPTR("null"), len))
 						// TODO: time/timestamp
 						return SQL_C_SSHORT;
 					break;
@@ -166,12 +125,12 @@ static SQLSMALLINT type_elastic2csql(const wchar_t *type_name, size_t len)
 			}
 			break;
 		case sizeof(JSON_COL_SHORT) - 1:
-			if (! wmemncasecmp(type_name, MK_WSTR(JSON_COL_SHORT), len))
+			if (! wmemncasecmp(type_name, MK_WPTR(JSON_COL_SHORT), len))
 				// TODO: time/timestamp
 				return SQL_C_SSHORT;
 			break;
 	}
-	ERR("unrecognized Elastic type `" LTPDL "` (%zd).", len, type_name, len);
+	ERR("unrecognized Elastic type `" LWPDL "` (%zd).", len, type_name, len);
 	return SQL_UNKNOWN_TYPE;
 }
 
@@ -234,8 +193,8 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 	
 	esodbc_desc_st *ird = stmt->ird;
 	wchar_t *keys[] = {
-		MK_WSTR(JSON_ANSWER_COL_NAME),
-		MK_WSTR(JSON_ANSWER_COL_TYPE)
+		MK_WPTR(JSON_ANSWER_COL_NAME),
+		MK_WPTR(JSON_ANSWER_COL_TYPE)
 	};
 
 
@@ -264,8 +223,8 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 		rec = &ird->recs[recno]; // +recno
 
 		col_wname = UJReadString(name_o, &len);
-		assert(sizeof(*col_wname) == sizeof(SQLTCHAR)); /* TODO: no ANSI */
-		rec->name = (SQLTCHAR *)col_wname;
+		assert(sizeof(*col_wname) == sizeof(SQLWCHAR)); /* TODO: no ANSI */
+		rec->name = (SQLWCHAR *)col_wname;
 		rec->unnamed = SQL_NAMED;
 
 		col_wtype = UJReadString(type_o, &len);
@@ -277,7 +236,7 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 		col_stype = type_elastic2csql(col_wtype, len);
 		if (col_stype == SQL_UNKNOWN_TYPE) {
 			ERRSTMT(stmt, "failed to convert Elastic to C SQL type `" 
-					LTPDL "`.", len, col_wtype);
+					LWPDL "`.", len, col_wtype);
 			RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
 		}
 		rec->concise_type = col_stype;
@@ -291,14 +250,14 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 		set_col_decdigits(rec);
 
 		/* TODO: set all settable fields */
-		rec->base_column_name = MK_TSTR("");
+		rec->base_column_name = MK_WPTR("");
 		rec->display_size = 256;
 
 #ifndef NDEBUG
 		//dump_record(rec);
 #endif /* NDEBUG */
 
-		DBGSTMT(stmt, "column #%d: name=`" LTPD "`, type=%d (`" LTPD "`).", 
+		DBGSTMT(stmt, "column #%d: name=`" LWPD "`, type=%d (`" LWPD "`).", 
 				recno, col_wname, col_stype, col_wtype);
 		recno ++;
 	}
@@ -320,9 +279,9 @@ SQLRETURN attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 	const wchar_t *wcurs;
 	size_t eccnt;
 	wchar_t *keys[] = {
-		MK_WSTR(JSON_ANSWER_COLUMNS),
-		MK_WSTR(JSON_ANSWER_ROWS),
-		MK_WSTR(JSON_ANSWER_CURSOR) 
+		MK_WPTR(JSON_ANSWER_COLUMNS),
+		MK_WPTR(JSON_ANSWER_ROWS),
+		MK_WPTR(JSON_ANSWER_CURSOR) 
 	};
 
 	/* clear any previous result set */
@@ -379,17 +338,16 @@ SQLRETURN attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 	if (cursor) {
 		wcurs = UJReadString(cursor, &eccnt);
 		if (eccnt) {
-			/* TODO: can this happen automatically anyways if hitting
-			 * Elastic's scroller size? */
+			/* this can happen automatically if hitting scroller size */
 			if (! stmt->dbc->fetch.max)
-				WARN("STMT@0x%p: no fetch size defined, but cursor returned.");
+				INFO("STMT@0x%p: no fetch size defined, but cursor returned.");
 			if (stmt->rset.ecurs)
-				DBGSTMT(stmt, "replacing old cursor `" LTPDL "`.", 
+				DBGSTMT(stmt, "replacing old cursor `" LWPDL "`.", 
 						stmt->rset.eccnt, stmt->rset.ecurs);
 			/* store new cursor vals */
 			stmt->rset.ecurs = wcurs;
 			stmt->rset.eccnt = eccnt;
-			DBGSTMT(stmt, "new elastic cursor: `" LTPDL "`[%zd].", 
+			DBGSTMT(stmt, "new elastic cursor: `" LWPDL "`[%zd].", 
 					stmt->rset.eccnt, stmt->rset.ecurs, stmt->rset.eccnt);
 		} else {
 			WARNSTMT(stmt, "empty cursor found in the answer.");
@@ -434,12 +392,12 @@ SQLRETURN attach_error(esodbc_stmt_st *stmt, char *buff, size_t blen)
 	int n;
 	void *state = NULL;
 	wchar_t *outer_keys[] = {
-		MK_WSTR(JSON_ANSWER_ERROR),
-		MK_WSTR(JSON_ANSWER_STATUS)
+		MK_WPTR(JSON_ANSWER_ERROR),
+		MK_WPTR(JSON_ANSWER_STATUS)
 	};
 	wchar_t *err_keys[] = {
-		MK_WSTR(JSON_ANSWER_ERR_TYPE),
-		MK_WSTR(JSON_ANSWER_ERR_REASON)
+		MK_WPTR(JSON_ANSWER_ERR_TYPE),
+		MK_WPTR(JSON_ANSWER_ERR_REASON)
 	};
 
 	INFO("STMT@0x%p REST request failed with `%.*s` (%zd).", stmt, blen, buff, 
@@ -472,13 +430,13 @@ SQLRETURN attach_error(esodbc_stmt_st *stmt, char *buff, size_t blen)
 	wreason = UJReadString(o_reason, &rlen);
 	/* these return empty string in case of mismatch */
 	assert(wtype && wreason);
-	DBGSTMT(stmt, "server failures: type: [%zd] `" LTPDL "`, reason: [%zd] `" 
-			LTPDL "`, status: %d.", tlen, tlen, wtype, rlen, rlen, wreason, 
+	DBGSTMT(stmt, "server failures: type: [%zd] `" LWPDL "`, reason: [%zd] `" 
+			LWPDL "`, status: %d.", tlen, tlen, wtype, rlen, rlen, wreason, 
 			UJNumericInt(o_status));
 
 	/* swprintf will fail if formated string would overrun the buffer size (as
 	 * opposed to write up to its limit) => find out the limit first.*/
-	n = swprintf(NULL, 0, MK_WSTR("%.*s: %.*s"), (int)tlen, wtype, (int)rlen,
+	n = swprintf(NULL, 0, MK_WPTR("%.*s: %.*s"), (int)tlen, wtype, (int)rlen,
 			wreason);
 	if (0 < n) {
 		wbuflen -= /* ": " */2 + /*\0*/1;
@@ -487,14 +445,14 @@ SQLRETURN attach_error(esodbc_stmt_st *stmt, char *buff, size_t blen)
 		rlen = left < rlen ? left : rlen;
 		wbuflen += /* ": " */2 + /*\0*/1;
 		/* swprintf will add the 0-term (or fail, if it can't) */
-		n = swprintf(wbuf, wbuflen, MK_WSTR("%.*s: %.*s"), (int)tlen, wtype,
+		n = swprintf(wbuf, wbuflen, MK_WPTR("%.*s: %.*s"), (int)tlen, wtype,
 				(int)rlen, wreason);
 	}
 	if (n < 0) {
 		ERRN("failed to print error message from server.");
 		assert(sizeof(MSG_INV_SRV_ANS) < sizeof(wbuf));
-		memcpy(wbuf, MK_TSTR(MSG_INV_SRV_ANS),
-				sizeof(MSG_INV_SRV_ANS)*sizeof(SQLTCHAR));
+		memcpy(wbuf, MK_WPTR(MSG_INV_SRV_ANS),
+				sizeof(MSG_INV_SRV_ANS)*sizeof(SQLWCHAR));
 	}
 
 	post_diagnostic(&stmt->diag, SQL_STATE_HY000, wbuf, 
@@ -510,19 +468,19 @@ end:
 }
 
 SQLRETURN attach_sql(esodbc_stmt_st *stmt, 
-		const SQLTCHAR *sql, /* SQL text statement */
+		const SQLWCHAR *sql, /* SQL text statement */
 		size_t sqlcnt /* count of chars of 'sql' */)
 {
 	char *u8;
 	int len;
 
-	DBGSTMT(stmt, "attaching SQL `" LTPDL "` (%zd).", sqlcnt, sql, sqlcnt);
+	DBGSTMT(stmt, "attaching SQL `" LWPDL "` (%zd).", sqlcnt, sql, sqlcnt);
 #if 0 // FIXME
 	if (wcslen(sql) < 1256) {
 		if (wcsstr(sql, L"FROM test_emp")) {
 			sql = L"SELECT emp_no, first_name, last_name, birth_date, 2+3 AS foo FROM test_emp";
 			sqlcnt = wcslen(sql);
-			DBGSTMT(stmt, "RE-attaching SQL `" LTPDL "` (%zd).", sqlcnt,
+			DBGSTMT(stmt, "RE-attaching SQL `" LWPDL "` (%zd).", sqlcnt,
 					sql, sqlcnt);
 		}
 	}
@@ -532,11 +490,11 @@ SQLRETURN attach_sql(esodbc_stmt_st *stmt,
 
 	len = WCS2U8(sql, (int)sqlcnt, NULL, 0);
 	if (len <= 0) {
-		ERRN("STMT@0x%p: failed to UCS2/UTF8 convert SQL `" LTPDL "` (%zd).", 
+		ERRN("STMT@0x%p: failed to UCS2/UTF8 convert SQL `" LWPDL "` (%zd).", 
 				stmt, sqlcnt, sql, sqlcnt);
 		RET_HDIAG(stmt, SQL_STATE_HY000, "UCS2/UTF8 conversion failure", 0);
 	}
-	DBGSTMT(stmt, "wide char SQL `" LTPDL "`[%zd] converts to UTF8 on %d "
+	DBGSTMT(stmt, "wide char SQL `" LWPDL "`[%zd] converts to UTF8 on %d "
 			"octets.", sqlcnt, sql, sqlcnt, len);
 
 	u8 = malloc(len);
@@ -547,7 +505,7 @@ SQLRETURN attach_sql(esodbc_stmt_st *stmt,
 
 	len = WCS2U8(sql, (int)sqlcnt, u8, len);
 	if (len <= 0) { /* can it happen? it's just succeded above */
-		ERRN("STMT@0x%p: failed to UCS2/UTF8 convert SQL `" LTPDL "` (%zd).", 
+		ERRN("STMT@0x%p: failed to UCS2/UTF8 convert SQL `" LWPDL "` (%zd).", 
 				stmt, sqlcnt, sql, sqlcnt);
 		free(u8);
 		RET_HDIAG(stmt, SQL_STATE_HY000, "UCS2/UTF8 conversion failure(2)", 0);
@@ -827,7 +785,7 @@ static SQLRETURN copy_longlong(desc_rec_st *arec, desc_rec_st *irec,
 	esodbc_desc_st *ard, *ird;
 	SQLSMALLINT target_type;
 	char buff[sizeof("18446744073709551616")]; /* = 1 << 8*8 */
-	SQLTCHAR wbuff[sizeof("18446744073709551616")]; /* = 1 << 8*8 */
+	SQLWCHAR wbuff[sizeof("18446744073709551616")]; /* = 1 << 8*8 */
 	size_t tocopy, blen;
 	esodbc_state_et state = SQL_STATE_00000;
 
@@ -921,7 +879,7 @@ static SQLRETURN wstr_to_cstr(desc_rec_st *arec, desc_rec_st *irec,
 			if (out_bytes <= 0) {
 				if (WCS2U8_BUFF_INSUFFICIENT)
 					continue;
-				ERRN("failed to convert wchar* to char* for string `" LTPDL 
+				ERRN("failed to convert wchar* to char* for string `" LWPDL 
 						"`.", chars, wstr);
 				RET_HDIAGS(stmt, SQL_STATE_22018);
 			} else {
@@ -936,7 +894,7 @@ static SQLRETURN wstr_to_cstr(desc_rec_st *arec, desc_rec_st *irec,
 			state = SQL_STATE_01004; /* indicate truncation */
 		}
 
-		DBG("REC@0x%p, data_ptr@0x%p, copied %zd bytes: `" LTPD "`.", arec,
+		DBG("REC@0x%p, data_ptr@0x%p, copied %zd bytes: `" LWPD "`.", arec,
 				data_ptr, out_bytes, charp);
 	} else {
 		DBG("REC@0x%p, NULL data_ptr.", arec);
@@ -946,7 +904,7 @@ static SQLRETURN wstr_to_cstr(desc_rec_st *arec, desc_rec_st *irec,
 	if (octet_len_ptr) {
 		out_bytes = (size_t)WCS2U8(wstr, (int)chars, NULL, 0);
 		if (out_bytes <= 0) {
-			ERRN("failed to convert wchar* to char* for string `" LTPDL "`.", 
+			ERRN("failed to convert wchar* to char* for string `" LWPDL "`.", 
 					chars, wstr);
 			RET_HDIAGS(stmt, SQL_STATE_22018);
 		}
@@ -990,7 +948,7 @@ static SQLRETURN wstr_to_wstr(desc_rec_st *arec, desc_rec_st *irec,
 			state = SQL_STATE_01004; /* indicate truncation */
 		}
 
-		DBG("REC@0x%p, data_ptr@0x%p, copied %zd bytes: `" LTPD "`.", arec,
+		DBG("REC@0x%p, data_ptr@0x%p, copied %zd bytes: `" LWPD "`.", arec,
 				data_ptr, out_bytes, widep);
 	} else {
 		DBG("REC@0x%p, NULL data_ptr", arec);
@@ -1019,7 +977,7 @@ static SQLRETURN wstr_to_timestamp(desc_rec_st *arec, desc_rec_st *irec,
 	timestamp_t tsp;
 	struct tm tmp;
 
-	DBG("converting ISO 8601 `" LTPDL "` to timestamp.", chars, wstr);
+	DBG("converting ISO 8601 `" LWPDL "` to timestamp.", chars, wstr);
 
 	if (octet_len_ptr)
 		*octet_len_ptr = sizeof(*tss);
@@ -1029,7 +987,7 @@ static SQLRETURN wstr_to_timestamp(desc_rec_st *arec, desc_rec_st *irec,
 		len = ansi_w2c(wstr, buff, len);
 		if (len <= 0 || timestamp_parse(buff, len - 1, &tsp) || 
 				(! timestamp_to_tm_local(&tsp, &tmp))) {
-			ERR("data `" LTPDL "` not an ANSI ISO 8601 format.", chars, wstr);
+			ERR("data `" LWPDL "` not an ANSI ISO 8601 format.", chars, wstr);
 			RET_HDIAGS(stmt, SQL_STATE_07006);
 		}
 		TM_TO_TIMESTAMP_STRUCT(&tmp, tss);
@@ -1118,7 +1076,7 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 	do { \
 		if (ard->array_status_ptr) \
 			ard->array_status_ptr[pos] = SQL_ROW_ERROR; \
-		return post_row_diagnostic(&stmt->diag, _state, MK_TSTR(_message), 0, \
+		return post_row_diagnostic(&stmt->diag, _state, MK_WPTR(_message), 0, \
 				rowno, _colno); \
 	} while (0)
 #define SET_ROW_DIAG(_rowno, _colno) \
@@ -1176,7 +1134,7 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 
 			case UJT_String:
 				wstr = UJReadString(obj, &len);
-				DBG("value [%zd, %d] is string: `" LTPD "`.", rowno, i + 1,
+				DBG("value [%zd, %d] is string: `" LWPD "`.", rowno, i + 1,
 						wstr);
 				/* UJSON4C returns chars count, but 0-terminates w/o counting
 				 * the terminator */
@@ -1491,7 +1449,7 @@ SQLRETURN EsSQLPrepareW
 		ERRSTMT(stmt, "invalid statment lenght: %d.", cchSqlStr);
 		RET_HDIAGS(stmt, SQL_STATE_HY090);
 	}
-	DBGSTMT(stmt, "preparing `" LTPDL "` [%d]", cchSqlStr, szSqlStr, 
+	DBGSTMT(stmt, "preparing `" LWPDL "` [%d]", cchSqlStr, szSqlStr, 
 			cchSqlStr);
 	
 	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
@@ -1551,7 +1509,7 @@ SQLRETURN EsSQLExecDirectW
 		ERRSTMT(stmt, "invalid statment lenght: %d.", cchSqlStr);
 		RET_HDIAGS(stmt, SQL_STATE_HY090);
 	}
-	DBGSTMT(stmt, "directly executing SQL: `" LTPDL "` [%d].", cchSqlStr,
+	DBGSTMT(stmt, "directly executing SQL: `" LWPDL "` [%d].", cchSqlStr,
 			szSqlStr, cchSqlStr);
 	
 	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
@@ -1648,10 +1606,10 @@ SQLRETURN EsSQLDescribeColW(
 #endif /* NDEBUG */
 
 	if (szColName) {
-		ret = write_tstr(&stmt->diag, szColName, rec->name, 
+		ret = write_wptr(&stmt->diag, szColName, rec->name, 
 				cchColNameMax * sizeof(*szColName), &col_blen);
 		if (! SQL_SUCCEEDED(ret)) {
-			ERRSTMT(stmt, "failed to copy column name `" LTPD "`.", rec->name);
+			ERRSTMT(stmt, "failed to copy column name `" LWPD "`.", rec->name);
 			return ret;
 		}
 	} else {
@@ -1726,7 +1684,7 @@ SQLRETURN EsSQLColAttributeW(
 	esodbc_desc_st *ird = stmt->ird;
 	desc_rec_st *rec;
 	SQLSMALLINT sint;
-	SQLTCHAR *tstr;
+	SQLWCHAR *wptr;
 	SQLLEN len;
 	SQLINTEGER iint;
 
@@ -1771,28 +1729,28 @@ SQLRETURN EsSQLColAttributeW(
 			PNUMATTR_ASSIGN(SQLSMALLINT, sint);
 			break;
 
-		/* SQLTCHAR* */
+		/* SQLWCHAR* */
 		do {
-		case SQL_DESC_BASE_COLUMN_NAME: tstr = rec->base_column_name; break;
-		case SQL_DESC_BASE_TABLE_NAME: tstr = rec->base_table_name; break;
-		case SQL_DESC_CATALOG_NAME: tstr = rec->catalog_name; break;
-		case SQL_DESC_LABEL: tstr = rec->label; break;
-		case SQL_DESC_LITERAL_PREFIX: tstr = rec->literal_prefix; break;
-		case SQL_DESC_LITERAL_SUFFIX: tstr = rec->literal_suffix; break;
-		case SQL_DESC_LOCAL_TYPE_NAME: tstr = rec->type_name; break;
-		case SQL_DESC_NAME: tstr = rec->name; break;
-		case SQL_DESC_SCHEMA_NAME: tstr = rec->schema_name; break;
-		case SQL_DESC_TABLE_NAME: tstr = rec->table_name; break;
-		case SQL_DESC_TYPE_NAME: tstr = rec->type_name; break;
+		case SQL_DESC_BASE_COLUMN_NAME: wptr = rec->base_column_name; break;
+		case SQL_DESC_BASE_TABLE_NAME: wptr = rec->base_table_name; break;
+		case SQL_DESC_CATALOG_NAME: wptr = rec->catalog_name; break;
+		case SQL_DESC_LABEL: wptr = rec->label; break;
+		case SQL_DESC_LITERAL_PREFIX: wptr = rec->literal_prefix; break;
+		case SQL_DESC_LITERAL_SUFFIX: wptr = rec->literal_suffix; break;
+		case SQL_DESC_LOCAL_TYPE_NAME: wptr = rec->type_name; break;
+		case SQL_DESC_NAME: wptr = rec->name; break;
+		case SQL_DESC_SCHEMA_NAME: wptr = rec->schema_name; break;
+		case SQL_DESC_TABLE_NAME: wptr = rec->table_name; break;
+		case SQL_DESC_TYPE_NAME: wptr = rec->type_name; break;
 		} while (0);
-			if (! tstr) {
+			if (! wptr) {
 				//BUG -- TODO: re-eval, once type handling is decided.
 				ERRSTMT(stmt, "IRD@0x%p record field type %d not initialized.",
 						ird, iField);
-				*(SQLTCHAR **)pCharAttr = MK_TSTR("");
+				*(SQLWCHAR **)pCharAttr = MK_WPTR("");
 				*pcbCharAttr = 0;
 			} else {
-				return write_tstr(&stmt->diag, pcbCharAttr, tstr, cbDescMax,
+				return write_wptr(&stmt->diag, pcbCharAttr, wptr, cbDescMax,
 						pcbCharAttr);
 			}
 			break;

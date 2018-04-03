@@ -21,12 +21,13 @@
 #include "handles.h"
 #include "log.h"
 #include "queries.h"
+#include "connect.h"
 
 
 static void free_rec_fields(desc_rec_st *rec)
 {
 	int i;
-	SQLTCHAR **tstr[] = {
+	SQLWCHAR **wptr[] = {
 		&rec->base_column_name,
 		&rec->base_table_name,
 		&rec->catalog_name,
@@ -39,11 +40,11 @@ static void free_rec_fields(desc_rec_st *rec)
 		&rec->table_name,
 		&rec->type_name,
 	};
-	for (i = 0; i < sizeof(tstr)/sizeof(tstr[0]); i ++) {
-		DBG("freeing field #%d = 0x%p.", i, *tstr[i]);
-		if (*tstr[i]) {
-			free(*tstr[i]);
-			*tstr[i] = NULL;
+	for (i = 0; i < sizeof(wptr)/sizeof(wptr[0]); i ++) {
+		DBG("freeing field #%d = 0x%p.", i, *wptr[i]);
+		if (*wptr[i]) {
+			free(*wptr[i]);
+			*wptr[i] = NULL;
 		}
 	}
 }
@@ -128,17 +129,17 @@ void dump_record(desc_rec_st *rec)
 	
 	DUMP_FIELD(rec, data_ptr, "0x%p");
 	
-	DUMP_FIELD(rec, base_column_name, LTPD);
-	DUMP_FIELD(rec, base_table_name, LTPD);
-	DUMP_FIELD(rec, catalog_name, LTPD);
-	DUMP_FIELD(rec, label, LTPD);
-	DUMP_FIELD(rec, literal_prefix, LTPD);
-	DUMP_FIELD(rec, literal_suffix, LTPD);
-	DUMP_FIELD(rec, local_type_name, LTPD);
-	DUMP_FIELD(rec, name, LTPD);
-	DUMP_FIELD(rec, schema_name, LTPD);
-	DUMP_FIELD(rec, table_name, LTPD);
-	DUMP_FIELD(rec, type_name, LTPD);
+	DUMP_FIELD(rec, base_column_name, LWPD);
+	DUMP_FIELD(rec, base_table_name, LWPD);
+	DUMP_FIELD(rec, catalog_name, LWPD);
+	DUMP_FIELD(rec, label, LWPD);
+	DUMP_FIELD(rec, literal_prefix, LWPD);
+	DUMP_FIELD(rec, literal_suffix, LWPD);
+	DUMP_FIELD(rec, local_type_name, LWPD);
+	DUMP_FIELD(rec, name, LWPD);
+	DUMP_FIELD(rec, schema_name, LWPD);
+	DUMP_FIELD(rec, table_name, LWPD);
+	DUMP_FIELD(rec, type_name, LWPD);
 
 	DUMP_FIELD(rec, indicator_ptr, "0x%p");
 	DUMP_FIELD(rec, octet_length_ptr, "0x%p");
@@ -241,6 +242,10 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 				RET_HDIAGS(ENVH(InputHandle), SQL_STATE_HY001);
 			}
 			init_diagnostic(&dbc->diag);
+			dbc->dsn.str = MK_WPTR(""); /* see explanation in cleanup_dbc() */
+			dbc->metadata_id = SQL_FALSE;
+			dbc->async_enable = SQL_ASYNC_ENABLE_OFF;
+
 			dbc->env = ENVH(InputHandle);
 			/* rest of initialization done at connect time */
 
@@ -323,8 +328,8 @@ SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 			break;
 		case SQL_HANDLE_DBC: /* Connection Handle */
 			// TODO: remove from (potential) list?
-			if (DBCH(Handle)->fetch.str)
-				free(DBCH(Handle)->fetch.str);
+			/* app/DM should have SQLDisconnect'ed, but just in case  */
+			cleanup_dbc(DBCH(Handle));
 			free(Handle);
 			break;
 		case SQL_HANDLE_STMT:
@@ -878,8 +883,8 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
 						"negative (%d).", buff_len);
 				return SQL_STATE_HY090;
 			}
-			if (buff_len % sizeof(SQLTCHAR)) {
-				ERR("buffer not alligned to SQLTCHAR size (%d).", buff_len);
+			if (buff_len % sizeof(SQLWCHAR)) {
+				ERR("buffer not alligned to SQLWCHAR size (%d).", buff_len);
 				return SQL_STATE_HY090;
 			}
 			if ((! writable) && (ESODBC_MAX_IDENTIFIER_LEN < buff_len)) {
@@ -1263,7 +1268,7 @@ SQLRETURN EsSQLGetDescFieldW(
 {
 	esodbc_desc_st *desc = DSCH(DescriptorHandle);
 	esodbc_state_et state;
-	SQLTCHAR *tstr;
+	SQLWCHAR *wptr;
 	SQLSMALLINT word;
 	SQLINTEGER intgr;
 	desc_rec_st *rec;
@@ -1374,31 +1379,31 @@ SQLRETURN EsSQLGetDescFieldW(
 			DBG("returning data pointer 0x%p.", rec->data_ptr);
 			break;
 
-		/* <SQLTCHAR *> */
+		/* <SQLWCHAR *> */
 		do {
-		case SQL_DESC_BASE_COLUMN_NAME: tstr = rec->base_column_name; break;
-		case SQL_DESC_BASE_TABLE_NAME: tstr = rec->base_table_name; break;
-		case SQL_DESC_CATALOG_NAME: tstr = rec->catalog_name; break;
-		case SQL_DESC_LABEL: tstr = rec->label; break;
-		case SQL_DESC_LITERAL_PREFIX: tstr = rec->literal_prefix; break;
-		case SQL_DESC_LITERAL_SUFFIX: tstr = rec->literal_suffix; break;
-		case SQL_DESC_LOCAL_TYPE_NAME: tstr = rec->local_type_name; break;
-		case SQL_DESC_NAME: tstr = rec->name; break;
-		case SQL_DESC_SCHEMA_NAME: tstr = rec->schema_name; break;
-		case SQL_DESC_TABLE_NAME: tstr = rec->table_name; break;
-		case SQL_DESC_TYPE_NAME: tstr = rec->type_name; break;
+		case SQL_DESC_BASE_COLUMN_NAME: wptr = rec->base_column_name; break;
+		case SQL_DESC_BASE_TABLE_NAME: wptr = rec->base_table_name; break;
+		case SQL_DESC_CATALOG_NAME: wptr = rec->catalog_name; break;
+		case SQL_DESC_LABEL: wptr = rec->label; break;
+		case SQL_DESC_LITERAL_PREFIX: wptr = rec->literal_prefix; break;
+		case SQL_DESC_LITERAL_SUFFIX: wptr = rec->literal_suffix; break;
+		case SQL_DESC_LOCAL_TYPE_NAME: wptr = rec->local_type_name; break;
+		case SQL_DESC_NAME: wptr = rec->name; break;
+		case SQL_DESC_SCHEMA_NAME: wptr = rec->schema_name; break;
+		case SQL_DESC_TABLE_NAME: wptr = rec->table_name; break;
+		case SQL_DESC_TYPE_NAME: wptr = rec->type_name; break;
 		} while (0);
-			if (! tstr) {
+			if (! wptr) {
 				*StringLengthPtr = 0;
 			} else {
-				*StringLengthPtr = (SQLINTEGER)wcslen(tstr) * sizeof(SQLTCHAR);
+				*StringLengthPtr = (SQLINTEGER)wcslen(wptr) * sizeof(SQLWCHAR);
 			}
 			if (ValuePtr) {
-				memcpy(ValuePtr, tstr, *StringLengthPtr);
+				memcpy(ValuePtr, wptr, *StringLengthPtr);
 				/* TODO: 0-term setting? */
 			}
-			DBG("returning record field %d as SQLTCHAR 0x%p (`"LTPD"`).", 
-					FieldIdentifier, tstr, tstr ? tstr : TS_NULL);
+			DBG("returning record field %d as SQLWCHAR 0x%p (`"LWPD"`).", 
+					FieldIdentifier, wptr, wptr ? wptr : TS_NULL);
 			break;
 
 		/* <SQLLEN *> */
@@ -1914,7 +1919,7 @@ SQLRETURN EsSQLSetDescFieldW(
 	esodbc_desc_st *desc = DSCH(DescriptorHandle);
 	esodbc_state_et state;
 	desc_rec_st *rec;
-	SQLTCHAR **tstrp, *tstr;
+	SQLWCHAR **wptrp, *wptr;
 	SQLSMALLINT *wordp;
 	SQLINTEGER *intp;
 	SQLSMALLINT count, type;
@@ -2101,49 +2106,49 @@ SQLRETURN EsSQLSetDescFieldW(
 			break;
 
 		case SQL_DESC_NAME:
-			WARN("stored procedure params (to set to `"LTPD"`) not "
-					"supported.", ValuePtr ? (SQLTCHAR *)ValuePtr : TS_NULL);
+			WARN("stored procedure params (to set to `"LWPD"`) not "
+					"supported.", ValuePtr ? (SQLWCHAR *)ValuePtr : TS_NULL);
 			RET_HDIAG(desc, SQL_STATE_HYC00, 
 					"stored procedure params not supported", 0);
 
-		/* <SQLTCHAR *> */
+		/* <SQLWCHAR *> */
 		do {
-		case SQL_DESC_BASE_COLUMN_NAME: tstrp = &rec->base_column_name; break;
-		case SQL_DESC_BASE_TABLE_NAME: tstrp = &rec->base_table_name; break;
-		case SQL_DESC_CATALOG_NAME: tstrp = &rec->catalog_name; break;
-		case SQL_DESC_LABEL: tstrp = &rec->label; break;
-		case SQL_DESC_LITERAL_PREFIX: tstrp = &rec->literal_prefix; break;
-		case SQL_DESC_LITERAL_SUFFIX: tstrp = &rec->literal_suffix; break;
-		case SQL_DESC_LOCAL_TYPE_NAME: tstrp = &rec->local_type_name; break;
-		case SQL_DESC_SCHEMA_NAME: tstrp = &rec->schema_name; break;
-		case SQL_DESC_TABLE_NAME: tstrp = &rec->table_name; break;
-		case SQL_DESC_TYPE_NAME: tstrp = &rec->type_name; break;
+		case SQL_DESC_BASE_COLUMN_NAME: wptrp = &rec->base_column_name; break;
+		case SQL_DESC_BASE_TABLE_NAME: wptrp = &rec->base_table_name; break;
+		case SQL_DESC_CATALOG_NAME: wptrp = &rec->catalog_name; break;
+		case SQL_DESC_LABEL: wptrp = &rec->label; break;
+		case SQL_DESC_LITERAL_PREFIX: wptrp = &rec->literal_prefix; break;
+		case SQL_DESC_LITERAL_SUFFIX: wptrp = &rec->literal_suffix; break;
+		case SQL_DESC_LOCAL_TYPE_NAME: wptrp = &rec->local_type_name; break;
+		case SQL_DESC_SCHEMA_NAME: wptrp = &rec->schema_name; break;
+		case SQL_DESC_TABLE_NAME: wptrp = &rec->table_name; break;
+		case SQL_DESC_TYPE_NAME: wptrp = &rec->type_name; break;
 		} while (0);
-			DBG("setting SQLTCHAR field %d to 0x%p(`"LTPD"`).", 
+			DBG("setting SQLWCHAR field %d to 0x%p(`"LWPD"`).", 
 					FieldIdentifier, ValuePtr, 
-					ValuePtr ? (SQLTCHAR *)ValuePtr : TS_NULL);
-			if (*tstrp) {
+					ValuePtr ? (SQLWCHAR *)ValuePtr : TS_NULL);
+			if (*wptrp) {
 				DBG("freeing previously allocated value for field %d "
-						"(`"LTPD"`).", *tstrp);
-				free(*tstrp);
+						"(`"LWPD"`).", *wptrp);
+				free(*wptrp);
 			}
 			if (! ValuePtr) {
-				*tstrp = NULL;
+				*wptrp = NULL;
 				DBG("field %d reset to NULL.", FieldIdentifier);
 				break;
 			}
 			if (BufferLength == SQL_NTS)
-				wlen = wcslen((SQLTCHAR *)ValuePtr);
+				wlen = wcslen((SQLWCHAR *)ValuePtr);
 			else
 				wlen = BufferLength;
-			tstr = (SQLTCHAR *)malloc((wlen + /*0-term*/1) * sizeof(SQLTCHAR));
-			if (! tstr) {
+			wptr = (SQLWCHAR *)malloc((wlen + /*0-term*/1) * sizeof(SQLWCHAR));
+			if (! wptr) {
 				ERR("failed to alloc string buffer of len %d.", wlen + 1);
 				RET_HDIAGS(desc, SQL_STATE_HY001);
 			}
-			memcpy(tstr, ValuePtr, wlen * sizeof(SQLTCHAR));
-			tstr[wlen] = 0;
-			*tstrp = tstr;
+			memcpy(wptr, ValuePtr, wlen * sizeof(SQLWCHAR));
+			wptr[wlen] = 0;
+			*wptrp = wptr;
 			break;
 
 		/* <SQLLEN *>, deferred */

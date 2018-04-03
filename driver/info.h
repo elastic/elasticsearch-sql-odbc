@@ -25,8 +25,8 @@
  * TODO: change sign to ...src, lsrc, dst, dlen... (lsrc is nearly always
  * known)
  */
-SQLRETURN write_tstr(esodbc_diag_st *diag,
-		SQLTCHAR *dest, const SQLTCHAR *src,
+SQLRETURN write_wptr(esodbc_diag_st *diag,
+		SQLWCHAR *dest, const SQLWCHAR *src,
 		SQLSMALLINT /*B*/avail, SQLSMALLINT /*B*/*usedp);
 
 SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
