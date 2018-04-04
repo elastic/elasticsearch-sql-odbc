@@ -77,14 +77,17 @@ typedef struct struct_dbc {
 	size_t apos; /* current write position in the abuff */
 	size_t amax; /* maximum lenght (bytes) that abuff can grow to */
 
+	/* window handler */
+	HWND hwin;
 	/* "the catalog is a database", "For a single-tier driver, the catalog
 	 * might be a directory" */
 	SQLWCHAR *catalog; 
-	// TODO: statements?
+	// TODO: statement list?
 	
 	/* options */
 	SQLULEN metadata_id; // default: SQL_FALSE
 	SQLULEN async_enable; // default: SQL_ASYNC_ENABLE_OFF
+	SQLUINTEGER txn_isolation; // default: SQL_TXN_*
 } esodbc_dbc_st;
 
 /* forward declarations */

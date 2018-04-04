@@ -260,9 +260,11 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			break;
 
 		case SQL_DATA_SOURCE_READ_ONLY:
-			DBG("requested: if data source is read only (`Y`es, it is).");
-			return write_wptr(&dbc->diag, InfoValue, MK_WPTR("Y"),
-					BufferLength, StringLengthPtr);
+			DBG("requested: if data source is read only (`%s`).",
+					ESODBC_DATA_SOURCE_READ_ONLY);
+			return write_wptr(&dbc->diag, InfoValue,
+					MK_WPTR(ESODBC_DATA_SOURCE_READ_ONLY), BufferLength,
+					StringLengthPtr);
 
 		case SQL_SEARCH_PATTERN_ESCAPE:
 			DBG("requested: escape character (`%s`).", ESODBC_PATTERN_ESCAPE);
@@ -282,6 +284,11 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			/* JDBC[0]: supportsNonNullableColumns() */
 			DBG("requested: nullable columns (true).");
 			*(SQLUSMALLINT *)InfoValue = SQL_NNC_NULL;
+			break;
+
+		case SQL_CATALOG_NAME:
+			// TODO: can the catalog varry? `SYS CATALOGS` here?
+			FIXME; // FIXME
 			break;
 
 		case SQL_CATALOG_NAME_SEPARATOR: /* SQL_QUALIFIER_NAME_SEPARATOR */
@@ -360,12 +367,19 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 					MK_WPTR(ESODBC_SCHEMA_TERM), BufferLength,
 					StringLengthPtr);
 
+		case SQL_TABLE_TERM:
+			DBG("requested table term (`%s`).", ESODBC_TABLE_TERM);
+			return write_wptr(&dbc->diag, InfoValue,
+					MK_WPTR(ESODBC_TABLE_TERM), BufferLength,
+					StringLengthPtr);
+
 		/* no procedures support */
 		case SQL_PROCEDURES:
 		case SQL_ACCESSIBLE_PROCEDURES:
-			DBG("requested: procedures support (`N`).");
-			return write_wptr(&dbc->diag, InfoValue, MK_WPTR("N"),
-					BufferLength, StringLengthPtr);
+			DBG("requested: procedures support (`%s`).", ESODBC_PROCEDURES);
+			return write_wptr(&dbc->diag, InfoValue,
+					MK_WPTR(ESODBC_PROCEDURES), BufferLength,
+					StringLengthPtr);
 		case SQL_MAX_PROCEDURE_NAME_LEN:
 			DBG("requested max procedure name len (0).");
 			*(SQLUSMALLINT *)InfoValue = 0; /* no support */
@@ -374,6 +388,176 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			DBG("requested: procedure term (``).");
 			return write_wptr(&dbc->diag, InfoValue, MK_WPTR(""),
 					BufferLength, StringLengthPtr);
+
+		case SQL_TXN_ISOLATION_OPTION:
+			DBG("requested: transaction isolation options (SQL_TXN_*).");
+			/* see comment related to definition; TODO */
+			*(SQLUINTEGER *)InfoValue = ESODBC_DEF_TXN_ISOLATION;
+			break;
+
+		case SQL_SQL92_PREDICATES:
+			DBG("requested: SQL92 predicates (%lu).", ESODBC_SQL92_PREDICATES);
+			*(SQLUINTEGER *)InfoValue = ESODBC_SQL92_PREDICATES;
+			break;
+
+		case SQL_SQL92_RELATIONAL_JOIN_OPERATORS:
+			DBG("requested: SQL92 relational joins operators (%lu).",
+					ESODBC_SQL92_RELATIONAL_JOIN_OPERATORS);
+			*(SQLUINTEGER *)InfoValue = ESODBC_SQL92_RELATIONAL_JOIN_OPERATORS;
+			break;
+
+		case SQL_OJ_CAPABILITIES: /* SQL_OUTER_JOIN_CAPABILITIES */
+			DBG("requested: outer joins capabilities (%lu).",
+					ESODBC_OJ_CAPABILITIES);
+			*(SQLUINTEGER *)InfoValue = ESODBC_OJ_CAPABILITIES;
+			break;
+
+		case SQL_SQL92_DATETIME_FUNCTIONS:
+			DBG("requested: SQL92 datetime functions (%lu).",
+					ESODBC_SQL92_DATETIME_FUNCTIONS);
+			*(SQLUINTEGER *)InfoValue = ESODBC_SQL92_DATETIME_FUNCTIONS;
+			break;
+
+		//case SQL_STRING_FUNCTIONS:
+		case SQL_SQL92_STRING_FUNCTIONS:
+			DBG("requested: SQL92 string functions (%lu).",
+					ESODBC_SQL92_STRING_FUNCTIONS);
+			*(SQLUINTEGER *)InfoValue = ESODBC_SQL92_STRING_FUNCTIONS;
+			break;
+
+		case SQL_SQL92_NUMERIC_VALUE_FUNCTIONS:
+			DBG("requested: SQL92 numeric value functions (%lu).",
+					ESODBC_SQL92_NUMERIC_VALUE_FUNCTIONS);
+			*(SQLUINTEGER *)InfoValue = ESODBC_SQL92_NUMERIC_VALUE_FUNCTIONS;
+			break;
+
+		case SQL_SQL92_VALUE_EXPRESSIONS:
+			DBG("requested: SQL92 value expressions (%lu).",
+					ODBC_SQL92_VALUE_EXPRESSIONS);
+			*(SQLUINTEGER *)InfoValue = ODBC_SQL92_VALUE_EXPRESSIONS;
+			break;
+
+		case SQL_CONVERT_FUNCTIONS:
+			DBG("requested: convert functions (%lu).",
+					ESODBC_CONVERT_FUNCTIONS);
+			*(SQLUINTEGER *)InfoValue = ESODBC_CONVERT_FUNCTIONS;
+			break;
+
+		case SQL_SYSTEM_FUNCTIONS:
+			DBG("requested: system functions (%lu).", ESODBC_SYSTEM_FUNCTIONS);
+			*(SQLUINTEGER *)InfoValue = ESODBC_SYSTEM_FUNCTIONS;
+			break;
+
+		case SQL_DATETIME_LITERALS:
+			DBG("requested: SQL92 datetime literals (%lu).",
+					ESODBC_DATETIME_LITERALS);
+			*(SQLUINTEGER *)InfoValue = ESODBC_DATETIME_LITERALS;
+			break;
+
+		case SQL_TIMEDATE_DIFF_INTERVALS:
+			DBG("requested: timedate diff intervals (%lu).",
+					ESODBC_TIMEDATE_DIFF_INTERVALS);
+			*(SQLUINTEGER *)InfoValue = ESODBC_TIMEDATE_DIFF_INTERVALS;
+			break;
+
+		case SQL_TIMEDATE_ADD_INTERVALS:
+			DBG("requested: timedate add intervals (%lu).",
+					ESODBC_TIMEDATE_ADD_INTERVALS);
+			*(SQLUINTEGER *)InfoValue = ESODBC_TIMEDATE_ADD_INTERVALS;
+			break;
+
+		case SQL_TIMEDATE_FUNCTIONS:
+			DBG("requested: timedate functions (%lu).",
+					ESODBC_TIMEDATE_FUNCTIONS);
+			*(SQLUINTEGER *)InfoValue = ESODBC_TIMEDATE_FUNCTIONS;
+			break;
+
+		case SQL_NUMERIC_FUNCTIONS:
+			DBG("requested: numeric functions (%lu).",
+					ESODBC_NUMERIC_FUNCTIONS);
+			*(SQLUINTEGER *)InfoValue = ESODBC_NUMERIC_FUNCTIONS;
+			break;
+
+		case SQL_STRING_FUNCTIONS:
+			DBG("requested: string functions (%lu).", ESODBC_STRING_FUNCTIONS);
+			*(SQLUINTEGER *)InfoValue = ESODBC_STRING_FUNCTIONS;
+			break;
+
+		case SQL_AGGREGATE_FUNCTIONS:
+			DBG("requested: aggregate functions (%lu).",
+					ESODBC_AGGREGATE_FUNCTIONS);
+			*(SQLUINTEGER *)InfoValue = ESODBC_AGGREGATE_FUNCTIONS;
+			break;
+
+		case SQL_SCHEMA_USAGE:
+			DBG("requested: schema usage (%lu).", ESODBC_SCHEMA_USAGE);
+			*(SQLUINTEGER *)InfoValue = ESODBC_SCHEMA_USAGE;
+			break;
+
+		case SQL_CATALOG_USAGE:
+			DBG("requested: catalog usage (%lu).", ESODBC_CATALOG_USAGE);
+			*(SQLUINTEGER *)InfoValue = ESODBC_CATALOG_USAGE;
+			break;
+
+		case SQL_QUOTED_IDENTIFIER_CASE:
+			DBG("requested: quoted identifier case (%lu).",
+					ESODBC_QUOTED_IDENTIFIER_CASE);
+			*(SQLUSMALLINT *)InfoValue = ESODBC_QUOTED_IDENTIFIER_CASE;
+			break;
+
+		case SQL_SPECIAL_CHARACTERS:
+			DBG("requested: special characters (`%s`).",
+					ESODBC_SPECIAL_CHARACTERS);
+			return write_wptr(&dbc->diag, InfoValue,
+					MK_WPTR(ESODBC_SPECIAL_CHARACTERS), BufferLength,
+					StringLengthPtr);
+			break;
+
+		case SQL_MAX_IDENTIFIER_LEN:
+			DBG("requested: max identifier len (%u).",
+					ESODBC_MAX_IDENTIFIER_LEN);
+			*(SQLUSMALLINT *)InfoValue = ESODBC_MAX_IDENTIFIER_LEN;
+			break;
+
+		case SQL_COLUMN_ALIAS:
+			DBG("requested: column alias (`%s`).", ESODBC_COLUMN_ALIAS);
+			return write_wptr(&dbc->diag, InfoValue,
+					MK_WPTR(ESODBC_COLUMN_ALIAS), BufferLength,
+					StringLengthPtr);
+
+		case SQL_SQL_CONFORMANCE:
+			DBG("requested: SQL conformance (%lu).", ESODBC_SQL_CONFORMANCE);
+			*(SQLUINTEGER *)InfoValue = ESODBC_SQL_CONFORMANCE;
+			break;
+
+		case SQL_ODBC_INTERFACE_CONFORMANCE:
+			DBG("requested: ODBC interface conformance (%lu).",
+					ESODBC_ODBC_INTERFACE_CONFORMANCE);
+			*(SQLUINTEGER *)InfoValue = ESODBC_ODBC_INTERFACE_CONFORMANCE;
+			break;
+
+		case SQL_DRIVER_VER:
+			DBG("requested: driver version (`%s`).", ESODBC_DRIVER_VER);
+			return write_wptr(&dbc->diag, InfoValue,
+					MK_WPTR(ESODBC_DRIVER_VER), BufferLength,
+					StringLengthPtr);
+
+		case SQL_DBMS_VER:
+			DBG("requested: DBMS version (`%s`).", ESODBC_ELASTICSEARCH_VER);
+			return write_wptr(&dbc->diag, InfoValue,
+					MK_WPTR(ESODBC_ELASTICSEARCH_VER), BufferLength,
+					StringLengthPtr);
+
+		case SQL_DBMS_NAME:
+			DBG("requested: DBMS name (`%s`).", ESODBC_ELASTICSEARCH_NAME);
+			return write_wptr(&dbc->diag, InfoValue,
+					MK_WPTR(ESODBC_ELASTICSEARCH_NAME), BufferLength,
+					StringLengthPtr);
+
+		case SQL_TXN_CAPABLE: /* SQL_TRANSACTION_CAPABLE */
+			DBG("requested: transaction cabable (%u).", ESODBC_TXN_CAPABLE);
+			*(SQLUSMALLINT *)InfoValue = ESODBC_TXN_CAPABLE;
+			break;
 
 		default:
 			ERR("unknown InfoType: %u.", InfoType);
