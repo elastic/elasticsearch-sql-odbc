@@ -234,6 +234,7 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			dbc->dsn.str = MK_WPTR(""); /* see explanation in cleanup_dbc() */
 			dbc->metadata_id = SQL_FALSE;
 			dbc->async_enable = SQL_ASYNC_ENABLE_OFF;
+			dbc->txn_isolation = ESODBC_DEF_TXN_ISOLATION;
 
 			dbc->env = ENVH(InputHandle);
 			/* rest of initialization done at connect time */

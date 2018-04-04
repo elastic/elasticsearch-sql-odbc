@@ -1187,6 +1187,14 @@ static BOOL prompt_user(config_attrs_st *attrs, BOOL disable_conn)
 	// TODO: display settings dialog box;
 	// An error message (if popping it more than once) might be needed.
 	//
+#if 1 // FIXME
+	static int i = 0;
+	attrs->address = MK_WSTR("10.0.2.2");
+	i ++;
+	if (2 < i)
+		return FALSE;
+	return TRUE;
+#endif
 	return FALSE;
 }
 
@@ -1429,6 +1437,16 @@ SQLRETURN EsSQLSetConnectAttrW(
 			dbc->async_enable = (SQLULEN)Value;
 			break;
 
+		case SQL_ATTR_QUIET_MODE:
+			DBG("DBC@0x%p setting window handler to 0x%p.", dbc, Value);
+			dbc->hwin = (HWND)Value;
+			break;
+
+		case SQL_ATTR_TXN_ISOLATION:
+			DBG("DBC@0x%p setting transaction isolation to: %u.", dbc,
+					(SQLUINTEGER)(uintptr_t)Value);
+			dbc->txn_isolation = (SQLUINTEGER)(uintptr_t)Value;
+			break;
 
 		default:
 			ERR("unknown Attribute: %d.", Attribute);
@@ -1506,6 +1524,17 @@ SQLRETURN EsSQLGetConnectAttrW(
 			*(SQLULEN *)ValuePtr = dbc->async_enable;
 			break;
 
+		case SQL_ATTR_QUIET_MODE:
+			DBG("DBC@0x%p getting window handler 0x%p.", dbc, dbc->hwin);
+			*(HWND *)ValuePtr = dbc->hwin;
+			break;
+
+		case SQL_ATTR_TXN_ISOLATION:
+			DBG("DBC@0x%p getting transaction isolation: %u.", dbc,
+					dbc->txn_isolation);
+			*(SQLUINTEGER *)ValuePtr = dbc->txn_isolation;
+			break;
+
 		case SQL_ATTR_ACCESS_MODE:
 		case SQL_ATTR_ASYNC_DBC_EVENT:
 		case SQL_ATTR_ASYNC_DBC_FUNCTIONS_ENABLE:
@@ -1519,12 +1548,10 @@ SQLRETURN EsSQLGetConnectAttrW(
 		case SQL_ATTR_LOGIN_TIMEOUT:
 		case SQL_ATTR_ODBC_CURSORS:
 		case SQL_ATTR_PACKET_SIZE:
-		case SQL_ATTR_QUIET_MODE:
 		case SQL_ATTR_TRACE:
 		case SQL_ATTR_TRACEFILE:
 		case SQL_ATTR_TRANSLATE_LIB:
 		case SQL_ATTR_TRANSLATE_OPTION:
-		case SQL_ATTR_TXN_ISOLATION:
 
 		default:
 			// FIXME: add the other attributes
