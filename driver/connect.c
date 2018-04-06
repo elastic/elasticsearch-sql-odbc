@@ -32,6 +32,8 @@
 #define CONNSTR_KW_DSN				"DSN"
 #define CONNSTR_KW_PWD				"PWD"
 #define CONNSTR_KW_UID				"UID"
+#define CONNSTR_KW_SAVEFILE			"SAVEFILE"
+#define CONNSTR_KW_FILEDSN			"FILEDSN"
 #define CONNSTR_KW_ADDRESS			"Address"
 #define CONNSTR_KW_PORT				"Port"
 #define CONNSTR_KW_SECURE			"Secure"
@@ -60,6 +62,8 @@ typedef struct {
 	wstr_st dsn;
 	wstr_st pwd;
 	wstr_st uid;
+	wstr_st savefile;
+	wstr_st filedsn;
 	wstr_st address;
 	wstr_st port;
 	wstr_st secure;
@@ -525,6 +529,8 @@ static BOOL assign_config_attr(config_attrs_st *attrs,
 		{&MK_WSTR(CONNSTR_KW_DSN), &attrs->dsn},
 		{&MK_WSTR(CONNSTR_KW_PWD), &attrs->pwd},
 		{&MK_WSTR(CONNSTR_KW_UID), &attrs->uid},
+		{&MK_WSTR(CONNSTR_KW_SAVEFILE), &attrs->savefile},
+		{&MK_WSTR(CONNSTR_KW_FILEDSN), &attrs->filedsn},
 		{&MK_WSTR(CONNSTR_KW_ADDRESS), &attrs->address},
 		{&MK_WSTR(CONNSTR_KW_PORT), &attrs->port},
 		{&MK_WSTR(CONNSTR_KW_SECURE), &attrs->secure},
@@ -760,7 +766,7 @@ static BOOL parse_connection_string(config_attrs_st *attrs,
 		DBG("read connection string attribute: `" LWPDL "` = `" LWPDL "`.", 
 				LWSTR(&keyword), LWSTR(&value));
 		if (! assign_config_attr(attrs, &keyword, &value, TRUE))
-			ERR("keyword '" LWPDL "' is unknown, ignoring it.", 
+			WARN("keyword '" LWPDL "' is unknown, ignoring it.",
 					LWSTR(&keyword));
 	}
 
@@ -801,6 +807,8 @@ static BOOL write_connection_string(config_attrs_st *attrs,
 		{&attrs->dsn, CONNSTR_KW_DSN},
 		{&attrs->pwd, CONNSTR_KW_PWD},
 		{&attrs->uid, CONNSTR_KW_UID},
+		{&attrs->savefile, CONNSTR_KW_SAVEFILE},
+		{&attrs->filedsn, CONNSTR_KW_FILEDSN},
 		{&attrs->address, CONNSTR_KW_ADDRESS},
 		{&attrs->port, CONNSTR_KW_PORT},
 		{&attrs->secure, CONNSTR_KW_SECURE},
