@@ -24,6 +24,9 @@
  * To be used with catalog functions, that can be all called with same stmt */
 #define ESODBC_SQL_CLOSE			((SQLUSMALLINT)-1)
 
+#define ESODBC_ALL_TABLES			"%"
+#define ESODBC_ALL_COLUMNS			"%"
+#define ESODBC_STRING_DELIM			"'"
 #define ESODBC_QUOTE_CHAR			"\""
 #define ESODBC_PATTERN_ESCAPE		"\\"
 #define ESODBC_CATALOG_SEPARATOR	":"
