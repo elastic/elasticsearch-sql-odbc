@@ -77,9 +77,9 @@
 /* max number of rows to request from server */
 #define ESODBC_DEF_FETCH_SIZE		"0" // no fetch size
 /* default host to connect to */
-//#define ESODBC_DEF_HOST			"localhost"
+//#define ESODBC_DEF_SERVER			"localhost"
 /* to allow loopback capture on Win10 */
-#define ESODBC_DEF_HOST				"127.0.0.1"
+#define ESODBC_DEF_SERVER			"127.0.0.1"
 /* Elasticsearch'es default port */
 #define ESODBC_DEF_PORT				"9200"
 /* default security (TLS) setting */
