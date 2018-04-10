@@ -57,6 +57,18 @@ int ansi_w2c(const SQLWCHAR *src, char *dst, size_t chars);
  * Compare two wchar_t object, case INsensitive.
  */
 int wmemncasecmp(const wchar_t *a, const wchar_t *b, size_t len);
+/*
+ * Compare two zero-terminated wchar_t* objects, until a 0 is encountered in
+ * either of them or until 'count' characters are evaluated. If 'count'
+ * parameter is negative, it is ignored.
+ *
+ * This is useful in comparing SQL strings which the API allows to be passed 
+ * either as 0-terminated or not (SQL_NTS).
+ * The function does a single pass (no lenght evaluation of the strings).
+ * wmemcmp() might read over the boundary of one of the objects, if the
+ * provided 'count' paramter is not the minimum of the strings' lenght.
+ */
+int wszmemcmp(const wchar_t *a, const wchar_t *b, long count);
 
 typedef struct wstr {
 	SQLWCHAR *str;

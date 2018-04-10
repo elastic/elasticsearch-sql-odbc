@@ -109,6 +109,20 @@ int wmemncasecmp(const wchar_t *a, const wchar_t *b, size_t len)
 	return diff;
 }
 
+int wszmemcmp(const wchar_t *a, const wchar_t *b, long count)
+{
+	int diff;
+
+	for (; *a && *b && count; a ++, b ++, count --) {
+		diff = *a - *b;
+		if (diff)
+			return diff;
+	}
+	if (! count)
+		return 0;
+	return *a - *b;
+}
+
 /* retuns the lenght of a buffer to hold the escaped variant of the unescaped
  * given json object  */
 static inline size_t json_escaped_len(const char *json, size_t len)
