@@ -282,4 +282,39 @@ SQLRETURN EsSQLSpecialColumnsW
 	return SQL_SUCCESS;
 }
 
+
+SQLRETURN EsSQLForeignKeysW(
+		SQLHSTMT           hstmt,
+		_In_reads_opt_(cchPkCatalogName) SQLWCHAR*    szPkCatalogName,
+		SQLSMALLINT        cchPkCatalogName,
+		_In_reads_opt_(cchPkSchemaName) SQLWCHAR*     szPkSchemaName,
+		SQLSMALLINT        cchPkSchemaName,
+		_In_reads_opt_(cchPkTableName) SQLWCHAR*      szPkTableName,
+		SQLSMALLINT        cchPkTableName,
+		_In_reads_opt_(cchFkCatalogName) SQLWCHAR*    szFkCatalogName,
+		SQLSMALLINT        cchFkCatalogName,
+		_In_reads_opt_(cchFkSchemaName) SQLWCHAR*     szFkSchemaName,
+		SQLSMALLINT        cchFkSchemaName,
+		_In_reads_opt_(cchFkTableName) SQLWCHAR*      szFkTableName,
+		SQLSMALLINT        cchFkTableName)
+{
+	WARN("no foreign keys supported.");
+	STMT_FORCE_NODATA(STMH(hstmt));
+	return SQL_SUCCESS;
+}
+
+SQLRETURN SQL_API EsSQLPrimaryKeysW(
+		SQLHSTMT           hstmt,
+		_In_reads_opt_(cchCatalogName) SQLWCHAR*    szCatalogName,
+		SQLSMALLINT        cchCatalogName,
+		_In_reads_opt_(cchSchemaName) SQLWCHAR*     szSchemaName,
+		SQLSMALLINT        cchSchemaName,
+		_In_reads_opt_(cchTableName) SQLWCHAR*      szTableName,
+		SQLSMALLINT        cchTableName)
+{
+	WARN("no primary keys supported.");
+	STMT_FORCE_NODATA(STMH(hstmt));
+	return SQL_SUCCESS;
+}
+
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */
