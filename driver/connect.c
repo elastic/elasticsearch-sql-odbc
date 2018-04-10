@@ -45,7 +45,7 @@
 #define CONNSTR_KW_UID				"UID"
 #define CONNSTR_KW_SAVEFILE			"SAVEFILE"
 #define CONNSTR_KW_FILEDSN			"FILEDSN"
-#define CONNSTR_KW_ADDRESS			"Address"
+#define CONNSTR_KW_SERVER			"Server"
 #define CONNSTR_KW_PORT				"Port"
 #define CONNSTR_KW_SECURE			"Secure"
 #define CONNSTR_KW_TIMEOUT			"Timeout"
@@ -75,7 +75,7 @@ typedef struct {
 	wstr_st uid;
 	wstr_st savefile;
 	wstr_st filedsn;
-	wstr_st address;
+	wstr_st server;
 	wstr_st port;
 	wstr_st secure;
 	wstr_st timeout;
@@ -542,7 +542,7 @@ static BOOL assign_config_attr(config_attrs_st *attrs,
 		{&MK_WSTR(CONNSTR_KW_UID), &attrs->uid},
 		{&MK_WSTR(CONNSTR_KW_SAVEFILE), &attrs->savefile},
 		{&MK_WSTR(CONNSTR_KW_FILEDSN), &attrs->filedsn},
-		{&MK_WSTR(CONNSTR_KW_ADDRESS), &attrs->address},
+		{&MK_WSTR(CONNSTR_KW_SERVER), &attrs->server},
 		{&MK_WSTR(CONNSTR_KW_PORT), &attrs->port},
 		{&MK_WSTR(CONNSTR_KW_SECURE), &attrs->secure},
 		{&MK_WSTR(CONNSTR_KW_TIMEOUT), &attrs->timeout},
@@ -820,7 +820,7 @@ static BOOL write_connection_string(config_attrs_st *attrs,
 		{&attrs->uid, CONNSTR_KW_UID},
 		{&attrs->savefile, CONNSTR_KW_SAVEFILE},
 		{&attrs->filedsn, CONNSTR_KW_FILEDSN},
-		{&attrs->address, CONNSTR_KW_ADDRESS},
+		{&attrs->server, CONNSTR_KW_SERVER},
 		{&attrs->port, CONNSTR_KW_PORT},
 		{&attrs->secure, CONNSTR_KW_SECURE},
 		{&attrs->timeout, CONNSTR_KW_TIMEOUT},
@@ -893,11 +893,11 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 	secure = wstr2bool(&attrs->secure);
 	cnt = swprintf(urlw, sizeof(urlw)/sizeof(urlw[0]),
 			L"http" WPFCP_DESC "://" WPFWP_LDESC ":" WPFWP_LDESC
-				ELASTIC_SQL_PATH, secure ? "s" : "", LWSTR(&attrs->address),
+				ELASTIC_SQL_PATH, secure ? "s" : "", LWSTR(&attrs->server),
 				LWSTR(&attrs->port));
 	if (cnt < 0) {
-		ERRN("failed to print URL out of address: `" LWPDL "` [%zd], "
-				"port: `" LWPDL "` [%zd].", LWSTR(&attrs->address),
+		ERRN("failed to print URL out of server: `" LWPDL "` [%zd], "
+				"port: `" LWPDL "` [%zd].", LWSTR(&attrs->server),
 				LWSTR(&attrs->port));
 		goto err;
 	}
@@ -1016,8 +1016,8 @@ err:
 static inline void assign_defaults(config_attrs_st *attrs)
 {
 	/* assign defaults where not assigned and applicable */
-	if (! attrs->address.cnt)
-		attrs->address = MK_WSTR(ESODBC_DEF_HOST);
+	if (! attrs->server.cnt)
+		attrs->server = MK_WSTR(ESODBC_DEF_SERVER);
 	if (! attrs->port.cnt)
 		attrs->port = MK_WSTR(ESODBC_DEF_PORT);
 	if (! attrs->secure.cnt)
@@ -1087,7 +1087,7 @@ static SQLRETURN do_connect(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 		return ret;
 	}
 
-	/* perform a connection test, to fail quickly if wrong address/port AND
+	/* perform a connection test, to fail quickly if wrong server/port AND
 	 * populate the DNS cache; this won't guarantee succesful post'ing, tho! */
 	ret = test_connect(dbc->curl);
 	/* still ok if fails */
@@ -1208,7 +1208,7 @@ static BOOL prompt_user(config_attrs_st *attrs, BOOL disable_conn)
 	//
 #if 1 // FIXME
 	static int i = 0;
-	attrs->address = MK_WSTR("10.0.2.2");
+	attrs->server = MK_WSTR("10.0.2.2");
 	i ++;
 	if (2 < i)
 		return FALSE;
