@@ -58,7 +58,7 @@ REM  Perform the building steps
 REM
 
 REM presence of 'help'/'?': invoke USAGE "function" and exit
-if not _%ARG:help=% == _%ARG% (
+if /i not _%ARG:help=% == _%ARG% (
 	call:USAGE %0
 	goto end
 ) else if not _%ARG:?=% == _%ARG% (
@@ -67,14 +67,15 @@ if not _%ARG:help=% == _%ARG% (
 )
 
 REM presence of 'proper' or 'clean': invoke respective "functions"
-if not _%ARG:proper=% == _%ARG% (
+if /i not _%ARG:proper=% == _%ARG% (
 	call:PROPER
-) else if not _%ARG:clean=% == _%ARG% (
+	goto end
+) else if /i not _%ARG:clean=% == _%ARG% (
 	call:CLEAN
 )
 
 REM presence of 'setup': invoke SETUP "function"
-if not _%ARG:setup=% == _%ARG% (
+if /i not _%ARG:setup=% == _%ARG% (
 	call:SETUP
 ) else (
 	REM Invoked without 'setup': setting up build vars skipped.
@@ -88,7 +89,7 @@ if not _%ARG:setup=% == _%ARG% (
 )
 
 REM presence of 'fetch': invoke FETCH "function"
-if not _%ARG:fetch=% == _%ARG% (
+if /i not _%ARG:fetch=% == _%ARG% (
 	call:FETCH
 )
 
@@ -96,35 +97,35 @@ if not _%ARG:fetch=% == _%ARG% (
 cd %BUILD_DIR%
 
 REM absence of nobuild: invoke BUILD "function"
-if _%ARG:nobuild=% == _%ARG% (
+if /i _%ARG:nobuild=% == _%ARG% (
 	call:BUILD
 ) else (
 	echo Invoked with 'nobuild', building skipped.
 )
 
 REM presence of 'copy': invoke COPY "function"
-if not _%ARG:copy=% == _%ARG% (
+if /i not _%ARG:copy=% == _%ARG% (
 	call:COPY
 ) else (
 	REM Invoked without 'copy': DLLs test installation skipped.
 )
 
 REM presence of 'trunclogs': invoke TRUNCLOGS "function"
-if not _%ARG:trunclogs=% == _%ARG% (
+if /i not _%ARG:trunclogs=% == _%ARG% (
 	call:TRUNCLOGS
 ) else (
 	REM Invoked without 'trunclogs', logs not truncated.
 )
 
 REM presence of 'regadd': call REGADD "function"
-if not _%ARG:regadd=% == _%ARG% (
+if /i not _%ARG:regadd=% == _%ARG% (
 	call:REGADD
 ) else (
 	REM Invoked without 'regadd': registry adding skipped.
 )
 
 REM presence of 'regdel': invoke REGDEL "function"
-if not _%ARG:regdel=% == _%ARG% (
+if /i not _%ARG:regdel=% == _%ARG% (
 	call:REGDEL
 ) else (
 	REM Invoked without 'regadd': registry adding skipped.
