@@ -555,7 +555,7 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 					StringLengthPtr);
 
 		case SQL_TXN_CAPABLE: /* SQL_TRANSACTION_CAPABLE */
-			DBG("requested: transaction cabable (%u).", ESODBC_TXN_CAPABLE);
+			DBG("requested: transaction capable (%u).", ESODBC_TXN_CAPABLE);
 			*(SQLUSMALLINT *)InfoValue = ESODBC_TXN_CAPABLE;
 			break;
 

@@ -126,7 +126,7 @@ typedef struct desc_rec {
 	SQLWCHAR		*base_column_name; /* read-only */
 	SQLWCHAR		*base_table_name; /* r/o */
 	SQLWCHAR		*catalog_name; /* r/o */
-	SQLWCHAR		*label; /* r/o */
+	SQLWCHAR		*label; /* r/o */ //alias?
 	SQLWCHAR		*literal_prefix; /* r/o */ // TODO: static?
 	SQLWCHAR		*literal_suffix; /* r/o */ // TODO: static?
 	SQLWCHAR		*local_type_name; /* r/o */
@@ -207,7 +207,7 @@ typedef struct struct_resultset {
 	const wchar_t *ecurs; /* Elastic's cursor object */
 	size_t eccnt; /* cursor char count */
 
-	size_t nrows; /* (count of) number of rows in current result set */
+	size_t nrows; /* (count of) rows in current result set */
 	size_t vrows; /* (count of) visited rows in current result set  */
 	size_t frows; /* (count of) fetched rows across *entire* result set  */
 
