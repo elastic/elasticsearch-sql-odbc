@@ -925,18 +925,27 @@ SQLRETURN SQL_API SQLForeignKeysW
 )
 {
 	SQLRETURN ret;
-	TRACE13(_IN, "pptptptptptpt", hstmt, szPkCatalogName, cchPkCatalogName,
-			szPkSchemaName, cchPkSchemaName, szPkTableName, cchPkTableName,
-			szFkCatalogName, cchFkCatalogName, szFkSchemaName,
-			cchFkSchemaName, szFkTableName, cchFkTableName);
-	ret = EsSQLForeignKeysW(hstmt, szPkCatalogName, cchPkCatalogName,
-			szPkSchemaName, cchPkSchemaName, szPkTableName, cchPkTableName,
-			szFkCatalogName, cchFkCatalogName, szFkSchemaName,
-			cchFkSchemaName, szFkTableName, cchFkTableName);
-	TRACE14(_OUT, "dpWtWtWtWtWtWt", ret, hstmt, szPkCatalogName,
-			cchPkCatalogName, szPkSchemaName, cchPkSchemaName, szPkTableName,
-			cchPkTableName, szFkCatalogName, cchFkCatalogName, szFkSchemaName,
-			cchFkSchemaName, szFkTableName, cchFkTableName);
+	TRACE13(_IN, "ppdpdpdpdpdpd", hstmt, 
+			szPkCatalogName, cchPkCatalogName,
+			szPkSchemaName, cchPkSchemaName,
+			szPkTableName, cchPkTableName,
+			szFkCatalogName, cchFkCatalogName,
+			szFkSchemaName, cchFkSchemaName,
+			szFkTableName, cchFkTableName);
+	ret = EsSQLForeignKeysW(hstmt, 
+			szPkCatalogName, cchPkCatalogName,
+			szPkSchemaName, cchPkSchemaName,
+			szPkTableName, cchPkTableName,
+			szFkCatalogName, cchFkCatalogName,
+			szFkSchemaName, cchFkSchemaName,
+			szFkTableName, cchFkTableName);
+	TRACE14(_OUT, "dpWdWdWdWdWdWd", ret, hstmt,
+			szPkCatalogName, cchPkCatalogName,
+			szPkSchemaName, cchPkSchemaName,
+			szPkTableName, cchPkTableName,
+			szFkCatalogName, cchFkCatalogName,
+			szFkSchemaName, cchFkSchemaName,
+			szFkTableName, cchFkTableName);
 	return ret;
 }
 
@@ -953,12 +962,18 @@ SQLRETURN SQL_API SQLPrimaryKeysW
 )
 {
 	SQLRETURN ret;
-	TRACE7(_IN, "pptptpt", hstmt, szCatalogName, cchCatalogName,
-			szSchemaName, cchSchemaName, szTableName, cchTableName);
-	ret = EsSQLPrimaryKeysW(hstmt, szCatalogName, cchCatalogName,
-			szSchemaName, cchSchemaName, szTableName, cchTableName);
-	TRACE8(_OUT, "dpWtWtWt", ret, hstmt, szCatalogName, cchCatalogName,
-			szSchemaName, cchSchemaName, szTableName, cchTableName);
+	TRACE7(_IN, "ppdpdpd", hstmt, 
+			szCatalogName, cchCatalogName,
+			szSchemaName, cchSchemaName,
+			szTableName, cchTableName);
+	ret = EsSQLPrimaryKeysW(hstmt, 
+			szCatalogName, cchCatalogName,
+			szSchemaName, cchSchemaName,
+			szTableName, cchTableName);
+	TRACE8(_OUT, "dpWdWdWd", ret, hstmt,
+			szCatalogName, cchCatalogName,
+			szSchemaName, cchSchemaName,
+			szTableName, cchTableName);
 	return ret;
 }
 
