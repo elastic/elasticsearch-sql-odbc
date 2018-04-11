@@ -829,8 +829,19 @@ static SQLRETURN copy_longlong(desc_rec_st *arec, desc_rec_st *irec,
 					irec->meta_type);
 			break;
 
-		case SQL_C_SLONG:
+		case SQL_C_STINYINT:
+			*(SQLSCHAR *)data_ptr = (SQLSCHAR)ll;
+			write_copied_octets(octet_len_ptr, sizeof(SQLSCHAR), 
+					stmt->max_length, irec->meta_type);
+			break;
+
 		case SQL_C_SSHORT:
+			*(SQLSMALLINT *)data_ptr = (SQLSMALLINT)ll;
+			write_copied_octets(octet_len_ptr, sizeof(SQLSMALLINT), 
+					stmt->max_length, irec->meta_type);
+			break;
+
+		case SQL_C_SLONG:
 			*(SQLINTEGER *)data_ptr = (SQLINTEGER)ll;
 			write_copied_octets(octet_len_ptr, sizeof(SQLINTEGER), 
 					stmt->max_length, irec->meta_type);
