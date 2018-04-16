@@ -1025,8 +1025,9 @@ static SQLRETURN wstr_to_timestamp(desc_rec_st *arec, desc_rec_st *irec,
 	}
 
 	if (data_ptr) {
-		if (! wstr_to_timestamp_struct(wstr, chars, tss))
+		if (! wstr_to_timestamp_struct(wstr, chars, tss)) {
 			RET_HDIAGS(stmt, SQL_STATE_07006);
+		}
 	} else {
 		DBG("REC@0x%p, NULL data_ptr", arec);
 	}

@@ -104,11 +104,13 @@ int wszmemcmp(const wchar_t *a, const wchar_t *b, long count)
 
 	for (; *a && *b && count; a ++, b ++, count --) {
 		diff = *a - *b;
-		if (diff)
+		if (diff) {
 			return diff;
+		}
 	}
-	if (! count)
+	if (! count) {
 		return 0;
+	}
 	return *a - *b;
 }
 
