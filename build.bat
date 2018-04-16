@@ -150,7 +150,7 @@ REM USAGE function: output a usage message
 	echo                   useful with 'setup' and 'reg*' arguments only;
 	echo                   x86 and x64 platforms supported only.
 	echo       setup     : invoke MSVC's build environment setup script before
-	echo                   building (requires 2017 version of later^).
+	echo                   building (requires 2017 version or later^).
 	echo       clean     : clean the build dir files.
 	echo       proper    : clean both the build and libs dir and exit.
 	echo       fetch     : fetch, patch and build the dependency libs.

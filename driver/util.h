@@ -53,9 +53,9 @@ int wmemncasecmp(const wchar_t *a, const wchar_t *b, size_t len);
  *
  * This is useful in comparing SQL strings which the API allows to be passed 
  * either as 0-terminated or not (SQL_NTS).
- * The function does a single pass (no lenght evaluation of the strings).
+ * The function does a single pass (no length evaluation of the strings).
  * wmemcmp() might read over the boundary of one of the objects, if the
- * provided 'count' paramter is not the minimum of the strings' lenght.
+ * provided 'count' paramter is not the minimum of the strings' length.
  */
 int wszmemcmp(const wchar_t *a, const wchar_t *b, long count);
 
