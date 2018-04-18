@@ -206,7 +206,7 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 		 */
 		case SQL_HANDLE_ENV: /* Environment Handle */
 			if (InputHandle != SQL_NULL_HANDLE) {
-				WARN("passed InputHandle not null (=0x%p).", InputHandle);
+				WARN("passed InputHandle not null (=0x%p).",InputHandle);
 				/* not fatal a.t.p. */
 			}
 			if (! OutputHandle) {
@@ -923,12 +923,13 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
 				return SQL_STATE_HY090;
 			}
 			if (buff_len % sizeof(SQLWCHAR)) {
-				ERR("buffer not alligned to SQLWCHAR size (%d).", buff_len);
+				ERR("buffer not alligned to SQLWCHAR size (%d).",
+						buff_len);
 				return SQL_STATE_HY090;
 			}
 			if ((! writable) && (ESODBC_MAX_IDENTIFIER_LEN < buff_len)) {
-				ERR("trying to set field %d to a string buffer larger than "
-						"max allowed (%d).", field_id, 
+				ERR("trying to set field %d to a string buffer larger "
+						"than max allowed (%d).", field_id,
 						ESODBC_MAX_IDENTIFIER_LEN);
 				return SQL_STATE_22001;
 			}
@@ -949,8 +950,8 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
 		case SQL_DESC_ROWS_PROCESSED_PTR:
 		case SQL_DESC_ARRAY_STATUS_PTR:
 			if (0 < buff_len) {
-				ERR("buffer is for binary buffer, but length indicator is "
-						"positive (%d).", buff_len);
+				ERR("buffer is for binary buffer, but length indicator "
+						"is positive (%d).", buff_len);
 				return SQL_STATE_HY090;
 			}
 			return SQL_STATE_00000;
@@ -960,8 +961,8 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
 			if ((buff_len != SQL_IS_POINTER) && (buff_len < 0)) {
 				/* spec says the lenght "should" be it's size => this check
 				 * might be too strict? */
-				ERR("buffer is for pointer, but its lenght indicator doesn't "
-						"match (%d).", buff_len);
+				ERR("buffer is for pointer, but its lenght indicator "
+						"doesn't match (%d).", buff_len);
 				return SQL_STATE_HY090;
 			}
 			return SQL_STATE_00000;
@@ -982,8 +983,8 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
 		case SQL_DESC_DISPLAY_SIZE:
 		case SQL_DESC_OCTET_LENGTH:
 			if (buff_len != SQL_IS_INTEGER) {
-				ERR("buffer is for interger, but its lenght indicator doesn't "
-						"match (%d).", buff_len);
+				ERR("buffer is for interger, but its lenght indicator "
+						"doesn't match (%d).", buff_len);
 				return SQL_STATE_HY090;
 			}
 			break;
@@ -992,8 +993,8 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
 		case SQL_DESC_ARRAY_SIZE:
 		case SQL_DESC_LENGTH:
 			if (buff_len != SQL_IS_UINTEGER) {
-				ERR("buffer is for uint, but its lenght indicator doesn't "
-						"match (%d).", buff_len);
+				ERR("buffer is for uint, but its lenght indicator "
+						"doesn't match (%d).", buff_len);
 				return SQL_STATE_HY090;
 			}
 			break;
@@ -1015,8 +1016,8 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
 		case SQL_DESC_UNSIGNED:
 		case SQL_DESC_UPDATABLE:
 			if (buff_len != SQL_IS_SMALLINT) {
-				ERR("buffer is for short, but its lenght indicator doesn't "
-						"match (%d).", buff_len);
+				ERR("buffer is for short, but its lenght indicator "
+						"doesn't match (%d).", buff_len);
 				return SQL_STATE_HY090;
 			}
 			break;

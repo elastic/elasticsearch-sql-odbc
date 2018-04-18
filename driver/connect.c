@@ -102,10 +102,10 @@ BOOL connect_init()
 
 	DBG("libcurl: global init.");
 
-	/* "this will init the winsock stuff" */ 
+	/* "this will init the winsock stuff" */
 	code = curl_global_init(CURL_GLOBAL_ALL);
 	if (code != CURLE_OK) {
-		ERR("libcurl: failed to initialize: '%s' (%d).", 
+		ERR("libcurl: failed to initialize: '%s' (%d).",
 				curl_easy_strerror(code), code);
 		return FALSE;
 	}
@@ -133,7 +133,7 @@ void connect_cleanup()
  * "ptr points to the delivered data, and the size of that data is size
  * multiplied with nmemb."
  */
-static size_t write_callback(char *ptr, size_t size, size_t nmemb, 
+static size_t write_callback(char *ptr, size_t size, size_t nmemb,
 		void *userdata)
 {
 	esodbc_dbc_st *dbc = (esodbc_dbc_st *)userdata;
@@ -295,7 +295,7 @@ static void cleanup_curl(esodbc_dbc_st *dbc)
 /*
  * Sends a POST request given the body
  */
-static SQLRETURN post_request(esodbc_stmt_st *stmt, 
+static SQLRETURN post_request(esodbc_stmt_st *stmt,
 		long timeout, /* req timeout; set to negative for default */
 		const char *u8body, /* stringified JSON object, UTF-8 encoded */
 		size_t blen /* size of the u8body buffer */)
@@ -506,21 +506,21 @@ static SQLRETURN test_connect(CURL *curl)
 	/* we only one to connect */
 	res = curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 1L);
 	if (res != CURLE_OK) {
-		ERR("libcurl: failed to set connect_only: %s (%d).", 
+		ERR("libcurl: failed to set connect_only: %s (%d).",
 				curl_easy_strerror(res), res);
 		return SQL_ERROR;
 	}
 
 	res = curl_easy_perform(curl);
 	if (res != CURLE_OK) {
-		ERR("libcurl: failed connect: %s (%d).", 
+		ERR("libcurl: failed connect: %s (%d).",
 				curl_easy_strerror(res), res);
 		return SQL_ERROR;
 	}
 
 	res = curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 0L);
 	if (res != CURLE_OK) {
-		ERR("libcurl: failed to unset connect_only: %s (%d).", 
+		ERR("libcurl: failed to unset connect_only: %s (%d).",
 				curl_easy_strerror(res), res);
 		return SQL_ERROR;
 	}
@@ -563,12 +563,12 @@ static BOOL assign_config_attr(config_attrs_st *attrs,
 		if (iter->val->cnt) {
 			if (! overwrite) {
 				INFO("multiple occurances of keyword '" LWPDL "'; "
-						"ignoring new `" LWPDL "`, keeping `" LWPDL "`.", 
+						"ignoring new `" LWPDL "`, keeping `" LWPDL "`.",
 						LWSTR(iter->kw), LWSTR(value), LWSTR(iter->val));
 				continue;
 			}
 			INFO("multiple occurances of keyword '" LWPDL "'; "
-					"overwriting old `" LWPDL "` with new `" LWPDL "`.", 
+					"overwriting old `" LWPDL "` with new `" LWPDL "`.",
 					LWSTR(iter->kw), LWSTR(iter->val), LWSTR(value));
 		}
 		*iter->val = *value;
@@ -618,7 +618,7 @@ static SQLWCHAR* skip_ws(SQLWCHAR **pos, SQLWCHAR *end, BOOL extended)
  * is supported as keyword or value).
  * Braces within braces are allowed.
  */
-static BOOL parse_token(BOOL is_value, SQLWCHAR **pos, SQLWCHAR *end, 
+static BOOL parse_token(BOOL is_value, SQLWCHAR **pos, SQLWCHAR *end,
 		wstr_st *token)
 {
 	BOOL brace_escaped = FALSE;
@@ -688,7 +688,7 @@ static BOOL parse_token(BOOL is_value, SQLWCHAR **pos, SQLWCHAR *end,
 				(*pos)++;
 				break;
 
-			case '}': 
+			case '}':
 				if (open_braces) {
 					open_braces --;
 					brace_escaped = TRUE;
@@ -761,7 +761,7 @@ static BOOL parse_connection_string(config_attrs_st *attrs,
 			return FALSE;
 
 		if (! parse_separator(&pos, end)) {
-			ERR("failed to parse separator (`=`) at position %zd", 
+			ERR("failed to parse separator (`=`) at position %zd",
 					pos - szConnStrIn);
 			return FALSE;
 		}
@@ -770,12 +770,13 @@ static BOOL parse_connection_string(config_attrs_st *attrs,
 			return FALSE;
 
 		if (! parse_token(TRUE, &pos, end, &value)) {
-			ERR("failed to parse value at position %zd", pos - szConnStrIn);
+			ERR("failed to parse value at position %zd",
+					pos - szConnStrIn);
 			return FALSE;
 		}
 
-		DBG("read connection string attribute: `" LWPDL "` = `" LWPDL "`.", 
-				LWSTR(&keyword), LWSTR(&value));
+		DBG("read connection string attribute: `" LWPDL "` = `" LWPDL
+				"`.",  LWSTR(&keyword), LWSTR(&value));
 		if (! assign_config_attr(attrs, &keyword, &value, TRUE))
 			WARN("keyword '" LWPDL "' is unknown, ignoring it.",
 					LWSTR(&keyword));
@@ -803,8 +804,8 @@ static inline BOOL needs_braces(wstr_st *token)
 }
 
 /* build a connection string to be written in the DSN files */
-static BOOL write_connection_string(config_attrs_st *attrs, 
-		SQLWCHAR *szConnStrOut, SQLSMALLINT cchConnStrOutMax, 
+static BOOL write_connection_string(config_attrs_st *attrs,
+		SQLWCHAR *szConnStrOut, SQLSMALLINT cchConnStrOutMax,
 		SQLSMALLINT *pcchConnStrOut)
 {
 	int n, braces;
@@ -851,11 +852,11 @@ static BOOL write_connection_string(config_attrs_st *attrs,
 					format = WPFCP_DESC "={" WPFWP_LDESC "};";
 				else
 					format = WPFCP_DESC "=" WPFWP_LDESC ";";
-				n = swprintf(szConnStrOut + pos, cchConnStrOutMax - pos, 
+				n = swprintf(szConnStrOut + pos, cchConnStrOutMax - pos,
 						format, iter->kw, LWSTR(iter->val));
 				if (n < 0) {
-					ERRN("failed to outprint connection string (space left:"
-							" %d; needed: %d).", cchConnStrOutMax - pos, 
+					ERRN("failed to outprint connection string (space "
+							"left: %d; needed: %d).", cchConnStrOutMax - pos,
 							iter->val->cnt);
 					return FALSE;
 				} else {
@@ -871,8 +872,8 @@ static BOOL write_connection_string(config_attrs_st *attrs,
 
 	*pcchConnStrOut = (SQLSMALLINT)pos;
 
-	DBG("Output connection string: `" LWPD "`; out len: %d.", szConnStrOut, 
-			pos);
+	DBG("Output connection string: `" LWPD "`; out len: %d.",
+			szConnStrOut, pos);
 	return TRUE;
 }
 
@@ -888,7 +889,7 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 	long timeout, max_body_size, max_fetch_size;
 
 	/*
-	 * build connection URL 
+	 * build connection URL
 	 */
 	secure = wstr2bool(&attrs->secure);
 	cnt = swprintf(urlw, sizeof(urlw)/sizeof(urlw[0]),
@@ -990,8 +991,8 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 
 	// TODO: catalog handling
 
-	/* 
-	 * set the REST body format: JSON/CBOR 
+	/*
+	 * set the REST body format: JSON/CBOR
 	 */
 	if (EQ_CASE_WSTR(&attrs->packing, &MK_WSTR("JSON"))) {
 		dbc->pack_json = TRUE;
@@ -1128,12 +1129,14 @@ static BOOL read_system_info(config_attrs_st *attrs, TCHAR *buff)
 		return FALSE;
 	}
 	/* try accessing local user's config first, if that fails, systems' */
-	if (RegOpenKeyEx(HKEY_CURRENT_USER, val, /*options*/0, KEY_READ, 
+	if (RegOpenKeyEx(HKEY_CURRENT_USER, val, /*options*/0, KEY_READ,
 				&hkey) != ERROR_SUCCESS) {
-		INFO("failed to open registry key `" REG_HKCU "\\" LWPD "`.", val);
-		if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, val, /*options*/0, KEY_READ, 
+		INFO("failed to open registry key `" REG_HKCU "\\" LWPD "`.",
+				val);
+		if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, val, /*options*/0, KEY_READ,
 					&hkey) != ERROR_SUCCESS) {
-			INFO("failed to open registry key `" REG_HKLM "\\" LWPD "`.", val);
+			INFO("failed to open registry key `" REG_HKLM "\\" LWPD "`.",
+					val);
 			goto end;
 		} else {
 			ktree = REG_HKLM;
@@ -1145,14 +1148,15 @@ static BOOL read_system_info(config_attrs_st *attrs, TCHAR *buff)
 	if (RegQueryInfoKey(hkey, /*key class*/NULL, /*len of key class*/NULL,
 				/*reserved*/NULL, /*no subkeys*/NULL, /*longest subkey*/NULL,
 				/*longest subkey class name*/NULL, &valsno, &maxvallen,
-				&maxdatalen, /*sec descr*/NULL, 
+				&maxdatalen, /*sec descr*/NULL,
 				/*update time */NULL) != ERROR_SUCCESS) {
-		ERRN("Failed to query registery key info for path `%s\\" LWPD "`.", 
-				ktree, val);
+		ERRN("Failed to query registery key info for path `%s\\" LWPD
+				"`.", ktree, val);
 		goto end;
 	} else {
-		DBG("Subkey '%s\\" LWPD "': vals: %d, lengthiest name: %d, lenghtiest "
-				"data: %d.", ktree, val, valsno, maxvallen, maxdatalen);
+		DBG("Subkey '%s\\" LWPD "': vals: %d, lengthiest name: %d, "
+				"lenghtiest data: %d.", ktree, val, valsno, maxvallen,
+				maxdatalen);
 		// malloc buffers?
 		if (MAX_REG_VAL_NAME < maxvallen)
 			BUG("value name buffer too small (%d), needed: %dB.",
@@ -1173,17 +1177,18 @@ static BOOL read_system_info(config_attrs_st *attrs, TCHAR *buff)
 			goto end;
 		}
 		if (valtype != REG_SZ) {
-			INFO("unused register values of type %d -- skipping.", valtype);
+			INFO("unused register values of type %d -- skipping.",
+					valtype);
 			continue;
 		}
 		tval = (tstr_st){val, vallen};
 		tdata = (tstr_st){(SQLTCHAR *)d, datalen};
 		if (assign_config_attr(attrs, &tval, &tdata, FALSE)) {
 			j ++;
-			DBG("reg entry`" LTPDL "`: `" LTPDL "` assigned.", LTSTR(&tval),
-					LTSTR(&tdata));
+			DBG("reg entry`" LTPDL "`: `" LTPDL "` assigned.",
+					LTSTR(&tval), LTSTR(&tdata));
 		} else {
-			INFO("ignoring reg entry `" LTPDL "`: `" LTPDL "`.", 
+			INFO("ignoring reg entry `" LTPDL "`: `" LTPDL "`.",
 					LTSTR(&tval), LTSTR(&tdata));
 			/* entry not directly relevant to driver config */
 		}
@@ -1352,7 +1357,7 @@ SQLRETURN EsSQLDriverConnectW
 	/* return the final connection string */
 	if (szConnStrOut || pcchConnStrOut) {
 		/* might have been reset to DEFAULT, if orig was not found */
-		attrs.dsn = orig_dsn; 
+		attrs.dsn = orig_dsn;
 		if (! write_connection_string(&attrs, szConnStrOut, cchConnStrOutMax,
 				pcchConnStrOut)) {
 			ERR("DBC@0x%p: failed to build output connection string.");

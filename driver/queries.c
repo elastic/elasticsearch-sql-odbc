@@ -99,7 +99,7 @@ static SQLSMALLINT type_elastic2csql(const wchar_t *type_name, size_t len)
 			}
 			break;
 		// case sizeof(JSON_COL_DATE) - 1:
-		case sizeof(JSON_COL_TEXT) - 1: 
+		case sizeof(JSON_COL_TEXT) - 1:
 			switch(tolower(type_name[0])) {
 				case (wchar_t)'t':
 					if (! wmemncasecmp(type_name, MK_WPTR(JSON_COL_TEXT), len))
@@ -130,7 +130,8 @@ static SQLSMALLINT type_elastic2csql(const wchar_t *type_name, size_t len)
 				return SQL_C_SSHORT;
 			break;
 	}
-	ERR("unrecognized Elastic type `" LWPDL "` (%zd).", len, type_name, len);
+	ERR("unrecognized Elastic type `" LWPDL "` (%zd).", len, type_name,
+			len);
 	return SQL_UNKNOWN_TYPE;
 }
 
@@ -145,11 +146,11 @@ static void set_col_size(desc_rec_st *rec)
 		case SQL_C_SSHORT: rec->precision = 5; break;
 
 		/* .length */
-		case SQL_C_CHAR: 
+		case SQL_C_CHAR:
 			rec->length = 256;  /*TODO: max TEXT size */
 			break;
 
-		case SQL_C_TYPE_DATE: 
+		case SQL_C_TYPE_DATE:
 			rec->length = sizeof(ISO8601_TEMPLATE)/*+\0*/;
 			break;
 		
@@ -229,7 +230,7 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 		col_wtype = UJReadString(type_o, &len);
 		/* If the type is unknown, an empty string is returned." */
 		rec->type_name = len ? (SQLWCHAR *)col_wtype : MK_WPTR("");
-		/* 
+		/*
 		 * TODO: to ELASTIC types, rather?
 		 * TODO: Read size (precision/lenght) and dec-dig(scale/precision)
 		 * from received type.
@@ -241,7 +242,7 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 			RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
 		}
 		rec->concise_type = col_stype;
-		concise_to_type_code(col_stype, &rec->type, 
+		concise_to_type_code(col_stype, &rec->type,
 				&rec->datetime_interval_code);
 		/* TODO: here it should be 'ird->type'. But we're setting C SQL types
 		 * for IRD as well for now. */
@@ -279,7 +280,7 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 
 
 /*
- * Processes a received answer: 
+ * Processes a received answer:
  * - takes a dynamic buffer, buff, of length blen. Will handle the buff memory
  * even if the call fails.
  * - parses it, preparing iterators for SQLFetch()'ing.
@@ -293,7 +294,7 @@ SQLRETURN attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 	wchar_t *keys[] = {
 		MK_WPTR(JSON_ANSWER_COLUMNS),
 		MK_WPTR(JSON_ANSWER_ROWS),
-		MK_WPTR(JSON_ANSWER_CURSOR) 
+		MK_WPTR(JSON_ANSWER_CURSOR)
 	};
 
 	/* clear any previous result set */
@@ -398,7 +399,7 @@ SQLRETURN attach_error(esodbc_stmt_st *stmt, char *buff, size_t blen)
 	UJObject obj, o_status, o_error, o_type, o_reason;
 	const wchar_t *wtype, *wreason;
 	size_t tlen, rlen, left;
-	wchar_t wbuf[sizeof(((esodbc_diag_st*)NULL)->text) / 
+	wchar_t wbuf[sizeof(((esodbc_diag_st*)NULL)->text) /
 		sizeof(*((esodbc_diag_st*)NULL)->text)];
 	size_t wbuflen = sizeof(wbuf)/sizeof(*wbuf);
 	int n;
@@ -479,7 +480,7 @@ end:
 	RET_STATE(stmt->diag.state);
 }
 
-SQLRETURN attach_sql(esodbc_stmt_st *stmt, 
+SQLRETURN attach_sql(esodbc_stmt_st *stmt,
 		const SQLWCHAR *sql, /* SQL text statement */
 		size_t sqlcnt /* count of chars of 'sql' */)
 {
@@ -575,7 +576,7 @@ SQLRETURN EsSQLBindCol(
 		SQLHSTMT StatementHandle,
 		SQLUSMALLINT ColumnNumber,
 		SQLSMALLINT TargetType, /* identifier of the C data type */
-		_Inout_updates_opt_(_Inexpressible_(BufferLength)) 
+		_Inout_updates_opt_(_Inexpressible_(BufferLength))
 				SQLPOINTER TargetValue,
 		SQLLEN BufferLength,
 		_Inout_opt_ SQLLEN *StrLen_or_Ind)
@@ -611,7 +612,7 @@ SQLRETURN EsSQLBindCol(
 	/* set concise type (or verbose for datetime/interval types) */
 	ret = EsSQLSetDescFieldW(ard, ColumnNumber, SQL_DESC_CONCISE_TYPE,
 			(SQLPOINTER)(intptr_t)TargetType, SQL_IS_SMALLINT);
-	if (ret != SQL_SUCCESS) 
+	if (ret != SQL_SUCCESS)
 		goto copy_ret;
 
 	 // TODO: "Sets one or more of SQL_DESC_LENGTH, SQL_DESC_PRECISION,
@@ -627,7 +628,7 @@ SQLRETURN EsSQLBindCol(
 
 	/* Sets the SQL_DESC_INDICATOR_PTR field to the value of StrLen_or_Ind" */
 	ret = EsSQLSetDescFieldW(ard, ColumnNumber, SQL_DESC_INDICATOR_PTR,
-			StrLen_or_Ind, 
+			StrLen_or_Ind,
 			SQL_LEN_BINARY_ATTR((SQLINTEGER)sizeof(StrLen_or_Ind)));
 	if (ret != SQL_SUCCESS)
 		goto copy_ret;
@@ -635,7 +636,7 @@ SQLRETURN EsSQLBindCol(
 	/* "Sets the SQL_DESC_OCTET_LENGTH_PTR field to the value of
 	 * StrLen_or_Ind." */
 	ret = EsSQLSetDescFieldW(ard, ColumnNumber, SQL_DESC_OCTET_LENGTH_PTR,
-			StrLen_or_Ind, 
+			StrLen_or_Ind,
 			SQL_LEN_BINARY_ATTR((SQLINTEGER)sizeof(StrLen_or_Ind)));
 	if (ret != SQL_SUCCESS)
 		goto copy_ret;
@@ -674,7 +675,7 @@ static void* deferred_address(SQLSMALLINT field_id, size_t pos,
 	} while (0)
 
 	switch (field_id) {
-		case SQL_DESC_DATA_PTR: 
+		case SQL_DESC_DATA_PTR:
 			base = rec->data_ptr;
 			if (desc->bind_type == SQL_BIND_BY_COLUMN) {
 				elem_size = (size_t)rec->octet_length;
@@ -683,8 +684,8 @@ static void* deferred_address(SQLSMALLINT field_id, size_t pos,
 				ROW_OFFSETS;
 			}
 			break;
-		case SQL_DESC_INDICATOR_PTR: 
-			base = rec->indicator_ptr; 
+		case SQL_DESC_INDICATOR_PTR:
+			base = rec->indicator_ptr;
 			if (desc->bind_type == SQL_BIND_BY_COLUMN) {
 				elem_size = sizeof(*rec->indicator_ptr);
 				offt = 0;
@@ -692,8 +693,8 @@ static void* deferred_address(SQLSMALLINT field_id, size_t pos,
 				ROW_OFFSETS;
 			}
 			break;
-		case SQL_DESC_OCTET_LENGTH_PTR: 
-			base = rec->octet_length_ptr; 
+		case SQL_DESC_OCTET_LENGTH_PTR:
+			base = rec->octet_length_ptr;
 			if (desc->bind_type == SQL_BIND_BY_COLUMN) {
 				elem_size = sizeof(*rec->octet_length_ptr);
 				offt = 0;
@@ -757,18 +758,19 @@ static size_t buff_octet_size(
 		max_copy -= max_copy % unit_size;
 
 	DBG("avail=%zd, room=%zd, attr_max=%zd, metatype:%d => "
-			"max_copy=%zd, state=%d.", 
+			"max_copy=%zd, state=%d.",
 			avail, room, attr_max, ird_mt, max_copy, *state);
 	return max_copy;
 }
 
-static inline void write_copied_octets(SQLLEN *octet_len_ptr, size_t copied, 
+static inline void write_copied_octets(SQLLEN *octet_len_ptr, size_t copied,
 		size_t attr_max, esodbc_metatype_et ird_mt)
 {
 	size_t max;
 
 	if (! octet_len_ptr) {
-		DBG("NULL octet len pointer, length (%zd) not indicated.", copied);
+		DBG("NULL octet len pointer, length (%zd) not indicated.",
+				copied);
 		return;
 	}
 
@@ -826,41 +828,41 @@ static SQLRETURN copy_longlong(desc_rec_st *arec, desc_rec_st *irec,
 			tocopy = buff_octet_size(blen, arec->octet_length,
 					stmt->max_length, sizeof(*buff), irec->meta_type, &state);
 			memcpy(data_ptr, buff, tocopy);
-			write_copied_octets(octet_len_ptr, blen, stmt->max_length, 
+			write_copied_octets(octet_len_ptr, blen, stmt->max_length,
 					irec->meta_type);
 			break;
 		case SQL_C_WCHAR:
 			_i64tow((int64_t)ll, wbuff, /*radix*/10);
 			/* TODO: find/write a function that returns len of conversion? */
 			blen = (wcslen(wbuff) + /* \0 */1) * sizeof(*wbuff);
-			tocopy = buff_octet_size(blen, arec->octet_length, 
+			tocopy = buff_octet_size(blen, arec->octet_length,
 					stmt->max_length, sizeof(*wbuff), irec->meta_type, &state);
 			memcpy(data_ptr, wbuff, tocopy);
-			write_copied_octets(octet_len_ptr, blen, stmt->max_length, 
+			write_copied_octets(octet_len_ptr, blen, stmt->max_length,
 					irec->meta_type);
 			break;
 
 		case SQL_C_STINYINT:
 			*(SQLSCHAR *)data_ptr = (SQLSCHAR)ll;
-			write_copied_octets(octet_len_ptr, sizeof(SQLSCHAR), 
+			write_copied_octets(octet_len_ptr, sizeof(SQLSCHAR),
 					stmt->max_length, irec->meta_type);
 			break;
 
 		case SQL_C_SSHORT:
 			*(SQLSMALLINT *)data_ptr = (SQLSMALLINT)ll;
-			write_copied_octets(octet_len_ptr, sizeof(SQLSMALLINT), 
+			write_copied_octets(octet_len_ptr, sizeof(SQLSMALLINT),
 					stmt->max_length, irec->meta_type);
 			break;
 
 		case SQL_C_SLONG:
 			*(SQLINTEGER *)data_ptr = (SQLINTEGER)ll;
-			write_copied_octets(octet_len_ptr, sizeof(SQLINTEGER), 
+			write_copied_octets(octet_len_ptr, sizeof(SQLINTEGER),
 					stmt->max_length, irec->meta_type);
 			break;
 		
 		case SQL_C_SBIGINT:
 			*(SQLBIGINT *)data_ptr = (SQLBIGINT)ll;
-			write_copied_octets(octet_len_ptr, sizeof(SQLBIGINT), 
+			write_copied_octets(octet_len_ptr, sizeof(SQLBIGINT),
 					stmt->max_length, irec->meta_type);
 			break;
 
@@ -1004,17 +1006,17 @@ static BOOL wstr_to_timestamp_struct(const wchar_t *wstr, size_t chars,
 
 	len = (int)(chars < sizeof(buff) - 1 ? chars : sizeof(buff) - 1);
 	len = ansi_w2c(wstr, buff, len);
-	if (len <= 0 || timestamp_parse(buff, len - 1, &tsp) || 
+	if (len <= 0 || timestamp_parse(buff, len - 1, &tsp) ||
 			(! timestamp_to_tm_local(&tsp, &tmp))) {
-		ERR("data `" LWPDL "` not an ANSI ISO 8601 format.", chars, wstr);
+		ERR("data `" LWPDL "` not an ANSI ISO 8601 format.", chars,wstr);
 		return FALSE;
 	}
 	TM_TO_TIMESTAMP_STRUCT(&tmp, tss);
 	tss->fraction = tsp.nsec / 1000000;
 
-	DBG("parsed ISO 8601: `%d-%d-%dT%d:%d:%d.%u+%dm`.", 
-			tss->year, tss->month, tss->day, 
-			tss->hour, tss->minute, tss->second, tss->fraction, 
+	DBG("parsed ISO 8601: `%d-%d-%dT%d:%d:%d.%u+%dm`.",
+			tss->year, tss->month, tss->day,
+			tss->hour, tss->minute, tss->second, tss->fraction,
 			tsp.offset);
 
 	return TRUE;
@@ -1101,16 +1103,16 @@ static SQLRETURN copy_string(desc_rec_st *arec, desc_rec_st *irec,
 	DBG("target data type: %d.", target_type);
 	switch (target_type) {
 		case SQL_C_CHAR:
-			return wstr_to_cstr(arec, irec, data_ptr, octet_len_ptr, 
+			return wstr_to_cstr(arec, irec, data_ptr, octet_len_ptr,
 					wstr, chars);
 		case SQL_C_WCHAR:
-			return wstr_to_wstr(arec, irec, data_ptr, octet_len_ptr, 
+			return wstr_to_wstr(arec, irec, data_ptr, octet_len_ptr,
 					wstr, chars);
 		case SQL_C_TYPE_TIMESTAMP:
-			return wstr_to_timestamp(arec, irec, data_ptr, octet_len_ptr, 
+			return wstr_to_timestamp(arec, irec, data_ptr, octet_len_ptr,
 					wstr, chars);
 		case SQL_C_TYPE_DATE:
-			return wstr_to_date(arec, irec, data_ptr, octet_len_ptr, 
+			return wstr_to_date(arec, irec, data_ptr, octet_len_ptr,
 					wstr, chars);
 
 		default:
@@ -1162,14 +1164,14 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 	if (! UJIsArray(row)) {
 		ERRSTMT(stmt, "one '%s' (#%zd) element in result set not array; type:"
 				" %d.", JSON_ANSWER_ROWS, stmt->rset.vrows, UJGetType(row));
-		RET_ROW_DIAG(SQL_STATE_01S01, MSG_INV_SRV_ANS, 
+		RET_ROW_DIAG(SQL_STATE_01S01, MSG_INV_SRV_ANS,
 				SQL_NO_COLUMN_NUMBER);
 	}
 	iter_row = UJBeginArray(row);
 	if (! iter_row) {
 		ERRSTMT(stmt, "Failed to obtain iterator on row (#%zd): %s.", rowno,
 				UJGetError(stmt->rset.state));
-		RET_ROW_DIAG(SQL_STATE_01S01, MSG_INV_SRV_ANS, 
+		RET_ROW_DIAG(SQL_STATE_01S01, MSG_INV_SRV_ANS,
 				SQL_NO_COLUMN_NUMBER);
 	}
 
@@ -1212,15 +1214,15 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 						wstr);
 				/* UJSON4C returns chars count, but 0-terminates w/o counting
 				 * the terminator */
-				assert(wstr[len] == 0); 
+				assert(wstr[len] == 0);
 				ret = copy_string(arec, irec, pos, wstr, len + /*\0*/1);
 				switch (ret) {
-					case SQL_SUCCESS_WITH_INFO: 
+					case SQL_SUCCESS_WITH_INFO:
 						with_info = TRUE;
 						SET_ROW_DIAG(rowno, i + 1);
-					case SQL_SUCCESS: 
+					case SQL_SUCCESS:
 						break;
-					default: 
+					default:
 						SET_ROW_DIAG(rowno, i + 1);
 						return ret;
 				}
@@ -1232,12 +1234,12 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 				DBG("value [%zd, %d] is numeric: %lld.", rowno, i + 1, ll);
 				ret = copy_longlong(arec, irec, pos, ll);
 				switch (ret) {
-					case SQL_SUCCESS_WITH_INFO: 
+					case SQL_SUCCESS_WITH_INFO:
 						with_info = TRUE;
 						SET_ROW_DIAG(rowno, i + 1);
-					case SQL_SUCCESS: 
+					case SQL_SUCCESS:
 						break;
-					default: 
+					default:
 						SET_ROW_DIAG(rowno, i + 1);
 						return ret;
 				}
@@ -1270,7 +1272,7 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 	}
 
 	if (ard->array_status_ptr)
-		ard->array_status_ptr[pos] = with_info ? SQL_ROW_SUCCESS_WITH_INFO : 
+		ard->array_status_ptr[pos] = with_info ? SQL_ROW_SUCCESS_WITH_INFO :
 			SQL_ROW_SUCCESS;
 
 	return with_info ? SQL_SUCCESS_WITH_INFO : SQL_SUCCESS;
@@ -1571,7 +1573,7 @@ SQLRETURN EsSQLExecDirectW
 (
 		SQLHSTMT    hstmt,
 		_In_reads_opt_(TextLength) SQLWCHAR* szSqlStr,
-		SQLINTEGER cchSqlStr 
+		SQLINTEGER cchSqlStr
 )
 {
 	esodbc_stmt_st *stmt = STMH(hstmt);
@@ -1598,7 +1600,7 @@ SQLRETURN EsSQLExecDirectW
 	}
 #ifndef NDEBUG
 	/* no reason to keep it (it can't be re-executed), except for debugging */
-	detach_sql(stmt); 
+	detach_sql(stmt);
 #endif /* NDEBUG */
 	return ret;
 }
@@ -1639,7 +1641,7 @@ static inline SQLSMALLINT get_col_decdigits(desc_rec_st *rec)
 SQLRETURN EsSQLDescribeColW(
 		SQLHSTMT            hstmt,
 		SQLUSMALLINT        icol,
-		_Out_writes_opt_(cchColNameMax) 
+		_Out_writes_opt_(cchColNameMax)
 		SQLWCHAR            *szColName,
 		SQLSMALLINT         cchColNameMax,
 		_Out_opt_
