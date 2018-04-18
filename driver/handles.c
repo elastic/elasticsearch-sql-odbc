@@ -13,7 +13,7 @@
 #include "connect.h"
 
 
-static void free_rec_fields(desc_rec_st *rec)
+static void free_rec_fields(esodbc_rec_st *rec)
 {
 	int i;
 	SQLWCHAR **wptr[] = {
@@ -103,7 +103,7 @@ static void clear_desc(esodbc_stmt_st *stmt, desc_type_et dtype, BOOL reinit)
 		init_desc(desc, desc->stmt, desc->type, desc->alloc_type);
 }
 
-void dump_record(desc_rec_st *rec)
+void dump_record(esodbc_rec_st *rec)
 {
 	DBG("Dumping REC@0x%p", rec);
 #define DUMP_FIELD(_strp, _name, _desc) \
@@ -1195,16 +1195,16 @@ static void get_rec_default(SQLSMALLINT field_id, SQLINTEGER buff_len,
 		memset(buff, 0, sz);
 }
 
-static inline void init_rec(desc_rec_st *rec, esodbc_desc_st *desc)
+static inline void init_rec(esodbc_rec_st *rec, esodbc_desc_st *desc)
 {
-	memset(rec, 0, sizeof(desc_rec_st));
+	memset(rec, 0, sizeof(esodbc_rec_st));
 	rec->desc = desc;
 	/* further init to defaults is done once the data type is set */
 }
 
 SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count)
 {
-	desc_rec_st *recs;
+	esodbc_rec_st *recs;
 	int i;
 
 	if (new_count < 0) {
@@ -1230,8 +1230,8 @@ SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count)
 		recs = NULL;
 	} else {
 		/* TODO: change to a list implementation? review@alpha */
-		recs = (desc_rec_st *)realloc(desc->recs, 
-				sizeof(desc_rec_st) * new_count);
+		recs = (esodbc_rec_st *)realloc(desc->recs,
+				sizeof(esodbc_rec_st) * new_count);
 		if (! recs) {
 			ERRN("can't (re)alloc %d records.", new_count);
 			RET_HDIAGS(desc, SQL_STATE_HY001);
@@ -1257,7 +1257,7 @@ SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count)
  * Returns the record with desired 1-based index.
  * Grow the array if needed (desired index higher than current count).
  */
-desc_rec_st* get_record(esodbc_desc_st *desc, SQLSMALLINT rec_no, BOOL grow)
+esodbc_rec_st* get_record(esodbc_desc_st *desc, SQLSMALLINT rec_no, BOOL grow)
 {
 	assert(0 <= rec_no);
 
@@ -1300,7 +1300,7 @@ SQLRETURN EsSQLGetDescFieldW(
 	SQLWCHAR *wptr;
 	SQLSMALLINT word;
 	SQLINTEGER intgr;
-	desc_rec_st *rec;
+	esodbc_rec_st *rec;
 
 	if (! check_access(desc->type, FieldIdentifier, 
 				O_RDONLY)) {
@@ -1626,7 +1626,7 @@ void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type,
 /*
  * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetdescfield-function#comments
  */
-static void set_defaults_from_type(desc_rec_st *rec)
+static void set_defaults_from_type(esodbc_rec_st *rec)
 {
 	switch (rec->meta_type) {
 		case METATYPE_STRING:
@@ -1807,7 +1807,7 @@ static esodbc_metatype_et sqlctype_to_meta(SQLSMALLINT concise)
 /*
  * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetdescrec-function#consistency-checks
  */
-static BOOL consistency_check(esodbc_desc_st *desc, desc_rec_st *rec)
+static BOOL consistency_check(esodbc_desc_st *desc, esodbc_rec_st *rec)
 {
 
 	SQLSMALLINT type, code; 
@@ -1888,7 +1888,7 @@ esodbc_metatype_et concise_to_meta(SQLSMALLINT concise_type,
 /*
  * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/column-size
  */
-SQLULEN get_rec_size(desc_rec_st *rec)
+SQLULEN get_rec_size(esodbc_rec_st *rec)
 {
 	if (rec->meta_type == METATYPE_EXACT_NUMERIC || 
 			rec->meta_type == METATYPE_FLOAT_NUMERIC) {
@@ -1902,7 +1902,7 @@ SQLULEN get_rec_size(desc_rec_st *rec)
 	}
 }
 
-SQLULEN get_rec_decdigits(desc_rec_st *rec)
+SQLULEN get_rec_decdigits(esodbc_rec_st *rec)
 {
 	switch (rec->meta_type) {
 		case METATYPE_DATETIME:
@@ -1949,7 +1949,7 @@ SQLRETURN EsSQLSetDescFieldW(
 {
 	esodbc_desc_st *desc = DSCH(DescriptorHandle);
 	esodbc_state_et state;
-	desc_rec_st *rec;
+	esodbc_rec_st *rec;
 	SQLWCHAR **wptrp, *wptr;
 	SQLSMALLINT *wordp;
 	SQLINTEGER *intp;

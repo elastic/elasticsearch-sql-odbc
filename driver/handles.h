@@ -148,7 +148,7 @@ typedef struct desc_rec {
 	SQLSMALLINT		usigned;
 	SQLSMALLINT		updatable;
 	/* /record fields */
-} desc_rec_st; /* TODO: -> esodbc_rec_st */
+} esodbc_rec_st;
 
 
 typedef enum {
@@ -182,7 +182,7 @@ typedef struct struct_desc {
 
 	/* array of records of .count cardinality
 	 * TODO: list? binding occurs seldomly, compared to execution, tho. */
-	desc_rec_st *recs;
+	esodbc_rec_st *recs;
 } esodbc_desc_st;
 
 
@@ -245,8 +245,8 @@ typedef struct struct_stmt {
 
 
 SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count);
-desc_rec_st* get_record(esodbc_desc_st *desc, SQLSMALLINT rec_no, BOOL grow);
-void dump_record(desc_rec_st *rec);
+esodbc_rec_st* get_record(esodbc_desc_st *desc, SQLSMALLINT rec_no, BOOL grow);
+void dump_record(esodbc_rec_st *rec);
 
 /* TODO: move to some utils.h */
 void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type, 
