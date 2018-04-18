@@ -53,7 +53,7 @@ static inline void log_file(int level, int werrno, const char *func,
 	} else {
 		pos = strnlen(buff, sizeof(buff)) - /*\n*/1;
 		/*
-		 * https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/ctime-s-ctime32-s-ctime64-s-wctime-s-wctime32-s-wctime64-s : 
+		 * https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/ctime-s-ctime32-s-ctime64-s-wctime-s-wctime32-s-wctime64-s :
 		 * """
 		 *  The return value string contains exactly 26 characters and has the
 		 *  form: Wed Jan 02 02:03:55 1980\n\0
@@ -117,7 +117,7 @@ static inline void log_file(int level, int werrno, const char *func,
 #endif /* NDEBUG */
 }
 
-void _esodbc_log(int lvl, int werrno, const char *func, 
+void _esodbc_log(int lvl, int werrno, const char *func,
 		const char *srcfile, int lineno, const char *fmt, ...)
 {
 	va_list args;

@@ -143,7 +143,8 @@ SQLRETURN write_wptr(esodbc_diag_st *diag,
 	/* return value always set to what it needs to be written (excluding \0).*/
 	used = (SQLSMALLINT)src_cnt * sizeof(SQLWCHAR);
 	if (! usedp) {
-		WARN("invalid output buffer provided (NULL) to collect used space.");
+		WARN("invalid output buffer provided (NULL) to collect used "
+				"space.");
 		//RET_cDIAG(diag, SQL_STATE_HY013, "invalid used provided (NULL)", 0);
 	} else {
 		/* how many bytes are available to return (not how many would be
@@ -153,7 +154,8 @@ SQLRETURN write_wptr(esodbc_diag_st *diag,
 
 	if (! dest) {
 		/* only return how large of a buffer we need */
-		INFO("NULL out buff: returning needed buffer size only (%d).", used);
+		INFO("NULL out buff: returning needed buffer size only (%d).",
+				used);
 	} else {
 		if (awail <= src_cnt) { /* =, since src_cnt doesn't count the \0 */
 			wcsncpy(dest, src, awail - /* 0-term */1);
@@ -179,7 +181,7 @@ SQLRETURN write_wptr(esodbc_diag_st *diag,
  * """
  */
 SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
-		SQLUSMALLINT InfoType, 
+		SQLUSMALLINT InfoType,
 		_Out_writes_bytes_opt_(BufferLength) SQLPOINTER InfoValue,
 		SQLSMALLINT BufferLength,
 		_Out_opt_ SQLSMALLINT *StringLengthPtr)
@@ -332,7 +334,7 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			 * return the SQL_CA1_NEXT, SQL_CA1_ABSOLUTE, and SQL_CA1_RELATIVE
 			 * options as supported, because the driver supports scrollable
 			 * cursors through the embedded SQL FETCH statement. " */
-			*(SQLUINTEGER *)InfoValue = 
+			*(SQLUINTEGER *)InfoValue =
 				SQL_CA1_NEXT | SQL_CA1_ABSOLUTE | SQL_CA1_RELATIVE;
 			break;
 
@@ -559,7 +561,7 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 /* TODO: see error.h: esodbc_errors definition note (2.x apps support) */
 /* Note: with SQL_DIAG_SQLSTATE DM provides a NULL StringLengthPtr */
 SQLRETURN EsSQLGetDiagFieldW(
-		SQLSMALLINT HandleType, 
+		SQLSMALLINT HandleType,
 		SQLHANDLE Handle,
 		SQLSMALLINT RecNumber,
 		SQLSMALLINT DiagIdentifier,
@@ -691,7 +693,7 @@ SQLRETURN EsSQLGetDiagFieldW(
 		/* same as SQLGetInfo(SQL_DATA_SOURCE_NAME) */
 		case SQL_DIAG_SERVER_NAME: /* TODO: keep same as _CONNECTION_NAME? */
 			switch (HandleType) {
-				case SQL_HANDLE_DBC: 
+				case SQL_HANDLE_DBC:
 					wptr = DBCH(Handle)->dsn.str;
 					break;
 				case SQL_HANDLE_STMT:
@@ -700,7 +702,7 @@ SQLRETURN EsSQLGetDiagFieldW(
 				case SQL_HANDLE_DESC:
 					wptr = DSCH(Handle)->stmt->dbc->dsn.str;
 					break;
-				default: 
+				default:
 					wptr = MK_WPTR("");
 			}
 			DBG("inquired connection name (`"LWPD"`)", wptr);
@@ -714,7 +716,7 @@ SQLRETURN EsSQLGetDiagFieldW(
 		case SQL_DIAG_ROW_NUMBER: //break;
 			RET_NOT_IMPLEMENTED;
 
-		case SQL_DIAG_SQLSTATE: 
+		case SQL_DIAG_SQLSTATE:
 			if (diag->state == SQL_STATE_00000) {
 				DBG("no diagnostic available for handle type %d.", HandleType);
 				return SQL_NO_DATA;
@@ -807,7 +809,7 @@ SQLRETURN EsSQLGetDiagRecW
 	if (NativeError)
 		*NativeError = diag->native_code;
 
-	ret = write_wptr(&dummy, MessageText, diag->text, 
+	ret = write_wptr(&dummy, MessageText, diag->text,
 			BufferLength * sizeof(*MessageText), &used);
 	if (TextLength)
 		*TextLength = used / sizeof(*MessageText);
@@ -816,7 +818,7 @@ SQLRETURN EsSQLGetDiagRecW
 
 
 SQLRETURN EsSQLGetFunctions(SQLHDBC ConnectionHandle,
-		SQLUSMALLINT FunctionId, 
+		SQLUSMALLINT FunctionId,
 		_Out_writes_opt_(_Inexpressible_("Buffer length pfExists points to depends on fFunction value.")) SQLUSMALLINT *Supported)
 {
 	int i;
@@ -874,7 +876,7 @@ SQLRETURN EsSQLGetTypeInfoW(SQLHSTMT StatementHandle, SQLSMALLINT DataType)
 
 	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
 	assert(SQL_SUCCEEDED(ret)); /* can't return error */
-	ret = attach_sql(stmt, MK_WPTR(SQL_TYPES_STATEMENT), 
+	ret = attach_sql(stmt, MK_WPTR(SQL_TYPES_STATEMENT),
 			sizeof(SQL_TYPES_STATEMENT) - 1);
 	if (SQL_SUCCEEDED(ret))
 		ret = post_statement(stmt);
