@@ -135,7 +135,7 @@ static SQLSMALLINT type_elastic2csql(const wchar_t *type_name, size_t len)
 	return SQL_UNKNOWN_TYPE;
 }
 
-static void set_col_size(desc_rec_st *rec)
+static void set_col_size(esodbc_rec_st *rec)
 {
 	switch (rec->concise_type) {
 		/* .precision */
@@ -159,7 +159,7 @@ static void set_col_size(desc_rec_st *rec)
 	}
 }
 
-static void set_col_decdigits(desc_rec_st *rec)
+static void set_col_decdigits(esodbc_rec_st *rec)
 {
 	switch (rec->concise_type) {
 		case SQL_C_SLONG:
@@ -183,7 +183,7 @@ static void set_col_decdigits(desc_rec_st *rec)
 
 static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 {
-	desc_rec_st *rec;
+	esodbc_rec_st *rec;
 	SQLRETURN ret;
 	SQLSMALLINT recno;
 	void *iter;
@@ -661,7 +661,7 @@ copy_ret:
  * pos: position in array/row_set (not result_set)
  */
 static void* deferred_address(SQLSMALLINT field_id, size_t pos,
-		desc_rec_st *rec)
+		esodbc_rec_st *rec)
 {
 	size_t elem_size;
 	SQLLEN offt;
@@ -790,7 +790,7 @@ static inline void write_copied_octets(SQLLEN *octet_len_ptr, size_t copied,
 		*octet_len_ptr = copied;
 }
 
-static SQLRETURN copy_longlong(desc_rec_st *arec, desc_rec_st *irec,
+static SQLRETURN copy_longlong(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		SQLULEN pos, long long ll)
 {
 	esodbc_stmt_st *stmt;
@@ -876,7 +876,7 @@ static SQLRETURN copy_longlong(desc_rec_st *arec, desc_rec_st *irec,
 	RET_STATE(state);
 }
 
-static SQLRETURN copy_double(desc_rec_st *arec, desc_rec_st *irec, 
+static SQLRETURN copy_double(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		SQLULEN pos, double dbl)
 {
 	FIXME; // FIXME
@@ -886,7 +886,7 @@ static SQLRETURN copy_double(desc_rec_st *arec, desc_rec_st *irec,
 /*
  * -> SQL_C_CHAR
  */
-static SQLRETURN wstr_to_cstr(desc_rec_st *arec, desc_rec_st *irec, 
+static SQLRETURN wstr_to_cstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		void *data_ptr, SQLLEN *octet_len_ptr,
 		const wchar_t *wstr, size_t chars)
 {
@@ -953,7 +953,7 @@ static SQLRETURN wstr_to_cstr(desc_rec_st *arec, desc_rec_st *irec,
 /*
  * -> SQL_C_WCHAR
  */
-static SQLRETURN wstr_to_wstr(desc_rec_st *arec, desc_rec_st *irec, 
+static SQLRETURN wstr_to_wstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		void *data_ptr, SQLLEN *octet_len_ptr,
 		const wchar_t *wstr, size_t chars)
 {
@@ -1026,7 +1026,7 @@ static BOOL wstr_to_timestamp_struct(const wchar_t *wstr, size_t chars,
 /*
  * -> SQL_C_TYPE_TIMESTAMP
  */
-static SQLRETURN wstr_to_timestamp(desc_rec_st *arec, desc_rec_st *irec, 
+static SQLRETURN wstr_to_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		void *data_ptr, SQLLEN *octet_len_ptr,
 		const wchar_t *wstr, size_t chars)
 {
@@ -1051,7 +1051,7 @@ static SQLRETURN wstr_to_timestamp(desc_rec_st *arec, desc_rec_st *irec,
 /*
  * -> SQL_C_TYPE_DATE
  */
-static SQLRETURN wstr_to_date(desc_rec_st *arec, desc_rec_st *irec, 
+static SQLRETURN wstr_to_date(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		void *data_ptr, SQLLEN *octet_len_ptr,
 		const wchar_t *wstr, size_t chars)
 {
@@ -1079,7 +1079,7 @@ static SQLRETURN wstr_to_date(desc_rec_st *arec, desc_rec_st *irec,
 /*
  * wstr: is 0-terminated, terminator is counted in 'chars'.
  */
-static SQLRETURN copy_string(desc_rec_st *arec, desc_rec_st *irec, 
+static SQLRETURN copy_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		SQLULEN pos, const wchar_t *wstr, size_t chars)
 {
 	esodbc_stmt_st *stmt;
@@ -1142,7 +1142,7 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 	size_t len;
 	BOOL with_info;
 	esodbc_desc_st *ard, *ird;
-	desc_rec_st* arec, *irec;
+	esodbc_rec_st* arec, *irec;
 
 	rowno = stmt->rset.frows + pos + /*1-based*/1;
 	ard = stmt->ard;
@@ -1605,7 +1605,7 @@ SQLRETURN EsSQLExecDirectW
 	return ret;
 }
 
-static inline SQLULEN get_col_size(desc_rec_st *rec)
+static inline SQLULEN get_col_size(esodbc_rec_st *rec)
 {
 	assert(rec->desc->type == DESC_TYPE_IRD);
 	switch (rec->meta_type) {
@@ -1624,7 +1624,7 @@ static inline SQLULEN get_col_size(desc_rec_st *rec)
 	return 0;
 }
 
-static inline SQLSMALLINT get_col_decdigits(desc_rec_st *rec)
+static inline SQLSMALLINT get_col_decdigits(esodbc_rec_st *rec)
 {
 	assert(rec->desc->type == DESC_TYPE_IRD);
 	switch (rec->meta_type) {
@@ -1656,7 +1656,7 @@ SQLRETURN EsSQLDescribeColW(
 		SQLSMALLINT*        pfNullable)
 {
 	esodbc_stmt_st *stmt = STMH(hstmt);
-	desc_rec_st *rec;
+	esodbc_rec_st *rec;
 	SQLRETURN ret;
 	SQLSMALLINT col_blen = -1;
 
@@ -1758,7 +1758,7 @@ SQLRETURN EsSQLColAttributeW(
 {
 	esodbc_stmt_st *stmt = STMH(hstmt);
 	esodbc_desc_st *ird = stmt->ird;
-	desc_rec_st *rec;
+	esodbc_rec_st *rec;
 	SQLSMALLINT sint;
 	SQLWCHAR *wptr;
 	SQLLEN len;
