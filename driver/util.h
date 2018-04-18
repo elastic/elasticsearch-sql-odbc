@@ -24,6 +24,7 @@
 /* FIXME: why isn't this included in sql/~ext.h? */
 /* win function parameter attributes */
 #include <windows.h>
+#include <tchar.h>
 #endif /* _WIN32/WIN32 */
 
 #include <inttypes.h>
@@ -43,6 +44,19 @@
  */
 #define _MK_WPTR(_cstr_)	(L ## _cstr_)
 #define MK_WPTR(_cstr_)		_MK_WPTR(_cstr_)
+
+#define MK_CPTR(_cstr_)		_cstr_
+
+#ifdef UNICODE
+#define MK_TPTR		MK_WPTR
+#else /* UNICODE */
+#define MK_TPTR		MK_CPTR
+#endif /* UNICODE */
+
+#if !defined(_WIN32) && !defined (WIN32)
+#define _T			MK_TPTR
+#endif /* _WIN32/WIN32 */
+
 
 typedef struct cstr {
 	SQLCHAR *str;
@@ -141,6 +155,69 @@ typedef cstr_st tstr_st;
  * size, if some char needs an escaping longer than remaining space).
  */
 size_t json_escape(const char *jin, size_t inlen, char *jout, size_t outlen);
+
+
+/*
+ * Printing aids.
+ */
+
+/*
+ * w/printf() desriptors for char/wchar_t *
+ * "WPrintF Wide/Char Pointer _ DESCriptor"
+ */
+#ifdef _WIN32
+/* funny M$ 'inverted' logic */
+/* wprintf wide_t pointer descriptor */
+#define WPFWP_DESC		L"%s"
+#define WPFWP_LDESC		L"%.*s"
+/* printf wide_t pointer descriptor */
+#define PFWP_DESC		"%S"
+#define PFWP_LDESC		"%.*S"
+/* wprintf char pointer descriptor */
+#define WPFCP_DESC		L"%S 
+#define WPFCP_LDESC		L"%.*S 
+/* printf char pointer descriptor */
+#define PFCP_DESC		"%s"
+#define PFCP_LDESC		"%.*s"
+#else /* _WIN32 */
+/* wprintf wide_t pointer descriptor */
+#define WPFWP_DESC		L"%S"
+#define WPFWP_LDESC		L"%.*S"
+/* printf wide_t pointer descriptor */
+#define PFWP_DESC		"%S"
+#define PFWP_LDESC		"%.*S"
+/* silly M$ */
+/* wprintf char pointer descriptor */
+#define WPFCP_DESC		L"%s 
+#define WPFCP_LDESC		L"%.*s 
+/* printf char pointer descriptor */
+#define PFCP_DESC		"%s"
+#define PFCP_LDESC		"%.*s"
+#endif /* _WIN32 */
+
+
+/* SNTPRINTF: function to printf into a string */
+#ifdef UNICODE
+#define SNTPRINTF	_snwprintf
+#define TSTRCHR		wcschr
+#else /* UNICODE */
+#define SNTPRINTF	snprintf
+#define TSTRCHR		strchr
+#endif /* UNICODE */
+
+
+/*
+ * Descriptors to be used with STPRINTF for TCHAR pointer type.
+ * "SNTPRINTF Tchar Pointer Descriptor [with Lenght]"
+ */
+#ifdef UNICODE
+#define STPD	WPFWP_DESC
+#define STPDL	WPFWP_LDESC
+#else /* UNICODE */
+#define STPD	PFCP_DESC
+#define STPDL	PFCP_LDESC
+#endif /* UNICODE */
+
 
 
 #endif /* __UTIL_H__ */

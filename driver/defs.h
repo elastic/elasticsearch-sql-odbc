@@ -22,6 +22,14 @@
  * DEFaultS
  */
 
+/* Tracing log buffer size. */
+#define ESODBC_LOG_BUF_SIZE			(4 * 1024)
+/* Log file prefix. The format is: prefix_datime */
+#define ESODBC_LOG_FILE_PREFIX		"esodbc"
+#define ESODBC_LOG_FILE_SUFFIX		".log"
+/* Environment variable name holding the log directory name */
+#define ESODBC_ENV_VAR_LOG_DIR		"ESODBC_LOG_DIR"
+
 // FIXME: review@alpha
 /* TODO: should there be a max? */
 #define ESODBC_MAX_ROW_ARRAY_SIZE	128

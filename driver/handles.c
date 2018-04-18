@@ -61,14 +61,19 @@ static inline void free_desc_recs(esodbc_desc_st *desc)
 	desc->count = 0;
 }
 
+static void init_hheader(esodbc_hhdr_st *hdr, SQLSMALLINT type, void *parent)
+{
+	hdr->type = type;
+	init_diagnostic(&hdr->diag);
+	hdr->parent = parent;
+}
 
 void init_desc(esodbc_desc_st *desc, esodbc_stmt_st *stmt, desc_type_et type, 
 		SQLSMALLINT alloc_type)
 {
 	memset(desc, 0, sizeof(esodbc_desc_st));
 
-	desc->stmt = stmt;
-	init_diagnostic(&desc->diag);
+	init_hheader(&desc->hdr, SQL_HANDLE_DESC, stmt);
 
 	desc->type = type;
 	desc->alloc_type = alloc_type;
@@ -111,7 +116,7 @@ static void clear_desc(esodbc_stmt_st *stmt, desc_type_et dtype, BOOL reinit)
 	if (desc->recs)
 		free_desc_recs(desc);
 	if (reinit)
-		init_desc(desc, desc->stmt, desc->type, desc->alloc_type);
+		init_desc(desc, desc->hdr.stmt, desc->type, desc->alloc_type);
 }
 
 void dump_record(esodbc_rec_st *rec)
@@ -190,6 +195,7 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 {
 	esodbc_dbc_st *dbc;
 	esodbc_stmt_st *stmt;
+	esodbc_hhdr_st *hdr;
 
 	switch(HandleType) {
 		/* 
@@ -218,9 +224,10 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 				ERRN("failed to callocate env handle.");
 				RET_STATE(SQL_STATE_HY001);
 			}
-			init_diagnostic(&ENVH(*OutputHandle)->diag);
-			DBG("new Environment handle allocated @0x%p.", *OutputHandle);
+
+			DBG("new Environment handle allocated @0x%p.",*OutputHandle);
 			break;
+
 		case SQL_HANDLE_DBC: /* Connection Handle */
 			/* https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlallochandle-function#diagnostics :
 			 * """
@@ -231,7 +238,7 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			 * """
 			 */
 			if (! ENVH(InputHandle)->version) {
-				ERR("environment has not version set when allocating DBC.");
+				ERR("no version set in env when allocating DBC.");
 				RET_HDIAG(ENVH(InputHandle), SQL_STATE_HY010, 
 						"enviornment has no version set yet", 0);
 			}
@@ -241,13 +248,11 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 				ERRN("failed to callocate connection handle.");
 				RET_HDIAGS(ENVH(InputHandle), SQL_STATE_HY001);
 			}
-			init_diagnostic(&dbc->diag);
 			dbc->dsn.str = MK_WPTR(""); /* see explanation in cleanup_dbc() */
 			dbc->metadata_id = SQL_FALSE;
 			dbc->async_enable = SQL_ASYNC_ENABLE_OFF;
 			dbc->txn_isolation = ESODBC_DEF_TXN_ISOLATION;
 
-			dbc->env = ENVH(InputHandle);
 			/* rest of initialization done at connect time */
 
 			DBG("new Connection handle allocated @0x%p.", *OutputHandle);
@@ -261,8 +266,6 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 				ERRN("failed to callocate statement handle.");
 				RET_HDIAGS(dbc, SQL_STATE_HY001); 
 			}
-			init_diagnostic(&stmt->diag);
-			stmt->dbc = dbc;
 
 			init_desc(&stmt->i_ard, stmt, DESC_TYPE_ARD, SQL_DESC_ALLOC_AUTO);
 			init_desc(&stmt->i_ird, stmt, DESC_TYPE_IRD, SQL_DESC_ALLOC_AUTO);
@@ -283,6 +286,7 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			 * set at connection level. */
 			stmt->metadata_id = dbc->metadata_id;
 			stmt->async_enable = dbc->async_enable;
+
 			DBG("new Statement handle allocated @0x%p.", *OutputHandle);
 			break;
 
@@ -299,7 +303,7 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			break;
 
 		case SQL_HANDLE_SENV: /* Shared Environment Handle */
-			RET_NOT_IMPLEMENTED;
+			FIXME; // FIXME
 			//break;
 #if 0
 		case SQL_HANDLE_DBC_INFO_TOKEN:
@@ -310,7 +314,13 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			return SQL_INVALID_HANDLE;
 	}
 
-	RET_STATE(SQL_STATE_00000);
+	/*
+	 * Initialize new handle's header.
+	 */
+	hdr = HDRH(*OutputHandle);
+	init_hheader(hdr, HandleType, InputHandle);
+
+	return SQL_SUCCESS;
 }
 
 SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
@@ -365,7 +375,7 @@ SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 			return SQL_INVALID_HANDLE;
 	}
 
-	RET_STATE(SQL_STATE_00000);
+	return SQL_SUCCESS;
 }
 
 
@@ -448,7 +458,7 @@ SQLRETURN EsSQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option)
 
 	}
 
-	RET_STATE(SQL_STATE_00000);
+	return SQL_SUCCESS;
 }
 
 
@@ -513,7 +523,7 @@ SQLRETURN EsSQLSetEnvAttr(SQLHENV EnvironmentHandle,
 					"Unsupported attribute value", 0);
 	}
 
-	RET_STATE(SQL_STATE_00000);
+	return SQL_SUCCESS;
 }
 
 SQLRETURN SQL_API EsSQLGetEnvAttr(SQLHENV EnvironmentHandle,
@@ -541,7 +551,7 @@ SQLRETURN SQL_API EsSQLGetEnvAttr(SQLHENV EnvironmentHandle,
 					"Unsupported attribute value", 0);
 	}
 
-	RET_STATE(SQL_STATE_00000);
+	return SQL_SUCCESS;
 }
 
 
@@ -2067,7 +2077,7 @@ SQLRETURN EsSQLSetDescFieldW(
 		rec = get_record(desc, RecNumber, TRUE);
 		if (! rec) {
 			ERR("can't get record with number %d.", RecNumber);
-			RET_STATE(desc->diag.state);
+			RET_STATE(desc->hdr.diag.state);
 		}
 		DBG("setting field %d of record #%d @ 0x%p.", FieldIdentifier, 
 				RecNumber, rec);

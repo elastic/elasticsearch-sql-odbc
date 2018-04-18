@@ -29,39 +29,61 @@
 // compile in empty functions (less unref'd params when leaving them out)
 #define WITH_EMPTY	1
 
+
+#define RET_NOT_IMPLEMENTED	\
+	do { \
+		ERR("not implemented.");\
+		return SQL_ERROR; \
+	} while (0)
+
+
+static BOOL driver_init()
+{
+	if (log_init()) {
+		INFO("initializing driver %s.", ESODBC_DRIVER_VER);
+		return connect_init();
+	}
+	return FALSE;
+}
+
+static void driver_cleanup()
+{
+	log_cleanup();
+	connect_cleanup();
+}
+
 BOOL WINAPI DllMain(
 	HINSTANCE hinstDLL,  // handle to DLL module
 	DWORD fdwReason,     // reason for calling function
 	LPVOID lpReserved)  // reserved
 {
-	TRACE3(_IN, "pdp", hinstDLL, fdwReason, lpReserved);
+	//TRACE3(_IN, "pdp", hinstDLL, fdwReason, lpReserved);
 
 	// Perform actions based on the reason for calling.
 	switch (fdwReason) {
 		// Initialize once for each new process.
 		// Return FALSE to fail DLL load.
 		case DLL_PROCESS_ATTACH:
-			INFO("process %d attach.", GetCurrentProcessId());
-			if (! connect_init()) {
-				ERR("failed to init transport.");
-				return  FALSE;
+			if (! driver_init()) {
+				return FALSE;
 			}
+			INFO("process %u attached.", GetCurrentProcessId());
 			break;
 
 		// Do thread-specific initialization.
 		case DLL_THREAD_ATTACH:
-			DBG("thread attach.");
+			DBG("thread %u attached.", GetCurrentThreadId());
 			break;
 
 		// Do thread-specific cleanup.
 		case DLL_THREAD_DETACH:
-			DBG("thread dettach.");
+			DBG("thread %u dettached.", GetCurrentThreadId());
 			break;
 
 		// Perform any necessary cleanup.
 		case DLL_PROCESS_DETACH:
-			INFO("process %d dettach.", GetCurrentProcessId());
-			connect_cleanup();
+			driver_cleanup();
+			INFO("process %u dettached.", GetCurrentProcessId());
 			break;
 	}
 
@@ -376,6 +398,7 @@ SQLRETURN SQL_API SQLGetDescRecW(
 		_Out_opt_
 		SQLSMALLINT     *NullablePtr)
 {
+#if 0
 	SQLRETURN ret;
 	TRACE11(_IN, "pdpdppppppp", DescriptorHandle, RecNumber, Name,
 			BufferLength, StringLengthPtr, TypePtr, SubTypePtr, LengthPtr,
@@ -387,6 +410,9 @@ SQLRETURN SQL_API SQLGetDescRecW(
 			BufferLength, StringLengthPtr, TypePtr, SubTypePtr, LengthPtr,
 			PrecisionPtr, ScalePtr, NullablePtr);
 	return ret;
+#else //0
+	RET_NOT_IMPLEMENTED;
+#endif //0
 }
 
 
@@ -421,6 +447,7 @@ SQLRETURN  SQL_API SQLSetDescRec(
 		_Inout_opt_ SQLLEN *StringLength,
 		_Inout_opt_ SQLLEN *Indicator)
 {
+#if 0
 	SQLRETURN ret;
 	TRACE10(_IN, "pddddddppp", DescriptorHandle, RecNumber, Type, SubType,
 			Length, Precision, Scale, Data, StringLength, Indicator);
@@ -429,6 +456,9 @@ SQLRETURN  SQL_API SQLSetDescRec(
 	TRACE11(_OUT, "dpddddddpnn", ret, DescriptorHandle, RecNumber, Type,
 			SubType, Length, Precision, Scale, Data, StringLength, Indicator);
 	return ret;
+#else //0
+	RET_NOT_IMPLEMENTED;
+#endif //0
 }
 
 #if WITH_EMPTY

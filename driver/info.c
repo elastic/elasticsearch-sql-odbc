@@ -43,20 +43,6 @@
 #endif /* win32 */
 
 
-#define GET_DIAG(_h/*handle*/, _ht/*~type*/, _d/*diagnostic*/) \
-	do { \
-		switch(_ht) { \
-			case SQL_HANDLE_SENV: \
-			case SQL_HANDLE_ENV: _d = &(((esodbc_env_st *)_h)->diag); break; \
-			case SQL_HANDLE_DBC: _d = &(((esodbc_dbc_st*)_h)->diag); break;\
-			case SQL_HANDLE_STMT: _d = &(((esodbc_stmt_st*)_h)->diag); break;\
-			case SQL_HANDLE_DESC: _d = &(((esodbc_env_st *)_h)->diag); break; \
-			default: \
-				ERR("unknown HandleType: %d.", _ht); \
-				return SQL_INVALID_HANDLE; \
-		} \
-	} while(0)
-
 
 /* List of supported functions in the driver */
 // FIXME: review at alpha what's implemented
@@ -205,7 +191,7 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		/* Driver Information */
 		/* "what version of odbc a driver complies with" */
 		case SQL_DRIVER_ODBC_VER:
-			return write_wptr(&dbc->diag, InfoValue,
+			return write_wptr(&dbc->hdr.diag, InfoValue,
 					MK_WPTR(ESODBC_SQL_SPEC_STRING), BufferLength,
 					StringLengthPtr);
 
@@ -252,25 +238,25 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 
 		case SQL_DATA_SOURCE_NAME:
 			DBG("requested: data source name: `"LWPD"`.", dbc->dsn.str);
-			return write_wptr(&dbc->diag, InfoValue, dbc->dsn.str,
+			return write_wptr(&dbc->hdr.diag, InfoValue, dbc->dsn.str,
 					BufferLength, StringLengthPtr);
 
 		case SQL_DRIVER_NAME:
 			DBG("requested: driver (file) name: %s.", DRIVER_NAME);
-			return write_wptr(&dbc->diag, InfoValue, 
+			return write_wptr(&dbc->hdr.diag, InfoValue,
 					MK_WPTR(DRIVER_NAME), BufferLength, StringLengthPtr);
 			break;
 
 		case SQL_DATA_SOURCE_READ_ONLY:
 			DBG("requested: if data source is read only (`%s`).",
 					ESODBC_DATA_SOURCE_READ_ONLY);
-			return write_wptr(&dbc->diag, InfoValue,
+			return write_wptr(&dbc->hdr.diag, InfoValue,
 					MK_WPTR(ESODBC_DATA_SOURCE_READ_ONLY), BufferLength,
 					StringLengthPtr);
 
 		case SQL_SEARCH_PATTERN_ESCAPE:
 			DBG("requested: escape character (`%s`).", ESODBC_PATTERN_ESCAPE);
-			return write_wptr(&dbc->diag, InfoValue,
+			return write_wptr(&dbc->hdr.diag, InfoValue,
 					MK_WPTR(ESODBC_PATTERN_ESCAPE), BufferLength,
 					StringLengthPtr);
 
@@ -297,7 +283,7 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			/* JDBC[0]: getCatalogSeparator() */
 			DBG("requested: catalogue separator (`%s`).", 
 					ESODBC_CATALOG_SEPARATOR);
-			return write_wptr(&dbc->diag, InfoValue,
+			return write_wptr(&dbc->hdr.diag, InfoValue,
 					MK_WPTR(ESODBC_CATALOG_SEPARATOR), BufferLength,
 					StringLengthPtr);
 
@@ -313,7 +299,7 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		case SQL_CATALOG_TERM: /* SQL_QUALIFIER_TERM */
 			/* JDBC[0]: getCatalogSeparator() */
 			DBG("requested: catalogue term (`%s`).", ESODBC_CATALOG_TERM);
-			return write_wptr(&dbc->diag, InfoValue,
+			return write_wptr(&dbc->hdr.diag, InfoValue,
 					MK_WPTR(ESODBC_CATALOG_TERM), BufferLength,
 					StringLengthPtr);
 
@@ -326,7 +312,7 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		case SQL_IDENTIFIER_QUOTE_CHAR:
 			/* JDBC[0]: getIdentifierQuoteString() */
 			DBG("requested: quoting char (`%s`).", ESODBC_QUOTE_CHAR);
-			return write_wptr(&dbc->diag, InfoValue,
+			return write_wptr(&dbc->hdr.diag, InfoValue,
 					MK_WPTR(ESODBC_QUOTE_CHAR), BufferLength,
 					StringLengthPtr);
 
@@ -365,13 +351,13 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 
 		case SQL_SCHEMA_TERM:
 			DBG("requested schema term (`%s`).", ESODBC_SCHEMA_TERM);
-			return write_wptr(&dbc->diag, InfoValue,
+			return write_wptr(&dbc->hdr.diag, InfoValue,
 					MK_WPTR(ESODBC_SCHEMA_TERM), BufferLength,
 					StringLengthPtr);
 
 		case SQL_TABLE_TERM:
 			DBG("requested table term (`%s`).", ESODBC_TABLE_TERM);
-			return write_wptr(&dbc->diag, InfoValue,
+			return write_wptr(&dbc->hdr.diag, InfoValue,
 					MK_WPTR(ESODBC_TABLE_TERM), BufferLength,
 					StringLengthPtr);
 
@@ -379,7 +365,7 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		case SQL_PROCEDURES:
 		case SQL_ACCESSIBLE_PROCEDURES:
 			DBG("requested: procedures support (`%s`).", ESODBC_PROCEDURES);
-			return write_wptr(&dbc->diag, InfoValue,
+			return write_wptr(&dbc->hdr.diag, InfoValue,
 					MK_WPTR(ESODBC_PROCEDURES), BufferLength,
 					StringLengthPtr);
 		case SQL_MAX_PROCEDURE_NAME_LEN:
@@ -388,7 +374,7 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			break;
 		case SQL_PROCEDURE_TERM:
 			DBG("requested: procedure term (``).");
-			return write_wptr(&dbc->diag, InfoValue, MK_WPTR(""),
+			return write_wptr(&dbc->hdr.diag, InfoValue, MK_WPTR(""),
 					BufferLength, StringLengthPtr);
 
 		case SQL_TXN_ISOLATION_OPTION:
@@ -510,7 +496,7 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		case SQL_SPECIAL_CHARACTERS:
 			DBG("requested: special characters (`%s`).",
 					ESODBC_SPECIAL_CHARACTERS);
-			return write_wptr(&dbc->diag, InfoValue,
+			return write_wptr(&dbc->hdr.diag, InfoValue,
 					MK_WPTR(ESODBC_SPECIAL_CHARACTERS), BufferLength,
 					StringLengthPtr);
 			break;
@@ -523,7 +509,7 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 
 		case SQL_COLUMN_ALIAS:
 			DBG("requested: column alias (`%s`).", ESODBC_COLUMN_ALIAS);
-			return write_wptr(&dbc->diag, InfoValue,
+			return write_wptr(&dbc->hdr.diag, InfoValue,
 					MK_WPTR(ESODBC_COLUMN_ALIAS), BufferLength,
 					StringLengthPtr);
 
@@ -540,19 +526,19 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 
 		case SQL_DRIVER_VER:
 			DBG("requested: driver version (`%s`).", ESODBC_DRIVER_VER);
-			return write_wptr(&dbc->diag, InfoValue,
+			return write_wptr(&dbc->hdr.diag, InfoValue,
 					MK_WPTR(ESODBC_DRIVER_VER), BufferLength,
 					StringLengthPtr);
 
 		case SQL_DBMS_VER:
 			DBG("requested: DBMS version (`%s`).", ESODBC_ELASTICSEARCH_VER);
-			return write_wptr(&dbc->diag, InfoValue,
+			return write_wptr(&dbc->hdr.diag, InfoValue,
 					MK_WPTR(ESODBC_ELASTICSEARCH_VER), BufferLength,
 					StringLengthPtr);
 
 		case SQL_DBMS_NAME:
 			DBG("requested: DBMS name (`%s`).", ESODBC_ELASTICSEARCH_NAME);
-			return write_wptr(&dbc->diag, InfoValue,
+			return write_wptr(&dbc->hdr.diag, InfoValue,
 					MK_WPTR(ESODBC_ELASTICSEARCH_NAME), BufferLength,
 					StringLengthPtr);
 
@@ -566,7 +552,7 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			RET_HDIAGS(dbc, SQL_STATE_HYC00/*096?*/);
 	}
 
-	RET_STATE(SQL_STATE_00000);
+	return SQL_SUCCESS;
 }
 
 /* TODO: see error.h: esodbc_errors definition note (2.x apps support) */
@@ -601,13 +587,13 @@ SQLRETURN EsSQLGetDiagFieldW(
 		return SQL_INVALID_HANDLE;
 	}
 
-	GET_DIAG(Handle, HandleType, diag);
+	diag = &HDRH(Handle)->diag;
 
 	switch(DiagIdentifier) {
 		/* Header Fields */
 		case SQL_DIAG_NUMBER:
-			assert(StringLengthPtr); // FIXME
-			*StringLengthPtr = sizeof(SQLINTEGER);
+			if (StringLengthPtr);
+				*StringLengthPtr = sizeof(SQLINTEGER);
 			if (DiagInfoPtr) {
 				// FIXME: check HandleType's record count (1 or 0)
 				*(SQLINTEGER *)DiagInfoPtr = 0;
@@ -616,7 +602,7 @@ SQLRETURN EsSQLGetDiagFieldW(
 				DBG("no DiagInfo buffer provided - returning ");
 				return SQL_SUCCESS_WITH_INFO;
 			}
-			RET_NOT_IMPLEMENTED;
+			FIXME; // FIXME
 			break;
 		case SQL_DIAG_CURSOR_ROW_COUNT:
 		case SQL_DIAG_DYNAMIC_FUNCTION:
@@ -708,10 +694,10 @@ SQLRETURN EsSQLGetDiagFieldW(
 					wptr = DBCH(Handle)->dsn.str;
 					break;
 				case SQL_HANDLE_STMT:
-					wptr = STMH(Handle)->dbc->dsn.str;
+					wptr = STMH(Handle)->hdr.dbc->dsn.str;
 					break;
 				case SQL_HANDLE_DESC:
-					wptr = DSCH(Handle)->stmt->dbc->dsn.str;
+					wptr = DSCH(Handle)->hdr.stmt->hdr.dbc->dsn.str;
 					break;
 				default:
 					wptr = MK_WPTR("");
@@ -725,7 +711,7 @@ SQLRETURN EsSQLGetDiagFieldW(
 		case SQL_DIAG_NATIVE: //break;
 		case SQL_DIAG_COLUMN_NUMBER: //break;
 		case SQL_DIAG_ROW_NUMBER: //break;
-			RET_NOT_IMPLEMENTED;
+			FIXME; // FIXME
 
 		case SQL_DIAG_SQLSTATE:
 			if (diag->state == SQL_STATE_00000) {
@@ -804,7 +790,7 @@ SQLRETURN EsSQLGetDiagRecW
 		ERR("shared environment handle type not allowed.");
 		return SQL_INVALID_HANDLE;
 	} else {
-		GET_DIAG(Handle, HandleType, diag);
+		diag = &HDRH(Handle)->diag;
 	}
 
 	if (diag->state == SQL_STATE_00000) {
@@ -858,7 +844,7 @@ SQLRETURN EsSQLGetFunctions(SQLHDBC ConnectionHandle,
 	}
 
 	// TODO: does this require connecting to the server?
-	RET_STATE(SQL_STATE_00000);
+	return SQL_SUCCESS;
 }
 
 /*

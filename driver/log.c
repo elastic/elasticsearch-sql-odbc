@@ -20,42 +20,198 @@
 #include <time.h>
 #include <assert.h>
 
+#include "defs.h"
 #include "log.h"
+
+#ifdef _WIN32
+#define FILE_PATH_SEPARATOR		'\\'
+#else /* _WIN32 */
+#define FILE_PATH_SEPARATOR		'/'
+#endif /* _WIN32 */
+
+#define LOG_LEVEL_SEPARATOR		'?'
 
 /*
  * https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/strerror-s-strerror-s-wcserror-s-wcserror-s :
- * """
- * Your string message can be, at most, 94 characters long.
- * 
- * """
+ * "Your string message can be, at most, 94 characters long."
+ * Size of buffer to fetch errno-to-string message.
  */
-#define LOG_EBUF_LEN	128
-#define LOG_BUF_LEN		4 * 1024
-/* TODO: make settable */
-#define LOG_PATH		"C:\\Users\\bpi\\Temp\\mylog.txt"
-int _esodbc_log_level = LOG_LEVEL_DBG;
-static FILE *fp = NULL;
+#define LOG_ERRNO_BUF_SIZE	128
 
-static inline void log_file(int level, int werrno, const char *func, 
+/* log level; disabled by default */
+int _esodbc_log_level = LOG_LEVEL_DISABLED;
+/* log file path -- process variable */
+static TCHAR *log_path = NULL;
+/* log file mutex -- process variable */
+static HANDLE log_mux = NULL;
+
+#define MUTEX_LOCK(_mux)	\
+	(WaitForSingleObject(_mux, INFINITE) == WAIT_OBJECT_0)
+#define MUTEX_UNLOCK(_mux)	ReleaseMutex(_mux)
+
+
+static inline HANDLE log_file_handle(BOOL open)
+{
+	static HANDLE log_handle = INVALID_HANDLE_VALUE;
+	if (open) {
+		if (log_handle == INVALID_HANDLE_VALUE) {
+			log_handle = CreateFile(
+					log_path, /* file name ("path") */
+					GENERIC_WRITE, /* desired access */
+					FILE_SHARE_WRITE, /* share mode */
+					NULL, /* security attributes */
+					OPEN_ALWAYS, /* creation disposition */
+					FILE_ATTRIBUTE_NORMAL, /* flags & attributes */
+					NULL /* template */);
+		}
+	} else {
+		if (log_handle != INVALID_HANDLE_VALUE) {
+			CloseHandle(log_handle);
+			log_handle = INVALID_HANDLE_VALUE;
+		}
+	}
+	return log_handle;
+}
+
+BOOL log_init()
+{
+	int pos;
+	/*
+	 * Fully qualified path name of the log file:
+	 * <path>\<E._LOG_FILE_PREFIX>_<datetime>_<pid><E._LOG_FILE_SUFFIX>
+	 * Example:
+	 * C:\Users\username\AppData\Local\Temp\esodbc_20181231235959_233.log
+	 */
+	static TCHAR path[MAX_PATH];
+	TCHAR *qmark; /* question mark position */
+	struct tm *then;
+	time_t now = time(NULL);
+
+	pos = GetEnvironmentVariable(_T(ESODBC_ENV_VAR_LOG_DIR), path,
+			sizeof(path)/sizeof(path[0]));
+	if (! pos) { /* 0 means error */
+		/* env var wasn't defined OR error occured (which we can't log). */
+		return GetLastError() == ERROR_ENVVAR_NOT_FOUND;
+	}
+	if (sizeof(path)/sizeof(path[0]) < pos) {
+		/* path buffer too small */
+		assert(0);
+		return FALSE;
+	}
+
+	/* is there a log level specified? */
+	if ((qmark = TSTRCHR(path, LOG_LEVEL_SEPARATOR))) {
+		*qmark = 0; /* end the path here */
+		pos = (int)(qmark - path); /* adjust the lenght of path */
+		/* first letter will indicate the log level, with the default being
+		 * debug, since this is mostly a tracing functionality */
+		switch (qmark[1]) {
+			case 'e':
+			case 'E':
+				_esodbc_log_level = LOG_LEVEL_ERR;
+				break;
+			case 'w':
+			case 'W':
+				_esodbc_log_level = LOG_LEVEL_WARN;
+				break;
+			case 'i':
+			case 'I':
+				_esodbc_log_level = LOG_LEVEL_INFO;
+				break;
+			default:
+				_esodbc_log_level = LOG_LEVEL_DBG;
+		}
+	} else {
+		/* default log level, if not specified, is debug */
+		_esodbc_log_level = LOG_LEVEL_DBG;
+	}
+
+	/* break down time to date-time */
+	if (! (then = localtime(&now))) {
+		assert(0);
+		return FALSE; /* should not happen */
+	}
+
+	/* build the log path name */
+	path[pos ++] = FILE_PATH_SEPARATOR;
+	pos = SNTPRINTF(path + pos, sizeof(path)/sizeof(path[0]),
+			"%c" STPD "_%d%.2d%.2d%.2d%.2d%.2d_%u" STPD,
+			FILE_PATH_SEPARATOR, _T(ESODBC_LOG_FILE_PREFIX),
+			then->tm_year + 1900, then->tm_mon + 1, then->tm_mday,
+			then->tm_hour, then->tm_min, then->tm_sec,
+			GetCurrentProcessId(),
+			_T(ESODBC_LOG_FILE_SUFFIX));
+	if (sizeof(path)/sizeof(path[0]) < pos) {
+		/* path buffer is too small */
+		assert(0);
+		return FALSE;
+	}
+
+	/* save the file path and open the file, to check path validity */
+	log_path = path;
+	if (log_file_handle(/* open*/TRUE) == INVALID_HANDLE_VALUE) {
+		return FALSE;
+	}
+
+	log_mux = CreateMutex(
+			NULL, /* default security attributes */
+			FALSE, /* initially not owned */
+			NULL /* unnamed mutex */);
+	if (! log_mux) {
+		log_file_handle(/* close */FALSE);
+		return FALSE;
+	}
+	return TRUE;
+}
+
+void log_cleanup()
+{
+	if (log_mux) {
+		CloseHandle(log_mux);
+	}
+	log_file_handle(/* close */FALSE);
+
+}
+
+static void log_file_write(char *buff, size_t pos)
+{
+	HANDLE log_handle;
+	DWORD written;
+
+	log_handle = log_file_handle(/*open*/TRUE);
+	if (log_handle == INVALID_HANDLE_VALUE) {
+		return;
+	}
+
+	/* write the buffer to file */
+	if (! WriteFile(
+				log_handle, /*handle*/
+				buff, /* buffer */
+				(DWORD)(pos * sizeof(buff[0])), /*bytes to write */
+				&written /* bytes written */,
+				NULL /*overlap*/)) {
+		log_file_handle(/* close */FALSE);
+	} else {
+#ifndef NDEBUG
+#ifdef _WIN32
+		FlushFileBuffers(log_handle);
+#endif /* _WIN32 */
+#endif /* NDEBUG */
+	}
+}
+
+static inline void log_file(int level, int werrno, const char *func,
 		const char *srcfile, int lineno, const char *fmt, va_list args)
 {
 	time_t now = time(NULL);
 	int ret;
 	size_t pos;
-	char buff[LOG_BUF_LEN];
-	char ebuff[LOG_EBUF_LEN];
+	char buff[ESODBC_LOG_BUF_SIZE];
+	char ebuff[LOG_ERRNO_BUF_SIZE];
+	const char *sfile, *next;
 	/* keep in sync with esodbc_log_levels */
 	static const char* level2str[] = { "ERROR", "WARN", "INFO", "DEBUG", };
-	assert(level < sizeof(level2str)/sizeof(char *));
-
-	if (! fp) {
-#ifdef _WIN32
-		if (fopen_s(&fp, LOG_PATH, "a+"))
-#else
-		if (! (fp = fopen(LOG_PATH, "a+")))
-#endif
-			return;
-	}
+	assert(level < sizeof(level2str)/sizeof(level2str[0]));
 
 	/* FIXME: 4!WINx */
 	if (ctime_s(buff, sizeof(buff), &now)) {
@@ -74,10 +230,15 @@ static inline void log_file(int level, int werrno, const char *func,
 		assert(pos == 24);
 	}
 
+	/* drop path from file name */
+	for (next = srcfile; next; next = strchr(sfile, FILE_PATH_SEPARATOR)) {
+		sfile = next + 1;
+	}
+
 	/* write the debugging prefix */
 	/* XXX: add release (file o.a.) printing? */
-	if ((ret = snprintf(buff + pos, sizeof(buff) - pos, " - [%s] %s()@%s:%d ", 
-					level2str[level], func, srcfile, lineno)) < 0)
+	if ((ret = snprintf(buff + pos, sizeof(buff) - pos, " - [%s] %s()@%s:%d ",
+					level2str[level], func, sfile, lineno)) < 0)
 		return;
 	else
 		pos += ret;
@@ -115,17 +276,10 @@ static inline void log_file(int level, int werrno, const char *func,
 		pos += ret;
 	assert(pos <= sizeof(buff));
 
-	/* write the buffer to file */
-	/* TODO: thread-safety 4!WINx */
-	if (fwrite(buff, sizeof(buff[0]), pos, fp) < 0) {
-		fclose(fp);
-		fp = NULL;
+	if (MUTEX_LOCK(log_mux)) {
+		log_file_write(buff, pos);
+		MUTEX_UNLOCK(log_mux);
 	}
-#ifndef NDEBUG
-#ifdef _WIN32
-	fflush(fp);
-#endif /* _WIN32 */
-#endif /* NDEBUG */
 }
 
 void _esodbc_log(int lvl, int werrno, const char *func,
