@@ -269,7 +269,7 @@ static SQLRETURN init_curl(esodbc_dbc_st *dbc)
 err:
 	if (curl)
 		curl_easy_cleanup(curl);
-	RET_STATE(dbc->diag.state);
+	RET_STATE(dbc->hdr.diag.state);
 }
 
 static void cleanup_curl(esodbc_dbc_st *dbc)
@@ -292,7 +292,7 @@ static SQLRETURN post_request(esodbc_stmt_st *stmt,
 	// char *const answer, /* buffer to receive the answer in */
 	// long avail /*size of the answer buffer */)
 	CURLcode res = CURLE_OK;
-	esodbc_dbc_st *dbc = stmt->dbc;
+	esodbc_dbc_st *dbc = stmt->hdr.dbc;
 	char *abuff = NULL;
 	size_t apos;
 	long to, code;
@@ -395,7 +395,7 @@ err_net: /* the error occured after the request hit hit the network */
 SQLRETURN post_statement(esodbc_stmt_st *stmt)
 {
 	SQLRETURN ret;
-	esodbc_dbc_st *dbc = stmt->dbc;
+	esodbc_dbc_st *dbc = stmt->hdr.dbc;
 	size_t bodylen, pos, u8len;
 	char *body, buff[ESODBC_BODY_BUF_START_SIZE];
 	char u8curs[ESODBC_BODY_BUF_START_SIZE];
@@ -1501,7 +1501,7 @@ SQLRETURN EsSQLGetConnectAttrW(
 				RET_HDIAGS(dbc, SQL_STATE_08003);
 			} else if (! get_current_catalog(dbc)) {
 				ERR("failed to get current catalog on handle 0x%p.", dbc);
-				RET_STATE(dbc, dbc->diag.state);
+				RET_STATE(dbc, dbc->hdr.diag.state);
 			}
 #endif //0
 #if 0
@@ -1511,7 +1511,7 @@ SQLRETURN EsSQLGetConnectAttrW(
 			*(SQLWCHAR **)ValuePtr = val;
 #else //0
 			// FIXME;
-			ret = write_wptr(&dbc->diag, (SQLWCHAR *)ValuePtr, 
+			ret = write_wptr(&dbc->hdr.diag, (SQLWCHAR *)ValuePtr,
 					MK_WPTR("NulL"), (SQLSMALLINT)BufferLength, &used);
 			if (StringLengthPtr);
 				*StringLengthPtr = (SQLINTEGER)used;

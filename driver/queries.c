@@ -10,7 +10,7 @@
 #include "timestamp.h"
 
 #include "queries.h"
-#include "handles.h"
+#include "log.h"
 #include "connect.h"
 #include "info.h"
 
@@ -341,8 +341,8 @@ SQLRETURN attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 		wcurs = UJReadString(cursor, &eccnt);
 		if (eccnt) {
 			/* this can happen automatically if hitting scroller size */
-			if (! stmt->dbc->fetch.max)
-				INFO("STMT@0x%p: no fetch size defined, but cursor returned.");
+			if (! stmt->hdr.dbc->fetch.max)
+				INFOH(stmt, "no fetch size defined, but cursor returned.");
 			if (stmt->rset.ecurs)
 				DBGSTMT(stmt, "replacing old cursor `" LWPDL "`.", 
 						stmt->rset.eccnt, stmt->rset.ecurs);
@@ -457,7 +457,7 @@ SQLRETURN attach_error(esodbc_stmt_st *stmt, char *buff, size_t blen)
 				sizeof(MSG_INV_SRV_ANS)*sizeof(SQLWCHAR));
 	}
 
-	post_diagnostic(&stmt->diag, SQL_STATE_HY000, wbuf, 
+	post_diagnostic(&stmt->hdr.diag, SQL_STATE_HY000, wbuf,
 			UJNumericInt(o_status));
 
 end:
@@ -466,7 +466,7 @@ end:
 	if (buff)
 		free(buff);
 
-	RET_STATE(stmt->diag.state);
+	RET_STATE(stmt->hdr.diag.state);
 }
 
 SQLRETURN attach_sql(esodbc_stmt_st *stmt,
@@ -792,7 +792,7 @@ static SQLRETURN copy_longlong(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	size_t tocopy, blen;
 	esodbc_state_et state = SQL_STATE_00000;
 
-	stmt = arec->desc->stmt;
+	stmt = arec->desc->hdr.stmt;
 	ird = stmt->ird;
 	ard = stmt->ard;
 
@@ -880,7 +880,7 @@ static SQLRETURN wstr_to_cstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		const wchar_t *wstr, size_t chars)
 {
 	esodbc_state_et state = SQL_STATE_00000;
-	esodbc_stmt_st *stmt = arec->desc->stmt;
+	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
 	char *charp;
 	int in_bytes, out_bytes, c;
 
@@ -947,7 +947,7 @@ static SQLRETURN wstr_to_wstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		const wchar_t *wstr, size_t chars)
 {
 	esodbc_state_et state = SQL_STATE_00000;
-	esodbc_stmt_st *stmt = arec->desc->stmt;
+	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
 	size_t in_bytes, out_bytes;
 	wchar_t *widep;
 
@@ -1019,7 +1019,7 @@ static SQLRETURN wstr_to_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		void *data_ptr, SQLLEN *octet_len_ptr,
 		const wchar_t *wstr, size_t chars)
 {
-	esodbc_stmt_st *stmt = arec->desc->stmt;
+	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
 	TIMESTAMP_STRUCT *tss = (TIMESTAMP_STRUCT *)data_ptr;
 
 	if (octet_len_ptr) {
@@ -1044,7 +1044,7 @@ static SQLRETURN wstr_to_date(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		void *data_ptr, SQLLEN *octet_len_ptr,
 		const wchar_t *wstr, size_t chars)
 {
-	esodbc_stmt_st *stmt = arec->desc->stmt;
+	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
 	DATE_STRUCT *ds = (DATE_STRUCT *)data_ptr;
 	TIMESTAMP_STRUCT tss;
 
@@ -1077,7 +1077,7 @@ static SQLRETURN copy_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	esodbc_desc_st *ard, *ird;
 	SQLSMALLINT target_type;
 
-	stmt = arec->desc->stmt;
+	stmt = arec->desc->hdr.stmt;
 	ird = stmt->ird;
 	ard = stmt->ard;
 
@@ -1141,13 +1141,13 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 	do { \
 		if (ard->array_status_ptr) \
 			ard->array_status_ptr[pos] = SQL_ROW_ERROR; \
-		return post_row_diagnostic(&stmt->diag, _state, MK_WPTR(_message), 0, \
+		return post_row_diagnostic(&stmt->hdr.diag, _state, MK_WPTR(_message), 0, \
 				rowno, _colno); \
 	} while (0)
 #define SET_ROW_DIAG(_rowno, _colno) \
 	do { \
-		stmt->diag.row_number = _rowno; \
-		stmt->diag.column_number = _colno; \
+		stmt->hdr.diag.row_number = _rowno; \
+		stmt->hdr.diag.column_number = _colno; \
 	} while (0)
 
 	if (! UJIsArray(row)) {
@@ -1671,7 +1671,7 @@ SQLRETURN EsSQLDescribeColW(
 #endif /* NDEBUG */
 
 	if (szColName) {
-		ret = write_wptr(&stmt->diag, szColName, rec->name, 
+		ret = write_wptr(&stmt->hdr.diag, szColName, rec->name,
 				cchColNameMax * sizeof(*szColName), &col_blen);
 		if (! SQL_SUCCEEDED(ret)) {
 			ERRSTMT(stmt, "failed to copy column name `" LWPD "`.", rec->name);
@@ -1815,7 +1815,7 @@ SQLRETURN EsSQLColAttributeW(
 				*(SQLWCHAR **)pCharAttr = MK_WPTR("");
 				*pcbCharAttr = 0;
 			} else {
-				return write_wptr(&stmt->diag, pcbCharAttr, wptr, cbDescMax,
+				return write_wptr(&stmt->hdr.diag, pcbCharAttr, wptr, cbDescMax,
 						pcbCharAttr);
 			}
 			break;
