@@ -140,8 +140,8 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb,
 	if (avail < have) {
 		/* calculate how much space to allocate. start from existing lenght,
 		 * if set, othewise from a constant (on first allocation). */
-		for (need = dbc->alen ? dbc->alen : ESODBC_BODY_BUF_START_SIZE; 
-				need < have; need *= 2)
+		for (need = dbc->alen ? dbc->alen : ESODBC_BODY_BUF_START_SIZE;
+				need < dbc->apos + have; need *= 2)
 			;
 		DBG("libcurl: DBC@0x%p: growing buffer for new chunk of %zd "
 				"from %zd to %zd.", dbc, have, dbc->alen, need);
