@@ -55,7 +55,7 @@ SQLRETURN EsSQLTablesW(
 		if (NameLength1 == SQL_NTS) {
 			cnt_cat = wcslen(catalog);
 			if (ESODBC_MAX_IDENTIFIER_LEN < cnt_cat) {
-				ERRSTMT(stmt, "catalog identifier name '" LTPDL "' too long "
+				ERRH(stmt, "catalog identifier name '" LTPDL "' too long "
 						"(%d. max=%d).", cnt_cat, catalog, cnt_cat,
 						ESODBC_MAX_IDENTIFIER_LEN);
 				RET_HDIAG(stmt, SQL_STATE_HY090, "catalog name too long", 0);
@@ -73,7 +73,7 @@ SQLRETURN EsSQLTablesW(
 		if (NameLength2 == SQL_NTS) {
 			cnt_sch = wcslen(schema);
 			if (ESODBC_MAX_IDENTIFIER_LEN < cnt_sch) {
-				ERRSTMT(stmt, "schema identifier name '" LTPDL "' too long "
+				ERRH(stmt, "schema identifier name '" LTPDL "' too long "
 						"(%d. max=%d).", cnt_sch, schema, cnt_sch,
 						ESODBC_MAX_IDENTIFIER_LEN);
 				RET_HDIAG(stmt, SQL_STATE_HY090, "schema name too long", 0);
@@ -89,7 +89,7 @@ SQLRETURN EsSQLTablesW(
 	/* TODO: server support needed for sch. name filtering */
 	if (cnt_sch && wszmemcmp(schema, MK_WPTR(SQL_ALL_SCHEMAS),
 				(long)cnt_sch)) {
-		ERR("filtering by schemas is not supported.");
+		ERRH(stmt, "filtering by schemas is not supported.");
 		RET_HDIAG(stmt, SQL_STATE_IM001, "schema filtering not supported", 0);
 	}
 
@@ -99,7 +99,7 @@ SQLRETURN EsSQLTablesW(
 		if (NameLength3 == SQL_NTS) {
 			cnt_tab = wcslen(table);
 			if (ESODBC_MAX_IDENTIFIER_LEN < cnt_tab) {
-				ERRSTMT(stmt, "table identifier name '" LTPDL "' too long "
+				ERRH(stmt, "table identifier name '" LTPDL "' too long "
 						"(%d. max=%d).", cnt_tab, table, cnt_tab,
 						ESODBC_MAX_IDENTIFIER_LEN);
 				RET_HDIAG(stmt, SQL_STATE_HY090, "table name too long", 0);
@@ -122,7 +122,7 @@ SQLRETURN EsSQLTablesW(
 	pos = swprintf(wbuf, sizeof(wbuf)/sizeof(wbuf[0]), SQL_TABLES,
 			(int)cnt_cat, catalog, (int)cnt_tab, table);
 	if (pos <= 0) {
-		ERRSTMT(stmt, "failed to print 'tables' catalog SQL.");
+		ERRH(stmt, "failed to print 'tables' catalog SQL.");
 		RET_HDIAGS(stmt, SQL_STATE_HY000);
 	}
 
@@ -164,7 +164,7 @@ SQLRETURN EsSQLColumnsW
 		if (cchCatalogName == SQL_NTS) {
 			cnt_cat = wcslen(catalog);
 			if (ESODBC_MAX_IDENTIFIER_LEN < cnt_cat) {
-				ERRSTMT(stmt, "catalog identifier name '" LTPDL "' too long "
+				ERRH(stmt, "catalog identifier name '" LTPDL "' too long "
 						"(%d. max=%d).", cnt_cat, catalog, cnt_cat,
 						ESODBC_MAX_IDENTIFIER_LEN);
 				RET_HDIAG(stmt, SQL_STATE_HY090, "catalog name too long", 0);
@@ -181,7 +181,7 @@ SQLRETURN EsSQLColumnsW
 		if (cchSchemaName == SQL_NTS) {
 			cnt_sch = wcslen(schema);
 			if (ESODBC_MAX_IDENTIFIER_LEN < cnt_sch) {
-				ERRSTMT(stmt, "schema identifier name '" LTPDL "' too long "
+				ERRH(stmt, "schema identifier name '" LTPDL "' too long "
 						"(%d. max=%d).", cnt_sch, schema, cnt_sch,
 						ESODBC_MAX_IDENTIFIER_LEN);
 				RET_HDIAG(stmt, SQL_STATE_HY090, "schema name too long", 0);
@@ -197,7 +197,7 @@ SQLRETURN EsSQLColumnsW
 	/* TODO: server support needed for sch. name filtering */
 	if (cnt_sch && wszmemcmp(schema, MK_WPTR(SQL_ALL_SCHEMAS),
 				(long)cnt_sch)) {
-		ERR("filtering by schemas is not supported.");
+		ERRH(stmt, "filtering by schemas is not supported.");
 		RET_HDIAG(stmt, SQL_STATE_IM001, "schema filtering not supported", 0);
 	}
 
@@ -207,7 +207,7 @@ SQLRETURN EsSQLColumnsW
 		if (cchTableName == SQL_NTS) {
 			cnt_tab = wcslen(table);
 			if (ESODBC_MAX_IDENTIFIER_LEN < cnt_tab) {
-				ERRSTMT(stmt, "table identifier name '" LTPDL "' too long "
+				ERRH(stmt, "table identifier name '" LTPDL "' too long "
 						"(%d. max=%d).", cnt_tab, table, cnt_tab,
 						ESODBC_MAX_IDENTIFIER_LEN);
 				RET_HDIAG(stmt, SQL_STATE_HY090, "table name too long", 0);
@@ -225,7 +225,7 @@ SQLRETURN EsSQLColumnsW
 		if (cchColumnName == SQL_NTS) {
 			cnt_col = wcslen(column);
 			if (ESODBC_MAX_IDENTIFIER_LEN < cnt_col) {
-				ERRSTMT(stmt, "column identifier name '" LTPDL "' too long "
+				ERRH(stmt, "column identifier name '" LTPDL "' too long "
 						"(%d. max=%d).", cnt_col, column, cnt_col,
 						ESODBC_MAX_IDENTIFIER_LEN);
 				RET_HDIAG(stmt, SQL_STATE_HY090, "column name too long", 0);
@@ -249,7 +249,7 @@ SQLRETURN EsSQLColumnsW
 				(int)cnt_tab, table, (int)cnt_col, column);
 	}
 	if (pos <= 0) {
-		ERRSTMT(stmt, "failed to print 'columns' catalog SQL.");
+		ERRH(stmt, "failed to print 'columns' catalog SQL.");
 		RET_HDIAGS(stmt, SQL_STATE_HY000);
 	}
 
@@ -277,7 +277,7 @@ SQLRETURN EsSQLSpecialColumnsW
 {
 	// TODO: is there a "rowid" equivalent: ID uniquely a ROW in the table?
 	// or unique indexes equivalents
-	WARN("no special columns available.");
+	WARNH(hstmt, "no special columns available.");
 	STMT_FORCE_NODATA(STMH(hstmt));
 	return SQL_SUCCESS;
 }
@@ -298,7 +298,7 @@ SQLRETURN EsSQLForeignKeysW(
 		_In_reads_opt_(cchFkTableName) SQLWCHAR*      szFkTableName,
 		SQLSMALLINT        cchFkTableName)
 {
-	WARN("no foreign keys supported.");
+	WARNH(hstmt, "no foreign keys supported.");
 	STMT_FORCE_NODATA(STMH(hstmt));
 	return SQL_SUCCESS;
 }
@@ -312,7 +312,7 @@ SQLRETURN SQL_API EsSQLPrimaryKeysW(
 		_In_reads_opt_(cchTableName) SQLWCHAR*      szTableName,
 		SQLSMALLINT        cchTableName)
 {
-	WARN("no primary keys supported.");
+	WARNH(hstmt, "no primary keys supported.");
 	STMT_FORCE_NODATA(STMH(hstmt));
 	return SQL_SUCCESS;
 }
