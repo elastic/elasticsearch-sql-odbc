@@ -63,7 +63,7 @@
 
 void clear_resultset(esodbc_stmt_st *stmt)
 {
-	DBGSTMT(stmt, "clearing result set; vrows=%zd, nrows=%zd, frows=%zd.", 
+	DBGH(stmt, "clearing result set; vrows=%zd, nrows=%zd, frows=%zd.",
 			stmt->rset.vrows, stmt->rset.nrows, stmt->rset.frows);
 	if (stmt->rset.buff)
 		free(stmt->rset.buff);
@@ -200,24 +200,24 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 
 
 	ncols = UJArraySize(columns);
-	DBGSTMT(stmt, "columns received: %zd.", ncols);
+	DBGH(stmt, "columns received: %zd.", ncols);
 	ret = update_rec_count(ird, (SQLSMALLINT)ncols);
 	if (! SQL_SUCCEEDED(ret)) {
-		ERRSTMT(stmt, "failed to set IRD's record count to %d.", ncols);
+		ERRH(stmt, "failed to set IRD's record count to %d.", ncols);
 		HDIAG_COPY(ird, stmt);
 		return ret;
 	}
 
 	iter = UJBeginArray(columns);
 	if (! iter) {
-		ERRSTMT(stmt, "failed to obtain array iterator: %s.", 
+		ERRH(stmt, "failed to obtain array iterator: %s.",
 				UJGetError(stmt->rset.state));
 		RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
 	}
 	recno = 0;
 	while (UJIterArray(&iter, &col_o)) {
 		if (UJObjectUnpack(col_o, 2, "SS", keys, &name_o, &type_o) < 2) {
-			ERRSTMT(stmt, "failed to decode JSON column: %s.", 
+			ERRH(stmt, "failed to decode JSON column: %s.",
 					UJGetError(stmt->rset.state));
 			RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
 		}
@@ -237,7 +237,7 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 		 */
 		col_stype = type_elastic2csql(col_wtype, len);
 		if (col_stype == SQL_UNKNOWN_TYPE) {
-			ERRSTMT(stmt, "failed to convert Elastic to C SQL type `" 
+			ERRH(stmt, "failed to convert Elastic to C SQL type `"
 					LWPDL "`.", len, col_wtype);
 			RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
 		}
@@ -270,7 +270,7 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 		//dump_record(rec);
 #endif /* NDEBUG */
 
-		DBGSTMT(stmt, "column #%d: name=`" LWPD "`, type=%d (`" LWPD "`).", 
+		DBGH(stmt, "column #%d: name=`" LWPD "`, type=%d (`" LWPD "`).",
 				recno, col_wname, col_stype, col_wtype);
 		recno ++;
 	}
@@ -308,7 +308,7 @@ SQLRETURN attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 	/* parse the entire JSON answer */
 	obj = UJDecode(buff, blen, NULL, &stmt->rset.state);
 	if (! obj) {
-		ERRSTMT(stmt, "failed to decode JSON answer (`%.*s`): %s.", blen, buff,
+		ERRH(stmt, "failed to decode JSON answer (`%.*s`): %s.", blen, buff,
 				stmt->rset.state ? UJGetError(stmt->rset.state) : "<none>");
 		RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
 	}
@@ -316,34 +316,34 @@ SQLRETURN attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 	/* extract the columns and rows objects */
 	unpacked = UJObjectUnpack(obj, 3, "AAS", keys, &columns, &rows, &cursor);
     if (unpacked < /* 'rows' must always be present */1) {
-		ERRSTMT(stmt, "failed to unpack JSON answer (`%.*s`): %s.", 
+		ERRH(stmt, "failed to unpack JSON answer (`%.*s`): %s.",
 				blen, buff, UJGetError(stmt->rset.state));
 		RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
 	}
 
 	/*
-	 * set the internal cursor (UJSON4C array iterator) 
+	 * set the internal cursor (UJSON4C array iterator)
 	 */
 	if (! rows) {
-		ERRSTMT(stmt, "no rows JSON object received in answer: `%.*s`[%zd].",
+		ERRH(stmt, "no rows JSON object received in answer: `%.*s`[%zd].",
 				blen, buff, blen);
 		RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
 	}
 	stmt->rset.rows_iter = UJBeginArray(rows);
 	if (! stmt->rset.rows_iter) {
 #if 0 /* UJSON4C will return NULL above, for empty array (meh!) */
-		ERRSTMT(stmt, "failed to get iterrator on received rows: %s.", 
+		ERRH(stmt, "failed to get iterrator on received rows: %s.",
 				UJGetError(stmt->rset.state));
 		RET_HDIAGS(stmt, SQL_STATE_HY000);
 #else /*0*/
-		DBGSTMT(stmt, "received empty resultset array: forcing nodata.");
+		DBGH(stmt, "received empty resultset array: forcing nodata.");
 		STMT_FORCE_NODATA(stmt);
 		stmt->rset.nrows = 0;
 #endif /*0*/
 	} else {
 		stmt->rset.nrows = (size_t)UJArraySize(rows);
 	}
-	DBGSTMT(stmt, "rows received in result set: %zd.", stmt->rset.nrows);
+	DBGH(stmt, "rows received in result set: %zd.", stmt->rset.nrows);
 
 	/*
 	 * copy Elastic's cursor (if there's one)
@@ -355,15 +355,15 @@ SQLRETURN attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 			if (! stmt->hdr.dbc->fetch.max)
 				INFOH(stmt, "no fetch size defined, but cursor returned.");
 			if (stmt->rset.ecurs)
-				DBGSTMT(stmt, "replacing old cursor `" LWPDL "`.", 
+				DBGH(stmt, "replacing old cursor `" LWPDL "`.",
 						stmt->rset.eccnt, stmt->rset.ecurs);
 			/* store new cursor vals */
 			stmt->rset.ecurs = wcurs;
 			stmt->rset.eccnt = eccnt;
-			DBGSTMT(stmt, "new elastic cursor: `" LWPDL "`[%zd].", 
+			DBGH(stmt, "new elastic cursor: `" LWPDL "`[%zd].",
 					stmt->rset.eccnt, stmt->rset.ecurs, stmt->rset.eccnt);
 		} else {
-			WARNSTMT(stmt, "empty cursor found in the answer.");
+			WARNH(stmt, "empty cursor found in the answer.");
 		}
 	} else {
 		/* should have been cleared by now */
@@ -375,14 +375,14 @@ SQLRETURN attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 	 */
 	if (columns) {
 		if (0 < stmt->ird->count) {
-			ERRSTMT(stmt, "%d columns already attached.", stmt->ird->count);
+			ERRH(stmt, "%d columns already attached.", stmt->ird->count);
 			RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
 		}
 		return attach_columns(stmt, columns);
 	} else {
 		/* no cols available in this answer: check if already received */
 		if (stmt->ird->count <= 0) {
-			ERRSTMT(stmt, "no columns available in result set; answer: "
+			ERRH(stmt, "no columns available in result set; answer: "
 					"`%.*s`[%zd].", blen, buff, blen);
 			RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
 		}
@@ -413,27 +413,26 @@ SQLRETURN attach_error(esodbc_stmt_st *stmt, char *buff, size_t blen)
 		MK_WPTR(JSON_ANSWER_ERR_REASON)
 	};
 
-	INFO("STMT@0x%p REST request failed with `%.*s` (%zd).", stmt, blen, buff, 
-			blen);
+	INFOH(stmt, "REST request failed with `%.*s` (%zd).", blen, buff, blen);
 
 	/* parse the entire JSON answer */
 	obj = UJDecode(buff, blen, NULL, &state);
 	if (! obj) {
-		ERRSTMT(stmt, "failed to decode JSON answer (`%.*s`): %s.", 
+		ERRH(stmt, "failed to decode JSON answer (`%.*s`): %s.",
 				blen, buff, state ? UJGetError(state) : "<none>");
 		SET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
 		goto end;
 	}
 	/* extract the status and error object */
 	if (UJObjectUnpack(obj, 2, "ON", outer_keys, &o_error, &o_status) < 2) {
-		ERRSTMT(stmt, "failed to unpack JSON answer (`%.*s`): %s.", 
+		ERRH(stmt, "failed to unpack JSON answer (`%.*s`): %s.",
 				blen, buff, UJGetError(state));
 		SET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
 		goto end;
 	}
 	/* unpack error object */
 	if (UJObjectUnpack(o_error, 2, "SS", err_keys, &o_type, &o_reason) < 2) {
-		ERRSTMT(stmt, "failed to unpack error object (`%.*s`): %s.", 
+		ERRH(stmt, "failed to unpack error object (`%.*s`): %s.",
 				blen, buff, UJGetError(state));
 		SET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
 		goto end;
@@ -443,8 +442,8 @@ SQLRETURN attach_error(esodbc_stmt_st *stmt, char *buff, size_t blen)
 	wreason = UJReadString(o_reason, &rlen);
 	/* these return empty string in case of mismatch */
 	assert(wtype && wreason);
-	DBGSTMT(stmt, "server failures: type: [%zd] `" LWPDL "`, reason: [%zd] `" 
-			LWPDL "`, status: %d.", tlen, tlen, wtype, rlen, rlen, wreason, 
+	DBGH(stmt, "server failures: type: [%zd] `" LWPDL "`, reason: [%zd] `"
+			LWPDL "`, status: %d.", tlen, tlen, wtype, rlen, rlen, wreason,
 			UJNumericInt(o_status));
 
 	/* swprintf will fail if formated string would overrun the buffer size (as
@@ -462,7 +461,7 @@ SQLRETURN attach_error(esodbc_stmt_st *stmt, char *buff, size_t blen)
 				(int)rlen, wreason);
 	}
 	if (n < 0) {
-		ERRN("failed to print error message from server.");
+		ERRNH(stmt, "failed to print error message from server.");
 		assert(sizeof(MSG_INV_SRV_ANS) < sizeof(wbuf));
 		memcpy(wbuf, MK_WPTR(MSG_INV_SRV_ANS),
 				sizeof(MSG_INV_SRV_ANS)*sizeof(SQLWCHAR));
@@ -487,13 +486,13 @@ SQLRETURN attach_sql(esodbc_stmt_st *stmt,
 	char *u8;
 	int len;
 
-	DBGSTMT(stmt, "attaching SQL `" LWPDL "` (%zd).", sqlcnt, sql, sqlcnt);
+	DBGH(stmt, "attaching SQL `" LWPDL "` (%zd).", sqlcnt, sql, sqlcnt);
 #if 0 // FIXME
 	if (wcslen(sql) < 1256) {
 		if (wcsstr(sql, L"FROM test_emp")) {
 			sql = L"SELECT emp_no, first_name, last_name, birth_date, 2+3 AS foo FROM test_emp";
 			sqlcnt = wcslen(sql);
-			DBGSTMT(stmt, "RE-attaching SQL `" LWPDL "` (%zd).", sqlcnt,
+			DBGH(stmt, "RE-attaching SQL `" LWPDL "` (%zd).", sqlcnt,
 					sql, sqlcnt);
 		}
 	}
@@ -503,23 +502,23 @@ SQLRETURN attach_sql(esodbc_stmt_st *stmt,
 
 	len = WCS2U8(sql, (int)sqlcnt, NULL, 0);
 	if (len <= 0) {
-		ERRN("STMT@0x%p: failed to UCS2/UTF8 convert SQL `" LWPDL "` (%zd).", 
-				stmt, sqlcnt, sql, sqlcnt);
+		ERRNH(stmt, "failed to UCS2/UTF8 convert SQL `" LWPDL "` (%zd).",
+				sqlcnt, sql, sqlcnt);
 		RET_HDIAG(stmt, SQL_STATE_HY000, "UCS2/UTF8 conversion failure", 0);
 	}
-	DBGSTMT(stmt, "wide char SQL `" LWPDL "`[%zd] converts to UTF8 on %d "
+	DBGH(stmt, "wide char SQL `" LWPDL "`[%zd] converts to UTF8 on %d "
 			"octets.", sqlcnt, sql, sqlcnt, len);
 
 	u8 = malloc(len);
 	if (! u8) {
-		ERRN("failed to alloc %dB.", len);
+		ERRNH(stmt, "failed to alloc %dB.", len);
 		RET_HDIAGS(stmt, SQL_STATE_HY001);
 	}
 
 	len = WCS2U8(sql, (int)sqlcnt, u8, len);
 	if (len <= 0) { /* can it happen? it's just succeded above */
-		ERRN("STMT@0x%p: failed to UCS2/UTF8 convert SQL `" LWPDL "` (%zd).", 
-				stmt, sqlcnt, sql, sqlcnt);
+		ERRNH(stmt, "failed to UCS2/UTF8 convert SQL `" LWPDL "` (%zd).",
+				sqlcnt, sql, sqlcnt);
 		free(u8);
 		RET_HDIAG(stmt, SQL_STATE_HY000, "UCS2/UTF8 conversion failure(2)", 0);
 	}
@@ -527,7 +526,7 @@ SQLRETURN attach_sql(esodbc_stmt_st *stmt,
 	stmt->u8sql = u8;
 	stmt->sqllen = (size_t)len;
 	
-	DBGSTMT(stmt, "attached SQL `%.*s` (%zd).", len, u8, len);
+	DBGH(stmt, "attached SQL `%.*s` (%zd).", len, u8, len);
 
 	return SQL_SUCCESS;
 }
@@ -586,7 +585,7 @@ SQLRETURN EsSQLBindCol(
 	esodbc_desc_st *ard = stmt->ard;
 
 	if (BufferLength < 0) {
-		ERRSTMT(stmt, "invalid negative BufferLength: %d.", BufferLength);
+		ERRH(stmt, "invalid negative BufferLength: %d.", BufferLength);
 		RET_HDIAGS(STMH(StatementHandle), SQL_STATE_HY090);
 	}
 
@@ -709,8 +708,8 @@ static void* deferred_address(SQLSMALLINT field_id, size_t pos,
 	}
 #undef ROW_OFFSETS
 
-	DBG("rec@0x%p, field_id:%d : base@0x%p, offset=%d, elem_size=%zd", 
-			rec, field_id, base, offt, elem_size);
+	DBGH(desc->hdr.stmt, "rec@0x%p, field_id:%d : base@0x%p, offset=%d, "
+			"elem_size=%zd", rec, field_id, base, offt, elem_size);
 
 	return base ? (char *)base + offt + pos * elem_size : NULL;
 }
@@ -812,14 +811,14 @@ static SQLRETURN copy_longlong(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	/* pointer to app's buffer */
 	data_ptr = deferred_address(SQL_DESC_DATA_PTR, pos, arec);
 	if (! data_ptr) {
-		ERRSTMT(stmt, "received numeric type, but NULL data ptr.");
+		ERRH(stmt, "received numeric type, but NULL data ptr.");
 		RET_HDIAGS(stmt, SQL_STATE_HY009);
 	}
 
 	/* "To use the default mapping, an application specifies the SQL_C_DEFAULT
 	 * type identifier." */
 	target_type = arec->type == SQL_C_DEFAULT ? irec->type : arec->type;
-	DBG("target data type: %d.", target_type);
+	DBGH(stmt, "target data type: %d.", target_type);
 	switch (target_type) {
 		case SQL_C_CHAR:
 			_i64toa((int64_t)ll, buff, /*radix*/10);
@@ -870,8 +869,8 @@ static SQLRETURN copy_longlong(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			FIXME; // FIXME
 			return SQL_ERROR;
 	}
-	DBG("REC@0x%p, data_ptr@0x%p, copied long long: `%d`.", arec, data_ptr,
-			(SQLINTEGER)ll);
+	DBGH(stmt, "REC@0x%p, data_ptr@0x%p, copied long long: `%d`.", arec,
+			data_ptr, (SQLINTEGER)ll);
 
 	RET_STATE(state);
 }
@@ -910,8 +909,8 @@ static SQLRETURN wstr_to_cstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			if (out_bytes <= 0) {
 				if (WCS2U8_BUFF_INSUFFICIENT)
 					continue;
-				ERRN("failed to convert wchar* to char* for string `" LWPDL 
-						"`.", chars, wstr);
+				ERRNH(stmt, "failed to convert wchar* to char* for string `"
+						LWPDL "`.", chars, wstr);
 				RET_HDIAGS(stmt, SQL_STATE_22018);
 			} else {
 				/* conversion succeeded */
@@ -925,24 +924,24 @@ static SQLRETURN wstr_to_cstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			state = SQL_STATE_01004; /* indicate truncation */
 		}
 
-		DBG("REC@0x%p, data_ptr@0x%p, copied %zd bytes: `" LWPD "`.", arec,
-				data_ptr, out_bytes, charp);
+		DBGH(stmt, "REC@0x%p, data_ptr@0x%p, copied %zd bytes: `" LWPD "`.",
+				arec, data_ptr, out_bytes, charp);
 	} else {
-		DBG("REC@0x%p, NULL data_ptr.", arec);
+		DBGH(stmt, "REC@0x%p, NULL data_ptr.", arec);
 	}
 
 	/* if length needs to be given, calculate  it not truncated & converted */
 	if (octet_len_ptr) {
 		out_bytes = (size_t)WCS2U8(wstr, (int)chars, NULL, 0);
 		if (out_bytes <= 0) {
-			ERRN("failed to convert wchar* to char* for string `" LWPDL "`.", 
-					chars, wstr);
+			ERRNH(stmt, "failed to convert wchar* to char* for string `"
+					LWPDL "`.", chars, wstr);
 			RET_HDIAGS(stmt, SQL_STATE_22018);
 		}
 		write_copied_octets(octet_len_ptr, out_bytes, stmt->max_length,
 				irec->meta_type);
 	} else {
-		DBG("REC@0x%p, NULL octet_len_ptr.", arec);
+		DBGH(stmt, "REC@0x%p, NULL octet_len_ptr.", arec);
 	}
 
 	if (state != SQL_STATE_00000)
@@ -979,10 +978,10 @@ static SQLRETURN wstr_to_wstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			state = SQL_STATE_01004; /* indicate truncation */
 		}
 
-		DBG("REC@0x%p, data_ptr@0x%p, copied %zd bytes: `" LWPD "`.", arec,
-				data_ptr, out_bytes, widep);
+		DBGH(stmt, "REC@0x%p, data_ptr@0x%p, copied %zd bytes: `" LWPD "`.",
+				arec, data_ptr, out_bytes, widep);
 	} else {
-		DBG("REC@0x%p, NULL data_ptr", arec);
+		DBGH(stmt, "REC@0x%p, NULL data_ptr", arec);
 	}
 	
 	write_copied_octets(octet_len_ptr, chars * sizeof(*wstr), stmt->max_length,
@@ -1042,7 +1041,7 @@ static SQLRETURN wstr_to_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			RET_HDIAGS(stmt, SQL_STATE_07006);
 		}
 	} else {
-		DBG("REC@0x%p, NULL data_ptr", arec);
+		DBGH(stmt, "REC@0x%p, NULL data_ptr", arec);
 	}
 
 	return SQL_SUCCESS;
@@ -1070,7 +1069,7 @@ static SQLRETURN wstr_to_date(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		ds->month = tss.month;
 		ds->day = tss.day;
 	} else {
-		DBG("REC@0x%p, NULL data_ptr", arec);
+		DBGH(stmt, "REC@0x%p, NULL data_ptr", arec);
 	}
 
 	return SQL_SUCCESS;
@@ -1100,7 +1099,7 @@ static SQLRETURN copy_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	/* "To use the default mapping, an application specifies the SQL_C_DEFAULT
 	 * type identifier." */
 	target_type = arec->type == SQL_C_DEFAULT ? irec->type : arec->type;
-	DBG("target data type: %d.", target_type);
+	DBGH(stmt, "target data type: %d.", target_type);
 	switch (target_type) {
 		case SQL_C_CHAR:
 			return wstr_to_cstr(arec, irec, data_ptr, octet_len_ptr,
@@ -1162,14 +1161,14 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 	} while (0)
 
 	if (! UJIsArray(row)) {
-		ERRSTMT(stmt, "one '%s' (#%zd) element in result set not array; type:"
+		ERRH(stmt, "one '%s' (#%zd) element in result set not array; type:"
 				" %d.", JSON_ANSWER_ROWS, stmt->rset.vrows, UJGetType(row));
 		RET_ROW_DIAG(SQL_STATE_01S01, MSG_INV_SRV_ANS,
 				SQL_NO_COLUMN_NUMBER);
 	}
 	iter_row = UJBeginArray(row);
 	if (! iter_row) {
-		ERRSTMT(stmt, "Failed to obtain iterator on row (#%zd): %s.", rowno,
+		ERRH(stmt, "Failed to obtain iterator on row (#%zd): %s.", rowno,
 				UJGetError(stmt->rset.state));
 		RET_ROW_DIAG(SQL_STATE_01S01, MSG_INV_SRV_ANS,
 				SQL_NO_COLUMN_NUMBER);
@@ -1180,7 +1179,7 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 	for (i = 0; i < ard->count && UJIterArray(&iter_row, &obj); i ++) {
 		/* if record not bound skip it */
 		if (! REC_IS_BOUND(&ard->recs[i])) {
-			DBG("column #%d not bound, skipping it.", i + 1);
+			DBGH(stmt, "column #%d not bound, skipping it.", i + 1);
 			continue;
 		}
 		
@@ -1191,17 +1190,17 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 		
 		switch (UJGetType(obj)) {
 			case UJT_Null:
-				DBG("value [%zd, %d] is NULL.", rowno, i + 1);
+				DBGH(stmt, "value [%zd, %d] is NULL.", rowno, i + 1);
 #if 0
 				if (! arec->nullable) {
-					ERRSTMT(stmt, "received a NULL for a not nullable val.");
+					ERRH(stmt, "received a NULL for a not nullable val.");
 					RET_ROW_DIAG(SQL_STATE_HY003, "NULL value received for non"
 							" nullable data type", i + 1);
 				}
 #endif //0
 				ind_len = deferred_address(SQL_DESC_INDICATOR_PTR, pos, arec);
 				if (! ind_len) {
-					ERRSTMT(stmt, "no buffer to signal NULL value.");
+					ERRH(stmt, "no buffer to signal NULL value.");
 					RET_ROW_DIAG(SQL_STATE_22002, "Indicator variable required"
 							" but not supplied", i + 1);
 				}
@@ -1210,8 +1209,8 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 
 			case UJT_String:
 				wstr = UJReadString(obj, &len);
-				DBG("value [%zd, %d] is string: `" LWPD "`.", rowno, i + 1,
-						wstr);
+				DBGH(stmt, "value [%zd, %d] is string: `" LWPD "`.", rowno,
+						i + 1, wstr);
 				/* UJSON4C returns chars count, but 0-terminates w/o counting
 				 * the terminator */
 				assert(wstr[len] == 0);
@@ -1231,7 +1230,8 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 			case UJT_Long:
 			case UJT_LongLong:
 				ll = UJNumericLongLong(obj);
-				DBG("value [%zd, %d] is numeric: %lld.", rowno, i + 1, ll);
+				DBGH(stmt, "value [%zd, %d] is numeric: %lld.", rowno, i + 1,
+						ll);
 				ret = copy_longlong(arec, irec, pos, ll);
 				switch (ret) {
 					case SQL_SUCCESS_WITH_INFO:
@@ -1247,15 +1247,15 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 
 			case UJT_Double:
 				dbl = UJNumericFloat(obj);
-				DBG("value [%zd, %d] is double: %f.", rowno, i + 1, dbl);
+				DBGH(stmt, "value [%zd, %d] is double: %f.", rowno, i + 1, dbl);
 				ret = copy_double(arec, irec, pos, dbl);
 				switch (ret) {
-					case SQL_SUCCESS_WITH_INFO: 
+					case SQL_SUCCESS_WITH_INFO:
 						with_info = TRUE;
 						SET_ROW_DIAG(rowno, i + 1);
-					case SQL_SUCCESS: 
+					case SQL_SUCCESS:
 						break;
-					default: 
+					default:
 						SET_ROW_DIAG(rowno, i + 1);
 						return ret;
 				}
@@ -1265,7 +1265,7 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 			case UJT_True:
 			case UJT_False:
 			default:
-				ERR("unexpected object of type %d in row L#%zd/T#%zd.",
+				ERRH(stmt, "unexpected object of type %d in row L#%zd/T#%zd.",
 						UJGetType(obj), stmt->rset.vrows, stmt->rset.frows);
 				RET_ROW_DIAG(SQL_STATE_01S01, MSG_INV_SRV_ANS, i + 1);
 		}
@@ -1352,33 +1352,33 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 
 	if (! STMT_HAS_RESULTSET(stmt)) {
 		if (STMT_NODATA_FORCED(stmt)) {
-			DBGSTMT(stmt, "empty result set flag set - returning no data.");
+			DBGH(stmt, "empty result set flag set - returning no data.");
 			return SQL_NO_DATA;
 		}
-		ERRSTMT(stmt, "no resultset available on statement.");
+		ERRH(stmt, "no resultset available on statement.");
 		RET_HDIAGS(stmt, SQL_STATE_HY010);
 	}
 
-	DBGSTMT(stmt, "(`%.*s`); cursor @ %zd / %zd.", stmt->sqllen,
+	DBGH(stmt, "(`%.*s`); cursor @ %zd / %zd.", stmt->sqllen,
 			stmt->u8sql, stmt->rset.vrows, stmt->rset.nrows);
 	
-	DBGSTMT(stmt, "rowset max size: %d.", ard->array_size);
+	DBGH(stmt, "rowset max size: %d.", ard->array_size);
 	errors = 0;
 	/* for all rows in rowset/array, iterate over rows in current resultset */
 	for (i = stmt->rset.array_pos; i < ard->array_size; i ++) {
 		if (! UJIterArray(&stmt->rset.rows_iter, &row)) {
-			DBGSTMT(stmt, "ran out of rows in current result set: nrows=%zd, "
+			DBGH(stmt, "ran out of rows in current result set: nrows=%zd, "
 					"vrows=%zd.", stmt->rset.nrows, stmt->rset.vrows);
 			if (stmt->rset.eccnt) { /*do I have an Elastic cursor? */
 				stmt->rset.array_pos = i;
 				ret = post_statement(stmt);
 				if (! SQL_SUCCEEDED(ret)) {
-					ERRSTMT(stmt, "failed to fetch next results.");
+					ERRH(stmt, "failed to fetch next results.");
 					return ret;
 				}
 				return EsSQLFetch(StatementHandle);
 			} else {
-				DBGSTMT(stmt, "reached end of entire result set. fetched=%zd.",
+				DBGH(stmt, "reached end of entire result set. fetched=%zd.",
 						stmt->rset.frows);
 				/* indicate the non-processed rows in rowset */
 				if (ard->array_status_ptr)
@@ -1389,7 +1389,7 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 		}
 		ret = copy_one_row(stmt, i, row);
 		if (! SQL_SUCCEEDED(ret)) {
-			ERRSTMT(stmt, "copying row %zd failed.", stmt->rset.vrows + i + 1);
+			ERRH(stmt, "copying row %zd failed.", stmt->rset.vrows + i + 1);
 			errors ++;
 		}
 	}
@@ -1401,17 +1401,17 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 
 	/* return number of processed rows (even if 0) */
 	if (ird->rows_processed_ptr) {
-		DBGSTMT(stmt, "setting number of processed rows to: %u.", i);
+		DBGH(stmt, "setting number of processed rows to: %u.", i);
 		*ird->rows_processed_ptr = i;
 	}
 
 	if (i <= 0) {
-		DBGSTMT(stmt, "no data %sto return.", stmt->rset.vrows ? "left ": "");
+		DBGH(stmt, "no data %sto return.", stmt->rset.vrows ? "left ": "");
 		return SQL_NO_DATA;
 	}
 	
 	if (errors && i <= errors) {
-		ERRSTMT(stmt, "processing failed for all rows [%d].", errors);
+		ERRH(stmt, "processing failed for all rows [%d].", errors);
 		return SQL_ERROR;
 	}
 
@@ -1459,13 +1459,13 @@ SQLRETURN EsSQLSetPos(
 		case SQL_REFRESH:
 		case SQL_UPDATE:
 		case SQL_DELETE:
-			ERR("operation %d not supported.", Operation);
+			ERRH(StatementHandle, "operation %d not supported.", Operation);
 			RET_HDIAGS(STMH(StatementHandle), SQL_STATE_HYC00);
 		default:
-			ERR("unknown operation type: %d.", Operation);
+			ERRH(StatementHandle, "unknown operation type: %d.", Operation);
 			RET_HDIAGS(STMH(StatementHandle), SQL_STATE_HY092);
 	}
-	RET_STATE(SQL_STATE_00000);
+	return SQL_SUCCESS;
 }
 
 /*
@@ -1481,7 +1481,7 @@ SQLRETURN EsSQLBulkOperations(
 		SQLHSTMT            StatementHandle,
 		SQLSMALLINT         Operation)
 {
-	ERR("data update functions not supported");
+	ERRH(StatementHandle, "data update functions not supported");
 	RET_HDIAGS(STMH(StatementHandle), SQL_STATE_IM001);
 }
 
@@ -1489,7 +1489,7 @@ SQLRETURN EsSQLCloseCursor(SQLHSTMT StatementHandle)
 {
 	esodbc_stmt_st *stmt = STMH(StatementHandle);
 	if (! STMT_HAS_RESULTSET(stmt)) {
-		ERRSTMT(stmt, "no open cursor for statement");
+		ERRH(stmt, "no open cursor for statement");
 		RET_HDIAGS(stmt, SQL_STATE_24000);
 	}
 	return EsSQLFreeStmt(StatementHandle, SQL_CLOSE);
@@ -1522,10 +1522,10 @@ SQLRETURN EsSQLPrepareW
 	if (cchSqlStr == SQL_NTS) {
 		cchSqlStr = (SQLINTEGER)wcslen(szSqlStr);
 	} else if (cchSqlStr <= 0) {
-		ERRSTMT(stmt, "invalid statment lenght: %d.", cchSqlStr);
+		ERRH(stmt, "invalid statment lenght: %d.", cchSqlStr);
 		RET_HDIAGS(stmt, SQL_STATE_HY090);
 	}
-	DBGSTMT(stmt, "preparing `" LWPDL "` [%d]", cchSqlStr, szSqlStr, 
+	DBGH(stmt, "preparing `" LWPDL "` [%d]", cchSqlStr, szSqlStr,
 			cchSqlStr);
 	
 	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
@@ -1551,7 +1551,7 @@ SQLRETURN EsSQLExecute(SQLHSTMT hstmt)
 {
 	esodbc_stmt_st *stmt = STMH(hstmt);
 
-	DBGSTMT(stmt, "executing `%.*s` (%zd)", stmt->sqllen, stmt->u8sql,
+	DBGH(stmt, "executing `%.*s` (%zd)", stmt->sqllen, stmt->u8sql,
 			stmt->sqllen);
 	
 	return post_statement(stmt);
@@ -1582,10 +1582,10 @@ SQLRETURN EsSQLExecDirectW
 	if (cchSqlStr == SQL_NTS) {
 		cchSqlStr = (SQLINTEGER)wcslen(szSqlStr);
 	} else if (cchSqlStr <= 0) {
-		ERRSTMT(stmt, "invalid statment lenght: %d.", cchSqlStr);
+		ERRH(stmt, "invalid statment lenght: %d.", cchSqlStr);
 		RET_HDIAGS(stmt, SQL_STATE_HY090);
 	}
-	DBGSTMT(stmt, "directly executing SQL: `" LWPDL "` [%d].", cchSqlStr,
+	DBGH(stmt, "directly executing SQL: `" LWPDL "` [%d].", cchSqlStr,
 			szSqlStr, cchSqlStr);
 	
 	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
@@ -1660,10 +1660,10 @@ SQLRETURN EsSQLDescribeColW(
 	SQLRETURN ret;
 	SQLSMALLINT col_blen = -1;
 
-	DBGSTMT(stmt, "IRD@0x%p, column #%d.", stmt->ird, icol);
+	DBGH(stmt, "IRD@0x%p, column #%d.", stmt->ird, icol);
 
 	if (! STMT_HAS_RESULTSET(stmt)) {
-		ERRSTMT(stmt, "no resultset available on statement.");
+		ERRH(stmt, "no resultset available on statement.");
 		RET_HDIAGS(stmt, SQL_STATE_HY010);
 	}
 
@@ -1674,7 +1674,7 @@ SQLRETURN EsSQLDescribeColW(
 	
 	rec = get_record(stmt->ird, icol, FALSE);
 	if (! rec) {
-		ERRSTMT(stmt, "no record for columns #%d.", icol);
+		ERRH(stmt, "no record for columns #%d.", icol);
 		RET_HDIAGS(stmt, SQL_STATE_07009);
 	}
 #ifndef NDEBUG
@@ -1685,55 +1685,55 @@ SQLRETURN EsSQLDescribeColW(
 		ret = write_wptr(&stmt->hdr.diag, szColName, rec->name,
 				cchColNameMax * sizeof(*szColName), &col_blen);
 		if (! SQL_SUCCEEDED(ret)) {
-			ERRSTMT(stmt, "failed to copy column name `" LWPD "`.", rec->name);
+			ERRH(stmt, "failed to copy column name `" LWPD "`.", rec->name);
 			return ret;
 		}
 	} else {
-		DBGSTMT(stmt, "NULL column name buffer provided.");
+		DBGH(stmt, "NULL column name buffer provided.");
 	}
 
 	if (! pcchColName) {
-		ERRSTMT(stmt, "no column name lenght buffer provided.");
-		RET_HDIAG(stmt, SQL_STATE_HY090, 
+		ERRH(stmt, "no column name lenght buffer provided.");
+		RET_HDIAG(stmt, SQL_STATE_HY090,
 				"no column name lenght buffer provided", 0);
 	}
-	*pcchColName = 0 <= col_blen ? (col_blen / sizeof(*szColName)) : 
+	*pcchColName = 0 <= col_blen ? (col_blen / sizeof(*szColName)) :
 		(SQLSMALLINT)wcslen(rec->name);
-	DBGSTMT(stmt, "col #%d name has %d chars.", icol, *pcchColName);
+	DBGH(stmt, "col #%d name has %d chars.", icol, *pcchColName);
 
 	if (! pfSqlType) {
-		ERRSTMT(stmt, "no column data type buffer provided.");
-		RET_HDIAG(stmt, SQL_STATE_HY090, 
+		ERRH(stmt, "no column data type buffer provided.");
+		RET_HDIAG(stmt, SQL_STATE_HY090,
 				"no column data type buffer provided", 0);
 	}
 	*pfSqlType = rec->concise_type;
-	DBGSTMT(stmt, "col #%d has concise type=%d.", icol, *pfSqlType);
+	DBGH(stmt, "col #%d has concise type=%d.", icol, *pfSqlType);
 
 	if (! pcbColDef) {
-		ERRSTMT(stmt, "no column size buffer provided.");
+		ERRH(stmt, "no column size buffer provided.");
 		RET_HDIAG(stmt, SQL_STATE_HY090, "no column size buffer provided", 0);
 	}
 	*pcbColDef = get_col_size(rec); // TODO: set "size" of columns from type
-	DBGSTMT(stmt, "col #%d of meta type %d has size=%llu.", 
+	DBGH(stmt, "col #%d of meta type %d has size=%llu.",
 			icol, rec->meta_type, *pcbColDef);
 
 	if (! pibScale) {
-		ERRSTMT(stmt, "no column decimal digits buffer provided.");
-		RET_HDIAG(stmt, SQL_STATE_HY090, 
+		ERRH(stmt, "no column decimal digits buffer provided.");
+		RET_HDIAG(stmt, SQL_STATE_HY090,
 				"no column decimal digits buffer provided", 0);
 	}
 	*pibScale = get_col_decdigits(rec); // TODO: set "decimal digits" from type
-	DBGSTMT(stmt, "col #%d of meta type %d has decimal digits=%d.", 
+	DBGH(stmt, "col #%d of meta type %d has decimal digits=%d.",
 			icol, rec->meta_type, *pibScale);
 
 	if (! pfNullable) {
-		ERRSTMT(stmt, "no column decimal digits buffer provided.");
-		RET_HDIAG(stmt, SQL_STATE_HY090, 
+		ERRH(stmt, "no column decimal digits buffer provided.");
+		RET_HDIAG(stmt, SQL_STATE_HY090,
 				"no column decimal digits buffer provided", 0);
 	}
 	/* TODO: this would be available in SQLColumns resultset. */
 	*pfNullable = rec->nullable;
-	DBGSTMT(stmt, "col #%d nullable=%d.", icol, *pfNullable);
+	DBGH(stmt, "col #%d nullable=%d.", icol, *pfNullable);
 
 	return SQL_SUCCESS;
 }
@@ -1770,10 +1770,10 @@ SQLRETURN EsSQLColAttributeW(
 #define PNUMATTR_ASSIGN(type, value) *(type *)pNumAttr = (type)(value)
 #endif /* _WIN64 */
 
-	DBGSTMT(stmt, "IRD@0x%p, column #%d, field: %d.", ird, iCol,iField);
+	DBGH(stmt, "IRD@0x%p, column #%d, field: %d.", ird, iCol, iField);
 
 	if (! STMT_HAS_RESULTSET(stmt)) {
-		ERRSTMT(stmt, "no resultset available on statement.");
+		ERRH(stmt, "no resultset available on statement.");
 		RET_HDIAGS(stmt, SQL_STATE_HY010);
 	}
 
@@ -1784,7 +1784,7 @@ SQLRETURN EsSQLColAttributeW(
 	
 	rec = get_record(ird, iCol, FALSE);
 	if (! rec) {
-		ERRSTMT(stmt, "no record for columns #%d.", iCol);
+		ERRH(stmt, "no record for columns #%d.", iCol);
 		RET_HDIAGS(stmt, SQL_STATE_07009);
 	}
 
@@ -1821,7 +1821,7 @@ SQLRETURN EsSQLColAttributeW(
 		} while (0);
 			if (! wptr) {
 				//BUG -- TODO: re-eval, once type handling is decided.
-				ERRSTMT(stmt, "IRD@0x%p record field type %d not initialized.",
+				ERRH(stmt, "IRD@0x%p record field type %d not initialized.",
 						ird, iField);
 				*(SQLWCHAR **)pCharAttr = MK_WPTR("");
 				*pcbCharAttr = 0;
@@ -1859,7 +1859,7 @@ SQLRETURN EsSQLColAttributeW(
 			break;
 
 		default:
-			ERRSTMT(stmt, "unknown field type %d.", iField);
+			ERRH(stmt, "unknown field type %d.", iField);
 			RET_HDIAGS(stmt, SQL_STATE_HY091);
 	}
 
@@ -1872,17 +1872,17 @@ SQLRETURN EsSQLRowCount(_In_ SQLHSTMT StatementHandle, _Out_ SQLLEN* RowCount)
 	esodbc_stmt_st *stmt = STMH(StatementHandle);
 	
 	if (! STMT_HAS_RESULTSET(stmt)) {
-		ERRSTMT(stmt, "no resultset available on statement.");
+		ERRH(stmt, "no resultset available on statement.");
 		RET_HDIAGS(stmt, SQL_STATE_HY010);
 	}
 	
-	DBGSTMT(stmt, "current resultset rows count: %zd.", stmt->rset.nrows);
+	DBGH(stmt, "current resultset rows count: %zd.", stmt->rset.nrows);
 	*RowCount = (SQLLEN)stmt->rset.nrows;
 
 	if (stmt->rset.eccnt) {
 		/* fetch_size or scroller size chunks the result */
-		WARN("this function will only return the row count of the partial "
-				"result set available.");
+		WARNH(stmt, "this function will only return the row count of the "
+				"partial result set available.");
 		/* returning a _WITH_INFO here will fail the query for MSQRY32.. */
 		//RET_HDIAG(stmt, SQL_STATE_01000, "row count is for partial result "
 		//		"only", 0);
