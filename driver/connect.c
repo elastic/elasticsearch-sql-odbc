@@ -43,8 +43,6 @@
 #define CONNSTR_KW_PACKING			"Packing"
 #define CONNSTR_KW_MAX_FETCH_SIZE	"MaxFetchSize"
 #define CONNSTR_KW_MAX_BODY_SIZE_MB	"MaxBodySizeMB"
-#define CONNSTR_KW_TRACE_FILE		"TraceFile"
-#define CONNSTR_KW_TRACE_LEVEL		"TraceLevel"
 
 #define ODBC_REG_SUBKEY_PATH	"SOFTWARE\\ODBC\\ODBC.INI"
 #define REG_HKLM				"HKEY_LOCAL_MACHINE"
@@ -540,8 +538,6 @@ static BOOL assign_config_attr(config_attrs_st *attrs,
 		{&MK_WSTR(CONNSTR_KW_PACKING), &attrs->packing},
 		{&MK_WSTR(CONNSTR_KW_MAX_FETCH_SIZE), &attrs->max_fetch_size},
 		{&MK_WSTR(CONNSTR_KW_MAX_BODY_SIZE_MB), &attrs->max_body_size},
-		{&MK_WSTR(CONNSTR_KW_TRACE_FILE), &attrs->trace_file},
-		{&MK_WSTR(CONNSTR_KW_TRACE_LEVEL), &attrs->trace_level},
 		{NULL, NULL}
 	};
 
@@ -819,8 +815,6 @@ static BOOL write_connection_string(config_attrs_st *attrs,
 		{&attrs->packing, CONNSTR_KW_PACKING},
 		{&attrs->max_fetch_size, CONNSTR_KW_MAX_FETCH_SIZE},
 		{&attrs->max_body_size, CONNSTR_KW_MAX_BODY_SIZE_MB},
-		{&attrs->trace_file, CONNSTR_KW_TRACE_FILE},
-		{&attrs->trace_level, CONNSTR_KW_TRACE_LEVEL},
 		{NULL, NULL}
 	};
 
