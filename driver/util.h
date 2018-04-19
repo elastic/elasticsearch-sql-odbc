@@ -163,8 +163,8 @@ size_t json_escape(const char *jin, size_t inlen, char *jout, size_t outlen);
 #define PFWP_DESC		"%S"
 #define PFWP_LDESC		"%.*S"
 /* wprintf char pointer descriptor */
-#define WPFCP_DESC		L"%S 
-#define WPFCP_LDESC		L"%.*S 
+#define WPFCP_DESC		L"%S"
+#define WPFCP_LDESC		L"%.*S"
 /* printf char pointer descriptor */
 #define PFCP_DESC		"%s"
 #define PFCP_LDESC		"%.*s"
