@@ -61,7 +61,7 @@ void clear_resultset(esodbc_stmt_st *stmt)
 	memset(&stmt->rset, 0, sizeof(stmt->rset));
 }
 
-static SQLSMALLINT type_elastic2csql(const wchar_t *type_name, size_t len)
+static SQLSMALLINT type_elastic2csql(const SQLWCHAR *type_name, size_t len)
 {
 	switch (len) {
 		// TODO: take in the precision for a better
@@ -70,17 +70,17 @@ static SQLSMALLINT type_elastic2csql(const wchar_t *type_name, size_t len)
 		// case sizeof(JSON_COL_BOOLEAN) - 1:
 		case sizeof(JSON_COL_INTEGER) - 1:
 			switch(tolower(type_name[0])) {
-				case (wchar_t)'i': /* integer */
+				case (SQLWCHAR)'i': /* integer */
 					if (wmemncasecmp(type_name, MK_WPTR(JSON_COL_INTEGER),
 								len) == 0)
 						return SQL_C_SLONG;
 					break;
-				case (wchar_t)'b': /* boolean */
+				case (SQLWCHAR)'b': /* boolean */
 					if (wmemncasecmp(type_name, MK_WPTR(JSON_COL_BOOLEAN),
 								len) == 0)
 						return SQL_C_UTINYINT;
 					break;
-				case (wchar_t)'k': /* keyword */
+				case (SQLWCHAR)'k': /* keyword */
 					if (wmemncasecmp(type_name, MK_WPTR(JSON_COL_KEYWORD),
 								len) == 0)
 						return SQL_C_CHAR;
@@ -90,22 +90,22 @@ static SQLSMALLINT type_elastic2csql(const wchar_t *type_name, size_t len)
 		// case sizeof(JSON_COL_DATE) - 1:
 		case sizeof(JSON_COL_TEXT) - 1:
 			switch(tolower(type_name[0])) {
-				case (wchar_t)'t':
+				case (SQLWCHAR)'t':
 					if (! wmemncasecmp(type_name, MK_WPTR(JSON_COL_TEXT), len))
 						// TODO: char/longvarchar/wchar/wvarchar?
 						return SQL_C_CHAR;
 					break;
-				case (wchar_t)'d':
+				case (SQLWCHAR)'d':
 					if (! wmemncasecmp(type_name, MK_WPTR(JSON_COL_DATE), len))
 						// TODO: time/timestamp
 						return SQL_C_TYPE_DATE;
 					break;
-				case (wchar_t)'b':
+				case (SQLWCHAR)'b':
 					if (! wmemncasecmp(type_name, MK_WPTR(JSON_COL_BYTE), len))
 						return SQL_C_STINYINT;
 					break;
 #if 1 // BUG FIXME
-				case (wchar_t)'n':
+				case (SQLWCHAR)'n':
 					if (! wmemncasecmp(type_name, MK_WPTR("null"), len))
 						// TODO: time/timestamp
 						return SQL_C_SSHORT;
@@ -213,7 +213,7 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 		rec = &ird->recs[recno]; // +recno
 
 		col_wname = UJReadString(name_o, &len);
-		assert(sizeof(*col_wname) == sizeof(SQLWCHAR)); /* TODO: no ANSI */
+		ASSERT_INTEGER_TYPES_EQUAL(wchar_t, SQLWCHAR);
 		rec->name = len ? (SQLWCHAR *)col_wname : MK_WPTR("");
 
 		col_wtype = UJReadString(type_o, &len);
