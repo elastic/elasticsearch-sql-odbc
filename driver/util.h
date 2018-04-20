@@ -28,9 +28,18 @@
 
 #include <inttypes.h>
 #include <wchar.h>
+#include <assert.h>
 
 #include "sql.h"
 #include "sqlext.h"
+
+/*
+ * Assert two integral types have same storage and sign.
+ */
+#define ASSERT_INTEGER_TYPES_EQUAL(a, b) \
+	assert((sizeof(a) == sizeof(b)) && \
+			( (0 < (a)0 - 1 && 0 < (b)0 - 1) || \
+			  (0 > (a)0 - 1 && 0 > (b)0 - 1) ))
 
 /* 
  * Stringifying in two preproc. passes 
@@ -54,9 +63,21 @@ typedef struct cstr {
  */
 int ansi_w2c(const SQLWCHAR *src, char *dst, size_t chars);
 /*
- * Compare two wchar_t object, case INsensitive.
+ * Compare two SQLWCHAR object, case INsensitive.
  */
-int wmemncasecmp(const wchar_t *a, const wchar_t *b, size_t len);
+int wmemncasecmp(const SQLWCHAR *a, const SQLWCHAR *b, size_t len);
+/*
+ * Compare two zero-terminated SQLWCHAR* objects, until a 0 is encountered in
+ * either of them or until 'count' characters are evaluated. If 'count'
+ * parameter is negative, it is ignored.
+ *
+ * This is useful in comparing SQL strings which the API allows to be passed 
+ * either as 0-terminated or not (SQL_NTS).
+ * The function does a single pass (no length evaluation of the strings).
+ * wmemcmp() might read over the boundary of one of the objects, if the
+ * provided 'count' paramter is not the minimum of the strings' length.
+ */
+int wszmemcmp(const SQLWCHAR *a, const SQLWCHAR *b, long count);
 
 typedef struct wstr {
 	SQLWCHAR *str;

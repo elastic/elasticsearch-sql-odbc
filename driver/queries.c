@@ -72,7 +72,7 @@ void clear_resultset(esodbc_stmt_st *stmt)
 	memset(&stmt->rset, 0, sizeof(stmt->rset));
 }
 
-static SQLSMALLINT type_elastic2csql(const wchar_t *type_name, size_t len)
+static SQLSMALLINT type_elastic2csql(const SQLWCHAR *type_name, size_t len)
 {
 	switch (len) {
 		// TODO: take in the precision for a better
@@ -81,17 +81,17 @@ static SQLSMALLINT type_elastic2csql(const wchar_t *type_name, size_t len)
 		// case sizeof(JSON_COL_BOOLEAN) - 1:
 		case sizeof(JSON_COL_INTEGER) - 1:
 			switch(tolower(type_name[0])) {
-				case (wchar_t)'i': /* integer */
+				case (SQLWCHAR)'i': /* integer */
 					if (wmemncasecmp(type_name, MK_WPTR(JSON_COL_INTEGER),
 								len) == 0)
 						return SQL_C_SLONG;
 					break;
-				case (wchar_t)'b': /* boolean */
+				case (SQLWCHAR)'b': /* boolean */
 					if (wmemncasecmp(type_name, MK_WPTR(JSON_COL_BOOLEAN),
 								len) == 0)
 						return SQL_C_UTINYINT;
 					break;
-				case (wchar_t)'k': /* keyword */
+				case (SQLWCHAR)'k': /* keyword */
 					if (wmemncasecmp(type_name, MK_WPTR(JSON_COL_KEYWORD),
 								len) == 0)
 						return SQL_C_CHAR;
@@ -101,22 +101,22 @@ static SQLSMALLINT type_elastic2csql(const wchar_t *type_name, size_t len)
 		// case sizeof(JSON_COL_DATE) - 1:
 		case sizeof(JSON_COL_TEXT) - 1: 
 			switch(tolower(type_name[0])) {
-				case (wchar_t)'t':
+				case (SQLWCHAR)'t':
 					if (! wmemncasecmp(type_name, MK_WPTR(JSON_COL_TEXT), len))
 						// TODO: char/longvarchar/wchar/wvarchar?
 						return SQL_C_CHAR;
 					break;
-				case (wchar_t)'d':
+				case (SQLWCHAR)'d':
 					if (! wmemncasecmp(type_name, MK_WPTR(JSON_COL_DATE), len))
 						// TODO: time/timestamp
 						return SQL_C_TYPE_DATE;
 					break;
-				case (wchar_t)'b':
+				case (SQLWCHAR)'b':
 					if (! wmemncasecmp(type_name, MK_WPTR(JSON_COL_BYTE), len))
 						return SQL_C_STINYINT;
 					break;
 #if 1 // BUG FIXME
-				case (wchar_t)'n':
+				case (SQLWCHAR)'n':
 					if (! wmemncasecmp(type_name, MK_WPTR("null"), len))
 						// TODO: time/timestamp
 						return SQL_C_SSHORT;
@@ -223,11 +223,12 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 		rec = &ird->recs[recno]; // +recno
 
 		col_wname = UJReadString(name_o, &len);
-		assert(sizeof(*col_wname) == sizeof(SQLWCHAR)); /* TODO: no ANSI */
-		rec->name = (SQLWCHAR *)col_wname;
-		rec->unnamed = SQL_NAMED;
+		ASSERT_INTEGER_TYPES_EQUAL(wchar_t, SQLWCHAR);
+		rec->name = len ? (SQLWCHAR *)col_wname : MK_WPTR("");
 
 		col_wtype = UJReadString(type_o, &len);
+		/* If the type is unknown, an empty string is returned." */
+		rec->type_name = len ? (SQLWCHAR *)col_wtype : MK_WPTR("");
 		/* 
 		 * TODO: to ELASTIC types, rather?
 		 * TODO: Read size (precision/lenght) and dec-dig(scale/precision)
@@ -250,8 +251,19 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 		set_col_decdigits(rec);
 
 		/* TODO: set all settable fields */
+
+		/* "If a base column name does not exist (as in the case of columns
+		 * that are expressions), then this variable contains an empty
+		 * string." */
 		rec->base_column_name = MK_WPTR("");
+		/* "If a column does not have a label, the column name is returned. If
+		 * the column is unlabeled and unnamed, an empty string is ret" */
+		rec->label = rec->name ? rec->name : MK_WPTR("");
 		rec->display_size = 256;
+
+		assert(rec->name && rec->label);
+		rec->unnamed = (rec->name[0] || rec->label[0]) ?
+			SQL_NAMED : SQL_UNNAMED;
 
 #ifndef NDEBUG
 		//dump_record(rec);
@@ -828,10 +840,27 @@ static SQLRETURN copy_longlong(desc_rec_st *arec, desc_rec_st *irec,
 					irec->meta_type);
 			break;
 
-		case SQL_C_SLONG:
+		case SQL_C_STINYINT:
+			*(SQLSCHAR *)data_ptr = (SQLSCHAR)ll;
+			write_copied_octets(octet_len_ptr, sizeof(SQLSCHAR), 
+					stmt->max_length, irec->meta_type);
+			break;
+
 		case SQL_C_SSHORT:
+			*(SQLSMALLINT *)data_ptr = (SQLSMALLINT)ll;
+			write_copied_octets(octet_len_ptr, sizeof(SQLSMALLINT), 
+					stmt->max_length, irec->meta_type);
+			break;
+
+		case SQL_C_SLONG:
 			*(SQLINTEGER *)data_ptr = (SQLINTEGER)ll;
 			write_copied_octets(octet_len_ptr, sizeof(SQLINTEGER), 
+					stmt->max_length, irec->meta_type);
+			break;
+		
+		case SQL_C_SBIGINT:
+			*(SQLBIGINT *)data_ptr = (SQLBIGINT)ll;
+			write_copied_octets(octet_len_ptr, sizeof(SQLBIGINT), 
 					stmt->max_length, irec->meta_type);
 			break;
 
@@ -963,6 +992,35 @@ static SQLRETURN wstr_to_wstr(desc_rec_st *arec, desc_rec_st *irec,
 }
 
 
+static BOOL wstr_to_timestamp_struct(const wchar_t *wstr, size_t chars,
+		TIMESTAMP_STRUCT *tss)
+{
+	char buff[sizeof(ISO8601_TEMPLATE)/*+\0*/];
+	int len;
+	timestamp_t tsp;
+	struct tm tmp;
+
+	DBG("converting ISO 8601 `" LWPDL "` to timestamp.", chars, wstr);
+
+	len = (int)(chars < sizeof(buff) - 1 ? chars : sizeof(buff) - 1);
+	len = ansi_w2c(wstr, buff, len);
+	if (len <= 0 || timestamp_parse(buff, len - 1, &tsp) || 
+			(! timestamp_to_tm_local(&tsp, &tmp))) {
+		ERR("data `" LWPDL "` not an ANSI ISO 8601 format.", chars, wstr);
+		return FALSE;
+	}
+	TM_TO_TIMESTAMP_STRUCT(&tmp, tss);
+	tss->fraction = tsp.nsec / 1000000;
+
+	DBG("parsed ISO 8601: `%d-%d-%dT%d:%d:%d.%u+%dm`.", 
+			tss->year, tss->month, tss->day, 
+			tss->hour, tss->minute, tss->second, tss->fraction, 
+			tsp.offset);
+
+	return TRUE;
+}
+
+
 /*
  * -> SQL_C_TYPE_TIMESTAMP
  */
@@ -972,31 +1030,43 @@ static SQLRETURN wstr_to_timestamp(desc_rec_st *arec, desc_rec_st *irec,
 {
 	esodbc_stmt_st *stmt = arec->desc->stmt;
 	TIMESTAMP_STRUCT *tss = (TIMESTAMP_STRUCT *)data_ptr;
-	char buff[sizeof(ISO8601_TEMPLATE)/*+\0*/];
-	int len;
-	timestamp_t tsp;
-	struct tm tmp;
 
-	DBG("converting ISO 8601 `" LWPDL "` to timestamp.", chars, wstr);
-
-	if (octet_len_ptr)
+	if (octet_len_ptr) {
 		*octet_len_ptr = sizeof(*tss);
+	}
 
 	if (data_ptr) {
-		len = (int)(chars < sizeof(buff) - 1 ? chars : sizeof(buff) - 1);
-		len = ansi_w2c(wstr, buff, len);
-		if (len <= 0 || timestamp_parse(buff, len - 1, &tsp) || 
-				(! timestamp_to_tm_local(&tsp, &tmp))) {
-			ERR("data `" LWPDL "` not an ANSI ISO 8601 format.", chars, wstr);
+		if (! wstr_to_timestamp_struct(wstr, chars, tss)) {
 			RET_HDIAGS(stmt, SQL_STATE_07006);
 		}
-		TM_TO_TIMESTAMP_STRUCT(&tmp, tss);
-		tss->fraction = tsp.nsec / 1000000;
+	} else {
+		DBG("REC@0x%p, NULL data_ptr", arec);
+	}
 
-		DBG("parsed ISO 8601: `%d-%d-%dT%d:%d:%d.%u+%dm`.", 
-				tss->year, tss->month, tss->day, 
-				tss->hour, tss->minute, tss->second, tss->fraction, 
-				tsp.offset);
+	return SQL_SUCCESS;
+}
+
+/*
+ * -> SQL_C_TYPE_DATE
+ */
+static SQLRETURN wstr_to_date(desc_rec_st *arec, desc_rec_st *irec, 
+		void *data_ptr, SQLLEN *octet_len_ptr,
+		const wchar_t *wstr, size_t chars)
+{
+	esodbc_stmt_st *stmt = arec->desc->stmt;
+	DATE_STRUCT *ds = (DATE_STRUCT *)data_ptr;
+	TIMESTAMP_STRUCT tss;
+
+	if (octet_len_ptr) {
+		*octet_len_ptr = sizeof(*ds);
+	}
+
+	if (data_ptr) {
+		if (! wstr_to_timestamp_struct(wstr, chars, &tss))
+			RET_HDIAGS(stmt, SQL_STATE_07006);
+		ds->year = tss.year;
+		ds->month = tss.month;
+		ds->day = tss.day;
 	} else {
 		DBG("REC@0x%p, NULL data_ptr", arec);
 	}
@@ -1039,6 +1109,10 @@ static SQLRETURN copy_string(desc_rec_st *arec, desc_rec_st *irec,
 		case SQL_C_TYPE_TIMESTAMP:
 			return wstr_to_timestamp(arec, irec, data_ptr, octet_len_ptr, 
 					wstr, chars);
+		case SQL_C_TYPE_DATE:
+			return wstr_to_date(arec, irec, data_ptr, octet_len_ptr, 
+					wstr, chars);
+
 		default:
 			// FIXME: convert data
 			FIXME;
@@ -1732,9 +1806,9 @@ SQLRETURN EsSQLColAttributeW(
 		/* SQLWCHAR* */
 		do {
 		case SQL_DESC_BASE_COLUMN_NAME: wptr = rec->base_column_name; break;
+		case SQL_DESC_LABEL: wptr = rec->label; break;
 		case SQL_DESC_BASE_TABLE_NAME: wptr = rec->base_table_name; break;
 		case SQL_DESC_CATALOG_NAME: wptr = rec->catalog_name; break;
-		case SQL_DESC_LABEL: wptr = rec->label; break;
 		case SQL_DESC_LITERAL_PREFIX: wptr = rec->literal_prefix; break;
 		case SQL_DESC_LITERAL_SUFFIX: wptr = rec->literal_suffix; break;
 		case SQL_DESC_LOCAL_TYPE_NAME: wptr = rec->type_name; break;

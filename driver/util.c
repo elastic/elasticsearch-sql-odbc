@@ -95,7 +95,7 @@ int ansi_w2c(const SQLWCHAR *src, char *dst, size_t chars)
 	return i + 1;
 }
 
-int wmemncasecmp(const wchar_t *a, const wchar_t *b, size_t len)
+int wmemncasecmp(const SQLWCHAR *a, const SQLWCHAR *b, size_t len)
 {
 	size_t i;
 	int diff = 0; /* if len == 0 */
@@ -107,6 +107,22 @@ int wmemncasecmp(const wchar_t *a, const wchar_t *b, size_t len)
 	//DBG("`" LWPDL "` vs `" LWPDL "` => %d (len=%zd, i=%d).", 
 	//		len, a, len, b, diff, len, i);
 	return diff;
+}
+
+int wszmemcmp(const SQLWCHAR *a, const SQLWCHAR *b, long count)
+{
+	int diff;
+
+	for (; *a && *b && count; a ++, b ++, count --) {
+		diff = *a - *b;
+		if (diff) {
+			return diff;
+		}
+	}
+	if (! count) {
+		return 0;
+	}
+	return *a - *b;
 }
 
 /* retuns the lenght of a buffer to hold the escaped variant of the unescaped

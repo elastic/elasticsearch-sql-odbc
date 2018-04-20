@@ -918,42 +918,77 @@ SQLRETURN SQL_API SQLColumnsW
 	return ret;
 }
 
-#if WITH_EMPTY
 SQLRETURN SQL_API SQLForeignKeysW
 (
-    SQLHSTMT           hstmt,
-    _In_reads_opt_(cchPkCatalogName) SQLWCHAR*    szPkCatalogName,
-    SQLSMALLINT        cchPkCatalogName,
-    _In_reads_opt_(cchPkSchemaName) SQLWCHAR*     szPkSchemaName,
-    SQLSMALLINT        cchPkSchemaName,
-    _In_reads_opt_(cchPkTableName) SQLWCHAR*      szPkTableName,
-    SQLSMALLINT        cchPkTableName,
-    _In_reads_opt_(cchFkCatalogName) SQLWCHAR*    szFkCatalogName,
-    SQLSMALLINT        cchFkCatalogName,
-    _In_reads_opt_(cchFkSchemaName) SQLWCHAR*     szFkSchemaName,
-    SQLSMALLINT        cchFkSchemaName,
-    _In_reads_opt_(cchFkTableName) SQLWCHAR*      szFkTableName,
-    SQLSMALLINT        cchFkTableName
+		SQLHSTMT           hstmt,
+		_In_reads_opt_(cchPkCatalogName) SQLWCHAR*    szPkCatalogName,
+		SQLSMALLINT        cchPkCatalogName,
+		_In_reads_opt_(cchPkSchemaName) SQLWCHAR*     szPkSchemaName,
+		SQLSMALLINT        cchPkSchemaName,
+		_In_reads_opt_(cchPkTableName) SQLWCHAR*      szPkTableName,
+		SQLSMALLINT        cchPkTableName,
+		_In_reads_opt_(cchFkCatalogName) SQLWCHAR*    szFkCatalogName,
+		SQLSMALLINT        cchFkCatalogName,
+		_In_reads_opt_(cchFkSchemaName) SQLWCHAR*     szFkSchemaName,
+		SQLSMALLINT        cchFkSchemaName,
+		_In_reads_opt_(cchFkTableName) SQLWCHAR*      szFkTableName,
+		SQLSMALLINT        cchFkTableName
 )
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE13(_IN, "ppdpdpdpdpdpd", hstmt, 
+			szPkCatalogName, cchPkCatalogName,
+			szPkSchemaName, cchPkSchemaName,
+			szPkTableName, cchPkTableName,
+			szFkCatalogName, cchFkCatalogName,
+			szFkSchemaName, cchFkSchemaName,
+			szFkTableName, cchFkTableName);
+	ret = EsSQLForeignKeysW(hstmt, 
+			szPkCatalogName, cchPkCatalogName,
+			szPkSchemaName, cchPkSchemaName,
+			szPkTableName, cchPkTableName,
+			szFkCatalogName, cchFkCatalogName,
+			szFkSchemaName, cchFkSchemaName,
+			szFkTableName, cchFkTableName);
+	TRACE14(_OUT, "dpWdWdWdWdWdWd", ret, hstmt,
+			szPkCatalogName, cchPkCatalogName,
+			szPkSchemaName, cchPkSchemaName,
+			szPkTableName, cchPkTableName,
+			szFkCatalogName, cchFkCatalogName,
+			szFkSchemaName, cchFkSchemaName,
+			szFkTableName, cchFkTableName);
+	return ret;
 }
 
 
 SQLRETURN SQL_API SQLPrimaryKeysW
 (
-    SQLHSTMT           hstmt,
-    _In_reads_opt_(cchCatalogName) SQLWCHAR*    szCatalogName,
-    SQLSMALLINT        cchCatalogName,
-    _In_reads_opt_(cchSchemaName) SQLWCHAR*     szSchemaName,
-    SQLSMALLINT        cchSchemaName,
-    _In_reads_opt_(cchTableName) SQLWCHAR*      szTableName,
-    SQLSMALLINT        cchTableName
+		SQLHSTMT           hstmt,
+		_In_reads_opt_(cchCatalogName) SQLWCHAR*    szCatalogName,
+		SQLSMALLINT        cchCatalogName,
+		_In_reads_opt_(cchSchemaName) SQLWCHAR*     szSchemaName,
+		SQLSMALLINT        cchSchemaName,
+		_In_reads_opt_(cchTableName) SQLWCHAR*      szTableName,
+		SQLSMALLINT        cchTableName
 )
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE7(_IN, "ppdpdpd", hstmt, 
+			szCatalogName, cchCatalogName,
+			szSchemaName, cchSchemaName,
+			szTableName, cchTableName);
+	ret = EsSQLPrimaryKeysW(hstmt, 
+			szCatalogName, cchCatalogName,
+			szSchemaName, cchSchemaName,
+			szTableName, cchTableName);
+	TRACE8(_OUT, "dpWdWdWd", ret, hstmt,
+			szCatalogName, cchCatalogName,
+			szSchemaName, cchSchemaName,
+			szTableName, cchTableName);
+	return ret;
 }
 
+#if WITH_EMPTY
 SQLRETURN SQL_API SQLProcedureColumnsW
 (
     SQLHSTMT           hstmt,

@@ -43,7 +43,9 @@
 #define CONNSTR_KW_DSN				"DSN"
 #define CONNSTR_KW_PWD				"PWD"
 #define CONNSTR_KW_UID				"UID"
-#define CONNSTR_KW_ADDRESS			"Address"
+#define CONNSTR_KW_SAVEFILE			"SAVEFILE"
+#define CONNSTR_KW_FILEDSN			"FILEDSN"
+#define CONNSTR_KW_SERVER			"Server"
 #define CONNSTR_KW_PORT				"Port"
 #define CONNSTR_KW_SECURE			"Secure"
 #define CONNSTR_KW_TIMEOUT			"Timeout"
@@ -71,7 +73,9 @@ typedef struct {
 	wstr_st dsn;
 	wstr_st pwd;
 	wstr_st uid;
-	wstr_st address;
+	wstr_st savefile;
+	wstr_st filedsn;
+	wstr_st server;
 	wstr_st port;
 	wstr_st secure;
 	wstr_st timeout;
@@ -536,7 +540,9 @@ static BOOL assign_config_attr(config_attrs_st *attrs,
 		{&MK_WSTR(CONNSTR_KW_DSN), &attrs->dsn},
 		{&MK_WSTR(CONNSTR_KW_PWD), &attrs->pwd},
 		{&MK_WSTR(CONNSTR_KW_UID), &attrs->uid},
-		{&MK_WSTR(CONNSTR_KW_ADDRESS), &attrs->address},
+		{&MK_WSTR(CONNSTR_KW_SAVEFILE), &attrs->savefile},
+		{&MK_WSTR(CONNSTR_KW_FILEDSN), &attrs->filedsn},
+		{&MK_WSTR(CONNSTR_KW_SERVER), &attrs->server},
 		{&MK_WSTR(CONNSTR_KW_PORT), &attrs->port},
 		{&MK_WSTR(CONNSTR_KW_SECURE), &attrs->secure},
 		{&MK_WSTR(CONNSTR_KW_TIMEOUT), &attrs->timeout},
@@ -771,7 +777,7 @@ static BOOL parse_connection_string(config_attrs_st *attrs,
 		DBG("read connection string attribute: `" LWPDL "` = `" LWPDL "`.", 
 				LWSTR(&keyword), LWSTR(&value));
 		if (! assign_config_attr(attrs, &keyword, &value, TRUE))
-			ERR("keyword '" LWPDL "' is unknown, ignoring it.", 
+			WARN("keyword '" LWPDL "' is unknown, ignoring it.",
 					LWSTR(&keyword));
 	}
 
@@ -812,7 +818,9 @@ static BOOL write_connection_string(config_attrs_st *attrs,
 		{&attrs->dsn, CONNSTR_KW_DSN},
 		{&attrs->pwd, CONNSTR_KW_PWD},
 		{&attrs->uid, CONNSTR_KW_UID},
-		{&attrs->address, CONNSTR_KW_ADDRESS},
+		{&attrs->savefile, CONNSTR_KW_SAVEFILE},
+		{&attrs->filedsn, CONNSTR_KW_FILEDSN},
+		{&attrs->server, CONNSTR_KW_SERVER},
 		{&attrs->port, CONNSTR_KW_PORT},
 		{&attrs->secure, CONNSTR_KW_SECURE},
 		{&attrs->timeout, CONNSTR_KW_TIMEOUT},
@@ -885,11 +893,11 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 	secure = wstr2bool(&attrs->secure);
 	cnt = swprintf(urlw, sizeof(urlw)/sizeof(urlw[0]),
 			L"http" WPFCP_DESC "://" WPFWP_LDESC ":" WPFWP_LDESC
-				ELASTIC_SQL_PATH, secure ? "s" : "", LWSTR(&attrs->address),
+				ELASTIC_SQL_PATH, secure ? "s" : "", LWSTR(&attrs->server),
 				LWSTR(&attrs->port));
 	if (cnt < 0) {
-		ERRN("failed to print URL out of address: `" LWPDL "` [%zd], "
-				"port: `" LWPDL "` [%zd].", LWSTR(&attrs->address),
+		ERRN("failed to print URL out of server: `" LWPDL "` [%zd], "
+				"port: `" LWPDL "` [%zd].", LWSTR(&attrs->server),
 				LWSTR(&attrs->port));
 		goto err;
 	}
@@ -1008,8 +1016,8 @@ err:
 static inline void assign_defaults(config_attrs_st *attrs)
 {
 	/* assign defaults where not assigned and applicable */
-	if (! attrs->address.cnt)
-		attrs->address = MK_WSTR(ESODBC_DEF_HOST);
+	if (! attrs->server.cnt)
+		attrs->server = MK_WSTR(ESODBC_DEF_SERVER);
 	if (! attrs->port.cnt)
 		attrs->port = MK_WSTR(ESODBC_DEF_PORT);
 	if (! attrs->secure.cnt)
@@ -1079,7 +1087,7 @@ static SQLRETURN do_connect(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 		return ret;
 	}
 
-	/* perform a connection test, to fail quickly if wrong address/port AND
+	/* perform a connection test, to fail quickly if wrong server/port AND
 	 * populate the DNS cache; this won't guarantee succesful post'ing, tho! */
 	ret = test_connect(dbc->curl);
 	/* still ok if fails */
@@ -1440,6 +1448,16 @@ SQLRETURN EsSQLSetConnectAttrW(
 			dbc->async_enable = (SQLULEN)Value;
 			break;
 
+		case SQL_ATTR_QUIET_MODE:
+			DBG("DBC@0x%p setting window handler to 0x%p.", dbc, Value);
+			dbc->hwin = (HWND)Value;
+			break;
+
+		case SQL_ATTR_TXN_ISOLATION:
+			DBG("DBC@0x%p setting transaction isolation to: %u.", dbc,
+					(SQLUINTEGER)(uintptr_t)Value);
+			dbc->txn_isolation = (SQLUINTEGER)(uintptr_t)Value;
+			break;
 
 		default:
 			ERR("unknown Attribute: %d.", Attribute);
@@ -1517,6 +1535,17 @@ SQLRETURN EsSQLGetConnectAttrW(
 			*(SQLULEN *)ValuePtr = dbc->async_enable;
 			break;
 
+		case SQL_ATTR_QUIET_MODE:
+			DBG("DBC@0x%p getting window handler 0x%p.", dbc, dbc->hwin);
+			*(HWND *)ValuePtr = dbc->hwin;
+			break;
+
+		case SQL_ATTR_TXN_ISOLATION:
+			DBG("DBC@0x%p getting transaction isolation: %u.", dbc,
+					dbc->txn_isolation);
+			*(SQLUINTEGER *)ValuePtr = dbc->txn_isolation;
+			break;
+
 		case SQL_ATTR_ACCESS_MODE:
 		case SQL_ATTR_ASYNC_DBC_EVENT:
 		case SQL_ATTR_ASYNC_DBC_FUNCTIONS_ENABLE:
@@ -1530,12 +1559,10 @@ SQLRETURN EsSQLGetConnectAttrW(
 		case SQL_ATTR_LOGIN_TIMEOUT:
 		case SQL_ATTR_ODBC_CURSORS:
 		case SQL_ATTR_PACKET_SIZE:
-		case SQL_ATTR_QUIET_MODE:
 		case SQL_ATTR_TRACE:
 		case SQL_ATTR_TRACEFILE:
 		case SQL_ATTR_TRANSLATE_LIB:
 		case SQL_ATTR_TRANSLATE_OPTION:
-		case SQL_ATTR_TXN_ISOLATION:
 
 		default:
 			// FIXME: add the other attributes
