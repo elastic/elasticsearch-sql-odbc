@@ -234,6 +234,7 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			dbc->dsn.str = MK_WPTR(""); /* see explanation in cleanup_dbc() */
 			dbc->metadata_id = SQL_FALSE;
 			dbc->async_enable = SQL_ASYNC_ENABLE_OFF;
+			dbc->txn_isolation = ESODBC_DEF_TXN_ISOLATION;
 
 			dbc->env = ENVH(InputHandle);
 			/* rest of initialization done at connect time */
@@ -712,15 +713,19 @@ SQLRETURN EsSQLSetStmtAttrW(
 				FIXME;
 			}	
 		case SQL_ATTR_APP_PARAM_DESC:
-			// FIXME: same logic for APD as above
+			// FIXME: same logic for ARD as above (part of params passing)
 			FIXME;
 			break;
 
 		case SQL_ATTR_IMP_ROW_DESC:
 		case SQL_ATTR_IMP_PARAM_DESC:
-			ERR("trying to set IxD (%d) descriptor (to @0x%p).", Attribute, 
+			ERR("trying to set IxD (%d) descriptor (to @0x%p).", Attribute,
 					ValuePtr);
 			RET_HDIAGS(stmt, SQL_STATE_HY017);
+
+		case SQL_ATTR_ROW_NUMBER:
+			ERR("row number attribute is read-only.");
+			RET_HDIAGS(stmt, SQL_STATE_HY024);
 
 		case SQL_ATTR_METADATA_ID:
 			DBG("setting metadata_id to: %u", (SQLULEN)ValuePtr);
@@ -767,6 +772,7 @@ SQLRETURN EsSQLGetStmtAttrW(
 {
 	esodbc_desc_st *desc;
 	esodbc_stmt_st *stmt = STMH(StatementHandle);
+	SQLRETURN ret;
 
 	switch (Attribute) {
 		do {
@@ -775,6 +781,7 @@ SQLRETURN EsSQLGetStmtAttrW(
 		case SQL_ATTR_IMP_ROW_DESC: desc = stmt->ird; break;
 		case SQL_ATTR_IMP_PARAM_DESC: desc = stmt->ipd; break;
 		} while (0);
+			DBG("getting descriptor (attr type %d): 0x%p.", Attribute, desc);
 			*(SQLPOINTER *)ValuePtr = desc;
 			break;
 
@@ -797,12 +804,44 @@ SQLRETURN EsSQLGetStmtAttrW(
 			*(SQLULEN *)ValuePtr = (SQLULEN)stmt->rset.frows;
 			break;
 
+		case SQL_ATTR_CURSOR_TYPE:
+			DBG("getting cursor type: %u.", SQL_CURSOR_FORWARD_ONLY);
+			/* we only support forward only cursor, so far - TODO */
+			*(SQLULEN *)ValuePtr = SQL_CURSOR_FORWARD_ONLY;
+			break;
+
+		do {
+		/* "Setting this statement attribute sets the SQL_DESC_ARRAY_SIZE
+		 * field in the ARD header." */
+		case SQL_ATTR_ROW_ARRAY_SIZE:
+			DBG("getting row array size.");
+			desc = stmt->ard;
+			break;
+		/* "Setting this statement attribute sets the SQL_DESC_ARRAY_SIZE
+		 * field in the APD header." */
+		case SQL_ATTR_PARAMSET_SIZE:
+			DBG("getting param set size.");
+			desc = stmt->apd;
+			break;
+		} while (0);
+			ret = EsSQLGetDescFieldW(desc, NO_REC_NR, SQL_DESC_ARRAY_SIZE,
+					ValuePtr, BufferLength, NULL);
+			if (ret != SQL_SUCCESS) /* _WITH_INFO wud be "error" here */
+				/* if SetDescField() fails, DM will check statement's diag */
+				HDIAG_COPY(desc, stmt);
+			return ret;
+
+		case SQL_ATTR_USE_BOOKMARKS:
+			DBG("getting use-bookmarks: %u.", SQL_UB_OFF);
+			*(SQLULEN *)ValuePtr = SQL_UB_OFF;
+			break;
+
 		default:
 			ERR("unknown attribute: %d.", Attribute);
 			RET_HDIAGS(stmt, SQL_STATE_HY092);
 	}
 
-	RET_STATE(SQL_STATE_00000);
+	return SQL_SUCCESS;
 }
 
 
@@ -1694,7 +1733,9 @@ static esodbc_metatype_et sqlctype_to_meta(SQLSMALLINT concise)
 			return METATYPE_STRING;
 		/* binary */
 		case SQL_C_BINARY:
+#ifdef _WIN64
 		case SQL_C_BOOKMARK:
+#endif
 		//case SQL_C_VARBOOKMARK:
 			return METATYPE_BIN;
 

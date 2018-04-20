@@ -47,6 +47,30 @@ SQLRETURN EsSQLSpecialColumnsW
     SQLUSMALLINT       fNullable
 );
 
+SQLRETURN EsSQLForeignKeysW(
+		SQLHSTMT           hstmt,
+		_In_reads_opt_(cchPkCatalogName) SQLWCHAR*    szPkCatalogName,
+		SQLSMALLINT        cchPkCatalogName,
+		_In_reads_opt_(cchPkSchemaName) SQLWCHAR*     szPkSchemaName,
+		SQLSMALLINT        cchPkSchemaName,
+		_In_reads_opt_(cchPkTableName) SQLWCHAR*      szPkTableName,
+		SQLSMALLINT        cchPkTableName,
+		_In_reads_opt_(cchFkCatalogName) SQLWCHAR*    szFkCatalogName,
+		SQLSMALLINT        cchFkCatalogName,
+		_In_reads_opt_(cchFkSchemaName) SQLWCHAR*     szFkSchemaName,
+		SQLSMALLINT        cchFkSchemaName,
+		_In_reads_opt_(cchFkTableName) SQLWCHAR*      szFkTableName,
+		SQLSMALLINT        cchFkTableName);
+
+SQLRETURN SQL_API EsSQLPrimaryKeysW(
+		SQLHSTMT           hstmt,
+		_In_reads_opt_(cchCatalogName) SQLWCHAR*    szCatalogName,
+		SQLSMALLINT        cchCatalogName,
+		_In_reads_opt_(cchSchemaName) SQLWCHAR*     szSchemaName,
+		SQLSMALLINT        cchSchemaName,
+		_In_reads_opt_(cchTableName) SQLWCHAR*      szTableName,
+		SQLSMALLINT        cchTableName);
+
 #endif /* __CATALOGUE_H__ */
 
 

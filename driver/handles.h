@@ -66,14 +66,17 @@ typedef struct struct_dbc {
 	size_t apos; /* current write position in the abuff */
 	size_t amax; /* maximum lenght (bytes) that abuff can grow to */
 
+	/* window handler */
+	HWND hwin;
 	/* "the catalog is a database", "For a single-tier driver, the catalog
 	 * might be a directory" */
 	SQLWCHAR *catalog; 
-	// TODO: statements?
+	// TODO: statement list?
 	
 	/* options */
 	SQLULEN metadata_id; // default: SQL_FALSE
 	SQLULEN async_enable; // default: SQL_ASYNC_ENABLE_OFF
+	SQLUINTEGER txn_isolation; // default: SQL_TXN_*
 } esodbc_dbc_st;
 
 /* forward declarations */
@@ -112,7 +115,7 @@ typedef struct desc_rec {
 	SQLWCHAR		*base_column_name; /* read-only */
 	SQLWCHAR		*base_table_name; /* r/o */
 	SQLWCHAR		*catalog_name; /* r/o */
-	SQLWCHAR		*label; /* r/o */
+	SQLWCHAR		*label; /* r/o */ //alias?
 	SQLWCHAR		*literal_prefix; /* r/o */ // TODO: static?
 	SQLWCHAR		*literal_suffix; /* r/o */ // TODO: static?
 	SQLWCHAR		*local_type_name; /* r/o */
@@ -193,7 +196,7 @@ typedef struct struct_resultset {
 	const wchar_t *ecurs; /* Elastic's cursor object */
 	size_t eccnt; /* cursor char count */
 
-	size_t nrows; /* (count of) number of rows in current result set */
+	size_t nrows; /* (count of) rows in current result set */
 	size_t vrows; /* (count of) visited rows in current result set  */
 	size_t frows; /* (count of) fetched rows across *entire* result set  */
 
