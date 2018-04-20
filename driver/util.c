@@ -95,7 +95,7 @@ int ansi_w2c(const SQLWCHAR *src, char *dst, size_t chars)
 	return i + 1;
 }
 
-int wmemncasecmp(const wchar_t *a, const wchar_t *b, size_t len)
+int wmemncasecmp(const SQLWCHAR *a, const SQLWCHAR *b, size_t len)
 {
 	size_t i;
 	int diff = 0; /* if len == 0 */
@@ -109,7 +109,7 @@ int wmemncasecmp(const wchar_t *a, const wchar_t *b, size_t len)
 	return diff;
 }
 
-int wszmemcmp(const wchar_t *a, const wchar_t *b, long count)
+int wszmemcmp(const SQLWCHAR *a, const SQLWCHAR *b, long count)
 {
 	int diff;
 
