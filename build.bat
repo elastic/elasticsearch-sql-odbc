@@ -204,11 +204,17 @@ REM CLEAN function: clean up the build dir before building
 
 REM SETUP function: set-up the build environment
 :SETUP
-	REM TODO: add some logic to detect available versions (Enterprise, Professional, Community)
-	REM TODO: add support for vcvarsall.bat (2015)
 	set RELEASE=2017
-	set EDITION=Community
-	call "C:\Program Files (x86)\Microsoft Visual Studio\%RELEASE%\%EDITION%\Common7\Tools\VsDevCmd.bat" -arch=!TARCH!
+	set EDITION=Professional
+	for %%e in (Enterprise, Professional, Community) do (
+		if exist "C:\Program Files (x86)\Microsoft Visual Studio\%RELEASE%\%%e\Common7\Tools\VsDevCmd.bat" (
+			if /i "%%e" == "Community" (
+				echo WARNING: Community edition is not licensed to build commerical projects.
+			)
+			call "C:\Program Files (x86)\Microsoft Visual Studio\%RELEASE%\%%e\Common7\Tools\VsDevCmd.bat" -arch=!TARCH!
+			break
+		)
+	)
 
 	goto:eof
 
