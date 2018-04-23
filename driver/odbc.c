@@ -37,8 +37,8 @@ static BOOL driver_init()
 
 static void driver_cleanup()
 {
-	log_cleanup();
 	connect_cleanup();
+	log_cleanup();
 }
 
 BOOL WINAPI DllMain(
@@ -46,8 +46,6 @@ BOOL WINAPI DllMain(
 	DWORD fdwReason,     // reason for calling function
 	LPVOID lpReserved)  // reserved
 {
-	//TRACE3(_IN, "pdp", hinstDLL, fdwReason, lpReserved);
-
 	// Perform actions based on the reason for calling.
 	switch (fdwReason) {
 		// Initialize once for each new process.
@@ -71,12 +69,11 @@ BOOL WINAPI DllMain(
 
 		// Perform any necessary cleanup.
 		case DLL_PROCESS_DETACH:
-			driver_cleanup();
 			INFO("process %u dettached.", GetCurrentProcessId());
+			driver_cleanup();
 			break;
 	}
 
-	TRACE4(_OUT, "updp", TRUE, hinstDLL, fdwReason, lpReserved);
 	return TRUE;
 }
 
