@@ -6,7 +6,7 @@ REM cls
 
 SET ARG="%*"
 SET SRC_PATH=%~dp0
-
+call:SET_TEMP
 
 REM 32/64 bit argument needs to stay on top, before setting LIBCURL path.
 REM presence of '32' or '64': set the Bits/Target ARCHhitecture
@@ -27,28 +27,19 @@ REM
 if "%BUILD_DIR%" == "" (
 	SET BUILD_DIR=%SRC_PATH%\builds
 )
-if "%LOGGING_DIR%" == "" (
-	if exist %USERPROFILE%\AppData\Local\Temp\ (
-		SET LOGGING_DIR=%USERPROFILE%\AppData\Local\Temp\
-	) else (
-		SET LOGGING_DIR="%USERPROFILE%\Local Settings\Temp\"
-	)
+if not "%ESODBC_LOG_DIR%" == "" (
+	for /f "tokens=1 delims=?" %%a in ("%ESODBC_LOG_DIR%") do set LOGGING_DIR=%%a
 )
 if "%INSTALL_DIR%" == "" (
-	REM change to lib
-	if exist %USERPROFILE%\AppData\Local\Temp\ (
-		SET INSTALL_DIR=%USERPROFILE%\AppData\Local\Temp
-	) else (
-		SET INSTALL_DIR="%USERPROFILE%\Local Settings\Temp"
-	)
+	set INSTALL_DIR=%TEMP%
 )
 
 if "%LIBCURL_PATH_BUILD%" == "" (
-	SET LIBCURL_PATH_BUILD=%SRC_PATH%\libs\curl\builds\libcurl-vc-!TARCH!-release-dll-ipv6-sspi-winssl
+	set LIBCURL_PATH_BUILD=%SRC_PATH%\libs\curl\builds\libcurl-vc-!TARCH!-release-dll-ipv6-sspi-winssl
 )
 
 if "%CMAKE_BIN_PATH%" == "" (
-	SET CMAKE_BIN_PATH="C:\Program Files\CMake\bin"
+	set CMAKE_BIN_PATH="C:\Program Files\CMake\bin"
 )
 
 
@@ -110,11 +101,11 @@ if /i not _%ARG:copy=% == _%ARG% (
 	REM Invoked without 'copy': DLLs test installation skipped.
 )
 
-REM presence of 'trunclogs': invoke TRUNCLOGS "function"
-if /i not _%ARG:trunclogs=% == _%ARG% (
-	call:TRUNCLOGS
+REM presence of 'clearlogs': invoke CLEARLOGS "function"
+if /i not _%ARG:clearlogs=% == _%ARG% (
+	call:CLEARLOGS
 ) else (
-	REM Invoked without 'trunclogs', logs not truncated.
+	REM Invoked without 'clearlogs', logs not touched.
 )
 
 REM presence of 'regadd': call REGADD "function"
@@ -140,6 +131,21 @@ REM
 REM  "Functions"
 REM
 
+REM if TEMP var not set, set it.
+:SET_TEMP
+	if exist %TEMP% goto:eof
+	set TEMP=%TMP%
+	if exist %TEMP% goto:eof
+	set TEMP=%USERPROFILE%\AppData\Local\Temp
+	if exist %TEMP% goto:eof
+	set TEMP="%USERPROFILE%\Local Settings\Temp\"
+	if exist %TEMP% goto:eof
+	echo WARN: no temporary directory available; using root
+	set TEMP=\
+
+	goto:eof
+
+
 REM USAGE function: output a usage message
 :USAGE
 	echo Usage: %1 [argument(s^)]
@@ -160,7 +166,7 @@ REM USAGE function: output a usage message
 	echo                   (needs Administrator privileges^).
 	echo       regdel    : deregister the driver from the registry;
 	echo                   (needs Administrator privileges^).
-	echo       trunclogs : truncate the logs (in %LOGGING_DIR%^).
+	echo       clearlogs : clear the logs (in: %LOGGING_DIR%^).
 	echo.
 	echo Multiple arguments can be used concurrently.
 	echo Invoked with no arguments, the script will only initiate a build.
@@ -169,8 +175,8 @@ REM USAGE function: output a usage message
 	echo List of settable environment variables:
 	echo       BUILD_DIR          : path to folder to hold the build files;
 	echo                            now set to: `%BUILD_DIR%`.
-	echo       LOGGING_DIR        : path to folder holding the logging files;
-	echo                            now set to: `%LOGGING_DIR%`.
+	echo       ESODBC_LOG_DIR     : path to folder holding the logging files;
+	echo                            now set to: `%ESODBC_LOG_DIR%`.
 	echo       INSTALL_DIR        : path to folder to hold the built driver;
 	echo                            now set to: `%INSTALL_DIR%`.
 	echo       LIBCURL_PATH_BUILD : path to libcurl library;
@@ -288,13 +294,20 @@ REM COPY function: copy DLLs (libcurl, odbc) to the test "install" dir
 	goto:eof
 
 
-REM TRUNCLOGS function: empty logs files
-:TRUNCLOGS
-	echo Truncating logs in %LOGGING_DIR%.
-	echo.>%LOGGING_DIR%\mylog.txt
-	echo.>%LOGGING_DIR%\SQL32.LOG
-	echo.>%LOGGING_DIR%\SQL.LOG
-
+REM CLEARLOGS function: empty logs files
+:CLEARLOGS
+	if not "%LOGGING_DIR%" == "" (
+		echo Clearing logs in %LOGGING_DIR%.
+		del %LOGGING_DIR%\esodbc_*.log >nul 2>&1
+		if exist %LOGGING_DIR%\SQL32.LOG (
+			echo.>%LOGGING_DIR%\SQL32.LOG
+		)
+		if exist %LOGGING_DIR%\SQL.LOG (
+			echo.>%LOGGING_DIR%\SQL.LOG
+		)
+	) else (
+		echo No logging directory to clear set; re-run with 'help' argument.
+	)
 	goto:eof
 
 

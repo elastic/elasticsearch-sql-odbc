@@ -22,44 +22,13 @@
 #include <string.h>
 #include <assert.h>
 
+#include "util.h"
 #include "error.h"
+#include "handles.h"
+
 
 /*
- * w/printf() desriptors for char/wchar_t *
- * "WPrintF Wide/Char Pointer _ DESCriptor"
- */
-#ifdef _WIN32
-/* funny M$ 'inverted' logic */
-/* wprintf wide_t pointer descriptor */
-#define WPFWP_DESC		L"%s"
-#define WPFWP_LDESC		L"%.*s"
-/* printf wide_t pointer descriptor */
-#define PFWP_DESC		"%S"
-#define PFWP_LDESC		"%.*S"
-/* wprintf char pointer descriptor */
-#define WPFCP_DESC		L"%S" 
-#define WPFCP_LDESC		L"%.*S" 
-/* printf char pointer descriptor */
-#define PFCP_DESC		"%s"
-#define PFCP_LDESC		"%.*s"
-#else /* _WIN32 */
-/* wprintf wide_t pointer descriptor */
-#define WPFWP_DESC		L"%S"
-#define WPFWP_LDESC		L"%.*S"
-/* printf wide_t pointer descriptor */
-#define PFWP_DESC		"%S"
-#define PFWP_LDESC		"%.*S"
-/* silly M$ */
-/* wprintf char pointer descriptor */
-#define WPFCP_DESC		L"%s" 
-#define WPFCP_LDESC		L"%.*s" 
-/* printf char pointer descriptor */
-#define PFCP_DESC		"%s"
-#define PFCP_LDESC		"%.*s"
-#endif /* _WIN32 */
-
-/*
- * Descriptors to be used with logging with SQLWCHAR pointer type.
+ * Descriptors to be used with logging for SQLWCHAR pointer type.
  * "Log Wchar Pointer Descriptor [with Lenght]"
  */
 #ifdef UNICODE
@@ -71,8 +40,8 @@
 #endif /* UNICODE */
 
 /*
- * Descriptors to be used with logging with SQLWCHAR pointer type.
- * "Log Wchar Pointer Descriptor [with Lenght]"
+ * Descriptors to be used with logging for SQLTCHAR pointer type.
+ * "Log Tchar Pointer Descriptor [with Lenght]"
  */
 #ifdef UNICODE
 #define LTPD	PFWP_DESC
@@ -90,34 +59,39 @@
 
 /* Note: keep in sync with __ESODBC_LVL2STR */
 enum osodbc_log_levels {
-	LOG_LEVEL_ERR,
+
+#define LOG_LEVEL_DISABLED	-1
+
+	LOG_LEVEL_ERR = 0,
 	LOG_LEVEL_WARN,
 	LOG_LEVEL_INFO,
 	LOG_LEVEL_DBG,
 };
+
+BOOL log_init();
+void log_cleanup();
 
 void _esodbc_log(int lvl, int werrno, const char *func, 
 		const char *srcfile, int lineno, const char *fmt, ...);
 extern int _esodbc_log_level;
 
 #define _LOG(lvl, werr, fmt, ...) \
-	if (lvl <= _esodbc_log_level) \
+	if ((lvl) <= _esodbc_log_level) \
 		_esodbc_log(lvl, werr, __func__, __FILE__, __LINE__, fmt, __VA_ARGS__)
+
+
 #define LOG(lvl, fmt, ...)	_LOG(lvl, 0, fmt, __VA_ARGS__)
 
-#define ERR(fmt, ...)	LOG(LOG_LEVEL_ERR, fmt, __VA_ARGS__)
 #define ERRN(fmt, ...)	_LOG(LOG_LEVEL_ERR, 1, fmt, __VA_ARGS__)
+#define ERR(fmt, ...)	LOG(LOG_LEVEL_ERR, fmt, __VA_ARGS__)
 #define WARN(fmt, ...)	LOG(LOG_LEVEL_WARN, fmt, __VA_ARGS__)
 #define INFO(fmt, ...)	LOG(LOG_LEVEL_INFO, fmt, __VA_ARGS__)
 #define DBG(fmt, ...)	LOG(LOG_LEVEL_DBG, fmt, __VA_ARGS__)
 
-#define ERRSTMT(stmt, fmt, ...)		ERR("STMT@0x%p: " fmt, stmt, __VA_ARGS__)
-#define WARNSTMT(stmt, fmt, ...)	WARN("STMT@0x%p: " fmt, stmt, __VA_ARGS__)
-#define DBGSTMT(stmt, fmt, ...)		DBG("STMT@0x%p: " fmt, stmt, __VA_ARGS__)
 
 #define BUG(fmt, ...) \
 	do { \
-		LOG(LOG_LEVEL_ERR, fmt, __VA_ARGS__); \
+		ERR("[BUG] " fmt, __VA_ARGS__); \
 		assert(0); \
 	} while (0)
 
@@ -125,6 +99,40 @@ extern int _esodbc_log_level;
 #define TRACE	DBG("===== TR4C3 =====");
 
 #define TS_NULL	MK_WPTR("<null>")
+
+
+/*
+ * Logging with handle
+ */
+
+/* get handle type prefix  */
+static inline char* _hhtype2str(void *handle)
+{
+	if (! handle)
+		return "";
+	switch (HDRH(handle)->type) {
+		case SQL_HANDLE_ENV: return "ENV";
+		case SQL_HANDLE_DBC: return "DBC";
+		case SQL_HANDLE_STMT: return "STMT";
+		case SQL_HANDLE_DESC: return "DESC";
+	}
+	/* likely mem corruption, it'll probably crash */
+	BUG("unknown handle (@0x%p) type (%d)", handle, HDRH(handle)->type);
+	return "???";
+}
+
+#define LOGH(lvl, werrn, hnd, fmt, ...) \
+	_LOG(lvl, werrn, "[%s@0x%p] " fmt, _hhtype2str(hnd), hnd, __VA_ARGS__)
+
+#define ERRNH(hnd, fmt, ...)	LOGH(LOG_LEVEL_ERR, 1, hnd, fmt, __VA_ARGS__)
+#define ERRH(hnd, fmt, ...)		LOGH(LOG_LEVEL_ERR, 0, hnd, fmt, __VA_ARGS__)
+#define WARNH(hnd, fmt, ...)	LOGH(LOG_LEVEL_WARN, 0, hnd, fmt, __VA_ARGS__)
+#define INFOH(hnd, fmt, ...)	LOGH(LOG_LEVEL_INFO, 0, hnd, fmt, __VA_ARGS__)
+#define DBGH(hnd, fmt, ...)		LOGH(LOG_LEVEL_DBG, 0, hnd, fmt, __VA_ARGS__)
+
+
+
+
 
 #endif /* __LOG_H__ */
 

@@ -23,8 +23,31 @@
 #include "ujdecode.h"
 
 #include "error.h"
-#include "log.h"
 #include "defs.h"
+
+/* forward declarations */
+struct struct_env;
+struct struct_dbc;
+struct struct_stmt;
+struct struct_desc;
+
+/*
+ * header structure, embedded in all API handles
+ * Note: must remain the first declared member.
+ */
+typedef struct struct_hheader { /* handle header */
+	/* SQL_HANDLE_ENV / _DBC / _STMT / _DESC  */
+	SQLSMALLINT type;
+	/* diagnostic/state keeping */
+	esodbc_diag_st diag;
+	/* back reference to "parent" structure (in type hierarchy) */
+	union {
+		struct struct_env *env;
+		struct struct_dbc *dbc;
+		struct struct_stmt *stmt;
+		void *parent;
+	};
+} esodbc_hhdr_st;
 
 /*
  * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/environment-handles :
@@ -36,10 +59,9 @@
  * """
  */
 typedef struct struct_env {
+	esodbc_hhdr_st hdr;
 	SQLUINTEGER version; /* versions defined as UL (see SQL_OV_ODBC3) */
-	/* diagnostic/state keeping */
-	esodbc_diag_st diag;
-	// TODO: connections
+	// TODO?: connections
 } esodbc_env_st;
 
 /*
@@ -53,9 +75,8 @@ typedef struct struct_env {
  * """
  */
 typedef struct struct_dbc {
-	esodbc_env_st *env;
-	/* diagnostic/state keeping */
-	esodbc_diag_st diag;
+	esodbc_hhdr_st hdr;
+
 	wstr_st dsn; /* data source name */
 	char *url;
 	SQLUINTEGER timeout;
@@ -89,10 +110,6 @@ typedef struct struct_dbc {
 	SQLULEN async_enable; // default: SQL_ASYNC_ENABLE_OFF
 	SQLUINTEGER txn_isolation; // default: SQL_TXN_*
 } esodbc_dbc_st;
-
-/* forward declarations */
-struct struct_desc;
-struct struct_stmt;
 
 typedef enum {
 	METATYPE_UNKNOWN = 0,
@@ -159,7 +176,7 @@ typedef struct desc_rec {
 	SQLSMALLINT		usigned;
 	SQLSMALLINT		updatable;
 	/* /record fields */
-} desc_rec_st; /* TODO: -> esodbc_rec_st */
+} esodbc_rec_st;
 
 
 typedef enum {
@@ -171,10 +188,8 @@ typedef enum {
 } desc_type_et;
 
 typedef struct struct_desc {
-	/* back ref to owning statement */
-	struct struct_stmt *stmt;
+	esodbc_hhdr_st hdr;
 
-	esodbc_diag_st diag;
 	desc_type_et type; /* APD, IPD, ARD, IRD */
 
 	/* header fields */
@@ -193,7 +208,7 @@ typedef struct struct_desc {
 
 	/* array of records of .count cardinality
 	 * TODO: list? binding occurs seldomly, compared to execution, tho. */
-	desc_rec_st *recs;
+	esodbc_rec_st *recs;
 } esodbc_desc_st;
 
 
@@ -223,8 +238,7 @@ typedef struct struct_resultset {
  */
 
 typedef struct struct_stmt {
-	esodbc_dbc_st *dbc;
-	esodbc_diag_st diag;
+	esodbc_hhdr_st hdr;
 
 	/* cache SQL, can be used with varying params */
 	char *u8sql; /* UTF8 JSON serialized buffer */
@@ -256,8 +270,8 @@ typedef struct struct_stmt {
 
 
 SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count);
-desc_rec_st* get_record(esodbc_desc_st *desc, SQLSMALLINT rec_no, BOOL grow);
-void dump_record(desc_rec_st *rec);
+esodbc_rec_st* get_record(esodbc_desc_st *desc, SQLSMALLINT rec_no, BOOL grow);
+void dump_record(esodbc_rec_st *rec);
 
 /* TODO: move to some utils.h */
 void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type, 
@@ -343,37 +357,32 @@ SQLRETURN EsSQLSetDescRec(
 		_Inout_opt_ SQLLEN *StringLength,
 		_Inout_opt_ SQLLEN *Indicator);
 
+
 #define ENVH(_h)	((esodbc_env_st *)(_h))
 #define DBCH(_h)	((esodbc_dbc_st *)(_h))
 #define STMH(_h)	((esodbc_stmt_st *)(_h))
 #define DSCH(_h)	((esodbc_desc_st *)(_h))
+/* this will only work if member stays first in handles (see struct decl). */
+#define HDRH(_h)	((esodbc_hhdr_st *)(_h))
+
 
 /* wraper of RET_CDIAG, compatible with any defined handle */
 #define RET_HDIAG(_hp/*handle ptr*/, _s/*tate*/, _t/*char text*/, _c/*ode*/) \
-	RET_CDIAG(&(_hp)->diag, _s, _t, _c)
+	RET_CDIAG(&(_hp)->hdr.diag, _s, _t, _c)
 /* similar to RET_HDIAG, but only post the state */
 #define RET_HDIAGS(_hp/*handle ptr*/, _s/*tate*/) \
-	RET_DIAG(&(_hp)->diag, _s, NULL, 0)
-/* copy the diagnostics from one handler to the other */
-#define HDIAG_COPY(_s, _d)	(_s)->diag = (_d)->diag
+	RET_DIAG(&(_hp)->hdr.diag, _s, NULL, 0)
+/* copy the diagnostics from one handle to the other */
+#define HDIAG_COPY(_s, _d)	(_s)->hdr.diag = (_d)->hdr.diag
 /* set a diagnostic to a(ny) handle */
 #define SET_HDIAG(_hp/*handle ptr*/, _s/*tate*/, _t/*char text*/, _c/*ode*/) \
-	post_diagnostic(&(_hp)->diag, _s, MK_WPTR(_t), _c)
+	post_diagnostic(&(_hp)->hdr.diag, _s, MK_WPTR(_t), _c)
 
 /* return the code associated with the given state (and debug-log) */
 #define RET_STATE(_s)	\
 	do { \
 		assert(_s < SQL_STATE_MAX); \
-		SQLRETURN _r = esodbc_errors[_s].retcode; \
-		SQLWCHAR *_c = esodbc_errors[_s].code; \
-		DBG("returning state "LWPD", code %d.", _c, _r); \
-		return _r; \
-	} while (0)
-
-#define RET_NOT_IMPLEMENTED	\
-	do { \
-		ERR("not implemented.");\
-		return SQL_ERROR; \
+		return esodbc_errors[_s].retcode; \
 	} while (0)
 
 #define STMT_HAS_RESULTSET(stmt)	((stmt)->rset.buff != NULL)
