@@ -59,7 +59,7 @@ if (${WIN32})
 	# set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /Ze")
 
 	if (${IS_UNICODE})
-		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DUNICODE")
+		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DUNICODE /D_UNICODE")
 	endif (${IS_UNICODE})
 	# set the version
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_VER_MAJOR=${DRV_VER_MAJOR}")

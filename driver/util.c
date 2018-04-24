@@ -59,7 +59,7 @@ BOOL wstr2long(wstr_st *val, long *out)
 
 /*
  * Converts a wchar_t string to a C string for ANSI characters.
- * 'dst' should be as character-long as 'src', if 'src' is not 0-terminated,
+ * 'dst' should be as character-long as 'src', if 'src' is 0-terminated,
  * OR one character longer otherwise (for the 0-term).
  * 'dst' will always be 0-term'd.
  * Returns negative if conversion fails, OR number of converted wchars,
@@ -76,10 +76,9 @@ int ansi_w2c(const SQLWCHAR *src, char *dst, size_t chars)
 		dst[i] = (char)src[i];
 	} while (src[i] && (++i < chars));
 
-	if (chars <= i) {
+	if (chars <= i) { /* equiv to: (src[i] != 0) */
 		/* loop stopped b/c of lenght -> src is not 0-term'd */
-		dst[i - 1] = 0;
-		return i;
+		dst[i] = 0;
 	}
 	return i + 1;
 }
