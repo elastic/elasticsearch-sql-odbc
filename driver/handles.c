@@ -332,7 +332,6 @@ SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 			free(stmt);
 			break;
 
-		
 		/* "When an explicitly allocated descriptor is freed, all statement
 		 * handles to which the freed descriptor applied automatically revert
 		 * to the descriptors implicitly allocated for them." */
@@ -715,7 +714,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 				stmt->ard = (esodbc_desc_st *)ValuePtr;
 				// FIXME: bind: re-init
 				FIXME;
-			}	
+			}
 		case SQL_ATTR_APP_PARAM_DESC:
 			// FIXME: same logic for ARD as above (part of params passing)
 			FIXME;
@@ -1546,7 +1545,7 @@ SQLRETURN EsSQLGetDescFieldW(
 			ERRH(desc, "unknown FieldIdentifier: %d.", FieldIdentifier);
 			RET_HDIAGS(desc, SQL_STATE_HY091);
 	}
-	
+
 	return SQL_SUCCESS;
 }
 
@@ -1837,7 +1836,7 @@ static esodbc_metatype_et sqlctype_to_meta(SQLSMALLINT concise)
 		case SQL_C_INTERVAL_HOUR_TO_SECOND:
 		case SQL_C_INTERVAL_MINUTE_TO_SECOND:
 			return METATYPE_INTERVAL_WSEC;
-		
+
 		case SQL_C_BIT:
 			return METATYPE_BIT;
 
@@ -2010,13 +2009,13 @@ SQLRETURN EsSQLSetDescFieldW(
 		 * however, an application can do so to force a consistency check of
 		 * IPD fields." 
 		 * TODO: the above won't work with the generic check implementation:
-		 * is it worth hacking an exception here? (since IPD/.data_ptr is 
+		 * is it worth hacking an exception here? (since IPD/.data_ptr is
 		 * marked RO) */
 		ERRH(desc, "field access check failed: not defined or RO for "
 				"desciptor.");
 		RET_HDIAGS(desc, SQL_STATE_HY091);
 	}
-	
+
 	state = check_buff(FieldIdentifier, ValuePtr, BufferLength, FALSE);
 	if (state != SQL_STATE_00000) {
 		ERRH(desc, "buffer/~ length check failed (%d).", state);
@@ -2304,7 +2303,7 @@ SQLRETURN EsSQLSetDescFieldW(
 			ERRH(desc, "unknown FieldIdentifier: %d.", FieldIdentifier);
 			RET_HDIAGS(desc, SQL_STATE_HY091);
 	}
-	
+
 	return SQL_SUCCESS;
 }
 
