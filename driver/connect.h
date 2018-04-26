@@ -26,6 +26,7 @@ void connect_cleanup();
 
 SQLRETURN post_statement(esodbc_stmt_st *stmt);
 void cleanup_dbc(esodbc_dbc_st *dbc);
+SQLSMALLINT type_elastic2csql(wstr_st *type_name);
 
 SQLRETURN EsSQLDriverConnectW
 (
