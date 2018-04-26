@@ -1756,8 +1756,9 @@ SQLRETURN EsSQLDescribeColW(
 		RET_HDIAG(stmt, SQL_STATE_HY090,
 				"no column decimal digits buffer provided", 0);
 	}
+	ASSERT_IXD_HAS_ES_TYPE(rec);
 	/* TODO: this would be available in SQLColumns resultset. */
-	*pfNullable = rec->nullable;
+	*pfNullable = rec->es_type->nullable;
 	DBGH(stmt, "col #%d nullable=%d.", icol, *pfNullable);
 
 	return SQL_SUCCESS;
@@ -1806,25 +1807,29 @@ SQLRETURN EsSQLColAttributeW(
 		/* TODO: if implementing bookmarks */
 		RET_HDIAGS(stmt, SQL_STATE_HYC00);
 	}
-	
+
 	rec = get_record(ird, iCol, FALSE);
 	if (! rec) {
 		ERRH(stmt, "no record for columns #%d.", iCol);
 		RET_HDIAGS(stmt, SQL_STATE_07009);
 	}
 
+	ASSERT_IXD_HAS_ES_TYPE(rec);
+
 	switch (iField) {
 		/* SQLSMALLINT */
 		do {
 		case SQL_DESC_CONCISE_TYPE: sint = rec->concise_type; break;
 		case SQL_DESC_TYPE: sint = rec->type; break;
-		case SQL_DESC_FIXED_PREC_SCALE: sint = rec->fixed_prec_scale; break;
-		case SQL_DESC_NULLABLE: sint = rec->nullable; break;
 		case SQL_DESC_PRECISION: sint = rec->precision; break;
 		case SQL_DESC_SCALE: sint = rec->scale; break;
-		case SQL_DESC_SEARCHABLE: sint = rec->searchable; break;
 		case SQL_DESC_UNNAMED: sint = rec->unnamed; break;
-		case SQL_DESC_UNSIGNED: sint = rec->usigned; break;
+		case SQL_DESC_FIXED_PREC_SCALE:
+			sint = rec->es_type->fixed_prec_scale;
+			break;
+		case SQL_DESC_NULLABLE: sint = rec->es_type->nullable; break;
+		case SQL_DESC_SEARCHABLE: sint = rec->es_type->searchable; break;
+		case SQL_DESC_UNSIGNED: sint = rec->es_type->unsigned_attribute; break;
 		case SQL_DESC_UPDATABLE: sint = rec->updatable; break;
 		} while (0);
 			PNUMATTR_ASSIGN(SQLSMALLINT, sint);
@@ -1836,26 +1841,34 @@ SQLRETURN EsSQLColAttributeW(
 		case SQL_DESC_LABEL: wptr = rec->label; break;
 		case SQL_DESC_BASE_TABLE_NAME: wptr = rec->base_table_name; break;
 		case SQL_DESC_CATALOG_NAME: wptr = rec->catalog_name; break;
-		case SQL_DESC_LITERAL_PREFIX: wptr = rec->literal_prefix; break;
-		case SQL_DESC_LITERAL_SUFFIX: wptr = rec->literal_suffix; break;
-		case SQL_DESC_LOCAL_TYPE_NAME: wptr = rec->type_name; break;
 		case SQL_DESC_NAME: wptr = rec->name; break;
 		case SQL_DESC_SCHEMA_NAME: wptr = rec->schema_name; break;
 		case SQL_DESC_TABLE_NAME: wptr = rec->table_name; break;
-		case SQL_DESC_TYPE_NAME: wptr = rec->type_name; break;
+		case SQL_DESC_LITERAL_PREFIX:
+			wptr = rec->es_type->literal_prefix.str;
+			break;
+		case SQL_DESC_LITERAL_SUFFIX:
+			wptr = rec->es_type->literal_suffix.str;
+			break;
+		case SQL_DESC_LOCAL_TYPE_NAME:
+			wptr = rec->es_type->type_name.str;
+			break;
+		case SQL_DESC_TYPE_NAME:
+			wptr = rec->es_type->type_name.str;
+			break;
 		} while (0);
 			if (! wptr) {
-				//BUG -- TODO: re-eval, once type handling is decided.
-				ERRH(stmt, "IRD@0x%p record field type %d not initialized.",
+				//FIXME: re-eval, once type handling is decided.
+				BUGH(stmt, "IRD@0x%p record field type %d not initialized.",
 						ird, iField);
 				*(SQLWCHAR **)pCharAttr = MK_WPTR("");
 				*pcbCharAttr = 0;
 			} else {
-				return write_wptr(&stmt->hdr.diag, pcbCharAttr, wptr, cbDescMax,
-						pcbCharAttr);
+				return write_wptr(&stmt->hdr.diag, pcbCharAttr, wptr,
+						cbDescMax, pcbCharAttr);
 			}
 			break;
-	
+
 		/* SQLLEN */
 		do {
 		case SQL_DESC_DISPLAY_SIZE: len = rec->display_size; break;
@@ -1871,8 +1884,12 @@ SQLRETURN EsSQLColAttributeW(
 
 		/* SQLINTEGER */
 		do {
-		case SQL_DESC_AUTO_UNIQUE_VALUE: iint = rec->auto_unique_value; break;
-		case SQL_DESC_CASE_SENSITIVE: iint = rec->case_sensitive; break;
+		case SQL_DESC_AUTO_UNIQUE_VALUE:
+			iint = rec->es_type->auto_unique_value;
+			break;
+		case SQL_DESC_CASE_SENSITIVE:
+			iint = rec->es_type->case_sensitive;
+			break;
 		case SQL_DESC_NUM_PREC_RADIX: iint = rec->num_prec_radix; break;
 		} while (0);
 			PNUMATTR_ASSIGN(SQLINTEGER, iint);
