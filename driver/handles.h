@@ -53,6 +53,36 @@ typedef struct struct_env {
 	// TODO?: connections
 } esodbc_env_st;
 
+
+typedef struct elasticsearch_type {
+	wstr_st			type_name;
+	SQLSMALLINT		data_type;
+	SQLINTEGER		column_size;
+	wstr_st			literal_prefix;
+	wstr_st			literal_suffix;
+	wstr_st			create_params;
+	SQLSMALLINT		nullable;
+	SQLSMALLINT		case_sensitive;
+	SQLSMALLINT		searchable;
+	SQLSMALLINT		unsigned_attribute;
+	SQLSMALLINT		fixed_prec_scale;
+	SQLSMALLINT		auto_unique_value;
+	wstr_st			local_type_name;
+	SQLSMALLINT		minimum_scale;
+	SQLSMALLINT		maximum_scale;
+	SQLSMALLINT		sql_data_type;
+	SQLSMALLINT		sql_datetime_sub;
+	SQLINTEGER		num_prec_radix;
+	SQLSMALLINT		interval_precision;
+
+	/* number of SYS TYPES result columns mapped over the above members */
+#define ESODBC_TYPES_MEMBERS	19
+
+	/* SQL C type driver mapping of ES' data_type */
+	SQLSMALLINT		sql_c_type;
+} esodbc_estype_st;
+
+
 /*
  * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/connection-handles : 
  * """
@@ -77,9 +107,8 @@ typedef struct struct_dbc {
 	} fetch;
 	BOOL pack_json; /* should JSON be used in REST bodies? (vs. CBOR) *///TODO
 
-	// FIXME: placeholder; used if connection has been established or not
-	// TODO: PROTO
-	void *conn;
+	esodbc_estype_st *es_types; /* array with ES types */
+	SQLULEN no_types; /* number of types in array */
 
 	CURL *curl; /* cURL handle */
 	char *abuff; /* buffer holding the answer */
@@ -121,25 +150,31 @@ typedef struct desc_rec {
 	/* helper member, to characterize the type */
 	esodbc_metatype_et	meta_type;
 
-	/* record fields */
+	/* pointer to the ES/SQL type in DBC array
+	 * need to be set for records in IxD descriptors */
+	esodbc_estype_st	*es_type;
+
+	/*
+	 * record fields
+	 */
+	/* following record fields have been moved into es_type:
+	 * literal_prefix, literal_suffix, local_type_name, type_name,
+	 * auto_unique_value, case_sensitive, fixed_prec_scale, nullable,
+	 * searchable, usigned  */
 	SQLSMALLINT		concise_type;
 	SQLSMALLINT		type; /* SQL_C_<type> -> AxD, SQL_<type> -> IxD */
 	SQLSMALLINT		datetime_interval_code;
 
 	SQLPOINTER		data_ptr; /* array, if .array_size > 1 */
 
-	/* TODO: add (& use) the lenghts */
+	/* TODO: move all SQLWCHARs to wstr_st */
 	SQLWCHAR		*base_column_name; /* read-only */
 	SQLWCHAR		*base_table_name; /* r/o */
 	SQLWCHAR		*catalog_name; /* r/o */
 	SQLWCHAR		*label; /* r/o */ //alias?
-	SQLWCHAR		*literal_prefix; /* r/o */ // TODO: static?
-	SQLWCHAR		*literal_suffix; /* r/o */ // TODO: static?
-	SQLWCHAR		*local_type_name; /* r/o */
 	SQLWCHAR		*name;
-	SQLWCHAR		*schema_name; /* r/o */ // TODO: static?
+	SQLWCHAR		*schema_name; /* r/o */
 	SQLWCHAR		*table_name; /* r/o */
-	SQLWCHAR		*type_name; /* r/o */
 
 	SQLLEN			*indicator_ptr; /* array, if .array_size > 1 */
 	SQLLEN			*octet_length_ptr; /* array, if .array_size > 1 */
@@ -149,22 +184,15 @@ typedef struct desc_rec {
 
 	SQLULEN			length;
 
-	SQLINTEGER		auto_unique_value;
-	SQLINTEGER		case_sensitive;
-	SQLINTEGER		datetime_interval_precision;
-	SQLINTEGER		num_prec_radix;
+	SQLINTEGER		datetime_interval_precision; /*TODO: -> es_type? */
+	SQLINTEGER		num_prec_radix; /*TODO: -> es_type? */
 
-	SQLSMALLINT		fixed_prec_scale;
-	SQLSMALLINT		nullable; /* r/o */
 	SQLSMALLINT		parameter_type;
 	SQLSMALLINT		precision;
 	SQLSMALLINT		rowver;
 	SQLSMALLINT		scale;
-	SQLSMALLINT		searchable;
 	SQLSMALLINT		unnamed;
-	SQLSMALLINT		usigned;
 	SQLSMALLINT		updatable;
-	/* /record fields */
 } esodbc_rec_st;
 
 

@@ -24,16 +24,6 @@
 #define JSON_ANSWER_ERR_REASON	"reason"
 #define JSON_ANSWER_COL_NAME	"name"
 #define JSON_ANSWER_COL_TYPE	"type"
-/* 4 */
-#define JSON_COL_TEXT			"text"
-#define JSON_COL_DATE			"date"
-#define JSON_COL_BYTE			"byte"
-/* 5 */
-#define JSON_COL_SHORT			"short"
-/* 7 */
-#define JSON_COL_BOOLEAN		"boolean"
-#define JSON_COL_INTEGER		"integer"
-#define JSON_COL_KEYWORD		"keyword"
 
 
 #define MSG_INV_SRV_ANS		"Invalid server answer"
@@ -59,69 +49,6 @@ void clear_resultset(esodbc_stmt_st *stmt)
 	if (stmt->rset.state)
 		UJFree(stmt->rset.state);
 	memset(&stmt->rset, 0, sizeof(stmt->rset));
-}
-
-static SQLSMALLINT type_elastic2csql(const SQLWCHAR *type_name, size_t len)
-{
-	switch (len) {
-		// TODO: take in the precision for a better
-		// representation
-		// case sizeof(JSON_COL_KEYWORD) - 1:
-		// case sizeof(JSON_COL_BOOLEAN) - 1:
-		case sizeof(JSON_COL_INTEGER) - 1:
-			switch(tolower(type_name[0])) {
-				case (SQLWCHAR)'i': /* integer */
-					if (wmemncasecmp(type_name, MK_WPTR(JSON_COL_INTEGER),
-								len) == 0)
-						return SQL_C_SLONG;
-					break;
-				case (SQLWCHAR)'b': /* boolean */
-					if (wmemncasecmp(type_name, MK_WPTR(JSON_COL_BOOLEAN),
-								len) == 0)
-						return SQL_C_UTINYINT;
-					break;
-				case (SQLWCHAR)'k': /* keyword */
-					if (wmemncasecmp(type_name, MK_WPTR(JSON_COL_KEYWORD),
-								len) == 0)
-						return SQL_C_CHAR;
-					break;
-			}
-			break;
-		// case sizeof(JSON_COL_DATE) - 1:
-		case sizeof(JSON_COL_TEXT) - 1:
-			switch(tolower(type_name[0])) {
-				case (SQLWCHAR)'t':
-					if (! wmemncasecmp(type_name, MK_WPTR(JSON_COL_TEXT), len))
-						// TODO: char/longvarchar/wchar/wvarchar?
-						return SQL_C_CHAR;
-					break;
-				case (SQLWCHAR)'d':
-					if (! wmemncasecmp(type_name, MK_WPTR(JSON_COL_DATE), len))
-						// TODO: time/timestamp
-						return SQL_C_TYPE_DATE;
-					break;
-				case (SQLWCHAR)'b':
-					if (! wmemncasecmp(type_name, MK_WPTR(JSON_COL_BYTE), len))
-						return SQL_C_STINYINT;
-					break;
-#if 1 // BUG FIXME
-				case (SQLWCHAR)'n':
-					if (! wmemncasecmp(type_name, MK_WPTR("null"), len))
-						// TODO: time/timestamp
-						return SQL_C_SSHORT;
-					break;
-#endif
-			}
-			break;
-		case sizeof(JSON_COL_SHORT) - 1:
-			if (! wmemncasecmp(type_name, MK_WPTR(JSON_COL_SHORT), len))
-				// TODO: time/timestamp
-				return SQL_C_SSHORT;
-			break;
-	}
-	ERR("unrecognized Elastic type `" LWPDL "` (%zd).", len, type_name,
-			len);
-	return SQL_UNKNOWN_TYPE;
 }
 
 static void set_col_size(esodbc_rec_st *rec)
@@ -172,21 +99,22 @@ static void set_col_decdigits(esodbc_rec_st *rec)
 
 static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 {
+	esodbc_desc_st *ird;
+	esodbc_dbc_st *dbc;
 	esodbc_rec_st *rec;
 	SQLRETURN ret;
 	SQLSMALLINT recno;
 	void *iter;
 	UJObject col_o, name_o, type_o;
-	const wchar_t *col_wname, *col_wtype;
-	SQLSMALLINT col_stype;
-	size_t len, ncols;
-	
-	esodbc_desc_st *ird = stmt->ird;
+	wstr_st col_name, col_type;
+	size_t ncols, i;
 	wchar_t *keys[] = {
 		MK_WPTR(JSON_ANSWER_COL_NAME),
 		MK_WPTR(JSON_ANSWER_COL_TYPE)
 	};
 
+	ird = stmt->ird;
+	dbc = stmt->hdr.dbc;
 
 	ncols = UJArraySize(columns);
 	DBGH(stmt, "columns received: %zd.", ncols);
@@ -212,35 +140,45 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 		}
 		rec = &ird->recs[recno]; // +recno
 
-		col_wname = UJReadString(name_o, &len);
 		ASSERT_INTEGER_TYPES_EQUAL(wchar_t, SQLWCHAR);
-		rec->name = len ? (SQLWCHAR *)col_wname : MK_WPTR("");
+		col_name.str = (SQLWCHAR *)UJReadString(name_o, &col_name.cnt);
+		rec->name = col_name.cnt ? col_name.str : MK_WPTR("");
 
-		col_wtype = UJReadString(type_o, &len);
-		/* If the type is unknown, an empty string is returned." */
-		rec->type_name = len ? (SQLWCHAR *)col_wtype : MK_WPTR("");
-		/*
-		 * TODO: to ELASTIC types, rather?
-		 * TODO: Read size (precision/lenght) and dec-dig(scale/precision)
-		 * from received type.
-		 */
-		col_stype = type_elastic2csql(col_wtype, len);
-		if (col_stype == SQL_UNKNOWN_TYPE) {
-			ERRH(stmt, "failed to convert Elastic to C SQL type `"
-					LWPDL "`.", len, col_wtype);
-			RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
+		col_type.str = (SQLWCHAR *)UJReadString(type_o, &col_type.cnt);
+
+		assert(! rec->es_type);
+		/* lookup the DBC-cashed ES type */
+		for (i = 0; i < dbc->no_types; i ++) {
+			if (EQ_CASE_WSTR(&dbc->es_types[i].type_name, &col_type)) {
+				rec->es_type = &dbc->es_types[i];
+				break;
+			}
 		}
-		rec->concise_type = col_stype;
-		concise_to_type_code(col_stype, &rec->type,
+		if (rec->es_type) {
+			rec->concise_type = rec->es_type->sql_c_type;
+		} else {
+			do {
+				if (! dbc->no_types) {
+					/* the connection doesn't have the types cached yet (this
+					 * is the SYS TYPES call) -> resolve the types "directly"
+					 * */
+					rec->concise_type = type_elastic2csql(&col_type);
+					if (rec->concise_type != SQL_UNKNOWN_TYPE)
+						break;
+				}
+				ERRH(stmt, "type lookup failed for `" LWPDL "`. (ES-driver "
+						"out of sync? check versions.)", LWSTR(&col_type));
+				RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
+			} while (0);
+		}
+		concise_to_type_code(rec->concise_type, &rec->type,
 				&rec->datetime_interval_code);
-		/* TODO: here it should be 'ird->type'. But we're setting C SQL types
-		 * for IRD as well for now. */
 		rec->meta_type = concise_to_meta(rec->concise_type, DESC_TYPE_ARD);
 
 		set_col_size(rec);
 		set_col_decdigits(rec);
 
-		/* TODO: set all settable fields */
+		/* TODO: set remaining of settable fields (base table etc.) */
 
 		/* "If a base column name does not exist (as in the case of columns
 		 * that are expressions), then this variable contains an empty
@@ -259,8 +197,9 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 		//dump_record(rec);
 #endif /* NDEBUG */
 
-		DBGH(stmt, "column #%d: name=`" LWPD "`, type=%d (`" LWPD "`).",
-				recno, col_wname, col_stype, col_wtype);
+		DBGH(stmt, "column #%d: name=`" LWPDL "`, type=%d (`" LWPDL "`).",
+				recno, LWSTR(&col_name), rec->concise_type,
+				LWSTR(&col_type));
 		recno ++;
 	}
 
@@ -468,6 +407,9 @@ end:
 	RET_STATE(stmt->hdr.diag.state);
 }
 
+/*
+ * Attach an SQL query to the statment: malloc, convert, copy.
+ */
 SQLRETURN attach_sql(esodbc_stmt_st *stmt,
 		const SQLWCHAR *sql, /* SQL text statement */
 		size_t sqlcnt /* count of chars of 'sql' */)
@@ -514,12 +456,15 @@ SQLRETURN attach_sql(esodbc_stmt_st *stmt,
 
 	stmt->u8sql = u8;
 	stmt->sqllen = (size_t)len;
-	
+
 	DBGH(stmt, "attached SQL `%.*s` (%zd).", len, u8, len);
 
 	return SQL_SUCCESS;
 }
 
+/*
+ * Detach the existing query (if any) from the statement.
+ */
 void detach_sql(esodbc_stmt_st *stmt)
 {
 	if (! stmt->u8sql)
@@ -735,6 +680,7 @@ static size_t buff_octet_size(
 
 	/* is target buffer to small? adjust size if so and indicate truncation */
 	/* Note: this should only be tested/applied if ARD.meta_type == STR||BIN */
+	// FIXME: check note above
 	if (room < max_copy) {
 		INFO("applying buffer truncation %zd -> %zd.", max_copy, room);
 		max_copy = room;
@@ -869,6 +815,69 @@ static SQLRETURN copy_double(esodbc_rec_st *arec, esodbc_rec_st *irec,
 {
 	FIXME; // FIXME
 	return SQL_ERROR;
+}
+
+static SQLRETURN copy_boolean(esodbc_rec_st *arec, esodbc_rec_st *irec,
+		SQLULEN pos, BOOL boolval)
+{
+	esodbc_stmt_st *stmt;
+	void *data_ptr;
+	SQLLEN *octet_len_ptr;
+	SQLSMALLINT target_type;
+
+	stmt = arec->desc->hdr.stmt;
+
+	/* pointer where to write how many characters we will/would use */
+	octet_len_ptr = deferred_address(SQL_DESC_OCTET_LENGTH_PTR, pos, arec);
+	/* pointer to app's buffer */
+	data_ptr = deferred_address(SQL_DESC_DATA_PTR, pos, arec);
+	if (! data_ptr) {
+		ERRH(stmt, "received boolean type, but NULL data ptr.");
+		RET_HDIAGS(stmt, SQL_STATE_HY009);
+	}
+
+	target_type = arec->type == SQL_C_DEFAULT ? irec->type : arec->type;
+	DBGH(stmt, "target data type: %d.", target_type);
+	switch (target_type) {
+		case SQL_C_STINYINT:
+		case SQL_C_UTINYINT:
+			*(SQLSCHAR *)data_ptr = (SQLSCHAR)boolval;
+			write_copied_octets(octet_len_ptr, sizeof(SQLSCHAR),
+					stmt->max_length, irec->meta_type);
+			break;
+
+		case SQL_C_SSHORT:
+		case SQL_C_USHORT:
+			*(SQLSMALLINT *)data_ptr = (SQLSMALLINT)boolval;
+			write_copied_octets(octet_len_ptr, sizeof(SQLSMALLINT),
+					stmt->max_length, irec->meta_type);
+			break;
+
+		case SQL_C_SLONG:
+		case SQL_C_ULONG:
+			*(SQLINTEGER *)data_ptr = (SQLINTEGER)boolval;
+			write_copied_octets(octet_len_ptr, sizeof(SQLINTEGER),
+					stmt->max_length, irec->meta_type);
+			break;
+
+		case SQL_C_SBIGINT:
+		case SQL_C_UBIGINT:
+			*(SQLBIGINT *)data_ptr = (SQLBIGINT)boolval;
+			write_copied_octets(octet_len_ptr, sizeof(SQLBIGINT),
+					stmt->max_length, irec->meta_type);
+			break;
+
+		case SQL_C_CHAR:
+		case SQL_C_WCHAR:
+
+		default:
+			FIXME; // FIXME
+			return SQL_ERROR;
+	}
+
+	DBGH(stmt, "REC@0x%p, data_ptr@0x%p, copied boolean: `%d`.", arec,
+			data_ptr, boolval);
+	return SQL_SUCCESS;
 }
 
 /*
@@ -1127,6 +1136,7 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 	long long ll;
 	double dbl;
 	const wchar_t *wstr;
+	BOOL boolval;
 	size_t len;
 	BOOL with_info;
 	esodbc_desc_st *ard, *ird;
@@ -1140,8 +1150,8 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 	do { \
 		if (ard->array_status_ptr) \
 			ard->array_status_ptr[pos] = SQL_ROW_ERROR; \
-		return post_row_diagnostic(&stmt->hdr.diag, _state, MK_WPTR(_message), 0, \
-				rowno, _colno); \
+		return post_row_diagnostic(&stmt->hdr.diag, _state, MK_WPTR(_message),\
+				0, rowno, _colno); \
 	} while (0)
 #define SET_ROW_DIAG(_rowno, _colno) \
 	do { \
@@ -1171,16 +1181,23 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 			DBGH(stmt, "column #%d not bound, skipping it.", i + 1);
 			continue;
 		}
-		
+
 		arec = get_record(ard, i + 1, FALSE);
 		irec = get_record(ird, i + 1, FALSE);
 		assert(arec);
 		assert(irec);
-		
+
 		switch (UJGetType(obj)) {
+			default:
+				ERRH(stmt, "unexpected object of type %d in row L#%zd/T#%zd.",
+						UJGetType(obj), stmt->rset.vrows, stmt->rset.frows);
+				RET_ROW_DIAG(SQL_STATE_01S01, MSG_INV_SRV_ANS, i + 1);
+				/* RET_.. returns */
+
 			case UJT_Null:
 				DBGH(stmt, "value [%zd, %d] is NULL.", rowno, i + 1);
 #if 0
+				// FIXME: needed?
 				if (! arec->nullable) {
 					ERRH(stmt, "received a NULL for a not nullable val.");
 					RET_ROW_DIAG(SQL_STATE_HY003, "NULL value received for non"
@@ -1194,26 +1211,18 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 							" but not supplied", i + 1);
 				}
 				*ind_len = SQL_NULL_DATA;
-				break;
+				continue; /* instead of break! no 'ret' processing to do. */
 
 			case UJT_String:
 				wstr = UJReadString(obj, &len);
-				DBGH(stmt, "value [%zd, %d] is string: `" LWPD "`.", rowno,
-						i + 1, wstr);
+				DBGH(stmt, "value [%zd, %d] is string [%d]:`" LWPDL "`.",
+						rowno, i + 1, len, len, wstr);
 				/* UJSON4C returns chars count, but 0-terminates w/o counting
 				 * the terminator */
 				assert(wstr[len] == 0);
+				/* "When character data is returned from the driver to the
+				 * application, the driver must always null-terminate it." */
 				ret = copy_string(arec, irec, pos, wstr, len + /*\0*/1);
-				switch (ret) {
-					case SQL_SUCCESS_WITH_INFO:
-						with_info = TRUE;
-						SET_ROW_DIAG(rowno, i + 1);
-					case SQL_SUCCESS:
-						break;
-					default:
-						SET_ROW_DIAG(rowno, i + 1);
-						return ret;
-				}
 				break;
 
 			case UJT_Long:
@@ -1222,47 +1231,43 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 				DBGH(stmt, "value [%zd, %d] is numeric: %lld.", rowno, i + 1,
 						ll);
 				ret = copy_longlong(arec, irec, pos, ll);
-				switch (ret) {
-					case SQL_SUCCESS_WITH_INFO:
-						with_info = TRUE;
-						SET_ROW_DIAG(rowno, i + 1);
-					case SQL_SUCCESS:
-						break;
-					default:
-						SET_ROW_DIAG(rowno, i + 1);
-						return ret;
-				}
 				break;
 
 			case UJT_Double:
 				dbl = UJNumericFloat(obj);
-				DBGH(stmt, "value [%zd, %d] is double: %f.", rowno, i + 1, dbl);
+				DBGH(stmt, "value [%zd, %d] is double: %f.", rowno, i + 1,
+						dbl);
 				ret = copy_double(arec, irec, pos, dbl);
-				switch (ret) {
-					case SQL_SUCCESS_WITH_INFO:
-						with_info = TRUE;
-						SET_ROW_DIAG(rowno, i + 1);
-					case SQL_SUCCESS:
-						break;
-					default:
-						SET_ROW_DIAG(rowno, i + 1);
-						return ret;
-				}
 				break;
 
 			/* TODO: convert to 1/0? */
 			case UJT_True:
 			case UJT_False:
+				boolval = UJGetType(obj) == UJT_True ? TRUE : FALSE;
+				DBGH(stmt, "value [%zd, %d] is boolean: %d.", rowno, i + 1,
+						boolval);
+				ret = copy_boolean(arec, irec, pos, boolval);
+				break;
+		}
+
+		switch (ret) {
+			case SQL_SUCCESS_WITH_INFO:
+				with_info = TRUE;
+				SET_ROW_DIAG(rowno, i + 1);
+			case SQL_SUCCESS:
+				break;
 			default:
-				ERRH(stmt, "unexpected object of type %d in row L#%zd/T#%zd.",
-						UJGetType(obj), stmt->rset.vrows, stmt->rset.frows);
-				RET_ROW_DIAG(SQL_STATE_01S01, MSG_INV_SRV_ANS, i + 1);
+				SET_ROW_DIAG(rowno, i + 1);
+				return ret;
 		}
 	}
 
-	if (ard->array_status_ptr)
-		ard->array_status_ptr[pos] = with_info ? SQL_ROW_SUCCESS_WITH_INFO :
+	if (ird->array_status_ptr) {
+		ird->array_status_ptr[pos] = with_info ? SQL_ROW_SUCCESS_WITH_INFO :
 			SQL_ROW_SUCCESS;
+		DBGH(stmt, "status array @0x%p#%d set to %d.", ird->array_status_ptr,
+				pos, ird->array_status_ptr[pos]);
+	}
 
 	return with_info ? SQL_SUCCESS_WITH_INFO : SQL_SUCCESS;
 
