@@ -89,7 +89,7 @@ them in driver's libs directory, where the build script expects them by
 default:
 ```
    somedirectory\
-    |_x-pack-odbc
+    |_elasticsearch-sql-odbc
       |_README.md
       |_CMakeLists.txt
       |_build.bat
