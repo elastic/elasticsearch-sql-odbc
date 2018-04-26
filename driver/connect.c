@@ -720,7 +720,7 @@ static BOOL parse_token(BOOL is_value, SQLWCHAR **pos, SQLWCHAR *end,
 				}
 				(*pos)++;
 				break;
-			
+
 			default:
 				(*pos)++;
 		}
@@ -1049,16 +1049,16 @@ static inline void assign_defaults(config_attrs_st *attrs)
 		attrs->follow = MK_WSTR(ESODBC_DEF_FOLLOW);
 
 	/* no default packing */
-	
+
 	if (! attrs->packing.cnt)
 		attrs->packing = MK_WSTR(ESODBC_DEF_PACKING);
 	if (! attrs->max_fetch_size.cnt)
 		attrs->max_fetch_size = MK_WSTR(ESODBC_DEF_FETCH_SIZE);
 	if (! attrs->max_body_size.cnt)
 		attrs->max_body_size = MK_WSTR(ESODBC_DEF_MAX_BODY_SIZE_MB);
-	
+
 	/* default: no trace file */
-	
+
 	if (! attrs->trace_level.cnt)
 		attrs->trace_level = MK_WSTR(ESODBC_DEF_TRACE_LEVEL);
 }
@@ -2020,7 +2020,6 @@ SQLRETURN EsSQLGetConnectAttrW(
 			if (StringLengthPtr);
 				*StringLengthPtr = (SQLINTEGER)used;
 			return ret;
-			
 #endif //0
 			break;
 
@@ -2068,7 +2067,7 @@ SQLRETURN EsSQLGetConnectAttrW(
 			ERRH(dbc, "unknown Attribute type %d.", Attribute);
 			RET_HDIAGS(DBCH(ConnectionHandle), SQL_STATE_HY092);
 	}
-	
+
 	return SQL_SUCCESS;
 }
 

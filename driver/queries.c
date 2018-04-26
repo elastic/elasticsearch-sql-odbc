@@ -808,7 +808,7 @@ static SQLRETURN copy_longlong(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			write_copied_octets(octet_len_ptr, sizeof(SQLINTEGER),
 					stmt->max_length, irec->meta_type);
 			break;
-		
+
 		case SQL_C_SBIGINT:
 			*(SQLBIGINT *)data_ptr = (SQLBIGINT)ll;
 			write_copied_octets(octet_len_ptr, sizeof(SQLBIGINT),
@@ -1386,7 +1386,7 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 
 	DBGH(stmt, "(`%.*s`); cursor @ %zd / %zd.", stmt->sqllen,
 			stmt->u8sql, stmt->rset.vrows, stmt->rset.nrows);
-	
+
 	DBGH(stmt, "rowset max size: %d.", ard->array_size);
 	errors = 0;
 	/* for all rows in rowset/array, iterate over rows in current resultset */
@@ -1434,7 +1434,7 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 		DBGH(stmt, "no data %sto return.", stmt->rset.vrows ? "left ": "");
 		return SQL_NO_DATA;
 	}
-	
+
 	if (errors && i <= errors) {
 		ERRH(stmt, "processing failed for all rows [%d].", errors);
 		return SQL_ERROR;
@@ -1552,10 +1552,10 @@ SQLRETURN EsSQLPrepareW
 	}
 	DBGH(stmt, "preparing `" LWPDL "` [%d]", cchSqlStr, szSqlStr,
 			cchSqlStr);
-	
+
 	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
 	assert(SQL_SUCCEEDED(ret)); /* can't return error */
-	
+
 	return attach_sql(stmt, szSqlStr, cchSqlStr);
 }
 
@@ -1578,7 +1578,7 @@ SQLRETURN EsSQLExecute(SQLHSTMT hstmt)
 
 	DBGH(stmt, "executing `%.*s` (%zd)", stmt->sqllen, stmt->u8sql,
 			stmt->sqllen);
-	
+
 	return post_statement(stmt);
 }
 
@@ -1612,7 +1612,7 @@ SQLRETURN EsSQLExecDirectW
 	}
 	DBGH(stmt, "directly executing SQL: `" LWPDL "` [%d].", cchSqlStr,
 			szSqlStr, cchSqlStr);
-	
+
 	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
 	assert(SQL_SUCCEEDED(ret)); /* can't return error */
 
@@ -1637,7 +1637,7 @@ static inline SQLULEN get_col_size(esodbc_rec_st *rec)
 		case METATYPE_EXACT_NUMERIC:
 		case METATYPE_FLOAT_NUMERIC:
 			return rec->precision;
-		
+
 		case METATYPE_STRING:
 		case METATYPE_BIN:
 		case METATYPE_DATETIME:
@@ -1656,7 +1656,7 @@ static inline SQLSMALLINT get_col_decdigits(esodbc_rec_st *rec)
 		case METATYPE_DATETIME:
 		case METATYPE_INTERVAL_WSEC:
 			return rec->precision;
-		
+
 		case METATYPE_EXACT_NUMERIC:
 			return rec->scale;
 	}
@@ -1696,7 +1696,7 @@ SQLRETURN EsSQLDescribeColW(
 		/* TODO: if implementing bookmarks */
 		RET_HDIAGS(stmt, SQL_STATE_HYC00);
 	}
-	
+
 	rec = get_record(stmt->ird, icol, FALSE);
 	if (! rec) {
 		ERRH(stmt, "no record for columns #%d.", icol);
@@ -1876,7 +1876,7 @@ SQLRETURN EsSQLColAttributeW(
 		} while (0);
 			PNUMATTR_ASSIGN(SQLLEN, len);
 			break;
-	
+
 		/* SQLULEN */
 		case SQL_DESC_LENGTH:
 			PNUMATTR_ASSIGN(SQLULEN, rec->length);
@@ -1912,12 +1912,12 @@ SQLRETURN EsSQLColAttributeW(
 SQLRETURN EsSQLRowCount(_In_ SQLHSTMT StatementHandle, _Out_ SQLLEN* RowCount)
 {
 	esodbc_stmt_st *stmt = STMH(StatementHandle);
-	
+
 	if (! STMT_HAS_RESULTSET(stmt)) {
 		ERRH(stmt, "no resultset available on statement.");
 		RET_HDIAGS(stmt, SQL_STATE_HY010);
 	}
-	
+
 	DBGH(stmt, "current resultset rows count: %zd.", stmt->rset.nrows);
 	*RowCount = (SQLLEN)stmt->rset.nrows;
 
