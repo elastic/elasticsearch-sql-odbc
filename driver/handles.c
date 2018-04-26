@@ -21,13 +21,9 @@ static void free_rec_fields(esodbc_rec_st *rec)
 		&rec->base_table_name,
 		&rec->catalog_name,
 		&rec->label,
-		&rec->literal_prefix,
-		&rec->literal_suffix,
-		&rec->local_type_name,
 		&rec->name,
 		&rec->schema_name,
 		&rec->table_name,
-		&rec->type_name,
 	};
 	for (i = 0; i < sizeof(wptr)/sizeof(wptr[0]); i ++) {
 		DBGH(rec->desc, "freeing field #%d = 0x%p.", i, *wptr[i]);
@@ -114,50 +110,43 @@ void dump_record(esodbc_rec_st *rec)
 #define DUMP_FIELD(_strp, _name, _desc) \
 	DBGH(rec->desc, "0x%p->%s: `" _desc "`.", _strp, # _name, (_strp)->_name)
 
+	// TODO: add dumping for the es_type?
+
 	DUMP_FIELD(rec, desc, "0x%p");
 	DUMP_FIELD(rec, meta_type, "%d");
-	
+
 	DUMP_FIELD(rec, concise_type, "%d");
 	DUMP_FIELD(rec, type, "%d");
 	DUMP_FIELD(rec, datetime_interval_code, "%d");
-	
+
 	DUMP_FIELD(rec, data_ptr, "0x%p");
-	
+
 	DUMP_FIELD(rec, base_column_name, LWPD);
 	DUMP_FIELD(rec, base_table_name, LWPD);
 	DUMP_FIELD(rec, catalog_name, LWPD);
 	DUMP_FIELD(rec, label, LWPD);
-	DUMP_FIELD(rec, literal_prefix, LWPD);
-	DUMP_FIELD(rec, literal_suffix, LWPD);
-	DUMP_FIELD(rec, local_type_name, LWPD);
 	DUMP_FIELD(rec, name, LWPD);
 	DUMP_FIELD(rec, schema_name, LWPD);
 	DUMP_FIELD(rec, table_name, LWPD);
-	DUMP_FIELD(rec, type_name, LWPD);
 
 	DUMP_FIELD(rec, indicator_ptr, "0x%p");
 	DUMP_FIELD(rec, octet_length_ptr, "0x%p");
-	
+
 	DUMP_FIELD(rec, display_size, "%lld");
 	DUMP_FIELD(rec, octet_length, "%lld");
-	
+
 	DUMP_FIELD(rec, length, "%llu");
-	
-	DUMP_FIELD(rec, auto_unique_value, "%d");
-	DUMP_FIELD(rec, case_sensitive, "%d");
+
 	DUMP_FIELD(rec, datetime_interval_precision, "%d");
 	DUMP_FIELD(rec, num_prec_radix, "%d");
-	
-	DUMP_FIELD(rec, fixed_prec_scale, "%d");
-	DUMP_FIELD(rec, nullable, "%d");
+
 	DUMP_FIELD(rec, parameter_type, "%d");
 	DUMP_FIELD(rec, precision, "%d");
 	DUMP_FIELD(rec, rowver, "%d");
 	DUMP_FIELD(rec, scale, "%d");
-	DUMP_FIELD(rec, searchable, "%d");
 	DUMP_FIELD(rec, unnamed, "%d");
-	DUMP_FIELD(rec, usigned, "%d");
 	DUMP_FIELD(rec, updatable, "%d");
+
 #undef DUMP_FIELD
 }
 
@@ -1083,6 +1072,11 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
  * SQL_DESC_TYPE		rw	rw	r	rw
  */
 // TODO: individual tests just for this
+/*
+ * Check access to record headers/fields.
+ * IxD must have es_type pointer set and it's value is not checked at
+ * header/field access time -> only this function guards against NP deref'ing.
+ */
 static BOOL check_access(desc_type_et desc_type, SQLSMALLINT field_id, 
 		char mode /* O_RDONLY | O_RDWR */)
 {
@@ -1102,7 +1096,7 @@ static BOOL check_access(desc_type_et desc_type, SQLSMALLINT field_id,
 			ret = TRUE;
 			break;
 		case SQL_DESC_ROWS_PROCESSED_PTR:
-			ret = desc_type == DESC_TYPE_IRD || desc_type == DESC_TYPE_IPD;
+			ret = DESC_TYPE_IS_IMPLEMENTATION(desc_type);
 			break;
 		case SQL_DESC_PARAMETER_TYPE:
 			ret = desc_type == DESC_TYPE_IPD;
@@ -1114,7 +1108,7 @@ static BOOL check_access(desc_type_et desc_type, SQLSMALLINT field_id,
 		case SQL_DESC_DATA_PTR:
 		case SQL_DESC_INDICATOR_PTR:
 		case SQL_DESC_OCTET_LENGTH_PTR:
-			ret = desc_type == DESC_TYPE_ARD || desc_type == DESC_TYPE_APD;
+			ret = DESC_TYPE_IS_APPLICATION(desc_type);
 			break;
 
 		case SQL_DESC_AUTO_UNIQUE_VALUE:
@@ -1139,8 +1133,7 @@ static BOOL check_access(desc_type_et desc_type, SQLSMALLINT field_id,
 		case SQL_DESC_ROWVER:
 		case SQL_DESC_UNSIGNED:
 		case SQL_DESC_TYPE_NAME:
-			ret = mode == O_RDONLY && 
-				(desc_type == DESC_TYPE_IRD || desc_type == DESC_TYPE_IPD);
+			ret = mode == O_RDONLY && DESC_TYPE_IS_IMPLEMENTATION(desc_type);
 			break;
 
 		case SQL_DESC_NAME:
@@ -1422,6 +1415,7 @@ SQLRETURN EsSQLGetDescFieldW(
 				RecNumber, rec);
 	}
 
+	ASSERT_IXD_HAS_ES_TYPE(rec);
 
 	/* record fields */
 	switch (FieldIdentifier) {
@@ -1437,13 +1431,21 @@ SQLRETURN EsSQLGetDescFieldW(
 		case SQL_DESC_BASE_TABLE_NAME: wptr = rec->base_table_name; break;
 		case SQL_DESC_CATALOG_NAME: wptr = rec->catalog_name; break;
 		case SQL_DESC_LABEL: wptr = rec->label; break;
-		case SQL_DESC_LITERAL_PREFIX: wptr = rec->literal_prefix; break;
-		case SQL_DESC_LITERAL_SUFFIX: wptr = rec->literal_suffix; break;
-		case SQL_DESC_LOCAL_TYPE_NAME: wptr = rec->local_type_name; break;
 		case SQL_DESC_NAME: wptr = rec->name; break;
 		case SQL_DESC_SCHEMA_NAME: wptr = rec->schema_name; break;
 		case SQL_DESC_TABLE_NAME: wptr = rec->table_name; break;
-		case SQL_DESC_TYPE_NAME: wptr = rec->type_name; break;
+		case SQL_DESC_LITERAL_PREFIX:
+			wptr = rec->es_type->literal_prefix.str;
+			break;
+		case SQL_DESC_LITERAL_SUFFIX: 
+			wptr = rec->es_type->literal_suffix.str;
+			break;
+		case SQL_DESC_LOCAL_TYPE_NAME:
+			wptr = rec->es_type->local_type_name.str;
+			break;
+		case SQL_DESC_TYPE_NAME:
+			wptr = rec->es_type->type_name.str;
+			break;
 		} while (0);
 			if (! wptr) {
 				*StringLengthPtr = 0;
@@ -1493,15 +1495,17 @@ SQLRETURN EsSQLGetDescFieldW(
 		case SQL_DESC_DATETIME_INTERVAL_CODE:
 			word = rec->datetime_interval_code; break;
 
-		case SQL_DESC_FIXED_PREC_SCALE: word = rec->fixed_prec_scale; break;
-		case SQL_DESC_NULLABLE: word = rec->nullable; break;
 		case SQL_DESC_PARAMETER_TYPE: word = rec->parameter_type; break;
 		case SQL_DESC_PRECISION: word = rec->precision; break;
 		case SQL_DESC_ROWVER: word = rec->rowver; break;
 		case SQL_DESC_SCALE: word = rec->scale; break;
-		case SQL_DESC_SEARCHABLE: word = rec->searchable; break;
 		case SQL_DESC_UNNAMED: word = rec->unnamed; break;
-		case SQL_DESC_UNSIGNED: word = rec->usigned; break;
+		case SQL_DESC_FIXED_PREC_SCALE:
+			word = rec->es_type->fixed_prec_scale;
+			break;
+		case SQL_DESC_NULLABLE: word = rec->es_type->nullable; break;
+		case SQL_DESC_SEARCHABLE: word = rec->es_type->searchable; break;
+		case SQL_DESC_UNSIGNED: word = rec->es_type->unsigned_attribute; break;
 		case SQL_DESC_UPDATABLE: word = rec->updatable; break;
 		} while (0);
 			*(SQLSMALLINT *)ValuePtr = word;
@@ -1511,11 +1515,27 @@ SQLRETURN EsSQLGetDescFieldW(
 
 		/* <SQLINTEGER> */
 		do {
-		case SQL_DESC_AUTO_UNIQUE_VALUE: intgr = rec->auto_unique_value; break;
-		case SQL_DESC_CASE_SENSITIVE: intgr = rec->case_sensitive; break;
-		case SQL_DESC_DATETIME_INTERVAL_PRECISION: 
-			intgr = rec->datetime_interval_precision; break;
-		case SQL_DESC_NUM_PREC_RADIX: intgr = rec->num_prec_radix; break;
+		case SQL_DESC_DATETIME_INTERVAL_PRECISION:
+			if (DESC_TYPE_IS_IMPLEMENTATION(rec->desc->type)) {
+				/* not used with ES (so far), as no interval types are sup. */
+				intgr = rec->es_type->interval_precision;
+			} else {
+				intgr = rec->datetime_interval_precision;
+			}
+			break;
+		case SQL_DESC_NUM_PREC_RADIX:
+			if DESC_TYPE_IS_IMPLEMENTATION(rec->desc->type) {
+				intgr = rec->es_type->num_prec_radix;
+			} else {
+				intgr = rec->num_prec_radix;
+			}
+			break;
+		case SQL_DESC_AUTO_UNIQUE_VALUE:
+			intgr = rec->es_type->auto_unique_value;
+			break;
+		case SQL_DESC_CASE_SENSITIVE:
+			intgr = rec->es_type->case_sensitive;
+			break;
 		} while (0);
 			*(SQLINTEGER *)ValuePtr = intgr;
 			DBGH(desc, "returning record field %d as %d.", FieldIdentifier,
@@ -2182,12 +2202,9 @@ SQLRETURN EsSQLSetDescFieldW(
 		case SQL_DESC_BASE_TABLE_NAME: wptrp = &rec->base_table_name; break;
 		case SQL_DESC_CATALOG_NAME: wptrp = &rec->catalog_name; break;
 		case SQL_DESC_LABEL: wptrp = &rec->label; break;
-		case SQL_DESC_LITERAL_PREFIX: wptrp = &rec->literal_prefix; break;
-		case SQL_DESC_LITERAL_SUFFIX: wptrp = &rec->literal_suffix; break;
-		case SQL_DESC_LOCAL_TYPE_NAME: wptrp = &rec->local_type_name; break;
+		/* R/O fields: literal_prefix/_suffix, local_type_name, type_name */
 		case SQL_DESC_SCHEMA_NAME: wptrp = &rec->schema_name; break;
 		case SQL_DESC_TABLE_NAME: wptrp = &rec->table_name; break;
-		case SQL_DESC_TYPE_NAME: wptrp = &rec->type_name; break;
 		} while (0);
 			DBGH(desc, "setting SQLWCHAR field %d to 0x%p(`"LWPD"`).",
 					FieldIdentifier, ValuePtr, 
@@ -2247,13 +2264,10 @@ SQLRETURN EsSQLSetDescFieldW(
 		do {
 		case SQL_DESC_DATETIME_INTERVAL_CODE:
 			wordp = &rec->datetime_interval_code; break;
-		case SQL_DESC_FIXED_PREC_SCALE: wordp = &rec->fixed_prec_scale; break;
-		case SQL_DESC_NULLABLE: wordp = &rec->nullable; break;
 		case SQL_DESC_PARAMETER_TYPE: wordp = &rec->parameter_type; break;
 		case SQL_DESC_PRECISION: wordp = &rec->precision; break;
 		case SQL_DESC_ROWVER: wordp = &rec->rowver; break;
 		case SQL_DESC_SCALE: wordp = &rec->scale; break;
-		case SQL_DESC_SEARCHABLE: wordp = &rec->searchable; break;
 		case SQL_DESC_UNNAMED:
 			/* only driver can set this value */
 			if ((SQLSMALLINT)(intptr_t)ValuePtr == SQL_NAMED) {
@@ -2263,7 +2277,7 @@ SQLRETURN EsSQLSetDescFieldW(
 			}
 			wordp = &rec->unnamed;
 			break;
-		case SQL_DESC_UNSIGNED: wordp = &rec->usigned; break;
+		/* R/O field: fixed_prec_scale, nullable, searchable, unsigned  */
 		case SQL_DESC_UPDATABLE: wordp = &rec->updatable; break;
 		} while (0);
 			DBGH(desc, "setting record field %d to %d.", FieldIdentifier,
@@ -2273,11 +2287,13 @@ SQLRETURN EsSQLSetDescFieldW(
 
 		/* <SQLINTEGER> */
 		do {
-		case SQL_DESC_AUTO_UNIQUE_VALUE: intp = &rec->auto_unique_value; break;
-		case SQL_DESC_CASE_SENSITIVE: intp = &rec->case_sensitive; break;
+		/* R/O field: auto_unique_value, case_sensitive  */
 		case SQL_DESC_DATETIME_INTERVAL_PRECISION: 
-			intp = &rec->datetime_interval_precision; break;
-		case SQL_DESC_NUM_PREC_RADIX: intp = &rec->num_prec_radix; break;
+			intp = &rec->datetime_interval_precision;
+			break;
+		case SQL_DESC_NUM_PREC_RADIX:
+			intp = &rec->num_prec_radix;
+			break;
 		} while (0);
 			DBGH(desc, "returning record field %d as %d.", FieldIdentifier,
 					(SQLINTEGER)(intptr_t)ValuePtr);

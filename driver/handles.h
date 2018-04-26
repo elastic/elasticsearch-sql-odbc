@@ -122,7 +122,7 @@ typedef struct struct_dbc {
 	 * might be a directory" */
 	SQLWCHAR *catalog; 
 	// TODO: statement list?
-	
+
 	/* options */
 	SQLULEN metadata_id; // default: SQL_FALSE
 	SQLULEN async_enable; // default: SQL_ASYNC_ENABLE_OFF
@@ -204,6 +204,20 @@ typedef enum {
 	DESC_TYPE_IPD,
 } desc_type_et;
 
+/* type is for an application descriptor */
+#define DESC_TYPE_IS_APPLICATION(_dtype) \
+	(_dtype == DESC_TYPE_ARD || _dtype == DESC_TYPE_APD)
+/* type is for an implementation descriptor */
+#define DESC_TYPE_IS_IMPLEMENTATION(_dtype) \
+	(_dtype == DESC_TYPE_IRD || _dtype == DESC_TYPE_IPD)
+/* type is for a record descriptor */
+#define DESC_TYPE_IS_RECORD(_dtype) \
+	(_dtype == DESC_TYPE_ARD || _dtype == DESC_TYPE_IRD)
+/* type is for a parameter descriptor */
+#define DESC_TYPE_IS_PARAMETER(_dtype) \
+	(_dtype == DESC_TYPE_APD || _dtype == DESC_TYPE_IPD)
+
+
 typedef struct struct_desc {
 	esodbc_hhdr_st hdr;
 
@@ -227,6 +241,10 @@ typedef struct struct_desc {
 	 * TODO: list? binding occurs seldomly, compared to execution, tho. */
 	esodbc_rec_st *recs;
 } esodbc_desc_st;
+
+/* the ES/SQL type must be set for implementation descriptor records */
+#define ASSERT_IXD_HAS_ES_TYPE(_rec) \
+	assert(DESC_TYPE_IS_IMPLEMENTATION(_rec->desc->type) && _rec->es_type)
 
 
 typedef struct struct_resultset {
