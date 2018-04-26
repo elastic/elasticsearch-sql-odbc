@@ -78,6 +78,8 @@ if /i not _%ARG:setup=% == _%ARG% (
 		echo.
 	)
 )
+REM
+
 
 REM presence of 'fetch': invoke FETCH "function"
 if /i not _%ARG:fetch=% == _%ARG% (
@@ -140,7 +142,9 @@ REM if TEMP var not set, set it.
 	if exist %TEMP% goto:eof
 	set TEMP="%USERPROFILE%\Local Settings\Temp\"
 	if exist %TEMP% goto:eof
-	echo WARN: no temporary directory available; using root
+	echo.
+	echo WARNING: no temporary directory available; using root
+	echo.
 	set TEMP=\
 
 	goto:eof
@@ -211,15 +215,22 @@ REM CLEAN function: clean up the build dir before building
 REM SETUP function: set-up the build environment
 :SETUP
 	set RELEASE=2017
-	set EDITION=Professional
 	for %%e in (Enterprise, Professional, Community) do (
 		if exist "C:\Program Files (x86)\Microsoft Visual Studio\%RELEASE%\%%e\Common7\Tools\VsDevCmd.bat" (
 			if /i "%%e" == "Community" (
+				echo.
 				echo WARNING: Community edition is not licensed to build commerical projects.
+				echo.
 			)
 			call "C:\Program Files (x86)\Microsoft Visual Studio\%RELEASE%\%%e\Common7\Tools\VsDevCmd.bat" -arch=!TARCH!
+			set EDITION=%%e
 			break
 		)
+	)
+	if "%EDITION%" == "" (
+		echo.
+		echo WARNING: no MSVC edition found, environment not set.
+		echo.
 	)
 
 	goto:eof
