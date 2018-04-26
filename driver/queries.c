@@ -697,14 +697,18 @@ static size_t buff_octet_size(
 	return max_copy;
 }
 
+/*
+ * Indicate the amount of data copied to the application, taking into account:
+ * the type of data, should truncation - due to max length attr setting - need
+ * to be indicated.
+ */
 static inline void write_copied_octets(SQLLEN *octet_len_ptr, size_t copied,
 		size_t attr_max, esodbc_metatype_et ird_mt)
 {
 	size_t max;
 
 	if (! octet_len_ptr) {
-		DBG("NULL octet len pointer, length (%zd) not indicated.",
-				copied);
+		DBG("NULL octet len pointer, length (%zd) not indicated.", copied);
 		return;
 	}
 
@@ -882,10 +886,12 @@ static SQLRETURN copy_boolean(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 /*
  * -> SQL_C_CHAR
+ * Note: chars_0 param accounts for 0-term, but lenght indicated back to the
+ * application must not.
  */
 static SQLRETURN wstr_to_cstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		void *data_ptr, SQLLEN *octet_len_ptr,
-		const wchar_t *wstr, size_t chars)
+		const wchar_t *wstr, size_t chars_0)
 {
 	esodbc_state_et state = SQL_STATE_00000;
 	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
@@ -897,18 +903,18 @@ static SQLRETURN wstr_to_cstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 		/* type is signed, driver should not allow a negative to this point. */
 		assert(0 <= arec->octet_length);
-		in_bytes = (int)buff_octet_size(chars * sizeof(*wstr),
+		in_bytes = (int)buff_octet_size(chars_0 * sizeof(*wstr),
 				(size_t)arec->octet_length, stmt->max_length, sizeof(*charp),
 				irec->meta_type, &state);
 		/* trim the original string until it fits in output buffer, with given
 		 * length limitation */
-		for (c = (int)chars; 0 < c; c --) {
+		for (c = (int)chars_0; 0 < c; c --) {
 			out_bytes = WCS2U8(wstr, c, charp, in_bytes);
 			if (out_bytes <= 0) {
 				if (WCS2U8_BUFF_INSUFFICIENT)
 					continue;
 				ERRNH(stmt, "failed to convert wchar* to char* for string `"
-						LWPDL "`.", chars, wstr);
+						LWPDL "`.", chars_0, wstr);
 				RET_HDIAGS(stmt, SQL_STATE_22018);
 			} else {
 				/* conversion succeeded */
@@ -928,13 +934,18 @@ static SQLRETURN wstr_to_cstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		DBGH(stmt, "REC@0x%p, NULL data_ptr.", arec);
 	}
 
-	/* if length needs to be given, calculate  it not truncated & converted */
+	/* if length needs to be given, calculate it (not truncated) & converted */
 	if (octet_len_ptr) {
-		out_bytes = (size_t)WCS2U8(wstr, (int)chars, NULL, 0);
+		out_bytes = (size_t)WCS2U8(wstr, (int)chars_0, NULL, 0);
 		if (out_bytes <= 0) {
 			ERRNH(stmt, "failed to convert wchar* to char* for string `"
-					LWPDL "`.", chars, wstr);
+					LWPDL "`.", chars_0, wstr);
 			RET_HDIAGS(stmt, SQL_STATE_22018);
+		} else {
+			/* chars_0 accounts for 0-terminator, so WCS2U8 will count that in
+			 * the output as well => trim it, since we must not count it when
+			 * indicating the lenght to the application */
+			out_bytes --;
 		}
 		write_copied_octets(octet_len_ptr, out_bytes, stmt->max_length,
 				irec->meta_type);
@@ -949,42 +960,46 @@ static SQLRETURN wstr_to_cstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 /*
  * -> SQL_C_WCHAR
+ * Note: chars_0 accounts for 0-term, but lenght indicated back to the
+ * application must not.
  */
 static SQLRETURN wstr_to_wstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		void *data_ptr, SQLLEN *octet_len_ptr,
-		const wchar_t *wstr, size_t chars)
+		const wchar_t *wstr, size_t chars_0)
 {
 	esodbc_state_et state = SQL_STATE_00000;
 	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
-	size_t in_bytes, out_bytes;
+	size_t in_bytes, out_chars;
 	wchar_t *widep;
 
 
 	if (data_ptr) {
 		widep = (wchar_t *)data_ptr;
-		
+
 		assert(0 <= arec->octet_length);
-		in_bytes = buff_octet_size(chars * sizeof(*wstr),
+		in_bytes = buff_octet_size(chars_0 * sizeof(*wstr),
 				(size_t)arec->octet_length, stmt->max_length, sizeof(*wstr),
 				irec->meta_type, &state);
 
 		memcpy(widep, wstr, in_bytes);
-		out_bytes = in_bytes / sizeof(*widep);
+		out_chars = in_bytes / sizeof(*widep);
 		/* if buffer too small to accomodate original, 0-term it */
-		if (widep[out_bytes - 1]) {
-			widep[out_bytes - 1] = 0;
+		if (widep[out_chars - 1]) {
+			widep[out_chars - 1] = 0;
 			state = SQL_STATE_01004; /* indicate truncation */
 		}
 
-		DBGH(stmt, "REC@0x%p, data_ptr@0x%p, copied %zd bytes: `" LWPD "`.",
-				arec, data_ptr, out_bytes, widep);
+		DBGH(stmt, "REC@0x%p, data_ptr@0x%p, copied %zd chars (and 0-term): `"
+				LWPD "`.", arec, data_ptr, out_chars, widep);
 	} else {
 		DBGH(stmt, "REC@0x%p, NULL data_ptr", arec);
 	}
-	
-	write_copied_octets(octet_len_ptr, chars * sizeof(*wstr), stmt->max_length,
-			irec->meta_type);
-	
+
+	/* original lenght is indicated, w/o possible buffer truncation (but with
+	 * possible 'network' truncation) */
+	write_copied_octets(octet_len_ptr, (chars_0 - /*0-term*/1) * sizeof(*wstr),
+			stmt->max_length, irec->meta_type);
+
 	if (state != SQL_STATE_00000)
 		RET_HDIAGS(stmt, state);
 	return SQL_SUCCESS;
@@ -1074,10 +1089,15 @@ static SQLRETURN wstr_to_date(esodbc_rec_st *arec, esodbc_rec_st *irec,
 }
 
 /*
- * wstr: is 0-terminated, terminator is counted in 'chars'.
+ * wstr: is 0-terminated and terminator is counted in 'chars_0'.
+ * However: "[w]hen C strings are used to hold character data, the
+ * null-termination character is not considered to be part of the data and is
+ * not counted as part of its byte length."
+ * "If the data was converted to a variable-length data type, such as
+ * character or binary [...][i]t then null-terminates the data."
  */
 static SQLRETURN copy_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
-		SQLULEN pos, const wchar_t *wstr, size_t chars)
+		SQLULEN pos, const wchar_t *wstr, size_t chars_0)
 {
 	esodbc_stmt_st *stmt;
 	void *data_ptr;
@@ -1101,16 +1121,16 @@ static SQLRETURN copy_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	switch (target_type) {
 		case SQL_C_CHAR:
 			return wstr_to_cstr(arec, irec, data_ptr, octet_len_ptr,
-					wstr, chars);
+					wstr, chars_0);
 		case SQL_C_WCHAR:
 			return wstr_to_wstr(arec, irec, data_ptr, octet_len_ptr,
-					wstr, chars);
+					wstr, chars_0);
 		case SQL_C_TYPE_TIMESTAMP:
 			return wstr_to_timestamp(arec, irec, data_ptr, octet_len_ptr,
-					wstr, chars);
+					wstr, chars_0);
 		case SQL_C_TYPE_DATE:
 			return wstr_to_date(arec, irec, data_ptr, octet_len_ptr,
-					wstr, chars);
+					wstr, chars_0);
 
 		default:
 			// FIXME: convert data
