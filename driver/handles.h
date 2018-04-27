@@ -53,10 +53,26 @@ typedef struct struct_env {
 	// TODO?: connections
 } esodbc_env_st;
 
+/* meta data types (same for both SQL_C_<t> and SQL_<t> types) */
+typedef enum {
+	METATYPE_UNKNOWN = 0,
+	METATYPE_EXACT_NUMERIC,
+	METATYPE_FLOAT_NUMERIC,
+	METATYPE_STRING,
+	METATYPE_BIN,
+	METATYPE_DATETIME,
+	METATYPE_INTERVAL_WSEC,
+	METATYPE_INTERVAL_WOSEC,
+	METATYPE_BIT,
+	METATYPE_UID,
+	METATYPE_MAX // SQL_C_DEFAULT
+} esodbc_metatype_et;
 
+/* Structure mapping one ES/SQL data type. */
 typedef struct elasticsearch_type {
+	/* fields of one row returned  in response to 'SYS TYPES' query */
 	wstr_st			type_name;
-	SQLSMALLINT		data_type;
+	SQLSMALLINT		data_type; /* maps to rec's .concise_type member */
 	SQLINTEGER		column_size;
 	wstr_st			literal_prefix;
 	wstr_st			literal_suffix;
@@ -70,16 +86,25 @@ typedef struct elasticsearch_type {
 	wstr_st			local_type_name;
 	SQLSMALLINT		minimum_scale;
 	SQLSMALLINT		maximum_scale;
-	SQLSMALLINT		sql_data_type;
-	SQLSMALLINT		sql_datetime_sub;
+	SQLSMALLINT		sql_data_type; /* :-> rec's .type member */
+	SQLSMALLINT		sql_datetime_sub; /* :-> rec's .datetime_interval_code */
 	SQLINTEGER		num_prec_radix;
 	SQLSMALLINT		interval_precision;
 
 	/* number of SYS TYPES result columns mapped over the above members */
 #define ESODBC_TYPES_MEMBERS	19
 
-	/* SQL C type driver mapping of ES' data_type */
-	SQLSMALLINT		sql_c_type;
+	/* SQL C type driver mapping of ES' data_type; this is derived from
+	 * .type_name, rathern than .(sql_)data_type (sice the name is the
+	 * "unique" key and sole identifier in general queries results). */
+	SQLSMALLINT		c_concise_type;
+	/* There should be no need for a supplemental 'sql_c_type': if
+	 * rec.datetime_interval_code == 0, then this member would equal the
+	 * concise one (above); else, rec.type will contain the right value
+	 * already (i.e. they'd be the same for SQL and SQL C data types). */
+	
+	/* helper member, to characterize the type */
+	esodbc_metatype_et	meta_type;
 } esodbc_estype_st;
 
 
@@ -129,20 +154,6 @@ typedef struct struct_dbc {
 	SQLUINTEGER txn_isolation; // default: SQL_TXN_*
 } esodbc_dbc_st;
 
-typedef enum {
-	METATYPE_UNKNOWN = 0,
-	METATYPE_EXACT_NUMERIC,
-	METATYPE_FLOAT_NUMERIC,
-	METATYPE_STRING,
-	METATYPE_BIN,
-	METATYPE_DATETIME,
-	METATYPE_INTERVAL_WSEC,
-	METATYPE_INTERVAL_WOSEC,
-	METATYPE_BIT,
-	METATYPE_UID,
-	METATYPE_MAX // SQL_C_DEFAULT
-} esodbc_metatype_et;
-
 typedef struct desc_rec {
 	/* back ref to owning descriptor */
 	struct struct_desc	*desc;
@@ -161,8 +172,9 @@ typedef struct desc_rec {
 	 * literal_prefix, literal_suffix, local_type_name, type_name,
 	 * auto_unique_value, case_sensitive, fixed_prec_scale, nullable,
 	 * searchable, usigned  */
+	/* record types (SQL_<t> for IxD, or SQL_C_<t> for AxD) */
 	SQLSMALLINT		concise_type;
-	SQLSMALLINT		type; /* SQL_C_<type> -> AxD, SQL_<type> -> IxD */
+	SQLSMALLINT		type;
 	SQLSMALLINT		datetime_interval_code;
 
 	SQLPOINTER		data_ptr; /* array, if .array_size > 1 */

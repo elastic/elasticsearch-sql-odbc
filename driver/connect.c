@@ -1537,9 +1537,6 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 
 		/* apply any needed fixes */
 
-		/* fix SQL_DATA_TYPE columns TODO: GH issue */
-		types[i].sql_data_type = types[i].data_type;
-
 		/* warn if scales extremes are different */
 		if (types[i].maximum_scale != types[i].minimum_scale) {
 			ERRH(dbc, "type `" LWPDL "` returned with non-equal max/min "
@@ -1548,12 +1545,20 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 		}
 
 		/* resolve ES type to SQL C type */
-		types[i].sql_c_type = type_elastic2csql(&types[i].type_name);
-		if (types[i].sql_c_type == SQL_UNKNOWN_TYPE) {
-			BUG("failed to convert type name `" LWPDL "` to SQL C type.",
+		types[i].c_concise_type = type_elastic2csql(&types[i].type_name);
+		if (types[i].c_concise_type == SQL_UNKNOWN_TYPE) {
+			/* ES version newer than driver's? */
+			ERRH(dbc, "failed to convert type name `" LWPDL "` to SQL C type.",
 					LWSTR(&types[i].type_name));
 			goto end;
 		}
+		/* set meta type */
+		types[i].meta_type = concise_to_meta(types[i].c_concise_type,
+				/*C type -> AxD*/DESC_TYPE_ARD);
+
+		/* fix SQL_DATA_TYPE and SQL_DATETIME_SUB columns TODO: GH issue */
+		concise_to_type_code(types[i].data_type, &types[i].sql_data_type,
+				&types[i].sql_datetime_sub);
 	}
 
 #undef ES_TYPES_COPY_INT

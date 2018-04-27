@@ -155,25 +155,23 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 			}
 		}
 		if (rec->es_type) {
-			rec->concise_type = rec->es_type->sql_c_type;
+			/* copy fileds pre-calculated at DB connect time */
+			rec->concise_type = rec->es_type->data_type;
+			rec->type = rec->es_type->sql_data_type;
+			rec->datetime_interval_code = rec->es_type->sql_datetime_sub;
+			rec->meta_type = rec->es_type->meta_type;
+		} else if (! dbc->no_types) {
+			/* the connection doesn't have yet the types cached (this is the
+			 * caching call) and don't have access to the data itself either,
+			 * just the column names & type names => set unknowns.  */
+			rec->concise_type = SQL_UNKNOWN_TYPE;
+			rec->type = SQL_UNKNOWN_TYPE;
+			rec->datetime_interval_code = 0;
+			rec->meta_type = METATYPE_UNKNOWN;
 		} else {
-			do {
-				if (! dbc->no_types) {
-					/* the connection doesn't have the types cached yet (this
-					 * is the SYS TYPES call) -> resolve the types "directly"
-					 * */
-					rec->concise_type = type_elastic2csql(&col_type);
-					if (rec->concise_type != SQL_UNKNOWN_TYPE)
-						break;
-				}
-				ERRH(stmt, "type lookup failed for `" LWPDL "`. (ES-driver "
-						"out of sync? check versions.)", LWSTR(&col_type));
-				RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
-			} while (0);
+			ERRH(stmt, "type lookup failed for `" LWPDL "`.",LWSTR(&col_type));
+			RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
 		}
-		concise_to_type_code(rec->concise_type, &rec->type,
-				&rec->datetime_interval_code);
-		rec->meta_type = concise_to_meta(rec->concise_type, DESC_TYPE_ARD);
 
 		set_col_size(rec);
 		set_col_decdigits(rec);
@@ -728,6 +726,23 @@ static inline void write_copied_octets(SQLLEN *octet_len_ptr, size_t copied,
 		*octet_len_ptr = copied;
 }
 
+/* if an application doesn't specify the conversion, use column's type */
+static inline SQLSMALLINT get_c_target_type(esodbc_rec_st *arec,
+		esodbc_rec_st *irec)
+{
+	SQLSMALLINT ctype;
+	/* "To use the default mapping, an application specifies the SQL_C_DEFAULT
+	 * type identifier." */
+	if (arec->type != SQL_C_DEFAULT) {
+		ctype = arec->type;
+	} else {
+		ctype = irec->es_type->c_concise_type;
+	}
+	DBGH(arec->desc, "target data type: %d.", ctype);
+	return ctype;
+}
+
+
 static SQLRETURN copy_longlong(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		SQLULEN pos, long long ll)
 {
@@ -735,7 +750,6 @@ static SQLRETURN copy_longlong(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	void *data_ptr;
 	SQLLEN *octet_len_ptr;
 	esodbc_desc_st *ard, *ird;
-	SQLSMALLINT target_type;
 	char buff[sizeof("18446744073709551616")]; /* = 1 << 8*8 */
 	SQLWCHAR wbuff[sizeof("18446744073709551616")]; /* = 1 << 8*8 */
 	size_t tocopy, blen;
@@ -754,11 +768,7 @@ static SQLRETURN copy_longlong(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		RET_HDIAGS(stmt, SQL_STATE_HY009);
 	}
 
-	/* "To use the default mapping, an application specifies the SQL_C_DEFAULT
-	 * type identifier." */
-	target_type = arec->type == SQL_C_DEFAULT ? irec->type : arec->type;
-	DBGH(stmt, "target data type: %d.", target_type);
-	switch (target_type) {
+	switch (get_c_target_type(arec, irec)) {
 		case SQL_C_CHAR:
 			_i64toa((int64_t)ll, buff, /*radix*/10);
 			/* TODO: find/write a function that returns len of conversion? */
@@ -827,7 +837,6 @@ static SQLRETURN copy_boolean(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	esodbc_stmt_st *stmt;
 	void *data_ptr;
 	SQLLEN *octet_len_ptr;
-	SQLSMALLINT target_type;
 
 	stmt = arec->desc->hdr.stmt;
 
@@ -840,9 +849,7 @@ static SQLRETURN copy_boolean(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		RET_HDIAGS(stmt, SQL_STATE_HY009);
 	}
 
-	target_type = arec->type == SQL_C_DEFAULT ? irec->type : arec->type;
-	DBGH(stmt, "target data type: %d.", target_type);
-	switch (target_type) {
+	switch (get_c_target_type(arec, irec)) {
 		case SQL_C_STINYINT:
 		case SQL_C_UTINYINT:
 			*(SQLSCHAR *)data_ptr = (SQLSCHAR)boolval;
@@ -873,6 +880,7 @@ static SQLRETURN copy_boolean(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 		case SQL_C_CHAR:
 		case SQL_C_WCHAR:
+			// TODO
 
 		default:
 			FIXME; // FIXME
@@ -1103,7 +1111,6 @@ static SQLRETURN copy_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	void *data_ptr;
 	SQLLEN *octet_len_ptr;
 	esodbc_desc_st *ard, *ird;
-	SQLSMALLINT target_type;
 
 	stmt = arec->desc->hdr.stmt;
 	ird = stmt->ird;
@@ -1114,11 +1121,7 @@ static SQLRETURN copy_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	/* pointer to app's buffer */
 	data_ptr = deferred_address(SQL_DESC_DATA_PTR, pos, arec);
 
-	/* "To use the default mapping, an application specifies the SQL_C_DEFAULT
-	 * type identifier." */
-	target_type = arec->type == SQL_C_DEFAULT ? irec->type : arec->type;
-	DBGH(stmt, "target data type: %d.", target_type);
-	switch (target_type) {
+	switch (get_c_target_type(arec, irec)) {
 		case SQL_C_CHAR:
 			return wstr_to_cstr(arec, irec, data_ptr, octet_len_ptr,
 					wstr, chars_0);
@@ -1634,6 +1637,13 @@ static inline SQLULEN get_col_size(esodbc_rec_st *rec)
 		case METATYPE_BIT:
 			return rec->length;
 	}
+	/*
+	 * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/column-size :
+	 * "If the driver cannot determine the column or parameter length for a
+	 * variable type, it returns SQL_NO_TOTAL.
+	 * We should always have the length for var types, so:
+	 * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqldescribecol-function#arguments :
+	 * "If the column size cannot be determined, the driver returns 0." */
 	return 0;
 }
 

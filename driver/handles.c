@@ -1601,11 +1601,17 @@ SQLRETURN EsSQLGetDescRecW(
 /*
  * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/data-type-identifiers-and-descriptors
  *
- * Note: C and SQL types have the same value for these following defines,
- * so this function will work for both IxD and AxD descriptors. (There is no
- * SQL_C_DATETIME or SQL_C_CODE_DATE.)
+ * Note: C and SQL types have the same value for the case values below, so
+ * this function will work no matter the concise type (i.e. for both IxD,
+ * using SQL_C_<type>, and AxD, using SQL_<type>, descriptors).
+ * The case values are for datetime and interval data types (see also the
+ * comment at function end), so these values must stay in sync, since there
+ * are no C corresponding defines for verbose and sub-code (i.e. nothing like
+ * "SQL_C_DATETIME" or "SQL_C_CODE_DATE").
+ * The identity does not hold across the bord, though (extended values, like
+ * BIGINTs do differ)!
  */
-void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type, 
+void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type,
 		SQLSMALLINT *code)
 {
 	switch (concise) {
@@ -1679,6 +1685,9 @@ void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type,
 			*code = SQL_CODE_MINUTE_TO_SECOND;
 			break;
 	}
+	/* "For all data types except datetime and interval data types, the
+	 * verbose type identifier is the same as the concise type identifier and
+	 * the value in SQL_DESC_DATETIME_INTERVAL_CODE is equal to 0." */
 	*type = concise;
 	*code = 0;
 }
@@ -1779,8 +1788,7 @@ static esodbc_metatype_et sqltype_to_meta(SQLSMALLINT concise)
 			return METATYPE_UID;
 	}
 
-	// BUG?
-	WARN("unknown meta type for concise SQL type %d.", concise);
+	ERR("unknown meta type for concise SQL type %d.", concise);
 	return METATYPE_UNKNOWN;
 }
 
@@ -1859,13 +1867,13 @@ static esodbc_metatype_et sqlctype_to_meta(SQLSMALLINT concise)
 			return METATYPE_MAX;
 	}
 
-	// BUG?
-	WARN("unknown meta type for concise C SQL type %d.", concise);
+	ERR("unknown meta type for concise C SQL type %d.", concise);
 	return METATYPE_UNKNOWN;
 }
 
 /*
  * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetdescrec-function#consistency-checks
+ * FIXME: re-eval this function along with IPD implementation!
  */
 static BOOL consistency_check(esodbc_desc_st *desc, esodbc_rec_st *rec)
 {
@@ -1923,7 +1931,7 @@ static BOOL consistency_check(esodbc_desc_st *desc, esodbc_rec_st *rec)
 	return TRUE;
 }
 
-esodbc_metatype_et concise_to_meta(SQLSMALLINT concise_type, 
+esodbc_metatype_et concise_to_meta(SQLSMALLINT concise_type,
 		desc_type_et desc_type)
 {
 	switch (desc_type) {
