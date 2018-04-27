@@ -1271,7 +1271,6 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 				ret = copy_double(arec, irec, pos, dbl);
 				break;
 
-			/* TODO: convert to 1/0? */
 			case UJT_True:
 			case UJT_False:
 				boolval = UJGetType(obj) == UJT_True ? TRUE : FALSE;
@@ -1636,7 +1635,7 @@ static inline SQLULEN get_col_size(esodbc_rec_st *rec)
 	switch (rec->meta_type) {
 		case METATYPE_EXACT_NUMERIC:
 		case METATYPE_FLOAT_NUMERIC:
-			return rec->precision;
+			return rec->es_type->column_size;
 
 		case METATYPE_STRING:
 		case METATYPE_BIN:
@@ -1655,11 +1654,14 @@ static inline SQLSMALLINT get_col_decdigits(esodbc_rec_st *rec)
 	switch (rec->meta_type) {
 		case METATYPE_DATETIME:
 		case METATYPE_INTERVAL_WSEC:
-			return rec->precision;
+			return (SQLSMALLINT)rec->es_type->column_size;
 
 		case METATYPE_EXACT_NUMERIC:
-			return rec->scale;
+			return rec->es_type->maximum_scale;
 	}
+	/* 0 to be returned for unknown case:
+	 * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqldescribecol-function#syntax
+	 */
 	return 0;
 }
 
@@ -1821,16 +1823,20 @@ SQLRETURN EsSQLColAttributeW(
 		do {
 		case SQL_DESC_CONCISE_TYPE: sint = rec->concise_type; break;
 		case SQL_DESC_TYPE: sint = rec->type; break;
-		case SQL_DESC_PRECISION: sint = rec->precision; break;
-		case SQL_DESC_SCALE: sint = rec->scale; break;
 		case SQL_DESC_UNNAMED: sint = rec->unnamed; break;
-		case SQL_DESC_FIXED_PREC_SCALE:
-			sint = rec->es_type->fixed_prec_scale;
-			break;
 		case SQL_DESC_NULLABLE: sint = rec->es_type->nullable; break;
 		case SQL_DESC_SEARCHABLE: sint = rec->es_type->searchable; break;
 		case SQL_DESC_UNSIGNED: sint = rec->es_type->unsigned_attribute; break;
 		case SQL_DESC_UPDATABLE: sint = rec->updatable; break;
+		case SQL_DESC_PRECISION:
+			sint = rec->es_type->fixed_prec_scale;
+			break;
+		case SQL_DESC_SCALE:
+			sint = rec->es_type->maximum_scale;
+			break;
+		case SQL_DESC_FIXED_PREC_SCALE:
+			sint = rec->es_type->fixed_prec_scale;
+			break;
 		} while (0);
 			PNUMATTR_ASSIGN(SQLSMALLINT, sint);
 			break;
@@ -1879,6 +1885,8 @@ SQLRETURN EsSQLColAttributeW(
 
 		/* SQLULEN */
 		case SQL_DESC_LENGTH:
+			/* "This information is returned from the SQL_DESC_LENGTH record
+			 * field of the IRD." */
 			PNUMATTR_ASSIGN(SQLULEN, rec->length);
 			break;
 
