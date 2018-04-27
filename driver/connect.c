@@ -1535,10 +1535,17 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 		ES_TYPES_COPY_INT(num_prec_radix);
 		ES_TYPES_COPY_INT(interval_precision);
 
-		/* apply any customizations */
+		/* apply any needed fixes */
 
 		/* fix SQL_DATA_TYPE columns TODO: GH issue */
 		types[i].sql_data_type = types[i].data_type;
+
+		/* warn if scales extremes are different */
+		if (types[i].maximum_scale != types[i].minimum_scale) {
+			ERRH(dbc, "type `" LWPDL "` returned with non-equal max/min "
+					"scale: %d/%d.", LWSTR(&types[i].type_name),
+					types[i].maximum_scale, types[i].minimum_scale);
+		}
 
 		/* resolve ES type to SQL C type */
 		types[i].sql_c_type = type_elastic2csql(&types[i].type_name);

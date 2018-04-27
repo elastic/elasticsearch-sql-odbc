@@ -1495,10 +1495,22 @@ SQLRETURN EsSQLGetDescFieldW(
 			word = rec->datetime_interval_code; break;
 
 		case SQL_DESC_PARAMETER_TYPE: word = rec->parameter_type; break;
-		case SQL_DESC_PRECISION: word = rec->precision; break;
 		case SQL_DESC_ROWVER: word = rec->rowver; break;
-		case SQL_DESC_SCALE: word = rec->scale; break;
 		case SQL_DESC_UNNAMED: word = rec->unnamed; break;
+		case SQL_DESC_PRECISION:
+			if (rec->desc->type == DESC_TYPE_IRD) {
+				word = (SQLSMALLINT)rec->es_type->column_size;
+			} else {
+				word = rec->precision;
+			}
+			break;
+		case SQL_DESC_SCALE:
+			if (rec->desc->type == DESC_TYPE_IRD) {
+				word = rec->es_type->maximum_scale;
+			} else {
+				word = rec->scale;
+			}
+			break;
 		case SQL_DESC_FIXED_PREC_SCALE:
 			word = rec->es_type->fixed_prec_scale;
 			break;
@@ -1869,8 +1881,6 @@ static BOOL consistency_check(esodbc_desc_st *desc, esodbc_rec_st *rec)
 		return FALSE;
 	}
 
-	/* TODO: use the get_rec_size/get_rec_decdigits() (below)? */
-
 	//if (rec->meta_type == METATYPE_NUMERIC) {
 	if (0) { // FIXME
 		/* TODO: actually check validity of precision/scale for data type */
@@ -1930,38 +1940,6 @@ esodbc_metatype_et concise_to_meta(SQLSMALLINT concise_type,
 	}
 
 	return METATYPE_UNKNOWN;
-}
-
-/*
- * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/column-size
- */
-SQLULEN get_rec_size(esodbc_rec_st *rec)
-{
-	if (rec->meta_type == METATYPE_EXACT_NUMERIC || 
-			rec->meta_type == METATYPE_FLOAT_NUMERIC) {
-		if (rec->precision < 0) {
-			BUG("precision can't be negative.");
-			return 0;
-		}
-		return (SQLULEN)rec->precision;
-	} else {
-		return rec->length;
-	}
-}
-
-SQLULEN get_rec_decdigits(esodbc_rec_st *rec)
-{
-	switch (rec->meta_type) {
-		case METATYPE_DATETIME:
-		case METATYPE_INTERVAL_WSEC:
-			return rec->precision;
-		case METATYPE_EXACT_NUMERIC:
-			return rec->scale;
-	}
-	/* 0 to be returned for unknown case:
-	 * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqldescribecol-function#syntax
-	 */
-	return 0;
 }
 
 /*
