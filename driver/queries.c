@@ -28,7 +28,6 @@
 
 #define MSG_INV_SRV_ANS		"Invalid server answer"
 
-#define ISO8601_TEMPLATE	"yyyy-mm-ddThh:mm:ss.sss+hh:mm"
 #define TM_TO_TIMESTAMP_STRUCT(_tmp/*src*/, _tsp/*dst*/) \
 	do { \
 		(_tsp)->year = (_tmp)->tm_year + 1900; \
@@ -51,50 +50,41 @@ void clear_resultset(esodbc_stmt_st *stmt)
 	memset(&stmt->rset, 0, sizeof(stmt->rset));
 }
 
+/* Set the desriptor fields associated with "size". This step is needed since
+ * the application could read the descriptors - like .length - individually,
+ * rather than through functions that make use of get_col_size() (where we
+ * could just read the es_type directly). */
 static void set_col_size(esodbc_rec_st *rec)
 {
-	switch (rec->concise_type) {
-		/* .precision */
-		// TODO: lifted from SYS TYPES: automate this?
-		case SQL_C_SLONG: rec->precision = 19; break;
-		case SQL_C_UTINYINT:
-		case SQL_C_STINYINT: rec->precision = 3; break;
-		case SQL_C_SSHORT: rec->precision = 5; break;
+	assert(rec->desc->type == DESC_TYPE_IRD);
 
-		/* .length */
-		case SQL_C_CHAR:
-			rec->length = 256;  /*TODO: max TEXT size */
+	switch (rec->meta_type) {
+		case METATYPE_UNKNOWN:
+			/* SYS TYPES call */
+			break;
+		case METATYPE_EXACT_NUMERIC:
+		case METATYPE_FLOAT_NUMERIC:
+			/* ignore, the .precision field is not used in IRDs, its value is
+			 * always read from es_type.column_size directly */
 			break;
 
-		case SQL_C_TYPE_DATE:
-			rec->length = sizeof(ISO8601_TEMPLATE)/*+\0*/;
+			/*
+			 * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/column-size : */
+		case METATYPE_STRING:
+			/* "The defined or maximum column size in characters of the
+			 * column" */
+			/* no break */
+		case METATYPE_BIN:
+			/* "The defined or maximum length in bytes of the column " */
+			/* no break */
+		case METATYPE_DATETIME:
+			/* "number of characters in the character representation" */
+			rec->length = rec->es_type->column_size;
 			break;
-		
-		default:
-			FIXME; // FIXME
-	}
-}
-
-static void set_col_decdigits(esodbc_rec_st *rec)
-{
-	switch (rec->concise_type) {
-		case SQL_C_SLONG:
-		case SQL_C_UTINYINT:
-		case SQL_C_STINYINT:
-		case SQL_C_SSHORT:
-			rec->scale = 0;
-			break;
-
-		case SQL_C_TYPE_DATE:
-			rec->precision = 3; /* [seconds].xxx of ISO 8601 */
-			break;
-		
-		case SQL_C_CHAR: break; /* n/a */
 
 		default:
-			FIXME; // FIXME
+			BUGH(rec->desc, "unsupported data c-type: %d.", rec->concise_type);
 	}
-
 }
 
 static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
@@ -174,7 +164,6 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 		}
 
 		set_col_size(rec);
-		set_col_decdigits(rec);
 
 		/* TODO: set remaining of settable fields (base table etc.) */
 
@@ -1016,7 +1005,7 @@ static SQLRETURN wstr_to_wstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 static BOOL wstr_to_timestamp_struct(const wchar_t *wstr, size_t chars,
 		TIMESTAMP_STRUCT *tss)
 {
-	char buff[sizeof(ISO8601_TEMPLATE)/*+\0*/];
+	char buff[sizeof(ESODBC_ISO8601_TEMPLATE)/*+\0*/];
 	int len;
 	timestamp_t tsp;
 	struct tm tmp;
@@ -1623,6 +1612,7 @@ SQLRETURN EsSQLExecDirectW
 static inline SQLULEN get_col_size(esodbc_rec_st *rec)
 {
 	assert(rec->desc->type == DESC_TYPE_IRD);
+
 	switch (rec->meta_type) {
 		case METATYPE_EXACT_NUMERIC:
 		case METATYPE_FLOAT_NUMERIC:
@@ -1635,12 +1625,11 @@ static inline SQLULEN get_col_size(esodbc_rec_st *rec)
 		case METATYPE_INTERVAL_WOSEC:
 		case METATYPE_BIT:
 			return rec->length;
+
+		case METATYPE_UID:
+			BUGH(rec->desc, "unsupported data c-type: %d.", rec->concise_type);
 	}
 	/*
-	 * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/column-size :
-	 * "If the driver cannot determine the column or parameter length for a
-	 * variable type, it returns SQL_NO_TOTAL.
-	 * We should always have the length for var types, so:
 	 * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqldescribecol-function#arguments :
 	 * "If the column size cannot be determined, the driver returns 0." */
 	return 0;
@@ -1652,7 +1641,8 @@ static inline SQLSMALLINT get_col_decdigits(esodbc_rec_st *rec)
 	switch (rec->meta_type) {
 		case METATYPE_DATETIME:
 		case METATYPE_INTERVAL_WSEC:
-			return (SQLSMALLINT)rec->es_type->column_size;
+			/* TODO: pending GH#30002 actually */
+			return 3;
 
 		case METATYPE_EXACT_NUMERIC:
 			return rec->es_type->maximum_scale;
@@ -1738,7 +1728,7 @@ SQLRETURN EsSQLDescribeColW(
 		ERRH(stmt, "no column size buffer provided.");
 		RET_HDIAG(stmt, SQL_STATE_HY090, "no column size buffer provided", 0);
 	}
-	*pcbColDef = get_col_size(rec); // TODO: set "size" of columns from type
+	*pcbColDef = get_col_size(rec);
 	DBGH(stmt, "col #%d of meta type %d has size=%llu.",
 			icol, rec->meta_type, *pcbColDef);
 
@@ -1747,7 +1737,7 @@ SQLRETURN EsSQLDescribeColW(
 		RET_HDIAG(stmt, SQL_STATE_HY090,
 				"no column decimal digits buffer provided", 0);
 	}
-	*pibScale = get_col_decdigits(rec); // TODO: set "decimal digits" from type
+	*pibScale = get_col_decdigits(rec);
 	DBGH(stmt, "col #%d of meta type %d has decimal digits=%d.",
 			icol, rec->meta_type, *pibScale);
 
