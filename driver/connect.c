@@ -1142,33 +1142,31 @@ SQLSMALLINT type_elastic2csql(wstr_st *type_name)
 				case (SQLWCHAR)'b':
 					if (! wmemncasecmp(type_name->str,
 								MK_WPTR(JSON_COL_BYTE), type_name->cnt)) {
-						return SQL_C_STINYINT;
+						return ESODBC_ES_TO_CSQL_BYTE;
 					}
 					break;
 				case (SQLWCHAR)'l':
 					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_LONG),
 								type_name->cnt)) {
-						return SQL_C_SLONG;
+						return ESODBC_ES_TO_CSQL_LONG;
 						}
 					break;
 				case (SQLWCHAR)'t':
 					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_TEXT),
 								type_name->cnt)) {
-						// TODO: char/longvarchar/wchar/wvarchar?
-						return SQL_C_CHAR;
+						return ESODBC_ES_TO_CSQL_TEXT;
 					}
 					break;
 				case (SQLWCHAR)'d':
 					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_DATE),
 								type_name->cnt)) {
-						return SQL_C_TYPE_TIMESTAMP;
+						return ESODBC_ES_TO_CSQL_DATE;
 					}
 					break;
 				case (SQLWCHAR)'n':
 					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_NULL),
 								type_name->cnt)) {
-						// TODO: own type?
-						return SQL_C_UTINYINT;
+						return ESODBC_ES_TO_CSQL_NULL;
 					}
 					break;
 			}
@@ -1180,13 +1178,13 @@ SQLSMALLINT type_elastic2csql(wstr_st *type_name)
 				case (SQLWCHAR)'s':
 					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_SHORT),
 								type_name->cnt)) {
-						return SQL_C_SSHORT;
+						return ESODBC_ES_TO_CSQL_SHORT;
 					}
 					break;
 				case (SQLWCHAR)'f':
 					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_FLOAT),
 								type_name->cnt)) {
-						return SQL_C_FLOAT;
+						return ESODBC_ES_TO_CSQL_FLOAT;
 					}
 					break;
 			}
@@ -1198,25 +1196,25 @@ SQLSMALLINT type_elastic2csql(wstr_st *type_name)
 				case (SQLWCHAR)'d':
 					if (! wmemncasecmp(type_name->str,
 								MK_WPTR(JSON_COL_DOUBLE), type_name->cnt)) {
-						return SQL_C_DOUBLE;
+						return ESODBC_ES_TO_CSQL_DOUBLE;
 					}
 					break;
 				case (SQLWCHAR)'b':
 					if (! wmemncasecmp(type_name->str,
 								MK_WPTR(JSON_COL_BINARY), type_name->cnt)) {
-						return SQL_C_BINARY;
+						return ESODBC_ES_TO_CSQL_BINARY;
 					}
 					break;
 				case (SQLWCHAR)'o':
 					if (! wmemncasecmp(type_name->str,
 								MK_WPTR(JSON_COL_OBJECT), type_name->cnt)) {
-						return SQL_C_BINARY;
+						return ESODBC_ES_TO_CSQL_OBJECT;
 					}
 					break;
 				case (SQLWCHAR)'n':
 					if (! wmemncasecmp(type_name->str,
 								MK_WPTR(JSON_COL_NESTED), type_name->cnt)) {
-						return SQL_C_BINARY;
+						return ESODBC_ES_TO_CSQL_NESTED;
 					}
 					break;
 			}
@@ -1228,17 +1226,17 @@ SQLSMALLINT type_elastic2csql(wstr_st *type_name)
 				case (SQLWCHAR)'i': /* integer */
 					if (wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_INTEGER),
 								type_name->cnt) == 0)
-						return SQL_C_SLONG;
+						return ESODBC_ES_TO_CSQL_INTEGER;
 					break;
 				case (SQLWCHAR)'b': /* boolean */
 					if (wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_BOOLEAN),
 								type_name->cnt) == 0)
-						return SQL_C_UTINYINT;
+						return ESODBC_ES_TO_CSQL_BOOLEAN;
 					break;
 				case (SQLWCHAR)'k': /* keyword */
 					if (wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_KEYWORD),
 								type_name->cnt) == 0)
-						return SQL_C_CHAR;
+						return ESODBC_ES_TO_CSQL_KEYWORD;
 					break;
 			}
 			break;
@@ -1247,7 +1245,7 @@ SQLSMALLINT type_elastic2csql(wstr_st *type_name)
 		case sizeof(JSON_COL_HALF_FLOAT) - 1:
 			if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_HALF_FLOAT),
 						type_name->cnt)) {
-				return SQL_C_FLOAT;
+				return ESODBC_ES_TO_CSQL_HALF_FLOAT;
 			}
 			break;
 
@@ -1255,7 +1253,7 @@ SQLSMALLINT type_elastic2csql(wstr_st *type_name)
 		case sizeof(JSON_COL_UNSUPPORTED) - 1:
 			if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_UNSUPPORTED),
 						type_name->cnt)) {
-				return SQL_C_BINARY;
+				return ESODBC_ES_TO_CSQL_UNSUPPORTED;
 			}
 			break;
 
@@ -1263,7 +1261,7 @@ SQLSMALLINT type_elastic2csql(wstr_st *type_name)
 		case sizeof(JSON_COL_SCALED_FLOAT) - 1:
 			if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_SCALED_FLOAT),
 						type_name->cnt)) {
-				return SQL_C_FLOAT;
+				return ESODBC_ES_TO_CSQL_SCALED_FLOAT;
 			}
 			break;
 
