@@ -143,9 +143,7 @@ void dump_record(esodbc_rec_st *rec)
 	DUMP_FIELD(rec, indicator_ptr, "0x%p");
 	DUMP_FIELD(rec, octet_length_ptr, "0x%p");
 
-	DUMP_FIELD(rec, display_size, "%lld");
 	DUMP_FIELD(rec, octet_length, "%lld");
-
 	DUMP_FIELD(rec, length, "%llu");
 
 	DUMP_FIELD(rec, datetime_interval_precision, "%d");
@@ -754,7 +752,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 			ulen = (SQLULEN)ValuePtr;
 			DBGH(stmt, "setting max_lenght to: %u.", ulen);
 			if (ulen < ESODBC_LO_MAX_LENGTH) {
-				WARNH(stmt, "MAX_LENGHT lower than min allowed (%d) -- "
+				WARNH(stmt, "MAX_LENGTH lower than min allowed (%d) -- "
 						"correcting value.", ESODBC_LO_MAX_LENGTH);
 				ulen = ESODBC_LO_MAX_LENGTH;
 			} else if (ESODBC_UP_MAX_LENGTH && ESODBC_UP_MAX_LENGTH < ulen) {
@@ -1484,8 +1482,9 @@ SQLRETURN EsSQLGetDescFieldW(
 
 		/* <SQLLEN> */
 		case SQL_DESC_DISPLAY_SIZE:
-			*(SQLLEN *)ValuePtr = rec->display_size;
-			DBGH(desc, "returning display size: %d.", rec->display_size);
+			*(SQLLEN *)ValuePtr = rec->es_type->display_size;
+			DBGH(desc, "returning display size: %d.",
+					rec->es_type->display_size);
 			break;
 		case SQL_DESC_OCTET_LENGTH:
 			*(SQLLEN *)ValuePtr = rec->octet_length;
@@ -2241,12 +2240,10 @@ SQLRETURN EsSQLSetDescFieldW(
 			break;
 
 		/* <SQLLEN> */
-		case SQL_DESC_DISPLAY_SIZE:
-			DBGH(desc, "setting display size: %d.", (SQLLEN)(intptr_t)ValuePtr);
-			rec->display_size = (SQLLEN)(intptr_t)ValuePtr;
-			break;
+		/* R/O fields: display_size */
 		case SQL_DESC_OCTET_LENGTH:
-			DBGH(desc, "setting octet length: %d.", (SQLLEN)(intptr_t)ValuePtr);
+			DBGH(desc, "setting octet length: %d.",
+					(SQLLEN)(intptr_t)ValuePtr);
 			rec->octet_length = (SQLLEN)(intptr_t)ValuePtr;
 			break;
 

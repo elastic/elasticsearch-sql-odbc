@@ -1271,6 +1271,100 @@ SQLSMALLINT type_elastic2csql(wstr_st *type_name)
 	return SQL_UNKNOWN_TYPE;
 }
 
+/*
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/display-size
+ */
+static void set_display_size(esodbc_estype_st *es_type)
+{
+	switch (es_type->data_type) {
+		case SQL_CHAR:
+		case SQL_VARCHAR: /* KEYWORD, TEXT */
+		case SQL_LONGVARCHAR:
+		case SQL_WCHAR:
+		case SQL_WVARCHAR:
+		case SQL_WLONGVARCHAR:
+			es_type->display_size = es_type->column_size;
+			break;
+
+		case SQL_REAL: /* FLOAT */
+			es_type->display_size = 14;
+			break;
+		case SQL_FLOAT: /* HALF_, SCALED_FLOAT */
+		case SQL_DOUBLE: /* DOUBLE */
+			es_type->display_size = 24;
+			break;
+
+		case SQL_TINYINT: /* BYTE */
+		case SQL_SMALLINT: /* SHORT */
+		case SQL_INTEGER: /* INTEGER */
+			es_type->display_size = es_type->column_size;
+			if (! es_type->unsigned_attribute)
+				es_type->display_size ++;
+			break;
+		case SQL_BIGINT: /* LONG */
+			es_type->display_size = es_type->column_size;
+			if (es_type->unsigned_attribute)
+				es_type->display_size ++;
+			break;
+
+		case SQL_BINARY:
+		case SQL_VARBINARY: /* BINARY */
+		case SQL_LONGVARBINARY:
+			/* 0xAB */
+			es_type->display_size = 2 * es_type->column_size;
+			break;
+
+		case SQL_TYPE_DATE:
+		case SQL_TYPE_TIME:
+		case SQL_TYPE_TIMESTAMP: /* DATE */
+			es_type->display_size = sizeof(ESODBC_ISO8601_TEMPLATE) - /*0*/1;
+			break;
+
+
+		case ESODBC_SQL_BOOLEAN:
+			es_type->display_size = /*'false'*/5;
+			break;
+
+		case ESODBC_SQL_NULL:
+			es_type->display_size = /*'null'*/4;
+			break;
+
+		/* treat these as variable binaries with unknown size */
+		case ESODBC_SQL_UNSUPPORTED:
+		case ESODBC_SQL_OBJECT: /* == ESODBC_SQL_NESTED */
+			es_type->display_size = SQL_NO_TOTAL;
+			break;
+
+		/*
+		case SQL_TYPE_UTCDATETIME:
+		case SQL_TYPE_UTCTIME:
+		*/
+
+		case SQL_DECIMAL:
+		case SQL_NUMERIC:
+
+		case SQL_BIT:
+
+		case SQL_INTERVAL_MONTH:
+		case SQL_INTERVAL_YEAR:
+		case SQL_INTERVAL_YEAR_TO_MONTH:
+		case SQL_INTERVAL_DAY:
+		case SQL_INTERVAL_HOUR:
+		case SQL_INTERVAL_MINUTE:
+		case SQL_INTERVAL_SECOND:
+		case SQL_INTERVAL_DAY_TO_HOUR:
+		case SQL_INTERVAL_DAY_TO_MINUTE:
+		case SQL_INTERVAL_DAY_TO_SECOND:
+		case SQL_INTERVAL_HOUR_TO_MINUTE:
+		case SQL_INTERVAL_HOUR_TO_SECOND:
+		case SQL_INTERVAL_MINUTE_TO_SECOND:
+
+		case SQL_GUID:
+
+		default:
+			BUG("unsupported ES/SQL data type: %d.", es_type->data_type);
+	}
+}
 
 /*
  * Load SYS TYPES data.
@@ -1568,6 +1662,8 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 		/* fix SQL_DATA_TYPE and SQL_DATETIME_SUB columns TODO: GH issue */
 		concise_to_type_code(types[i].data_type, &types[i].sql_data_type,
 				&types[i].sql_datetime_sub);
+
+		set_display_size(types + i);
 	}
 
 #undef ES_TYPES_COPY_INT

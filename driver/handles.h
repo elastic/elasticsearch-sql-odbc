@@ -108,7 +108,7 @@ typedef struct elasticsearch_type {
 	/* SQL C type driver mapping of ES' data_type; this is derived from
 	 * .type_name, rathern than .(sql_)data_type (sice the name is the
 	 * "unique" key and sole identifier in general queries results). */
-	SQLSMALLINT		c_concise_type;
+	SQLSMALLINT			c_concise_type;
 	/* There should be no need for a supplemental 'sql_c_type': if
 	 * rec.datetime_interval_code == 0, then this member would equal the
 	 * concise one (above); else, rec.type will contain the right value
@@ -116,6 +116,7 @@ typedef struct elasticsearch_type {
 	
 	/* helper member, to characterize the type */
 	esodbc_metatype_et	meta_type;
+	SQLLEN				display_size;
 } esodbc_estype_st;
 
 
@@ -180,9 +181,9 @@ typedef struct desc_rec {
 	 * record fields
 	 */
 	/* following record fields have been moved into es_type:
-	 * literal_prefix, literal_suffix, local_type_name, type_name,
-	 * auto_unique_value, case_sensitive, fixed_prec_scale, nullable,
-	 * searchable, usigned  */
+	 * display_size, literal_prefix, literal_suffix, local_type_name,
+	 * type_name, auto_unique_value, case_sensitive, fixed_prec_scale,
+	 * nullable, searchable, usigned  */
 	/* record types (SQL_<t> for IxD, or SQL_C_<t> for AxD) */
 	SQLSMALLINT		concise_type;
 	SQLSMALLINT		type;
@@ -202,9 +203,7 @@ typedef struct desc_rec {
 	SQLLEN			*indicator_ptr; /* array, if .array_size > 1 */
 	SQLLEN			*octet_length_ptr; /* array, if .array_size > 1 */
 
-	SQLLEN			display_size;
 	SQLLEN			octet_length;
-
 	SQLULEN			length;
 
 	SQLINTEGER		datetime_interval_precision; /*TODO: -> es_type? */

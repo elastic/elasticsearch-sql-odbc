@@ -196,7 +196,6 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 		/* "If a column does not have a label, the column name is returned. If
 		 * the column is unlabeled and unnamed, an empty string is ret" */
 		rec->label = rec->name ? rec->name : MK_WPTR("");
-		rec->display_size = 256;
 
 		assert(rec->name && rec->label);
 		rec->unnamed = (rec->name[0] || rec->label[0]) ?
@@ -1887,7 +1886,7 @@ SQLRETURN EsSQLColAttributeW(
 
 		/* SQLLEN */
 		do {
-		case SQL_DESC_DISPLAY_SIZE: len = rec->display_size; break;
+		case SQL_DESC_DISPLAY_SIZE: len = rec->es_type->display_size; break;
 		case SQL_DESC_OCTET_LENGTH: len = rec->octet_length; break;
 		} while (0);
 			PNUMATTR_ASSIGN(SQLLEN, len);
