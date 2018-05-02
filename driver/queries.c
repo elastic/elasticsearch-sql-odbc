@@ -778,24 +778,28 @@ static SQLRETURN copy_longlong(esodbc_rec_st *arec, esodbc_rec_st *irec,
 					irec->meta_type);
 			break;
 
+		case SQL_C_TINYINT:
 		case SQL_C_STINYINT:
 			*(SQLSCHAR *)data_ptr = (SQLSCHAR)ll;
 			write_copied_octets(octet_len_ptr, sizeof(SQLSCHAR),
 					stmt->max_length, irec->meta_type);
 			break;
 
+		case SQL_C_SHORT:
 		case SQL_C_SSHORT:
 			*(SQLSMALLINT *)data_ptr = (SQLSMALLINT)ll;
 			write_copied_octets(octet_len_ptr, sizeof(SQLSMALLINT),
 					stmt->max_length, irec->meta_type);
 			break;
 
+		case SQL_C_LONG:
 		case SQL_C_SLONG:
 			*(SQLINTEGER *)data_ptr = (SQLINTEGER)ll;
 			write_copied_octets(octet_len_ptr, sizeof(SQLINTEGER),
 					stmt->max_length, irec->meta_type);
 			break;
 
+		case SQL_C_BIGINT:
 		case SQL_C_SBIGINT:
 			*(SQLBIGINT *)data_ptr = (SQLBIGINT)ll;
 			write_copied_octets(octet_len_ptr, sizeof(SQLBIGINT),
