@@ -646,7 +646,7 @@ static void* deferred_address(SQLSMALLINT field_id, size_t pos,
 }
 
 /*
- * Handles the lenghts of the data to copy out to the application:
+ * Handles the lengths of the data to copy out to the application:
  * (1) returns the max amount of bytes to copy (in the data_ptr), taking into
  *     account:
  *     - the bytes of the data 'avail',
@@ -720,7 +720,7 @@ static inline void write_copied_octets(SQLLEN *octet_len_ptr, size_t copied,
 		 * figuring out what the actual length is" */
 		*octet_len_ptr = max;
 	else
-		/* if no "network" truncation done, indicate data's lenght, no
+		/* if no "network" truncation done, indicate data's length, no
 		 * matter if truncated to buffer's size or not */
 		*octet_len_ptr = copied;
 }
@@ -893,7 +893,7 @@ static SQLRETURN copy_boolean(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 /*
  * -> SQL_C_CHAR
- * Note: chars_0 param accounts for 0-term, but lenght indicated back to the
+ * Note: chars_0 param accounts for 0-term, but length indicated back to the
  * application must not.
  */
 static SQLRETURN wstr_to_cstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
@@ -951,7 +951,7 @@ static SQLRETURN wstr_to_cstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		} else {
 			/* chars_0 accounts for 0-terminator, so WCS2U8 will count that in
 			 * the output as well => trim it, since we must not count it when
-			 * indicating the lenght to the application */
+			 * indicating the length to the application */
 			out_bytes --;
 		}
 		write_copied_octets(octet_len_ptr, out_bytes, stmt->max_length,
@@ -967,7 +967,7 @@ static SQLRETURN wstr_to_cstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 /*
  * -> SQL_C_WCHAR
- * Note: chars_0 accounts for 0-term, but lenght indicated back to the
+ * Note: chars_0 accounts for 0-term, but length indicated back to the
  * application must not.
  */
 static SQLRETURN wstr_to_wstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
@@ -1002,7 +1002,7 @@ static SQLRETURN wstr_to_wstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		DBGH(stmt, "REC@0x%p, NULL data_ptr", arec);
 	}
 
-	/* original lenght is indicated, w/o possible buffer truncation (but with
+	/* original length is indicated, w/o possible buffer truncation (but with
 	 * possible 'network' truncation) */
 	write_copied_octets(octet_len_ptr, (chars_0 - /*0-term*/1) * sizeof(*wstr),
 			stmt->max_length, irec->meta_type);
@@ -1537,7 +1537,7 @@ SQLRETURN EsSQLPrepareW
 	if (cchSqlStr == SQL_NTS) {
 		cchSqlStr = (SQLINTEGER)wcslen(szSqlStr);
 	} else if (cchSqlStr <= 0) {
-		ERRH(stmt, "invalid statment lenght: %d.", cchSqlStr);
+		ERRH(stmt, "invalid statment length: %d.", cchSqlStr);
 		RET_HDIAGS(stmt, SQL_STATE_HY090);
 	}
 	DBGH(stmt, "preparing `" LWPDL "` [%d]", cchSqlStr, szSqlStr,
@@ -1597,7 +1597,7 @@ SQLRETURN EsSQLExecDirectW
 	if (cchSqlStr == SQL_NTS) {
 		cchSqlStr = (SQLINTEGER)wcslen(szSqlStr);
 	} else if (cchSqlStr <= 0) {
-		ERRH(stmt, "invalid statment lenght: %d.", cchSqlStr);
+		ERRH(stmt, "invalid statment length: %d.", cchSqlStr);
 		RET_HDIAGS(stmt, SQL_STATE_HY090);
 	}
 	DBGH(stmt, "directly executing SQL: `" LWPDL "` [%d].", cchSqlStr,
@@ -1719,9 +1719,9 @@ SQLRETURN EsSQLDescribeColW(
 	}
 
 	if (! pcchColName) {
-		ERRH(stmt, "no column name lenght buffer provided.");
+		ERRH(stmt, "no column name length buffer provided.");
 		RET_HDIAG(stmt, SQL_STATE_HY090,
-				"no column name lenght buffer provided", 0);
+				"no column name length buffer provided", 0);
 	}
 	*pcchColName = 0 <= col_blen ? (col_blen / sizeof(*szColName)) :
 		(SQLSMALLINT)wcslen(rec->name);

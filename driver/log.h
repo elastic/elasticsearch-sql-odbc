@@ -29,7 +29,7 @@
 
 /*
  * Descriptors to be used with logging for SQLWCHAR pointer type.
- * "Log Wchar Pointer Descriptor [with Lenght]"
+ * "Log Wchar Pointer Descriptor [with Length]"
  */
 #ifdef UNICODE
 #define LWPD	PFWP_DESC
@@ -41,7 +41,7 @@
 
 /*
  * Descriptors to be used with logging for SQLTCHAR pointer type.
- * "Log Tchar Pointer Descriptor [with Lenght]"
+ * "Log Tchar Pointer Descriptor [with Length]"
  */
 #ifdef UNICODE
 #define LTPD	PFWP_DESC

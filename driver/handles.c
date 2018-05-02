@@ -750,7 +750,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 
 		case SQL_ATTR_MAX_LENGTH:
 			ulen = (SQLULEN)ValuePtr;
-			DBGH(stmt, "setting max_lenght to: %u.", ulen);
+			DBGH(stmt, "setting max_length to: %u.", ulen);
 			if (ulen < ESODBC_LO_MAX_LENGTH) {
 				WARNH(stmt, "MAX_LENGTH lower than min allowed (%d) -- "
 						"correcting value.", ESODBC_LO_MAX_LENGTH);
@@ -961,9 +961,9 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
 		/* pointer to a value other than string or binary string */
 		case SQL_DESC_DATA_PTR:
 			if ((buff_len != SQL_IS_POINTER) && (buff_len < 0)) {
-				/* spec says the lenght "should" be it's size => this check
+				/* spec says the length "should" be it's size => this check
 				 * might be too strict? */
-				ERR("buffer is for pointer, but its lenght indicator "
+				ERR("buffer is for pointer, but its length indicator "
 						"doesn't match (%d).", buff_len);
 				return SQL_STATE_HY090;
 			}
@@ -971,7 +971,7 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
 	}
 
 	if (! writable)
-		/* this call is from SetDescField, so lenght for integer types are
+		/* this call is from SetDescField, so length for integer types are
 		 * ignored */
 		return SQL_STATE_00000;
 
@@ -985,7 +985,7 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
 		case SQL_DESC_DISPLAY_SIZE:
 		case SQL_DESC_OCTET_LENGTH:
 			if (buff_len != SQL_IS_INTEGER) {
-				ERR("buffer is for interger, but its lenght indicator "
+				ERR("buffer is for interger, but its length indicator "
 						"doesn't match (%d).", buff_len);
 				return SQL_STATE_HY090;
 			}
@@ -995,7 +995,7 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
 		case SQL_DESC_ARRAY_SIZE:
 		case SQL_DESC_LENGTH:
 			if (buff_len != SQL_IS_UINTEGER) {
-				ERR("buffer is for uint, but its lenght indicator "
+				ERR("buffer is for uint, but its length indicator "
 						"doesn't match (%d).", buff_len);
 				return SQL_STATE_HY090;
 			}
@@ -1018,7 +1018,7 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
 		case SQL_DESC_UNSIGNED:
 		case SQL_DESC_UPDATABLE:
 			if (buff_len != SQL_IS_SMALLINT) {
-				ERR("buffer is for short, but its lenght indicator "
+				ERR("buffer is for short, but its length indicator "
 						"doesn't match (%d).", buff_len);
 				return SQL_STATE_HY090;
 			}
@@ -1494,7 +1494,7 @@ SQLRETURN EsSQLGetDescFieldW(
 		/* <SQLULEN> */
 		case SQL_DESC_LENGTH:
 			*(SQLULEN *)ValuePtr = rec->length;
-			DBGH(desc, "returning lenght: %u.", rec->length);
+			DBGH(desc, "returning length: %u.", rec->length);
 			break;
 
 		/* <SQLSMALLINT> */
@@ -1618,8 +1618,8 @@ SQLRETURN EsSQLGetDescRecW(
  * comment at function end), so these values must stay in sync, since there
  * are no C corresponding defines for verbose and sub-code (i.e. nothing like
  * "SQL_C_DATETIME" or "SQL_C_CODE_DATE").
- * The identity does not hold across the bord, though (extended values, like
- * BIGINTs do differ)!
+ * The identity does not hold across the board, though (extended values, like
+ * BIGINTs, do differ)!
  */
 void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type,
 		SQLSMALLINT *code)
@@ -2112,7 +2112,7 @@ SQLRETURN EsSQLSetDescFieldW(
 	 * the SQL_DESC_DATA_PTR field, the driver sets SQL_DESC_DATA_PTR to a
 	 * null pointer, unbinding the record."
 	 *
-	 * NOTE: the record can actually still be bound by the lenght/indicator
+	 * NOTE: the record can actually still be bound by the length/indicator
 	 * buffer(s), so the above "binding" definition is incomplete.
 	 */
 	if (FieldIdentifier != SQL_DESC_DATA_PTR)
@@ -2249,7 +2249,7 @@ SQLRETURN EsSQLSetDescFieldW(
 
 		/* <SQLULEN> */
 		case SQL_DESC_LENGTH:
-			DBGH(desc, "setting lenght: %u.", (SQLULEN)(uintptr_t)ValuePtr);
+			DBGH(desc, "setting length: %u.", (SQLULEN)(uintptr_t)ValuePtr);
 			rec->length = (SQLULEN)(uintptr_t)ValuePtr;
 			break;
 

@@ -57,7 +57,7 @@
 /* max # of active statements for a connection */
 /* TODO: review@alpha */
 #define ESODBC_MAX_CONCURRENT_ACTIVITIES	16
-/* maximum identifer lenght */
+/* maximum identifer length */
 /* TODO: review@alpha */
 #define ESODBC_MAX_IDENTIFIER_LEN			128
 
@@ -257,7 +257,7 @@
 /*
  * SQL92 numeric value functions:
  * - supported: none.
- * - not supported: BIT_LENGHT, CHAR_LENGTH, CHARACTER_LENGTH, EXTRACT,
+ * - not supported: BIT_LENGTH, CHAR_LENGTH, CHARACTER_LENGTH, EXTRACT,
  *   OCTET_LENGTH, POSITION
  */
 #define ESODBC_SQL92_NUMERIC_VALUE_FUNCTIONS	0

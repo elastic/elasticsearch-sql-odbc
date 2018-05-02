@@ -86,7 +86,7 @@
 #define REG_HKLM				"HKEY_LOCAL_MACHINE"
 #define REG_HKCU				"HKEY_CURRENT_USER"
 
-/* max lenght of a registry key value name */
+/* max length of a registry key value name */
 #define MAX_REG_VAL_NAME		1024
 /* max size of a registry key data */
 #define MAX_REG_DATA_SIZE		4096
@@ -174,7 +174,7 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb,
 
 	/* do I need to grow the existing buffer? */
 	if (avail < have) {
-		/* calculate how much space to allocate. start from existing lenght,
+		/* calculate how much space to allocate. start from existing length,
 		 * if set, othewise from a constant (on first allocation). */
 		for (need = dbc->alen ? dbc->alen : ESODBC_BODY_BUF_START_SIZE;
 				need < dbc->apos + have; need *= 2)
@@ -445,7 +445,7 @@ SQLRETURN post_statement(esodbc_stmt_st *stmt)
 	 * clean this function). */
 
 	/* evaluate how long the stringified REST object will be */
-	if (stmt->rset.eccnt) { /* eval CURSOR object lenght */
+	if (stmt->rset.eccnt) { /* eval CURSOR object length */
 		/* convert cursor to C [mb]string. */
 		/* TODO: ansi_w2c() fits better for Base64 encoded cursors. */
 		u8len = WCS2U8(stmt->rset.ecurs, (int)stmt->rset.eccnt, u8curs,
@@ -459,7 +459,7 @@ SQLRETURN post_statement(esodbc_stmt_st *stmt)
 		bodylen = sizeof(JSON_SQL_CURSOR_START) - /*\0*/1;
 		bodylen += json_escape(u8curs, u8len, NULL, 0);
 		bodylen += sizeof(JSON_SQL_CURSOR_END) - /*\0*/1;
-	} else { /* eval QUERY object lenght */
+	} else { /* eval QUERY object length */
 		bodylen = sizeof(JSON_SQL_QUERY_START) - /*\0*/1;
 		if (dbc->fetch.slen) {
 			bodylen += sizeof(JSON_SQL_QUERY_MID_FETCH) - /*\0*/1;
@@ -886,7 +886,7 @@ static BOOL write_connection_string(config_attrs_st *attrs,
 					pos += n;
 				}
 			} else {
-				/* simply increment the counter, since the untruncated lenght
+				/* simply increment the counter, since the untruncated length
 				 * need to be returned to the app */
 				pos += iter->val->cnt + braces;
 			}
@@ -925,7 +925,7 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 				LWSTR(&attrs->port));
 		goto err;
 	}
-	/* lenght of URL converted to U8 */
+	/* length of URL converted to U8 */
 	n = WCS2U8(urlw, cnt, NULL, 0);
 	if (! n) {
 		ERRNH(dbc, "failed to estimate U8 conversion space necessary for `"
@@ -1381,11 +1381,11 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 	SQLSMALLINT col_cnt;
 	SQLLEN row_cnt;
 	/* structure for one row returned by the ES.
-	 * This is a mirror of elasticsearch_type, with lenght-or-indicator fields
+	 * This is a mirror of elasticsearch_type, with length-or-indicator fields
 	 * for each of the members in elasticsearch_type */
 	struct {
 		SQLWCHAR		type_name[ESODBC_MAX_IDENTIFIER_LEN];
-		SQLLEN			type_name_loi; /* _ lenght or indicator */
+		SQLLEN			type_name_loi; /* _ length or indicator */
 		SQLSMALLINT		data_type;
 		SQLLEN			data_type_loi;
 		SQLINTEGER		column_size;
@@ -1546,8 +1546,8 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 		goto end;
 	}
 
-	/* check row statues;
-	 * calculate the lenght of all strings (SQLWCHAR members) returned
+	/* check row statuses;
+	 * calculate the length of all strings (SQLWCHAR members) returned
 	 * count also the 0-terms, which are not counted for in the indicator */
 	strs_len = 0;
 	for (i = 0; i < rows_fetched; i ++) {
@@ -1748,7 +1748,7 @@ static BOOL read_system_info(config_attrs_st *attrs, TCHAR *buff)
 		goto end;
 	} else {
 		DBG("Subkey '%s\\" LWPD "': vals: %d, lengthiest name: %d, "
-				"lenghtiest data: %d.", ktree, val, valsno, maxvallen,
+				"lengthiest data: %d.", ktree, val, valsno, maxvallen,
 				maxdatalen);
 		// malloc buffers?
 		if (MAX_REG_VAL_NAME < maxvallen)
