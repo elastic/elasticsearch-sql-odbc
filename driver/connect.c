@@ -2060,12 +2060,25 @@ SQLRETURN EsSQLSetConnectAttrW(
 	return SQL_SUCCESS;
 }
 
-#if 0
-static BOOL get_current_catalog(esodbc_dbc_st *dbc)
+/* writes into 'dest', of size 'room', the current catalog of 'dbc'.
+ * returns negative on error, or the char count written otherwise */
+static SQLSMALLINT get_current_catalog(esodbc_dbc_st *dbc, SQLWCHAR *dest,
+		SQLSMALLINT room)
 {
-	FIXME;
+	SQLSMALLINT used;
+	SQLWCHAR *catalog = MK_WPTR("my_current_catalog"); // FIXME
+
+	//
+	// TODO: use the new SYS CATALOGS query
+	//
+
+	DBGH(dbc, "current catalog: `" LWPD "`.", catalog);
+	if (! SQL_SUCCEEDED(write_wptr(&dbc->hdr.diag, dest, catalog, room,
+					&used))) {
+		return -1;
+	}
+	return used;
 }
-#endif //0
 
 SQLRETURN EsSQLGetConnectAttrW(
 		SQLHDBC        ConnectionHandle,
@@ -2075,9 +2088,7 @@ SQLRETURN EsSQLGetConnectAttrW(
 		_Out_opt_ SQLINTEGER* StringLengthPtr)
 {
 	esodbc_dbc_st *dbc = DBCH(ConnectionHandle);
-	SQLRETURN ret;
 	SQLSMALLINT used;
-//	SQLWCHAR *val;
 
 	switch(Attribute) {
 		/* https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/automatic-population-of-the-ipd */
@@ -2092,30 +2103,17 @@ SQLRETURN EsSQLGetConnectAttrW(
 
 		/* "the name of the catalog to be used by the data source" */
 		case SQL_ATTR_CURRENT_CATALOG:
-			DBGH(dbc, "requested: catalog name (@0x%p).", dbc->catalog);
-#if 0
+			DBGH(dbc, "requested: catalog name.");
 			if (! dbc->es_types) {
 				ERRH(dbc, "no connection active.");
-				/* TODO: check connection state and correct state */
 				RET_HDIAGS(dbc, SQL_STATE_08003);
-			} else if (! get_current_catalog(dbc)) {
+			} else if ((used = get_current_catalog(dbc, (SQLWCHAR *)ValuePtr,
+						(SQLSMALLINT)BufferLength)) < 0) {
 				ERRH(dbc, "failed to get current catalog.");
-				RET_STATE(dbc, dbc->hdr.diag.state);
+				RET_STATE(dbc->hdr.diag.state);
 			}
-#endif //0
-#if 0
-			val = dbc->catalog ? dbc->catalog : MK_WPTR("null");
-			*StringLengthPtr = wcslen(*(SQLWCHAR **)ValuePtr);
-			*StringLengthPtr *= sizeof(SQLWCHAR);
-			*(SQLWCHAR **)ValuePtr = val;
-#else //0
-			// FIXME;
-			ret = write_wptr(&dbc->hdr.diag, (SQLWCHAR *)ValuePtr,
-					MK_WPTR("NulL"), (SQLSMALLINT)BufferLength, &used);
 			if (StringLengthPtr);
 				*StringLengthPtr = (SQLINTEGER)used;
-			return ret;
-#endif //0
 			break;
 
 		case SQL_ATTR_METADATA_ID:
