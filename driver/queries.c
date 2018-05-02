@@ -810,7 +810,6 @@ static SQLRETURN copy_longlong(esodbc_rec_st *arec, esodbc_rec_st *irec,
 					stmt->max_length, irec->meta_type);
 			break;
 
-		case SQL_C_BIGINT:
 		case SQL_C_SBIGINT:
 			*(SQLBIGINT *)data_ptr = (SQLBIGINT)ll;
 			write_copied_octets(octet_len_ptr, sizeof(SQLBIGINT),
