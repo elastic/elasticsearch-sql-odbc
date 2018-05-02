@@ -206,7 +206,7 @@ size_t json_escape(const char *jin, size_t inlen, char *jout, size_t outlen);
 
 /*
  * Descriptors to be used with STPRINTF for TCHAR pointer type.
- * "SNTPRINTF Tchar Pointer Descriptor [with Lenght]"
+ * "SNTPRINTF Tchar Pointer Descriptor [with Length]"
  */
 #ifdef UNICODE
 #define STPD	WPFWP_DESC

@@ -140,7 +140,7 @@ typedef struct struct_dbc {
 	char *abuff; /* buffer holding the answer */
 	size_t alen; /* size of abuff */
 	size_t apos; /* current write position in the abuff */
-	size_t amax; /* maximum lenght (bytes) that abuff can grow to */
+	size_t amax; /* maximum length (bytes) that abuff can grow to */
 
 	/* window handler */
 	HWND hwin;
@@ -261,7 +261,7 @@ typedef struct struct_desc {
 typedef struct struct_resultset {
 	long code; /* code of last response */
 	char *buff; /* buffer containing the answer to the last request in a STM */
-	size_t blen; /* lenght of the answer */
+	size_t blen; /* length of the answer */
 
 	void *state; /* top UJSON decoder state */
 	void *rows_iter; /* UJSON array with the result set */

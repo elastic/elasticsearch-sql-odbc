@@ -77,7 +77,7 @@ int ansi_w2c(const SQLWCHAR *src, char *dst, size_t chars)
 	} while (src[i] && (++i < chars));
 
 	if (chars <= i) { /* equiv to: (src[i] != 0) */
-		/* loop stopped b/c of lenght -> src is not 0-term'd */
+		/* loop stopped b/c of length -> src is not 0-term'd */
 		dst[i] = 0;
 	}
 	return i + 1;
@@ -113,7 +113,7 @@ int wszmemcmp(const SQLWCHAR *a, const SQLWCHAR *b, long count)
 	return *a - *b;
 }
 
-/* retuns the lenght of a buffer to hold the escaped variant of the unescaped
+/* retuns the length of a buffer to hold the escaped variant of the unescaped
  * given json object  */
 static inline size_t json_escaped_len(const char *json, size_t len)
 {
