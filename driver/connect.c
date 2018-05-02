@@ -113,6 +113,49 @@ typedef struct {
 	wstr_st trace_level;
 } config_attrs_st;
 
+/* structure for one row returned by the ES.
+ * This is a mirror of elasticsearch_type, with length-or-indicator fields
+ * for each of the members in elasticsearch_type */
+typedef struct {
+	SQLWCHAR		type_name[ESODBC_MAX_IDENTIFIER_LEN];
+	SQLLEN			type_name_loi; /* _ length or indicator */
+	SQLSMALLINT		data_type;
+	SQLLEN			data_type_loi;
+	SQLINTEGER		column_size;
+	SQLLEN			column_size_loi;
+	SQLWCHAR		literal_prefix[ESODBC_MAX_IDENTIFIER_LEN];
+	SQLLEN			literal_prefix_loi;
+	SQLWCHAR		literal_suffix[ESODBC_MAX_IDENTIFIER_LEN];
+	SQLLEN			literal_suffix_loi;
+	SQLWCHAR		create_params[ESODBC_MAX_IDENTIFIER_LEN];
+	SQLLEN			create_params_loi;
+	SQLSMALLINT		nullable;
+	SQLLEN			nullable_loi;
+	SQLSMALLINT		case_sensitive;
+	SQLLEN			case_sensitive_loi;
+	SQLSMALLINT		searchable;
+	SQLLEN			searchable_loi;
+	SQLSMALLINT		unsigned_attribute;
+	SQLLEN			unsigned_attribute_loi;
+	SQLSMALLINT		fixed_prec_scale;
+	SQLLEN			fixed_prec_scale_loi;
+	SQLSMALLINT		auto_unique_value;
+	SQLLEN			auto_unique_value_loi;
+	SQLWCHAR		local_type_name[ESODBC_MAX_IDENTIFIER_LEN];
+	SQLLEN			local_type_name_loi;
+	SQLSMALLINT		minimum_scale;
+	SQLLEN			minimum_scale_loi;
+	SQLSMALLINT		maximum_scale;
+	SQLLEN			maximum_scale_loi;
+	SQLSMALLINT		sql_data_type;
+	SQLLEN			sql_data_type_loi;
+	SQLSMALLINT		sql_datetime_sub;
+	SQLLEN			sql_datetime_sub_loi;
+	SQLINTEGER		num_prec_radix;
+	SQLLEN			num_prec_radix_loi;
+	SQLSMALLINT		interval_precision;
+	SQLLEN			interval_precision_loi;
+} estype_row_st;
 /*
  * HTTP headers used for all requests (Content-Type, Accept).
  */
@@ -1366,6 +1409,141 @@ static void set_display_size(esodbc_estype_st *es_type)
 	}
 }
 
+static BOOL bind_types_cols(esodbc_stmt_st *stmt, estype_row_st *type_row)
+{
+
+	/* bind one column */
+#define ES_TYPES_BINDCOL(_col_nr, _member, _c_type) \
+	do { \
+		SQLPOINTER _ptr = _c_type == SQL_C_WCHAR ? \
+			(SQLPOINTER)(uintptr_t)type_row[0]._member : \
+			(SQLPOINTER)&type_row[0]._member; \
+		if (! SQL_SUCCEEDED(EsSQLBindCol(stmt, _col_nr, _c_type, \
+						_ptr, sizeof(type_row[0]._member), \
+						&type_row[0]._member ## _loi))) { \
+			ERRH(stmt, "failed to bind column #" STR(_col_nr) "."); \
+			return FALSE; \
+		} \
+	} while (0)
+
+	ES_TYPES_BINDCOL(1, type_name, SQL_C_WCHAR);
+	ES_TYPES_BINDCOL(2, data_type, SQL_C_SSHORT);
+	ES_TYPES_BINDCOL(3, column_size, SQL_C_SLONG);
+	ES_TYPES_BINDCOL(4, literal_prefix, SQL_C_WCHAR);
+	ES_TYPES_BINDCOL(5, literal_suffix, SQL_C_WCHAR);
+	ES_TYPES_BINDCOL(6, create_params, SQL_C_WCHAR);
+	ES_TYPES_BINDCOL(7, nullable, SQL_C_SSHORT);
+	ES_TYPES_BINDCOL(8, case_sensitive, SQL_C_SSHORT);
+	ES_TYPES_BINDCOL(9, searchable, SQL_C_SSHORT);
+	ES_TYPES_BINDCOL(10, unsigned_attribute, SQL_C_SSHORT);
+	ES_TYPES_BINDCOL(11, fixed_prec_scale, SQL_C_SSHORT);
+	ES_TYPES_BINDCOL(12, auto_unique_value, SQL_C_SSHORT);
+	ES_TYPES_BINDCOL(13, local_type_name, SQL_C_WCHAR);
+	ES_TYPES_BINDCOL(14, minimum_scale, SQL_C_SSHORT);
+	ES_TYPES_BINDCOL(15, maximum_scale, SQL_C_SSHORT);
+	ES_TYPES_BINDCOL(16, sql_data_type, SQL_C_SSHORT);
+	ES_TYPES_BINDCOL(17, sql_datetime_sub, SQL_C_SSHORT);
+	ES_TYPES_BINDCOL(18, num_prec_radix, SQL_C_SLONG);
+	ES_TYPES_BINDCOL(19, interval_precision, SQL_C_SSHORT);
+
+#undef ES_TYPES_BINDCOL
+
+	return TRUE;
+}
+
+static void* copy_types_rows(estype_row_st *type_row, SQLULEN rows_fetched,
+		esodbc_estype_st *types)
+{
+	SQLWCHAR *pos;
+	int i;
+
+	/* start pointer where the strings will be copied in */
+	pos = (SQLWCHAR *)&types[rows_fetched];
+
+	/* copy one integer member */
+#define ES_TYPES_COPY_INT(_member) \
+	do { \
+		if (type_row[i]._member ## _loi == SQL_NULL_DATA) { \
+			/*null->0 is harmless for cached types */\
+			types[i]._member = 0; \
+		} else { \
+			types[i]._member = type_row[i]._member; \
+		} \
+	} while (0)
+	/* copy one wstr_st member
+	 * Note: it'll shift NULLs to empty strings, as most of the API asks for
+	 * empty strings if data is unavailable ("unkown"). */
+#define ES_TYPES_COPY_WSTR(_wmember) \
+	do { \
+		if (type_row[i]._wmember ## _loi == SQL_NULL_DATA) { \
+			types[i]._wmember.cnt = 0; \
+			types[i]._wmember.str = MK_WPTR(""); \
+		} else { \
+			types[i]._wmember.cnt = \
+				type_row[i]._wmember ## _loi / sizeof(SQLWCHAR); \
+			types[i]._wmember.str = pos; \
+			wmemcpy(types[i]._wmember.str, \
+					type_row[i]._wmember, types[i]._wmember.cnt + /*\0*/1); \
+			pos += types[i]._wmember.cnt + /*\0*/1; \
+		} \
+	} while (0)
+
+	for (i = 0; i < rows_fetched; i ++) {
+		/* copy data */
+		ES_TYPES_COPY_WSTR(type_name);
+		ES_TYPES_COPY_INT(data_type);
+		ES_TYPES_COPY_INT(column_size);
+		ES_TYPES_COPY_WSTR(literal_prefix);
+		ES_TYPES_COPY_WSTR(literal_suffix);
+		ES_TYPES_COPY_WSTR(create_params);
+		ES_TYPES_COPY_INT(nullable);
+		ES_TYPES_COPY_INT(case_sensitive);
+		ES_TYPES_COPY_INT(searchable);
+		ES_TYPES_COPY_INT(unsigned_attribute);
+		ES_TYPES_COPY_INT(fixed_prec_scale);
+		ES_TYPES_COPY_INT(auto_unique_value);
+		ES_TYPES_COPY_WSTR(local_type_name);
+		ES_TYPES_COPY_INT(minimum_scale);
+		ES_TYPES_COPY_INT(maximum_scale);
+		ES_TYPES_COPY_INT(sql_data_type);
+		ES_TYPES_COPY_INT(sql_datetime_sub);
+		ES_TYPES_COPY_INT(num_prec_radix);
+		ES_TYPES_COPY_INT(interval_precision);
+
+		/* apply any needed fixes */
+
+		/* warn if scales extremes are different */
+		if (types[i].maximum_scale != types[i].minimum_scale) {
+			ERR("type `" LWPDL "` returned with non-equal max/min "
+					"scale: %d/%d.", LWSTR(&types[i].type_name),
+					types[i].maximum_scale, types[i].minimum_scale);
+		}
+
+		/* resolve ES type to SQL C type */
+		types[i].c_concise_type = type_elastic2csql(&types[i].type_name);
+		if (types[i].c_concise_type == SQL_UNKNOWN_TYPE) {
+			/* ES version newer than driver's? */
+			ERR("failed to convert type name `" LWPDL "` to SQL C type.",
+					LWSTR(&types[i].type_name));
+			return NULL;
+		}
+		/* set meta type */
+		types[i].meta_type = concise_to_meta(types[i].c_concise_type,
+				/*C type -> AxD*/DESC_TYPE_ARD);
+
+		/* fix SQL_DATA_TYPE and SQL_DATETIME_SUB columns TODO: GH issue */
+		concise_to_type_code(types[i].data_type, &types[i].sql_data_type,
+				&types[i].sql_datetime_sub);
+
+		set_display_size(types + i);
+	}
+
+#undef ES_TYPES_COPY_INT
+#undef ES_TYPES_COPY_WCHAR
+
+	return pos;
+}
+
 /*
  * Load SYS TYPES data.
  *
@@ -1380,56 +1558,14 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 	SQLRETURN ret = FALSE;
 	SQLSMALLINT col_cnt;
 	SQLLEN row_cnt;
-	/* structure for one row returned by the ES.
-	 * This is a mirror of elasticsearch_type, with length-or-indicator fields
-	 * for each of the members in elasticsearch_type */
-	struct {
-		SQLWCHAR		type_name[ESODBC_MAX_IDENTIFIER_LEN];
-		SQLLEN			type_name_loi; /* _ length or indicator */
-		SQLSMALLINT		data_type;
-		SQLLEN			data_type_loi;
-		SQLINTEGER		column_size;
-		SQLLEN			column_size_loi;
-		SQLWCHAR		literal_prefix[ESODBC_MAX_IDENTIFIER_LEN];
-		SQLLEN			literal_prefix_loi;
-		SQLWCHAR		literal_suffix[ESODBC_MAX_IDENTIFIER_LEN];
-		SQLLEN			literal_suffix_loi;
-		SQLWCHAR		create_params[ESODBC_MAX_IDENTIFIER_LEN];
-		SQLLEN			create_params_loi;
-		SQLSMALLINT		nullable;
-		SQLLEN			nullable_loi;
-		SQLSMALLINT		case_sensitive;
-		SQLLEN			case_sensitive_loi;
-		SQLSMALLINT		searchable;
-		SQLLEN			searchable_loi;
-		SQLSMALLINT		unsigned_attribute;
-		SQLLEN			unsigned_attribute_loi;
-		SQLSMALLINT		fixed_prec_scale;
-		SQLLEN			fixed_prec_scale_loi;
-		SQLSMALLINT		auto_unique_value;
-		SQLLEN			auto_unique_value_loi;
-		SQLWCHAR		local_type_name[ESODBC_MAX_IDENTIFIER_LEN];
-		SQLLEN			local_type_name_loi;
-		SQLSMALLINT		minimum_scale;
-		SQLLEN			minimum_scale_loi;
-		SQLSMALLINT		maximum_scale;
-		SQLLEN			maximum_scale_loi;
-		SQLSMALLINT		sql_data_type;
-		SQLLEN			sql_data_type_loi;
-		SQLSMALLINT		sql_datetime_sub;
-		SQLLEN			sql_datetime_sub_loi;
-		SQLINTEGER		num_prec_radix;
-		SQLLEN			num_prec_radix_loi;
-		SQLSMALLINT		interval_precision;
-		SQLLEN			interval_precision_loi;
-	} type_row[ESODBC_MAX_ROW_ARRAY_SIZE];
-	/* both arrays must use ESODBC_MAX_ROW_ARRAY_SIZE since no SQLFetch()
+	/* both arrays below must use ESODBC_MAX_ROW_ARRAY_SIZE since no SQLFetch()
 	 * looping is implemented (see check after SQLFetch() below). */
+	estype_row_st type_row[ESODBC_MAX_ROW_ARRAY_SIZE];
 	SQLUSMALLINT row_status[ESODBC_MAX_ROW_ARRAY_SIZE];
 	SQLULEN rows_fetched, i, strs_len;
 	size_t size;
-	SQLWCHAR *pos;
 	esodbc_estype_st *types = NULL;
+	void *pos;
 
 	if (! SQL_SUCCEEDED(EsSQLAllocHandle(SQL_HANDLE_STMT, dbc, &stmt))) {
 		ERRH(dbc, "failed to alloc a statement handle.");
@@ -1499,41 +1635,9 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 		goto end;
 	}
 
-	/* bind one column */
-#define ES_TYPES_BINDCOL(_col_nr, _member, _c_type) \
-	do { \
-		SQLPOINTER _ptr = _c_type == SQL_C_WCHAR ? \
-			(SQLPOINTER)(uintptr_t)type_row[0]._member : \
-			(SQLPOINTER)&type_row[0]._member; \
-		if (! SQL_SUCCEEDED(EsSQLBindCol(stmt, _col_nr, _c_type, \
-						_ptr, sizeof(type_row[0]._member), \
-						&type_row[0]._member ## _loi))) { \
-			ERRH(stmt, "failed to bind column #" STR(_col_nr) "."); \
-			goto end; \
-		} \
-	} while (0)
-
-	ES_TYPES_BINDCOL(1, type_name, SQL_C_WCHAR);
-	ES_TYPES_BINDCOL(2, data_type, SQL_C_SSHORT);
-	ES_TYPES_BINDCOL(3, column_size, SQL_C_SLONG);
-	ES_TYPES_BINDCOL(4, literal_prefix, SQL_C_WCHAR);
-	ES_TYPES_BINDCOL(5, literal_suffix, SQL_C_WCHAR);
-	ES_TYPES_BINDCOL(6, create_params, SQL_C_WCHAR);
-	ES_TYPES_BINDCOL(7, nullable, SQL_C_SSHORT);
-	ES_TYPES_BINDCOL(8, case_sensitive, SQL_C_SSHORT);
-	ES_TYPES_BINDCOL(9, searchable, SQL_C_SSHORT);
-	ES_TYPES_BINDCOL(10, unsigned_attribute, SQL_C_SSHORT);
-	ES_TYPES_BINDCOL(11, fixed_prec_scale, SQL_C_SSHORT);
-	ES_TYPES_BINDCOL(12, auto_unique_value, SQL_C_SSHORT);
-	ES_TYPES_BINDCOL(13, local_type_name, SQL_C_WCHAR);
-	ES_TYPES_BINDCOL(14, minimum_scale, SQL_C_SSHORT);
-	ES_TYPES_BINDCOL(15, maximum_scale, SQL_C_SSHORT);
-	ES_TYPES_BINDCOL(16, sql_data_type, SQL_C_SSHORT);
-	ES_TYPES_BINDCOL(17, sql_datetime_sub, SQL_C_SSHORT);
-	ES_TYPES_BINDCOL(18, num_prec_radix, SQL_C_SLONG);
-	ES_TYPES_BINDCOL(19, interval_precision, SQL_C_SSHORT);
-
-#undef ES_TYPES_BINDCOL
+	if (! bind_types_cols(stmt, type_row)) {
+		goto end;
+	}
 
 	/* fetch the results into the type_row array */
 	if (! SQL_SUCCEEDED(EsSQLFetch(stmt))) {
@@ -1585,90 +1689,10 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 		goto end;
 	}
 
-	/* start pointer where the strings will be copied in */
-	pos = (SQLWCHAR *)&types[rows_fetched];
-
-	/* copy one integer member
-	 * TODO: treat NULL case */
-#define ES_TYPES_COPY_INT(_member) \
-	do { \
-		if (type_row[i]._member ## _loi == SQL_NULL_DATA) { \
-			types[i]._member = 0; \
-		} else { \
-			types[i]._member = type_row[i]._member; \
-		} \
-	} while (0)
-	/* copy one wstr_st member
-	 * Note: it'll shift NULLs to empty strings, as most of the API asks for
-	 * empty strings if data is unavailable ("unkown"). */
-#define ES_TYPES_COPY_WSTR(_wmember) \
-	do { \
-		if (type_row[i]._wmember ## _loi == SQL_NULL_DATA) { \
-			types[i]._wmember.cnt = 0; \
-			types[i]._wmember.str = MK_WPTR(""); \
-		} else { \
-			types[i]._wmember.cnt = \
-				type_row[i]._wmember ## _loi / sizeof(SQLWCHAR); \
-			types[i]._wmember.str = pos; \
-			wmemcpy(types[i]._wmember.str, \
-					type_row[i]._wmember, types[i]._wmember.cnt + /*\0*/1); \
-			pos += types[i]._wmember.cnt + /*\0*/1; \
-		} \
-	} while (0)
-
-	for (i = 0; i < rows_fetched; i ++) {
-		/* copy data */
-		ES_TYPES_COPY_WSTR(type_name);
-		ES_TYPES_COPY_INT(data_type);
-		ES_TYPES_COPY_INT(column_size);
-		ES_TYPES_COPY_WSTR(literal_prefix);
-		ES_TYPES_COPY_WSTR(literal_suffix);
-		ES_TYPES_COPY_WSTR(create_params);
-		ES_TYPES_COPY_INT(nullable);
-		ES_TYPES_COPY_INT(case_sensitive);
-		ES_TYPES_COPY_INT(searchable);
-		ES_TYPES_COPY_INT(unsigned_attribute);
-		ES_TYPES_COPY_INT(fixed_prec_scale);
-		ES_TYPES_COPY_INT(auto_unique_value);
-		ES_TYPES_COPY_WSTR(local_type_name);
-		ES_TYPES_COPY_INT(minimum_scale);
-		ES_TYPES_COPY_INT(maximum_scale);
-		ES_TYPES_COPY_INT(sql_data_type);
-		ES_TYPES_COPY_INT(sql_datetime_sub);
-		ES_TYPES_COPY_INT(num_prec_radix);
-		ES_TYPES_COPY_INT(interval_precision);
-
-		/* apply any needed fixes */
-
-		/* warn if scales extremes are different */
-		if (types[i].maximum_scale != types[i].minimum_scale) {
-			ERRH(dbc, "type `" LWPDL "` returned with non-equal max/min "
-					"scale: %d/%d.", LWSTR(&types[i].type_name),
-					types[i].maximum_scale, types[i].minimum_scale);
-		}
-
-		/* resolve ES type to SQL C type */
-		types[i].c_concise_type = type_elastic2csql(&types[i].type_name);
-		if (types[i].c_concise_type == SQL_UNKNOWN_TYPE) {
-			/* ES version newer than driver's? */
-			ERRH(dbc, "failed to convert type name `" LWPDL "` to SQL C type.",
-					LWSTR(&types[i].type_name));
-			goto end;
-		}
-		/* set meta type */
-		types[i].meta_type = concise_to_meta(types[i].c_concise_type,
-				/*C type -> AxD*/DESC_TYPE_ARD);
-
-		/* fix SQL_DATA_TYPE and SQL_DATETIME_SUB columns TODO: GH issue */
-		concise_to_type_code(types[i].data_type, &types[i].sql_data_type,
-				&types[i].sql_datetime_sub);
-
-		set_display_size(types + i);
+	if (! (pos = copy_types_rows(type_row, rows_fetched, types))) {
+		ERRH(dbc, "failed to process recieved ES/SQL data types.");
+		goto end;
 	}
-
-#undef ES_TYPES_COPY_INT
-#undef ES_TYPES_COPY_WCHAR
-
 	/* I didn't overrun the buffer */
 	assert((char *)pos - (char *)(types + rows_fetched) <=
 			(intptr_t)(strs_len));
