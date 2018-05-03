@@ -57,7 +57,7 @@
 /* max # of active statements for a connection */
 /* TODO: review@alpha */
 #define ESODBC_MAX_CONCURRENT_ACTIVITIES	16
-/* maximum identifer lenght */
+/* maximum identifer length */
 /* TODO: review@alpha */
 #define ESODBC_MAX_IDENTIFIER_LEN			128
 
@@ -257,7 +257,7 @@
 /*
  * SQL92 numeric value functions:
  * - supported: none.
- * - not supported: BIT_LENGHT, CHAR_LENGTH, CHARACTER_LENGTH, EXTRACT,
+ * - not supported: BIT_LENGTH, CHAR_LENGTH, CHARACTER_LENGTH, EXTRACT,
  *   OCTET_LENGTH, POSITION
  */
 #define ESODBC_SQL92_NUMERIC_VALUE_FUNCTIONS	0
@@ -282,6 +282,58 @@
  */
 #define ODBC_SQL92_VALUE_EXPRESSIONS			0
 
+/*
+ * ES specific data types
+ */
+#define ESODBC_SQL_BOOLEAN			16
+#define ESODBC_SQL_NULL				0
+#define ESODBC_SQL_UNSUPPORTED		1111
+#define ESODBC_SQL_OBJECT			2002
+#define ESODBC_SQL_NESTED			2002
 
+/*
+ * ISO8601 template ('yyyy-mm-ddThh:mm:ss.sss+hh:mm')
+ */
+#define ESODBC_ISO8601_TEMPLATE		"yyyy-mm-ddThh:mm:ss.sssZ"
+
+/*
+ * ES-to-C-SQL mappings
+ * DATA_TYPE(SYS TYPES) : SQL_<type> -> SQL_C_<type>
+ * Collected here for a quick overview (and easy change); can't be automated.
+ */
+/* -6: SQL_TINYINT -> SQL_C_TINYINT */
+#define ESODBC_ES_TO_CSQL_BYTE			SQL_C_TINYINT
+/* 5: SQL_SMALLINT -> SQL_C_SHORT */
+#define ESODBC_ES_TO_CSQL_SHORT			SQL_C_SSHORT
+/* 4: SQL_INTEGER -> SQL_C_LONG */
+#define ESODBC_ES_TO_CSQL_INTEGER		SQL_C_SLONG
+/* -5: SQL_BIGINT -> SQL_C_SBIGINT */
+#define ESODBC_ES_TO_CSQL_LONG			SQL_C_SBIGINT
+/* 6: SQL_FLOAT -> SQL_C_DOUBLE */
+#define ESODBC_ES_TO_CSQL_HALF_FLOAT	SQL_C_DOUBLE
+/* 6: SQL_FLOAT -> SQL_C_DOUBLE */
+#define ESODBC_ES_TO_CSQL_SCALED_FLOAT	SQL_C_DOUBLE
+/* 7: SQL_REAL -> SQL_C_DOUBLE */
+#define ESODBC_ES_TO_CSQL_FLOAT			SQL_C_FLOAT
+/* 8: SQL_DOUBLE -> SQL_C_FLOAT */
+#define ESODBC_ES_TO_CSQL_DOUBLE		SQL_C_DOUBLE
+/* 16: ??? -> SQL_C_TINYINT */
+#define ESODBC_ES_TO_CSQL_BOOLEAN		SQL_C_STINYINT
+/* 12: SQL_VARCHAR -> SQL_C_WCHAR */
+#define ESODBC_ES_TO_CSQL_KEYWORD		SQL_C_WCHAR
+/* 12: SQL_VARCHAR -> SQL_C_WCHAR */
+#define ESODBC_ES_TO_CSQL_TEXT			SQL_C_WCHAR
+/* 93: SQL_TYPE_TIMESTAMP -> SQL_C_TYPE_TIMESTAMP */
+#define ESODBC_ES_TO_CSQL_DATE			SQL_C_TYPE_TIMESTAMP
+/* -3: SQL_VARBINARY -> SQL_C_BINARY */
+#define ESODBC_ES_TO_CSQL_BINARY		SQL_C_BINARY
+/* 0: SQL_TYPE_NULL -> SQL_C_TINYINT */
+#define ESODBC_ES_TO_CSQL_NULL			SQL_C_STINYINT
+/* 1111: ??? -> SQL_C_BINARY */
+#define ESODBC_ES_TO_CSQL_UNSUPPORTED	SQL_C_BINARY
+/* 2002: ??? -> SQL_C_BINARY */
+#define ESODBC_ES_TO_CSQL_OBJECT		SQL_C_BINARY
+/* 2002: ??? -> SQL_C_BINARY */
+#define ESODBC_ES_TO_CSQL_NESTED		SQL_C_BINARY
 
 #endif /* __DEFS_H__ */

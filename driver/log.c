@@ -102,7 +102,7 @@ BOOL log_init()
 	/* is there a log level specified? */
 	if ((qmark = TSTRCHR(path, LOG_LEVEL_SEPARATOR))) {
 		*qmark = 0; /* end the path here */
-		pos = (int)(qmark - path); /* adjust the lenght of path */
+		pos = (int)(qmark - path); /* adjust the length of path */
 		/* first letter will indicate the log level, with the default being
 		 * debug, since this is mostly a tracing functionality */
 		switch (qmark[1]) {

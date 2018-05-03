@@ -437,7 +437,7 @@ typedef struct {
 	esodbc_state_et state;
 	/* [vendor-identifier][ODBC-component-identifier]component-supplied-text */
 	SQLWCHAR text[SQL_MAX_MESSAGE_LENGTH];
-	/* lenght of characters in the buffer */
+	/* length of characters in the buffer */
 	SQLUSMALLINT text_len; /* in characters, not bytes, w/o the 0-term */
 							/* (SQLSMALLINT)wcslen(native_text) */
 	/* returned in SQLGetDiagField()/SQL_DIAG_NATIVE, SQLGetDiagRecW() */
