@@ -18,7 +18,7 @@
 
 /*
  * Descriptors to be used with logging for SQLWCHAR pointer type.
- * "Log Wchar Pointer Descriptor [with Lenght]"
+ * "Log Wchar Pointer Descriptor [with Length]"
  */
 #ifdef UNICODE
 #define LWPD	PFWP_DESC
@@ -30,7 +30,7 @@
 
 /*
  * Descriptors to be used with logging for SQLTCHAR pointer type.
- * "Log Tchar Pointer Descriptor [with Lenght]"
+ * "Log Tchar Pointer Descriptor [with Length]"
  */
 #ifdef UNICODE
 #define LTPD	PFWP_DESC
@@ -77,7 +77,6 @@ extern int _esodbc_log_level;
 #define INFO(fmt, ...)	LOG(LOG_LEVEL_INFO, fmt, __VA_ARGS__)
 #define DBG(fmt, ...)	LOG(LOG_LEVEL_DBG, fmt, __VA_ARGS__)
 
-
 #define BUG(fmt, ...) \
 	do { \
 		ERR("[BUG] " fmt, __VA_ARGS__); \
@@ -119,6 +118,11 @@ static inline char* _hhtype2str(void *handle)
 #define INFOH(hnd, fmt, ...)	LOGH(LOG_LEVEL_INFO, 0, hnd, fmt, __VA_ARGS__)
 #define DBGH(hnd, fmt, ...)		LOGH(LOG_LEVEL_DBG, 0, hnd, fmt, __VA_ARGS__)
 
+#define BUGH(hnd, fmt, ...) \
+	do { \
+		ERRH(hnd, "[BUG] " fmt, __VA_ARGS__); \
+		assert(0); \
+	} while (0)
 
 
 

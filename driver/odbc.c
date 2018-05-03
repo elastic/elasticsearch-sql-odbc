@@ -491,6 +491,9 @@ SQLRETURN SQL_API SQLPrepareW
 #if WITH_EMPTY
 /*
  * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/sending-long-data
+ * Note: must use EsSQLSetDescFieldW() for param data-type setting, to call
+ * set_defaults_from_type(), to meet the "Other fields implicitly set"
+ * requirements from the page linked in set_defaults_from_type() comments.
  */
 SQLRETURN SQL_API SQLBindParameter(
     SQLHSTMT           hstmt,
@@ -613,6 +616,7 @@ SQLRETURN SQL_API SQLNativeSqlW
  * with information about the parameter, including the data type, precision,
  * scale, and other characteristics. This is equivalent to supporting
  * SQLDescribeParam."
+ * Note: see EsSQLDescribeColW() for size & dec digits impl.
  */
 SQLRETURN SQL_API SQLDescribeParam(
     SQLHSTMT           hstmt,

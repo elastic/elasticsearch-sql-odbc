@@ -53,6 +53,62 @@ typedef struct struct_env {
 	// TODO?: connections
 } esodbc_env_st;
 
+/* meta data types (same for both SQL_C_<t> and SQL_<t> types) */
+typedef enum {
+	METATYPE_UNKNOWN = 0,
+	METATYPE_EXACT_NUMERIC,
+	METATYPE_FLOAT_NUMERIC,
+	METATYPE_STRING,
+	METATYPE_BIN,
+	METATYPE_DATETIME,
+	METATYPE_INTERVAL_WSEC,
+	METATYPE_INTERVAL_WOSEC,
+	METATYPE_BIT,
+	METATYPE_UID,
+	METATYPE_MAX // SQL_C_DEFAULT
+} esodbc_metatype_et;
+
+/* Structure mapping one ES/SQL data type. */
+typedef struct elasticsearch_type {
+	/* fields of one row returned  in response to 'SYS TYPES' query */
+	wstr_st			type_name;
+	SQLSMALLINT		data_type; /* maps to rec's .concise_type member */
+	SQLINTEGER		column_size;
+	wstr_st			literal_prefix;
+	wstr_st			literal_suffix;
+	wstr_st			create_params;
+	SQLSMALLINT		nullable;
+	SQLSMALLINT		case_sensitive;
+	SQLSMALLINT		searchable;
+	SQLSMALLINT		unsigned_attribute;
+	SQLSMALLINT		fixed_prec_scale;
+	SQLSMALLINT		auto_unique_value;
+	wstr_st			local_type_name;
+	SQLSMALLINT		minimum_scale;
+	SQLSMALLINT		maximum_scale;
+	SQLSMALLINT		sql_data_type; /* :-> rec's .type member */
+	SQLSMALLINT		sql_datetime_sub; /* :-> rec's .datetime_interval_code */
+	SQLINTEGER		num_prec_radix;
+	SQLSMALLINT		interval_precision;
+
+	/* number of SYS TYPES result columns mapped over the above members */
+#define ESODBC_TYPES_MEMBERS	19
+
+	/* SQL C type driver mapping of ES' data_type; this is derived from
+	 * .type_name, rathern than .(sql_)data_type (sice the name is the
+	 * "unique" key and sole identifier in general queries results). */
+	SQLSMALLINT			c_concise_type;
+	/* There should be no need for a supplemental 'sql_c_type': if
+	 * rec.datetime_interval_code == 0, then this member would equal the
+	 * concise one (above); else, rec.type will contain the right value
+	 * already (i.e. they'd be the same for SQL and SQL C data types). */
+	
+	/* helper member, to characterize the type */
+	esodbc_metatype_et	meta_type;
+	SQLLEN				display_size;
+} esodbc_estype_st;
+
+
 /*
  * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/connection-handles : 
  * """
@@ -77,15 +133,14 @@ typedef struct struct_dbc {
 	} fetch;
 	BOOL pack_json; /* should JSON be used in REST bodies? (vs. CBOR) *///TODO
 
-	// FIXME: placeholder; used if connection has been established or not
-	// TODO: PROTO
-	void *conn;
+	esodbc_estype_st *es_types; /* array with ES types */
+	SQLULEN no_types; /* number of types in array */
 
 	CURL *curl; /* cURL handle */
 	char *abuff; /* buffer holding the answer */
 	size_t alen; /* size of abuff */
 	size_t apos; /* current write position in the abuff */
-	size_t amax; /* maximum lenght (bytes) that abuff can grow to */
+	size_t amax; /* maximum length (bytes) that abuff can grow to */
 
 	/* window handler */
 	HWND hwin;
@@ -93,26 +148,12 @@ typedef struct struct_dbc {
 	 * might be a directory" */
 	SQLWCHAR *catalog; 
 	// TODO: statement list?
-	
+
 	/* options */
 	SQLULEN metadata_id; // default: SQL_FALSE
 	SQLULEN async_enable; // default: SQL_ASYNC_ENABLE_OFF
 	SQLUINTEGER txn_isolation; // default: SQL_TXN_*
 } esodbc_dbc_st;
-
-typedef enum {
-	METATYPE_UNKNOWN = 0,
-	METATYPE_EXACT_NUMERIC,
-	METATYPE_FLOAT_NUMERIC,
-	METATYPE_STRING,
-	METATYPE_BIN,
-	METATYPE_DATETIME,
-	METATYPE_INTERVAL_WSEC,
-	METATYPE_INTERVAL_WOSEC,
-	METATYPE_BIT,
-	METATYPE_UID,
-	METATYPE_MAX // SQL_C_DEFAULT
-} esodbc_metatype_et;
 
 typedef struct desc_rec {
 	/* back ref to owning descriptor */
@@ -121,50 +162,48 @@ typedef struct desc_rec {
 	/* helper member, to characterize the type */
 	esodbc_metatype_et	meta_type;
 
-	/* record fields */
+	/* pointer to the ES/SQL type in DBC array
+	 * need to be set for records in IxD descriptors */
+	esodbc_estype_st	*es_type;
+
+	/*
+	 * record fields
+	 */
+	/* following record fields have been moved into es_type:
+	 * display_size, literal_prefix, literal_suffix, local_type_name,
+	 * type_name, auto_unique_value, case_sensitive, fixed_prec_scale,
+	 * nullable, searchable, usigned  */
+	/* record types (SQL_<t> for IxD, or SQL_C_<t> for AxD) */
 	SQLSMALLINT		concise_type;
-	SQLSMALLINT		type; /* SQL_C_<type> -> AxD, SQL_<type> -> IxD */
+	SQLSMALLINT		type;
 	SQLSMALLINT		datetime_interval_code;
 
 	SQLPOINTER		data_ptr; /* array, if .array_size > 1 */
 
-	/* TODO: add (& use) the lenghts */
+	/* TODO: move all SQLWCHARs to wstr_st */
 	SQLWCHAR		*base_column_name; /* read-only */
 	SQLWCHAR		*base_table_name; /* r/o */
 	SQLWCHAR		*catalog_name; /* r/o */
 	SQLWCHAR		*label; /* r/o */ //alias?
-	SQLWCHAR		*literal_prefix; /* r/o */ // TODO: static?
-	SQLWCHAR		*literal_suffix; /* r/o */ // TODO: static?
-	SQLWCHAR		*local_type_name; /* r/o */
 	SQLWCHAR		*name;
-	SQLWCHAR		*schema_name; /* r/o */ // TODO: static?
+	SQLWCHAR		*schema_name; /* r/o */
 	SQLWCHAR		*table_name; /* r/o */
-	SQLWCHAR		*type_name; /* r/o */
 
 	SQLLEN			*indicator_ptr; /* array, if .array_size > 1 */
 	SQLLEN			*octet_length_ptr; /* array, if .array_size > 1 */
 
-	SQLLEN			display_size;
 	SQLLEN			octet_length;
-
 	SQLULEN			length;
 
-	SQLINTEGER		auto_unique_value;
-	SQLINTEGER		case_sensitive;
-	SQLINTEGER		datetime_interval_precision;
-	SQLINTEGER		num_prec_radix;
+	SQLINTEGER		datetime_interval_precision; /*TODO: -> es_type? */
+	SQLINTEGER		num_prec_radix; /*TODO: -> es_type? */
 
-	SQLSMALLINT		fixed_prec_scale;
-	SQLSMALLINT		nullable; /* r/o */
 	SQLSMALLINT		parameter_type;
 	SQLSMALLINT		precision;
 	SQLSMALLINT		rowver;
 	SQLSMALLINT		scale;
-	SQLSMALLINT		searchable;
 	SQLSMALLINT		unnamed;
-	SQLSMALLINT		usigned;
 	SQLSMALLINT		updatable;
-	/* /record fields */
 } esodbc_rec_st;
 
 
@@ -175,6 +214,20 @@ typedef enum {
 	DESC_TYPE_APD,
 	DESC_TYPE_IPD,
 } desc_type_et;
+
+/* type is for an application descriptor */
+#define DESC_TYPE_IS_APPLICATION(_dtype) \
+	(_dtype == DESC_TYPE_ARD || _dtype == DESC_TYPE_APD)
+/* type is for an implementation descriptor */
+#define DESC_TYPE_IS_IMPLEMENTATION(_dtype) \
+	(_dtype == DESC_TYPE_IRD || _dtype == DESC_TYPE_IPD)
+/* type is for a record descriptor */
+#define DESC_TYPE_IS_RECORD(_dtype) \
+	(_dtype == DESC_TYPE_ARD || _dtype == DESC_TYPE_IRD)
+/* type is for a parameter descriptor */
+#define DESC_TYPE_IS_PARAMETER(_dtype) \
+	(_dtype == DESC_TYPE_APD || _dtype == DESC_TYPE_IPD)
+
 
 typedef struct struct_desc {
 	esodbc_hhdr_st hdr;
@@ -200,11 +253,15 @@ typedef struct struct_desc {
 	esodbc_rec_st *recs;
 } esodbc_desc_st;
 
+/* the ES/SQL type must be set for implementation descriptor records */
+#define ASSERT_IXD_HAS_ES_TYPE(_rec) \
+	assert(DESC_TYPE_IS_IMPLEMENTATION(_rec->desc->type) && _rec->es_type)
+
 
 typedef struct struct_resultset {
 	long code; /* code of last response */
 	char *buff; /* buffer containing the answer to the last request in a STM */
-	size_t blen; /* lenght of the answer */
+	size_t blen; /* length of the answer */
 
 	void *state; /* top UJSON decoder state */
 	void *rows_iter; /* UJSON array with the result set */

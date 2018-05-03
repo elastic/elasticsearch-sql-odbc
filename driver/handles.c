@@ -21,13 +21,9 @@ static void free_rec_fields(esodbc_rec_st *rec)
 		&rec->base_table_name,
 		&rec->catalog_name,
 		&rec->label,
-		&rec->literal_prefix,
-		&rec->literal_suffix,
-		&rec->local_type_name,
 		&rec->name,
 		&rec->schema_name,
 		&rec->table_name,
-		&rec->type_name,
 	};
 	for (i = 0; i < sizeof(wptr)/sizeof(wptr[0]); i ++) {
 		DBGH(rec->desc, "freeing field #%d = 0x%p.", i, *wptr[i]);
@@ -114,50 +110,41 @@ void dump_record(esodbc_rec_st *rec)
 #define DUMP_FIELD(_strp, _name, _desc) \
 	DBGH(rec->desc, "0x%p->%s: `" _desc "`.", _strp, # _name, (_strp)->_name)
 
+	// TODO: add dumping for the es_type?
+
 	DUMP_FIELD(rec, desc, "0x%p");
 	DUMP_FIELD(rec, meta_type, "%d");
-	
+
 	DUMP_FIELD(rec, concise_type, "%d");
 	DUMP_FIELD(rec, type, "%d");
 	DUMP_FIELD(rec, datetime_interval_code, "%d");
-	
+
 	DUMP_FIELD(rec, data_ptr, "0x%p");
-	
+
 	DUMP_FIELD(rec, base_column_name, LWPD);
 	DUMP_FIELD(rec, base_table_name, LWPD);
 	DUMP_FIELD(rec, catalog_name, LWPD);
 	DUMP_FIELD(rec, label, LWPD);
-	DUMP_FIELD(rec, literal_prefix, LWPD);
-	DUMP_FIELD(rec, literal_suffix, LWPD);
-	DUMP_FIELD(rec, local_type_name, LWPD);
 	DUMP_FIELD(rec, name, LWPD);
 	DUMP_FIELD(rec, schema_name, LWPD);
 	DUMP_FIELD(rec, table_name, LWPD);
-	DUMP_FIELD(rec, type_name, LWPD);
 
 	DUMP_FIELD(rec, indicator_ptr, "0x%p");
 	DUMP_FIELD(rec, octet_length_ptr, "0x%p");
-	
-	DUMP_FIELD(rec, display_size, "%lld");
+
 	DUMP_FIELD(rec, octet_length, "%lld");
-	
 	DUMP_FIELD(rec, length, "%llu");
-	
-	DUMP_FIELD(rec, auto_unique_value, "%d");
-	DUMP_FIELD(rec, case_sensitive, "%d");
+
 	DUMP_FIELD(rec, datetime_interval_precision, "%d");
 	DUMP_FIELD(rec, num_prec_radix, "%d");
-	
-	DUMP_FIELD(rec, fixed_prec_scale, "%d");
-	DUMP_FIELD(rec, nullable, "%d");
+
 	DUMP_FIELD(rec, parameter_type, "%d");
 	DUMP_FIELD(rec, precision, "%d");
 	DUMP_FIELD(rec, rowver, "%d");
 	DUMP_FIELD(rec, scale, "%d");
-	DUMP_FIELD(rec, searchable, "%d");
 	DUMP_FIELD(rec, unnamed, "%d");
-	DUMP_FIELD(rec, usigned, "%d");
 	DUMP_FIELD(rec, updatable, "%d");
+
 #undef DUMP_FIELD
 }
 
@@ -343,7 +330,6 @@ SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 			free(stmt);
 			break;
 
-		
 		/* "When an explicitly allocated descriptor is freed, all statement
 		 * handles to which the freed descriptor applied automatically revert
 		 * to the descriptors implicitly allocated for them." */
@@ -726,7 +712,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 				stmt->ard = (esodbc_desc_st *)ValuePtr;
 				// FIXME: bind: re-init
 				FIXME;
-			}	
+			}
 		case SQL_ATTR_APP_PARAM_DESC:
 			// FIXME: same logic for ARD as above (part of params passing)
 			FIXME;
@@ -753,9 +739,9 @@ SQLRETURN EsSQLSetStmtAttrW(
 
 		case SQL_ATTR_MAX_LENGTH:
 			ulen = (SQLULEN)ValuePtr;
-			DBGH(stmt, "setting max_lenght to: %u.", ulen);
+			DBGH(stmt, "setting max_length to: %u.", ulen);
 			if (ulen < ESODBC_LO_MAX_LENGTH) {
-				WARNH(stmt, "MAX_LENGHT lower than min allowed (%d) -- "
+				WARNH(stmt, "MAX_LENGTH lower than min allowed (%d) -- "
 						"correcting value.", ESODBC_LO_MAX_LENGTH);
 				ulen = ESODBC_LO_MAX_LENGTH;
 			} else if (ESODBC_UP_MAX_LENGTH && ESODBC_UP_MAX_LENGTH < ulen) {
@@ -964,9 +950,9 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
 		/* pointer to a value other than string or binary string */
 		case SQL_DESC_DATA_PTR:
 			if ((buff_len != SQL_IS_POINTER) && (buff_len < 0)) {
-				/* spec says the lenght "should" be it's size => this check
+				/* spec says the length "should" be it's size => this check
 				 * might be too strict? */
-				ERR("buffer is for pointer, but its lenght indicator "
+				ERR("buffer is for pointer, but its length indicator "
 						"doesn't match (%d).", buff_len);
 				return SQL_STATE_HY090;
 			}
@@ -974,7 +960,7 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
 	}
 
 	if (! writable)
-		/* this call is from SetDescField, so lenght for integer types are
+		/* this call is from SetDescField, so length for integer types are
 		 * ignored */
 		return SQL_STATE_00000;
 
@@ -988,7 +974,7 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
 		case SQL_DESC_DISPLAY_SIZE:
 		case SQL_DESC_OCTET_LENGTH:
 			if (buff_len != SQL_IS_INTEGER) {
-				ERR("buffer is for interger, but its lenght indicator "
+				ERR("buffer is for interger, but its length indicator "
 						"doesn't match (%d).", buff_len);
 				return SQL_STATE_HY090;
 			}
@@ -998,7 +984,7 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
 		case SQL_DESC_ARRAY_SIZE:
 		case SQL_DESC_LENGTH:
 			if (buff_len != SQL_IS_UINTEGER) {
-				ERR("buffer is for uint, but its lenght indicator "
+				ERR("buffer is for uint, but its length indicator "
 						"doesn't match (%d).", buff_len);
 				return SQL_STATE_HY090;
 			}
@@ -1021,7 +1007,7 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
 		case SQL_DESC_UNSIGNED:
 		case SQL_DESC_UPDATABLE:
 			if (buff_len != SQL_IS_SMALLINT) {
-				ERR("buffer is for short, but its lenght indicator "
+				ERR("buffer is for short, but its length indicator "
 						"doesn't match (%d).", buff_len);
 				return SQL_STATE_HY090;
 			}
@@ -1083,6 +1069,11 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
  * SQL_DESC_TYPE		rw	rw	r	rw
  */
 // TODO: individual tests just for this
+/*
+ * Check access to record headers/fields.
+ * IxD must have es_type pointer set and it's value is not checked at
+ * header/field access time -> only this function guards against NP deref'ing.
+ */
 static BOOL check_access(desc_type_et desc_type, SQLSMALLINT field_id, 
 		char mode /* O_RDONLY | O_RDWR */)
 {
@@ -1102,7 +1093,7 @@ static BOOL check_access(desc_type_et desc_type, SQLSMALLINT field_id,
 			ret = TRUE;
 			break;
 		case SQL_DESC_ROWS_PROCESSED_PTR:
-			ret = desc_type == DESC_TYPE_IRD || desc_type == DESC_TYPE_IPD;
+			ret = DESC_TYPE_IS_IMPLEMENTATION(desc_type);
 			break;
 		case SQL_DESC_PARAMETER_TYPE:
 			ret = desc_type == DESC_TYPE_IPD;
@@ -1114,7 +1105,7 @@ static BOOL check_access(desc_type_et desc_type, SQLSMALLINT field_id,
 		case SQL_DESC_DATA_PTR:
 		case SQL_DESC_INDICATOR_PTR:
 		case SQL_DESC_OCTET_LENGTH_PTR:
-			ret = desc_type == DESC_TYPE_ARD || desc_type == DESC_TYPE_APD;
+			ret = DESC_TYPE_IS_APPLICATION(desc_type);
 			break;
 
 		case SQL_DESC_AUTO_UNIQUE_VALUE:
@@ -1139,8 +1130,7 @@ static BOOL check_access(desc_type_et desc_type, SQLSMALLINT field_id,
 		case SQL_DESC_ROWVER:
 		case SQL_DESC_UNSIGNED:
 		case SQL_DESC_TYPE_NAME:
-			ret = mode == O_RDONLY && 
-				(desc_type == DESC_TYPE_IRD || desc_type == DESC_TYPE_IPD);
+			ret = mode == O_RDONLY && DESC_TYPE_IS_IMPLEMENTATION(desc_type);
 			break;
 
 		case SQL_DESC_NAME:
@@ -1422,6 +1412,7 @@ SQLRETURN EsSQLGetDescFieldW(
 				RecNumber, rec);
 	}
 
+	ASSERT_IXD_HAS_ES_TYPE(rec);
 
 	/* record fields */
 	switch (FieldIdentifier) {
@@ -1437,13 +1428,21 @@ SQLRETURN EsSQLGetDescFieldW(
 		case SQL_DESC_BASE_TABLE_NAME: wptr = rec->base_table_name; break;
 		case SQL_DESC_CATALOG_NAME: wptr = rec->catalog_name; break;
 		case SQL_DESC_LABEL: wptr = rec->label; break;
-		case SQL_DESC_LITERAL_PREFIX: wptr = rec->literal_prefix; break;
-		case SQL_DESC_LITERAL_SUFFIX: wptr = rec->literal_suffix; break;
-		case SQL_DESC_LOCAL_TYPE_NAME: wptr = rec->local_type_name; break;
 		case SQL_DESC_NAME: wptr = rec->name; break;
 		case SQL_DESC_SCHEMA_NAME: wptr = rec->schema_name; break;
 		case SQL_DESC_TABLE_NAME: wptr = rec->table_name; break;
-		case SQL_DESC_TYPE_NAME: wptr = rec->type_name; break;
+		case SQL_DESC_LITERAL_PREFIX:
+			wptr = rec->es_type->literal_prefix.str;
+			break;
+		case SQL_DESC_LITERAL_SUFFIX: 
+			wptr = rec->es_type->literal_suffix.str;
+			break;
+		case SQL_DESC_LOCAL_TYPE_NAME:
+			wptr = rec->es_type->local_type_name.str;
+			break;
+		case SQL_DESC_TYPE_NAME:
+			wptr = rec->es_type->type_name.str;
+			break;
 		} while (0);
 			if (! wptr) {
 				*StringLengthPtr = 0;
@@ -1472,8 +1471,9 @@ SQLRETURN EsSQLGetDescFieldW(
 
 		/* <SQLLEN> */
 		case SQL_DESC_DISPLAY_SIZE:
-			*(SQLLEN *)ValuePtr = rec->display_size;
-			DBGH(desc, "returning display size: %d.", rec->display_size);
+			*(SQLLEN *)ValuePtr = rec->es_type->display_size;
+			DBGH(desc, "returning display size: %d.",
+					rec->es_type->display_size);
 			break;
 		case SQL_DESC_OCTET_LENGTH:
 			*(SQLLEN *)ValuePtr = rec->octet_length;
@@ -1483,7 +1483,7 @@ SQLRETURN EsSQLGetDescFieldW(
 		/* <SQLULEN> */
 		case SQL_DESC_LENGTH:
 			*(SQLULEN *)ValuePtr = rec->length;
-			DBGH(desc, "returning lenght: %u.", rec->length);
+			DBGH(desc, "returning length: %u.", rec->length);
 			break;
 
 		/* <SQLSMALLINT> */
@@ -1493,15 +1493,29 @@ SQLRETURN EsSQLGetDescFieldW(
 		case SQL_DESC_DATETIME_INTERVAL_CODE:
 			word = rec->datetime_interval_code; break;
 
-		case SQL_DESC_FIXED_PREC_SCALE: word = rec->fixed_prec_scale; break;
-		case SQL_DESC_NULLABLE: word = rec->nullable; break;
 		case SQL_DESC_PARAMETER_TYPE: word = rec->parameter_type; break;
-		case SQL_DESC_PRECISION: word = rec->precision; break;
 		case SQL_DESC_ROWVER: word = rec->rowver; break;
-		case SQL_DESC_SCALE: word = rec->scale; break;
-		case SQL_DESC_SEARCHABLE: word = rec->searchable; break;
 		case SQL_DESC_UNNAMED: word = rec->unnamed; break;
-		case SQL_DESC_UNSIGNED: word = rec->usigned; break;
+		case SQL_DESC_PRECISION:
+			if (rec->desc->type == DESC_TYPE_IRD) {
+				word = (SQLSMALLINT)rec->es_type->column_size;
+			} else {
+				word = rec->precision;
+			}
+			break;
+		case SQL_DESC_SCALE:
+			if (rec->desc->type == DESC_TYPE_IRD) {
+				word = rec->es_type->maximum_scale;
+			} else {
+				word = rec->scale;
+			}
+			break;
+		case SQL_DESC_FIXED_PREC_SCALE:
+			word = rec->es_type->fixed_prec_scale;
+			break;
+		case SQL_DESC_NULLABLE: word = rec->es_type->nullable; break;
+		case SQL_DESC_SEARCHABLE: word = rec->es_type->searchable; break;
+		case SQL_DESC_UNSIGNED: word = rec->es_type->unsigned_attribute; break;
 		case SQL_DESC_UPDATABLE: word = rec->updatable; break;
 		} while (0);
 			*(SQLSMALLINT *)ValuePtr = word;
@@ -1511,11 +1525,27 @@ SQLRETURN EsSQLGetDescFieldW(
 
 		/* <SQLINTEGER> */
 		do {
-		case SQL_DESC_AUTO_UNIQUE_VALUE: intgr = rec->auto_unique_value; break;
-		case SQL_DESC_CASE_SENSITIVE: intgr = rec->case_sensitive; break;
-		case SQL_DESC_DATETIME_INTERVAL_PRECISION: 
-			intgr = rec->datetime_interval_precision; break;
-		case SQL_DESC_NUM_PREC_RADIX: intgr = rec->num_prec_radix; break;
+		case SQL_DESC_DATETIME_INTERVAL_PRECISION:
+			if (DESC_TYPE_IS_IMPLEMENTATION(rec->desc->type)) {
+				/* not used with ES (so far), as no interval types are sup. */
+				intgr = rec->es_type->interval_precision;
+			} else {
+				intgr = rec->datetime_interval_precision;
+			}
+			break;
+		case SQL_DESC_NUM_PREC_RADIX:
+			if DESC_TYPE_IS_IMPLEMENTATION(rec->desc->type) {
+				intgr = rec->es_type->num_prec_radix;
+			} else {
+				intgr = rec->num_prec_radix;
+			}
+			break;
+		case SQL_DESC_AUTO_UNIQUE_VALUE:
+			intgr = rec->es_type->auto_unique_value;
+			break;
+		case SQL_DESC_CASE_SENSITIVE:
+			intgr = rec->es_type->case_sensitive;
+			break;
 		} while (0);
 			*(SQLINTEGER *)ValuePtr = intgr;
 			DBGH(desc, "returning record field %d as %d.", FieldIdentifier,
@@ -1526,7 +1556,7 @@ SQLRETURN EsSQLGetDescFieldW(
 			ERRH(desc, "unknown FieldIdentifier: %d.", FieldIdentifier);
 			RET_HDIAGS(desc, SQL_STATE_HY091);
 	}
-	
+
 	return SQL_SUCCESS;
 }
 
@@ -1570,11 +1600,17 @@ SQLRETURN EsSQLGetDescRecW(
 /*
  * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/data-type-identifiers-and-descriptors
  *
- * Note: C and SQL types have the same value for these following defines,
- * so this function will work for both IxD and AxD descriptors. (There is no
- * SQL_C_DATETIME or SQL_C_CODE_DATE.)
+ * Note: C and SQL types have the same value for the case values below, so
+ * this function will work no matter the concise type (i.e. for both IxD,
+ * using SQL_C_<type>, and AxD, using SQL_<type>, descriptors).
+ * The case values are for datetime and interval data types (see also the
+ * comment at function end), so these values must stay in sync, since there
+ * are no C corresponding defines for verbose and sub-code (i.e. nothing like
+ * "SQL_C_DATETIME" or "SQL_C_CODE_DATE").
+ * The identity does not hold across the board, though (extended values, like
+ * BIGINTs, do differ)!
  */
-void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type, 
+void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type,
 		SQLSMALLINT *code)
 {
 	switch (concise) {
@@ -1648,6 +1684,9 @@ void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type,
 			*code = SQL_CODE_MINUTE_TO_SECOND;
 			break;
 	}
+	/* "For all data types except datetime and interval data types, the
+	 * verbose type identifier is the same as the concise type identifier and
+	 * the value in SQL_DESC_DATETIME_INTERVAL_CODE is equal to 0." */
 	*type = concise;
 	*code = 0;
 }
@@ -1748,8 +1787,7 @@ static esodbc_metatype_et sqltype_to_meta(SQLSMALLINT concise)
 			return METATYPE_UID;
 	}
 
-	// BUG?
-	WARN("unknown meta type for concise SQL type %d.", concise);
+	ERR("unknown meta type for concise SQL type %d.", concise);
 	return METATYPE_UNKNOWN;
 }
 
@@ -1817,7 +1855,7 @@ static esodbc_metatype_et sqlctype_to_meta(SQLSMALLINT concise)
 		case SQL_C_INTERVAL_HOUR_TO_SECOND:
 		case SQL_C_INTERVAL_MINUTE_TO_SECOND:
 			return METATYPE_INTERVAL_WSEC;
-		
+
 		case SQL_C_BIT:
 			return METATYPE_BIT;
 
@@ -1828,13 +1866,13 @@ static esodbc_metatype_et sqlctype_to_meta(SQLSMALLINT concise)
 			return METATYPE_MAX;
 	}
 
-	// BUG?
-	WARN("unknown meta type for concise C SQL type %d.", concise);
+	ERR("unknown meta type for concise C SQL type %d.", concise);
 	return METATYPE_UNKNOWN;
 }
 
 /*
  * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetdescrec-function#consistency-checks
+ * FIXME: re-eval this function along with IPD implementation!
  */
 static BOOL consistency_check(esodbc_desc_st *desc, esodbc_rec_st *rec)
 {
@@ -1849,8 +1887,6 @@ static BOOL consistency_check(esodbc_desc_st *desc, esodbc_rec_st *rec)
 				rec->datetime_interval_code);
 		return FALSE;
 	}
-
-	/* TODO: use the get_rec_size/get_rec_decdigits() (below)? */
 
 	//if (rec->meta_type == METATYPE_NUMERIC) {
 	if (0) { // FIXME
@@ -1894,7 +1930,7 @@ static BOOL consistency_check(esodbc_desc_st *desc, esodbc_rec_st *rec)
 	return TRUE;
 }
 
-esodbc_metatype_et concise_to_meta(SQLSMALLINT concise_type, 
+esodbc_metatype_et concise_to_meta(SQLSMALLINT concise_type,
 		desc_type_et desc_type)
 {
 	switch (desc_type) {
@@ -1911,38 +1947,6 @@ esodbc_metatype_et concise_to_meta(SQLSMALLINT concise_type,
 	}
 
 	return METATYPE_UNKNOWN;
-}
-
-/*
- * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/column-size
- */
-SQLULEN get_rec_size(esodbc_rec_st *rec)
-{
-	if (rec->meta_type == METATYPE_EXACT_NUMERIC || 
-			rec->meta_type == METATYPE_FLOAT_NUMERIC) {
-		if (rec->precision < 0) {
-			BUG("precision can't be negative.");
-			return 0;
-		}
-		return (SQLULEN)rec->precision;
-	} else {
-		return rec->length;
-	}
-}
-
-SQLULEN get_rec_decdigits(esodbc_rec_st *rec)
-{
-	switch (rec->meta_type) {
-		case METATYPE_DATETIME:
-		case METATYPE_INTERVAL_WSEC:
-			return rec->precision;
-		case METATYPE_EXACT_NUMERIC:
-			return rec->scale;
-	}
-	/* 0 to be returned for unknown case:
-	 * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqldescribecol-function#syntax
-	 */
-	return 0;
 }
 
 /*
@@ -1990,13 +1994,13 @@ SQLRETURN EsSQLSetDescFieldW(
 		 * however, an application can do so to force a consistency check of
 		 * IPD fields." 
 		 * TODO: the above won't work with the generic check implementation:
-		 * is it worth hacking an exception here? (since IPD/.data_ptr is 
+		 * is it worth hacking an exception here? (since IPD/.data_ptr is
 		 * marked RO) */
 		ERRH(desc, "field access check failed: not defined or RO for "
 				"desciptor.");
 		RET_HDIAGS(desc, SQL_STATE_HY091);
 	}
-	
+
 	state = check_buff(FieldIdentifier, ValuePtr, BufferLength, FALSE);
 	if (state != SQL_STATE_00000) {
 		ERRH(desc, "buffer/~ length check failed (%d).", state);
@@ -2097,7 +2101,7 @@ SQLRETURN EsSQLSetDescFieldW(
 	 * the SQL_DESC_DATA_PTR field, the driver sets SQL_DESC_DATA_PTR to a
 	 * null pointer, unbinding the record."
 	 *
-	 * NOTE: the record can actually still be bound by the lenght/indicator
+	 * NOTE: the record can actually still be bound by the length/indicator
 	 * buffer(s), so the above "binding" definition is incomplete.
 	 */
 	if (FieldIdentifier != SQL_DESC_DATA_PTR)
@@ -2182,12 +2186,9 @@ SQLRETURN EsSQLSetDescFieldW(
 		case SQL_DESC_BASE_TABLE_NAME: wptrp = &rec->base_table_name; break;
 		case SQL_DESC_CATALOG_NAME: wptrp = &rec->catalog_name; break;
 		case SQL_DESC_LABEL: wptrp = &rec->label; break;
-		case SQL_DESC_LITERAL_PREFIX: wptrp = &rec->literal_prefix; break;
-		case SQL_DESC_LITERAL_SUFFIX: wptrp = &rec->literal_suffix; break;
-		case SQL_DESC_LOCAL_TYPE_NAME: wptrp = &rec->local_type_name; break;
+		/* R/O fields: literal_prefix/_suffix, local_type_name, type_name */
 		case SQL_DESC_SCHEMA_NAME: wptrp = &rec->schema_name; break;
 		case SQL_DESC_TABLE_NAME: wptrp = &rec->table_name; break;
-		case SQL_DESC_TYPE_NAME: wptrp = &rec->type_name; break;
 		} while (0);
 			DBGH(desc, "setting SQLWCHAR field %d to 0x%p(`"LWPD"`).",
 					FieldIdentifier, ValuePtr, 
@@ -2228,18 +2229,16 @@ SQLRETURN EsSQLSetDescFieldW(
 			break;
 
 		/* <SQLLEN> */
-		case SQL_DESC_DISPLAY_SIZE:
-			DBGH(desc, "setting display size: %d.", (SQLLEN)(intptr_t)ValuePtr);
-			rec->display_size = (SQLLEN)(intptr_t)ValuePtr;
-			break;
+		/* R/O fields: display_size */
 		case SQL_DESC_OCTET_LENGTH:
-			DBGH(desc, "setting octet length: %d.", (SQLLEN)(intptr_t)ValuePtr);
+			DBGH(desc, "setting octet length: %d.",
+					(SQLLEN)(intptr_t)ValuePtr);
 			rec->octet_length = (SQLLEN)(intptr_t)ValuePtr;
 			break;
 
 		/* <SQLULEN> */
 		case SQL_DESC_LENGTH:
-			DBGH(desc, "setting lenght: %u.", (SQLULEN)(uintptr_t)ValuePtr);
+			DBGH(desc, "setting length: %u.", (SQLULEN)(uintptr_t)ValuePtr);
 			rec->length = (SQLULEN)(uintptr_t)ValuePtr;
 			break;
 
@@ -2247,13 +2246,10 @@ SQLRETURN EsSQLSetDescFieldW(
 		do {
 		case SQL_DESC_DATETIME_INTERVAL_CODE:
 			wordp = &rec->datetime_interval_code; break;
-		case SQL_DESC_FIXED_PREC_SCALE: wordp = &rec->fixed_prec_scale; break;
-		case SQL_DESC_NULLABLE: wordp = &rec->nullable; break;
 		case SQL_DESC_PARAMETER_TYPE: wordp = &rec->parameter_type; break;
 		case SQL_DESC_PRECISION: wordp = &rec->precision; break;
 		case SQL_DESC_ROWVER: wordp = &rec->rowver; break;
 		case SQL_DESC_SCALE: wordp = &rec->scale; break;
-		case SQL_DESC_SEARCHABLE: wordp = &rec->searchable; break;
 		case SQL_DESC_UNNAMED:
 			/* only driver can set this value */
 			if ((SQLSMALLINT)(intptr_t)ValuePtr == SQL_NAMED) {
@@ -2263,7 +2259,7 @@ SQLRETURN EsSQLSetDescFieldW(
 			}
 			wordp = &rec->unnamed;
 			break;
-		case SQL_DESC_UNSIGNED: wordp = &rec->usigned; break;
+		/* R/O field: fixed_prec_scale, nullable, searchable, unsigned  */
 		case SQL_DESC_UPDATABLE: wordp = &rec->updatable; break;
 		} while (0);
 			DBGH(desc, "setting record field %d to %d.", FieldIdentifier,
@@ -2273,11 +2269,13 @@ SQLRETURN EsSQLSetDescFieldW(
 
 		/* <SQLINTEGER> */
 		do {
-		case SQL_DESC_AUTO_UNIQUE_VALUE: intp = &rec->auto_unique_value; break;
-		case SQL_DESC_CASE_SENSITIVE: intp = &rec->case_sensitive; break;
+		/* R/O field: auto_unique_value, case_sensitive  */
 		case SQL_DESC_DATETIME_INTERVAL_PRECISION: 
-			intp = &rec->datetime_interval_precision; break;
-		case SQL_DESC_NUM_PREC_RADIX: intp = &rec->num_prec_radix; break;
+			intp = &rec->datetime_interval_precision;
+			break;
+		case SQL_DESC_NUM_PREC_RADIX:
+			intp = &rec->num_prec_radix;
+			break;
 		} while (0);
 			DBGH(desc, "returning record field %d as %d.", FieldIdentifier,
 					(SQLINTEGER)(intptr_t)ValuePtr);
@@ -2288,7 +2286,7 @@ SQLRETURN EsSQLSetDescFieldW(
 			ERRH(desc, "unknown FieldIdentifier: %d.", FieldIdentifier);
 			RET_HDIAGS(desc, SQL_STATE_HY091);
 	}
-	
+
 	return SQL_SUCCESS;
 }
 

@@ -27,6 +27,33 @@
 #define JSON_SQL_CURSOR_START		"{\"cursor\":\""
 #define JSON_SQL_CURSOR_END			"\"}"
 
+/* Elasticsearch/SQL data types */
+/* 4 */
+#define JSON_COL_BYTE			"byte"
+#define JSON_COL_LONG			"long"
+#define JSON_COL_TEXT			"text"
+#define JSON_COL_DATE			"date"
+#define JSON_COL_NULL			"null"
+/* 5 */
+#define JSON_COL_SHORT			"short"
+#define JSON_COL_FLOAT			"float"
+/* 6 */
+#define JSON_COL_DOUBLE			"double"
+#define JSON_COL_BINARY			"binary"
+#define JSON_COL_OBJECT			"object"
+#define JSON_COL_NESTED			"nested"
+/* 7 */
+#define JSON_COL_BOOLEAN		"boolean"
+#define JSON_COL_INTEGER		"integer"
+#define JSON_COL_KEYWORD		"keyword"
+/* 10 */
+#define JSON_COL_HALF_FLOAT		"half_float"
+/* 11 */
+#define JSON_COL_UNSUPPORTED	"unsupported"
+/* 12 */
+#define JSON_COL_SCALED_FLOAT	"scaled_float"
+
+
 /* attribute keywords used in connection strings */
 #define CONNSTR_KW_DRIVER			"Driver"
 #define CONNSTR_KW_DSN				"DSN"
@@ -48,7 +75,7 @@
 #define REG_HKLM				"HKEY_LOCAL_MACHINE"
 #define REG_HKCU				"HKEY_CURRENT_USER"
 
-/* max lenght of a registry key value name */
+/* max length of a registry key value name */
 #define MAX_REG_VAL_NAME		1024
 /* max size of a registry key data */
 #define MAX_REG_DATA_SIZE		4096
@@ -75,6 +102,49 @@ typedef struct {
 	wstr_st trace_level;
 } config_attrs_st;
 
+/* structure for one row returned by the ES.
+ * This is a mirror of elasticsearch_type, with length-or-indicator fields
+ * for each of the members in elasticsearch_type */
+typedef struct {
+	SQLWCHAR		type_name[ESODBC_MAX_IDENTIFIER_LEN];
+	SQLLEN			type_name_loi; /* _ length or indicator */
+	SQLSMALLINT		data_type;
+	SQLLEN			data_type_loi;
+	SQLINTEGER		column_size;
+	SQLLEN			column_size_loi;
+	SQLWCHAR		literal_prefix[ESODBC_MAX_IDENTIFIER_LEN];
+	SQLLEN			literal_prefix_loi;
+	SQLWCHAR		literal_suffix[ESODBC_MAX_IDENTIFIER_LEN];
+	SQLLEN			literal_suffix_loi;
+	SQLWCHAR		create_params[ESODBC_MAX_IDENTIFIER_LEN];
+	SQLLEN			create_params_loi;
+	SQLSMALLINT		nullable;
+	SQLLEN			nullable_loi;
+	SQLSMALLINT		case_sensitive;
+	SQLLEN			case_sensitive_loi;
+	SQLSMALLINT		searchable;
+	SQLLEN			searchable_loi;
+	SQLSMALLINT		unsigned_attribute;
+	SQLLEN			unsigned_attribute_loi;
+	SQLSMALLINT		fixed_prec_scale;
+	SQLLEN			fixed_prec_scale_loi;
+	SQLSMALLINT		auto_unique_value;
+	SQLLEN			auto_unique_value_loi;
+	SQLWCHAR		local_type_name[ESODBC_MAX_IDENTIFIER_LEN];
+	SQLLEN			local_type_name_loi;
+	SQLSMALLINT		minimum_scale;
+	SQLLEN			minimum_scale_loi;
+	SQLSMALLINT		maximum_scale;
+	SQLLEN			maximum_scale_loi;
+	SQLSMALLINT		sql_data_type;
+	SQLLEN			sql_data_type_loi;
+	SQLSMALLINT		sql_datetime_sub;
+	SQLLEN			sql_datetime_sub_loi;
+	SQLINTEGER		num_prec_radix;
+	SQLLEN			num_prec_radix_loi;
+	SQLSMALLINT		interval_precision;
+	SQLLEN			interval_precision_loi;
+} estype_row_st;
 /*
  * HTTP headers used for all requests (Content-Type, Accept).
  */
@@ -136,7 +206,7 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb,
 
 	/* do I need to grow the existing buffer? */
 	if (avail < have) {
-		/* calculate how much space to allocate. start from existing lenght,
+		/* calculate how much space to allocate. start from existing length,
 		 * if set, othewise from a constant (on first allocation). */
 		for (need = dbc->alen ? dbc->alen : ESODBC_BODY_BUF_START_SIZE;
 				need < dbc->apos + have; need *= 2)
@@ -407,7 +477,7 @@ SQLRETURN post_statement(esodbc_stmt_st *stmt)
 	 * clean this function). */
 
 	/* evaluate how long the stringified REST object will be */
-	if (stmt->rset.eccnt) { /* eval CURSOR object lenght */
+	if (stmt->rset.eccnt) { /* eval CURSOR object length */
 		/* convert cursor to C [mb]string. */
 		/* TODO: ansi_w2c() fits better for Base64 encoded cursors. */
 		u8len = WCS2U8(stmt->rset.ecurs, (int)stmt->rset.eccnt, u8curs,
@@ -421,7 +491,7 @@ SQLRETURN post_statement(esodbc_stmt_st *stmt)
 		bodylen = sizeof(JSON_SQL_CURSOR_START) - /*\0*/1;
 		bodylen += json_escape(u8curs, u8len, NULL, 0);
 		bodylen += sizeof(JSON_SQL_CURSOR_END) - /*\0*/1;
-	} else { /* eval QUERY object lenght */
+	} else { /* eval QUERY object length */
 		bodylen = sizeof(JSON_SQL_QUERY_START) - /*\0*/1;
 		if (dbc->fetch.slen) {
 			bodylen += sizeof(JSON_SQL_QUERY_MID_FETCH) - /*\0*/1;
@@ -682,7 +752,7 @@ static BOOL parse_token(BOOL is_value, SQLWCHAR **pos, SQLWCHAR *end,
 				}
 				(*pos)++;
 				break;
-			
+
 			default:
 				(*pos)++;
 		}
@@ -848,7 +918,7 @@ static BOOL write_connection_string(config_attrs_st *attrs,
 					pos += n;
 				}
 			} else {
-				/* simply increment the counter, since the untruncated lenght
+				/* simply increment the counter, since the untruncated length
 				 * need to be returned to the app */
 				pos += iter->val->cnt + braces;
 			}
@@ -887,7 +957,7 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 				LWSTR(&attrs->port));
 		goto err;
 	}
-	/* lenght of URL converted to U8 */
+	/* length of URL converted to U8 */
 	n = WCS2U8(urlw, cnt, NULL, 0);
 	if (! n) {
 		ERRNH(dbc, "failed to estimate U8 conversion space necessary for `"
@@ -1011,16 +1081,16 @@ static inline void assign_defaults(config_attrs_st *attrs)
 		attrs->follow = MK_WSTR(ESODBC_DEF_FOLLOW);
 
 	/* no default packing */
-	
+
 	if (! attrs->packing.cnt)
 		attrs->packing = MK_WSTR(ESODBC_DEF_PACKING);
 	if (! attrs->max_fetch_size.cnt)
 		attrs->max_fetch_size = MK_WSTR(ESODBC_DEF_FETCH_SIZE);
 	if (! attrs->max_body_size.cnt)
 		attrs->max_body_size = MK_WSTR(ESODBC_DEF_MAX_BODY_SIZE_MB);
-	
+
 	/* default: no trace file */
-	
+
 	if (! attrs->trace_level.cnt)
 		attrs->trace_level = MK_WSTR(ESODBC_DEF_TRACE_LEVEL);
 }
@@ -1046,6 +1116,13 @@ void cleanup_dbc(esodbc_dbc_st *dbc)
 		 * actual DSN value hasn't been allocated/copied. */
 		dbc->dsn.str = MK_WPTR("");
 		dbc->dsn.cnt = 0;
+	}
+	if (dbc->es_types) {
+		free(dbc->es_types);
+		dbc->es_types = NULL;
+		dbc->no_types = 0;
+	} else {
+		assert(dbc->no_types == 0);
 	}
 	assert(dbc->abuff == NULL); /* reminder for when going multithreaded */
 	cleanup_curl(dbc);
@@ -1084,6 +1161,553 @@ static SQLRETURN do_connect(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 	}
 
 	return SQL_SUCCESS;
+}
+
+
+/* Maps ES/SQL type to C SQL. */
+SQLSMALLINT type_elastic2csql(wstr_st *type_name)
+{
+	switch (type_name->cnt) {
+		/* 4: BYTE, LONG, TEXT, DATE, NULL */
+		case sizeof(JSON_COL_BYTE) - 1:
+			switch (tolower(type_name->str[0])) {
+				case (SQLWCHAR)'b':
+					if (! wmemncasecmp(type_name->str,
+								MK_WPTR(JSON_COL_BYTE), type_name->cnt)) {
+						return ESODBC_ES_TO_CSQL_BYTE;
+					}
+					break;
+				case (SQLWCHAR)'l':
+					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_LONG),
+								type_name->cnt)) {
+						return ESODBC_ES_TO_CSQL_LONG;
+						}
+					break;
+				case (SQLWCHAR)'t':
+					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_TEXT),
+								type_name->cnt)) {
+						return ESODBC_ES_TO_CSQL_TEXT;
+					}
+					break;
+				case (SQLWCHAR)'d':
+					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_DATE),
+								type_name->cnt)) {
+						return ESODBC_ES_TO_CSQL_DATE;
+					}
+					break;
+				case (SQLWCHAR)'n':
+					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_NULL),
+								type_name->cnt)) {
+						return ESODBC_ES_TO_CSQL_NULL;
+					}
+					break;
+			}
+			break;
+
+		/* 5: SHORT, FLOAT */
+		case sizeof(JSON_COL_SHORT) - 1:
+			switch (tolower(type_name->str[0])) {
+				case (SQLWCHAR)'s':
+					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_SHORT),
+								type_name->cnt)) {
+						return ESODBC_ES_TO_CSQL_SHORT;
+					}
+					break;
+				case (SQLWCHAR)'f':
+					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_FLOAT),
+								type_name->cnt)) {
+						return ESODBC_ES_TO_CSQL_FLOAT;
+					}
+					break;
+			}
+			break;
+
+		/* 6: DOUBLE, BINARY, OBJECT, NESTED */
+		case sizeof(JSON_COL_DOUBLE) - 1:
+			switch (tolower(type_name->str[0])) {
+				case (SQLWCHAR)'d':
+					if (! wmemncasecmp(type_name->str,
+								MK_WPTR(JSON_COL_DOUBLE), type_name->cnt)) {
+						return ESODBC_ES_TO_CSQL_DOUBLE;
+					}
+					break;
+				case (SQLWCHAR)'b':
+					if (! wmemncasecmp(type_name->str,
+								MK_WPTR(JSON_COL_BINARY), type_name->cnt)) {
+						return ESODBC_ES_TO_CSQL_BINARY;
+					}
+					break;
+				case (SQLWCHAR)'o':
+					if (! wmemncasecmp(type_name->str,
+								MK_WPTR(JSON_COL_OBJECT), type_name->cnt)) {
+						return ESODBC_ES_TO_CSQL_OBJECT;
+					}
+					break;
+				case (SQLWCHAR)'n':
+					if (! wmemncasecmp(type_name->str,
+								MK_WPTR(JSON_COL_NESTED), type_name->cnt)) {
+						return ESODBC_ES_TO_CSQL_NESTED;
+					}
+					break;
+			}
+			break;
+
+		/* 7: INTEGER, BOOLEAN, KEYWORD */
+		case sizeof(JSON_COL_INTEGER) - 1:
+			switch (tolower(type_name->str[0])) {
+				case (SQLWCHAR)'i': /* integer */
+					if (wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_INTEGER),
+								type_name->cnt) == 0)
+						return ESODBC_ES_TO_CSQL_INTEGER;
+					break;
+				case (SQLWCHAR)'b': /* boolean */
+					if (wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_BOOLEAN),
+								type_name->cnt) == 0)
+						return ESODBC_ES_TO_CSQL_BOOLEAN;
+					break;
+				case (SQLWCHAR)'k': /* keyword */
+					if (wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_KEYWORD),
+								type_name->cnt) == 0)
+						return ESODBC_ES_TO_CSQL_KEYWORD;
+					break;
+			}
+			break;
+
+		/* 10: HALF_FLOAT */
+		case sizeof(JSON_COL_HALF_FLOAT) - 1:
+			if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_HALF_FLOAT),
+						type_name->cnt)) {
+				return ESODBC_ES_TO_CSQL_HALF_FLOAT;
+			}
+			break;
+
+		/* 11: UNSUPPORTED */
+		case sizeof(JSON_COL_UNSUPPORTED) - 1:
+			if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_UNSUPPORTED),
+						type_name->cnt)) {
+				return ESODBC_ES_TO_CSQL_UNSUPPORTED;
+			}
+			break;
+
+		/* 12: SCALED_FLOAT */
+		case sizeof(JSON_COL_SCALED_FLOAT) - 1:
+			if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_SCALED_FLOAT),
+						type_name->cnt)) {
+				return ESODBC_ES_TO_CSQL_SCALED_FLOAT;
+			}
+			break;
+
+	}
+	ERR("unrecognized Elastic type `" LWPDL "` (%zd).", LWSTR(type_name),
+			type_name->cnt);
+	return SQL_UNKNOWN_TYPE;
+}
+
+/*
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/display-size
+ */
+static void set_display_size(esodbc_estype_st *es_type)
+{
+	switch (es_type->data_type) {
+		case SQL_CHAR:
+		case SQL_VARCHAR: /* KEYWORD, TEXT */
+		case SQL_LONGVARCHAR:
+		case SQL_WCHAR:
+		case SQL_WVARCHAR:
+		case SQL_WLONGVARCHAR:
+			es_type->display_size = es_type->column_size;
+			break;
+
+		case SQL_REAL: /* FLOAT */
+			es_type->display_size = 14;
+			break;
+		case SQL_FLOAT: /* HALF_, SCALED_FLOAT */
+		case SQL_DOUBLE: /* DOUBLE */
+			es_type->display_size = 24;
+			break;
+
+		case SQL_TINYINT: /* BYTE */
+		case SQL_SMALLINT: /* SHORT */
+		case SQL_INTEGER: /* INTEGER */
+			es_type->display_size = es_type->column_size;
+			if (! es_type->unsigned_attribute)
+				es_type->display_size ++;
+			break;
+		case SQL_BIGINT: /* LONG */
+			es_type->display_size = es_type->column_size;
+			if (es_type->unsigned_attribute)
+				es_type->display_size ++;
+			break;
+
+		case SQL_BINARY:
+		case SQL_VARBINARY: /* BINARY */
+		case SQL_LONGVARBINARY:
+			/* 0xAB */
+			es_type->display_size = 2 * es_type->column_size;
+			break;
+
+		case SQL_TYPE_DATE:
+		case SQL_TYPE_TIME:
+		case SQL_TYPE_TIMESTAMP: /* DATE */
+			es_type->display_size = sizeof(ESODBC_ISO8601_TEMPLATE) - /*0*/1;
+			break;
+
+
+		case ESODBC_SQL_BOOLEAN:
+			es_type->display_size = /*'false'*/5;
+			break;
+
+		case ESODBC_SQL_NULL:
+			es_type->display_size = /*'null'*/4;
+			break;
+
+		/* treat these as variable binaries with unknown size */
+		case ESODBC_SQL_UNSUPPORTED:
+		case ESODBC_SQL_OBJECT: /* == ESODBC_SQL_NESTED */
+			es_type->display_size = SQL_NO_TOTAL;
+			break;
+
+		/*
+		case SQL_TYPE_UTCDATETIME:
+		case SQL_TYPE_UTCTIME:
+		*/
+
+		case SQL_DECIMAL:
+		case SQL_NUMERIC:
+
+		case SQL_BIT:
+
+		case SQL_INTERVAL_MONTH:
+		case SQL_INTERVAL_YEAR:
+		case SQL_INTERVAL_YEAR_TO_MONTH:
+		case SQL_INTERVAL_DAY:
+		case SQL_INTERVAL_HOUR:
+		case SQL_INTERVAL_MINUTE:
+		case SQL_INTERVAL_SECOND:
+		case SQL_INTERVAL_DAY_TO_HOUR:
+		case SQL_INTERVAL_DAY_TO_MINUTE:
+		case SQL_INTERVAL_DAY_TO_SECOND:
+		case SQL_INTERVAL_HOUR_TO_MINUTE:
+		case SQL_INTERVAL_HOUR_TO_SECOND:
+		case SQL_INTERVAL_MINUTE_TO_SECOND:
+
+		case SQL_GUID:
+
+		default:
+			BUG("unsupported ES/SQL data type: %d.", es_type->data_type);
+	}
+}
+
+static BOOL bind_types_cols(esodbc_stmt_st *stmt, estype_row_st *type_row)
+{
+
+	/* bind one column */
+#define ES_TYPES_BINDCOL(_col_nr, _member, _c_type) \
+	do { \
+		SQLPOINTER _ptr = _c_type == SQL_C_WCHAR ? \
+			(SQLPOINTER)(uintptr_t)type_row[0]._member : \
+			(SQLPOINTER)&type_row[0]._member; \
+		if (! SQL_SUCCEEDED(EsSQLBindCol(stmt, _col_nr, _c_type, \
+						_ptr, sizeof(type_row[0]._member), \
+						&type_row[0]._member ## _loi))) { \
+			ERRH(stmt, "failed to bind column #" STR(_col_nr) "."); \
+			return FALSE; \
+		} \
+	} while (0)
+
+	ES_TYPES_BINDCOL(1, type_name, SQL_C_WCHAR);
+	ES_TYPES_BINDCOL(2, data_type, SQL_C_SSHORT);
+	ES_TYPES_BINDCOL(3, column_size, SQL_C_SLONG);
+	ES_TYPES_BINDCOL(4, literal_prefix, SQL_C_WCHAR);
+	ES_TYPES_BINDCOL(5, literal_suffix, SQL_C_WCHAR);
+	ES_TYPES_BINDCOL(6, create_params, SQL_C_WCHAR);
+	ES_TYPES_BINDCOL(7, nullable, SQL_C_SSHORT);
+	ES_TYPES_BINDCOL(8, case_sensitive, SQL_C_SSHORT);
+	ES_TYPES_BINDCOL(9, searchable, SQL_C_SSHORT);
+	ES_TYPES_BINDCOL(10, unsigned_attribute, SQL_C_SSHORT);
+	ES_TYPES_BINDCOL(11, fixed_prec_scale, SQL_C_SSHORT);
+	ES_TYPES_BINDCOL(12, auto_unique_value, SQL_C_SSHORT);
+	ES_TYPES_BINDCOL(13, local_type_name, SQL_C_WCHAR);
+	ES_TYPES_BINDCOL(14, minimum_scale, SQL_C_SSHORT);
+	ES_TYPES_BINDCOL(15, maximum_scale, SQL_C_SSHORT);
+	ES_TYPES_BINDCOL(16, sql_data_type, SQL_C_SSHORT);
+	ES_TYPES_BINDCOL(17, sql_datetime_sub, SQL_C_SSHORT);
+	ES_TYPES_BINDCOL(18, num_prec_radix, SQL_C_SLONG);
+	ES_TYPES_BINDCOL(19, interval_precision, SQL_C_SSHORT);
+
+#undef ES_TYPES_BINDCOL
+
+	return TRUE;
+}
+
+static void* copy_types_rows(estype_row_st *type_row, SQLULEN rows_fetched,
+		esodbc_estype_st *types)
+{
+	SQLWCHAR *pos;
+	int i;
+
+	/* start pointer where the strings will be copied in */
+	pos = (SQLWCHAR *)&types[rows_fetched];
+
+	/* copy one integer member */
+#define ES_TYPES_COPY_INT(_member) \
+	do { \
+		if (type_row[i]._member ## _loi == SQL_NULL_DATA) { \
+			/*null->0 is harmless for cached types */\
+			types[i]._member = 0; \
+		} else { \
+			types[i]._member = type_row[i]._member; \
+		} \
+	} while (0)
+	/* copy one wstr_st member
+	 * Note: it'll shift NULLs to empty strings, as most of the API asks for
+	 * empty strings if data is unavailable ("unkown"). */
+#define ES_TYPES_COPY_WSTR(_wmember) \
+	do { \
+		if (type_row[i]._wmember ## _loi == SQL_NULL_DATA) { \
+			types[i]._wmember.cnt = 0; \
+			types[i]._wmember.str = MK_WPTR(""); \
+		} else { \
+			types[i]._wmember.cnt = \
+				type_row[i]._wmember ## _loi / sizeof(SQLWCHAR); \
+			types[i]._wmember.str = pos; \
+			wmemcpy(types[i]._wmember.str, \
+					type_row[i]._wmember, types[i]._wmember.cnt + /*\0*/1); \
+			pos += types[i]._wmember.cnt + /*\0*/1; \
+		} \
+	} while (0)
+
+	for (i = 0; i < rows_fetched; i ++) {
+		/* copy data */
+		ES_TYPES_COPY_WSTR(type_name);
+		ES_TYPES_COPY_INT(data_type);
+		ES_TYPES_COPY_INT(column_size);
+		ES_TYPES_COPY_WSTR(literal_prefix);
+		ES_TYPES_COPY_WSTR(literal_suffix);
+		ES_TYPES_COPY_WSTR(create_params);
+		ES_TYPES_COPY_INT(nullable);
+		ES_TYPES_COPY_INT(case_sensitive);
+		ES_TYPES_COPY_INT(searchable);
+		ES_TYPES_COPY_INT(unsigned_attribute);
+		ES_TYPES_COPY_INT(fixed_prec_scale);
+		ES_TYPES_COPY_INT(auto_unique_value);
+		ES_TYPES_COPY_WSTR(local_type_name);
+		ES_TYPES_COPY_INT(minimum_scale);
+		ES_TYPES_COPY_INT(maximum_scale);
+		ES_TYPES_COPY_INT(sql_data_type);
+		ES_TYPES_COPY_INT(sql_datetime_sub);
+		ES_TYPES_COPY_INT(num_prec_radix);
+		ES_TYPES_COPY_INT(interval_precision);
+
+		/* apply any needed fixes */
+
+		/* warn if scales extremes are different */
+		if (types[i].maximum_scale != types[i].minimum_scale) {
+			ERR("type `" LWPDL "` returned with non-equal max/min "
+					"scale: %d/%d.", LWSTR(&types[i].type_name),
+					types[i].maximum_scale, types[i].minimum_scale);
+		}
+
+		/* resolve ES type to SQL C type */
+		types[i].c_concise_type = type_elastic2csql(&types[i].type_name);
+		if (types[i].c_concise_type == SQL_UNKNOWN_TYPE) {
+			/* ES version newer than driver's? */
+			ERR("failed to convert type name `" LWPDL "` to SQL C type.",
+					LWSTR(&types[i].type_name));
+			return NULL;
+		}
+		/* set meta type */
+		types[i].meta_type = concise_to_meta(types[i].c_concise_type,
+				/*C type -> AxD*/DESC_TYPE_ARD);
+
+		/* fix SQL_DATA_TYPE and SQL_DATETIME_SUB columns TODO: GH issue */
+		concise_to_type_code(types[i].data_type, &types[i].sql_data_type,
+				&types[i].sql_datetime_sub);
+
+		set_display_size(types + i);
+	}
+
+#undef ES_TYPES_COPY_INT
+#undef ES_TYPES_COPY_WCHAR
+
+	return pos;
+}
+
+/*
+ * Load SYS TYPES data.
+ *
+ * One can not do a row-wise rowset fetch with ODBC where the
+ * length-indicator buffer is separate from the row structure => need to
+ * "manually" copy from a row structure (defined into the function) into the
+ * estype structure. The array of estype structs is returned.
+ */
+static BOOL load_es_types(esodbc_dbc_st *dbc)
+{
+	esodbc_stmt_st *stmt = NULL;
+	SQLRETURN ret = FALSE;
+	SQLSMALLINT col_cnt;
+	SQLLEN row_cnt;
+	/* both arrays below must use ESODBC_MAX_ROW_ARRAY_SIZE since no SQLFetch()
+	 * looping is implemented (see check after SQLFetch() below). */
+	estype_row_st type_row[ESODBC_MAX_ROW_ARRAY_SIZE];
+	SQLUSMALLINT row_status[ESODBC_MAX_ROW_ARRAY_SIZE];
+	SQLULEN rows_fetched, i, strs_len;
+	size_t size;
+	esodbc_estype_st *types = NULL;
+	void *pos;
+
+	if (! SQL_SUCCEEDED(EsSQLAllocHandle(SQL_HANDLE_STMT, dbc, &stmt))) {
+		ERRH(dbc, "failed to alloc a statement handle.");
+		return FALSE;
+	}
+	assert(stmt);
+
+	if (! SQL_SUCCEEDED(EsSQLGetTypeInfoW(stmt, SQL_ALL_TYPES))) {
+		ERRH(stmt, "failed to query Elasticsearch.");
+		goto end;
+	}
+
+	/* check that we have as many columns as members in target row struct */
+	if (! SQL_SUCCEEDED(EsSQLNumResultCols(stmt, &col_cnt))) {
+		ERRH(stmt, "failed to get result columns count.");
+		goto end;
+	} else if (col_cnt != ESODBC_TYPES_MEMBERS) {
+		ERRH(stmt, "Elasticsearch returned an unexpected number of columns "
+				"(%d vs expected %d).", col_cnt, ESODBC_TYPES_MEMBERS);
+		goto end;
+	} else {
+		DBGH(stmt, "Elasticsearch types columns count: %d.", col_cnt);
+	}
+
+	/* check that we have received proper number of rows (non-0, less than
+	 * max allowed here) */
+	if (! SQL_SUCCEEDED(EsSQLRowCount(stmt, &row_cnt))) {
+		ERRH(stmt, "failed to get result rows count.");
+		goto end;
+	} else if (row_cnt <= 0) {
+		ERRH(stmt, "Elasticsearch returned no type as supported.");
+		goto end;
+	} else if (ESODBC_MAX_ROW_ARRAY_SIZE < row_cnt) {
+		ERRH(stmt, "Elasticsearch returned too many types (%d vs limit %zd).",
+				row_cnt, ESODBC_MAX_ROW_ARRAY_SIZE);
+		goto end;
+	} else {
+		DBGH(stmt, "Elasticsearch types rows count: %ld.", row_cnt);
+	}
+
+	/* indicate bind type: row-wise (i.e. row size) */
+	if (! SQL_SUCCEEDED(EsSQLSetStmtAttrW(stmt, SQL_ATTR_ROW_BIND_TYPE,
+					(SQLPOINTER)sizeof(type_row[0]), 0))) {
+		ERRH(stmt, "failed to set bind type to row-wise.");
+		goto end;
+	}
+	/* indicate rowset size */
+	if (! SQL_SUCCEEDED(EsSQLSetStmtAttrW(stmt, SQL_ATTR_ROW_ARRAY_SIZE,
+					(SQLPOINTER)ESODBC_MAX_ROW_ARRAY_SIZE, 0))) {
+		ERRH(stmt, "failed to set rowset size (%zd).",
+				ESODBC_MAX_ROW_ARRAY_SIZE);
+		goto end;
+	}
+	/* indicate array to write row status into; initialize with error first */
+	for (i = 0; i < ESODBC_MAX_ROW_ARRAY_SIZE; i ++) {
+		row_status[i] = SQL_ROW_ERROR;
+	}
+	if (! SQL_SUCCEEDED(EsSQLSetStmtAttrW(stmt, SQL_ATTR_ROW_STATUS_PTR,
+					row_status, 0))) {
+		ERRH(stmt, "failed to set row status array.");
+		goto end;
+	}
+	/* indicate pointer to write how many rows were fetched into */
+	if (! SQL_SUCCEEDED(EsSQLSetStmtAttrW(stmt, SQL_ATTR_ROWS_FETCHED_PTR,
+					&rows_fetched, 0))) {
+		ERRH(stmt, "failed to set fetched size pointer.");
+		goto end;
+	}
+
+	if (! bind_types_cols(stmt, type_row)) {
+		goto end;
+	}
+
+	/* fetch the results into the type_row array */
+	if (! SQL_SUCCEEDED(EsSQLFetch(stmt))) {
+		ERRH(stmt, "failed to fetch results.");
+		goto end;
+	} else if (rows_fetched < (SQLULEN)row_cnt) {
+		/* we're using arrays with max size that SQLFetch() accepts => it
+		 * should read all data in one go. */
+		ERRH(stmt, "failed to fetch all the rows in one go.");
+		goto end;
+	}
+
+	/* check row statuses;
+	 * calculate the length of all strings (SQLWCHAR members) returned
+	 * count also the 0-terms, which are not counted for in the indicator */
+	strs_len = 0;
+	for (i = 0; i < rows_fetched; i ++) {
+		if (row_status[i] != SQL_ROW_SUCCESS) {
+			ERRH(stmt, "row #%d not succesfully fetched; status: %d.", i,
+					row_status[i]);
+			goto end;
+		}
+		if (type_row[i].type_name_loi != SQL_NULL_DATA) {
+			strs_len += type_row[i].type_name_loi;
+			strs_len += sizeof(*type_row[i].type_name); /* 0-term */
+		}
+		if (type_row[i].literal_prefix_loi != SQL_NULL_DATA) {
+			strs_len += type_row[i].literal_prefix_loi;
+			strs_len += sizeof(*type_row[i].literal_prefix); /* 0-term */
+		}
+		if (type_row[i].literal_suffix_loi != SQL_NULL_DATA) {
+			strs_len += type_row[i].literal_suffix_loi;
+			strs_len += sizeof(*type_row[i].literal_suffix); /* 0-term */
+		}
+		if (type_row[i].create_params_loi != SQL_NULL_DATA) {
+			strs_len += type_row[i].create_params_loi;
+			strs_len += sizeof(*type_row[i].create_params); /* 0-term */
+		}
+		if (type_row[i].local_type_name_loi != SQL_NULL_DATA) {
+			strs_len += type_row[i].local_type_name_loi;
+			strs_len += sizeof(*type_row[i].local_type_name); /* 0-term */
+		}
+	}
+
+	/* collate types array and the strings referenced within it */
+	size = rows_fetched * sizeof(esodbc_estype_st) + strs_len;
+	if (! (types = calloc(1, size))) {
+		ERRNH(stmt, "OOM for %ldB.", size);
+		goto end;
+	}
+
+	if (! (pos = copy_types_rows(type_row, rows_fetched, types))) {
+		ERRH(dbc, "failed to process recieved ES/SQL data types.");
+		goto end;
+	}
+	/* I didn't overrun the buffer */
+	assert((char *)pos - (char *)(types + rows_fetched) <=
+			(intptr_t)(strs_len));
+
+	ret = TRUE;
+end:
+	if (! SQL_SUCCEEDED(EsSQLFreeStmt(stmt, SQL_UNBIND))) {
+		ERRH(stmt, "failed to unbind statement");
+		ret = FALSE;
+	}
+	if (! SQL_SUCCEEDED(EsSQLFreeHandle(SQL_HANDLE_STMT, stmt))) {
+		ERRH(dbc, "failed to free statement handle!");
+		ret = FALSE;
+	}
+
+	if (ret) {
+		/* finally, associate the types to the dbc handle */
+		dbc->es_types = types;
+		dbc->no_types = rows_fetched;
+	} else if (types) {
+		/* freeing the statement went wrong */
+		free(types);
+		types = NULL;
+	}
+
+	return ret;
 }
 
 #if defined(_WIN32) || defined (WIN32)
@@ -1137,7 +1761,7 @@ static BOOL read_system_info(config_attrs_st *attrs, TCHAR *buff)
 		goto end;
 	} else {
 		DBG("Subkey '%s\\" LWPD "': vals: %d, lengthiest name: %d, "
-				"lenghtiest data: %d.", ktree, val, valsno, maxvallen,
+				"lengthiest data: %d.", ktree, val, valsno, maxvallen,
 				maxdatalen);
 		// malloc buffers?
 		if (MAX_REG_VAL_NAME < maxvallen)
@@ -1325,11 +1949,16 @@ SQLRETURN EsSQLDriverConnectW
 			RET_HDIAGS(dbc, SQL_STATE_HY110);
 	}
 
+	if (! load_es_types(dbc)) {
+		ERRH(dbc, "failed to load Elasticsearch/SQL types.");
+		RET_HDIAG(dbc, SQL_STATE_HY000,
+				"failed to load Elasticsearch/SQL types", 0);
+	}
 
 	/* save the original DSN for later inquiry by app */
 	dbc->dsn.str = malloc((orig_dsn.cnt + /*0*/1) * sizeof(SQLWCHAR));
 	if (! dbc->dsn.str) {
-		ERRNH(dbc, "OOM for %zdB.", (orig_dsn.cnt + /*0*/1) * sizeof(SQLWCHAR));
+		ERRNH(dbc, "OOM for %zdB.", (orig_dsn.cnt + 1) * sizeof(SQLWCHAR));
 		RET_HDIAGS(dbc, SQL_STATE_HY001);
 	}
 	dbc->dsn.str[orig_dsn.cnt] = '\0';
@@ -1403,9 +2032,10 @@ SQLRETURN EsSQLSetConnectAttrW(
 			return SQL_ERROR; /* error means ANSI */
 
 		case SQL_ATTR_LOGIN_TIMEOUT:
-			if (dbc->conn) {
-				ERRH(dbc, "connection already established, can't set connection"
-						" timeout (to %u).", (SQLUINTEGER)(uintptr_t)Value);
+			if (dbc->es_types) {
+				ERRH(dbc, "connection already established, can't set "
+						"connection timeout anymore (to %u).",
+						(SQLUINTEGER)(uintptr_t)Value);
 				RET_HDIAG(dbc, SQL_STATE_HY011, "connection established, "
 						"can't set connection timeout.", 0);
 			}
@@ -1454,12 +2084,25 @@ SQLRETURN EsSQLSetConnectAttrW(
 	return SQL_SUCCESS;
 }
 
-#if 0
-static BOOL get_current_catalog(esodbc_dbc_st *dbc)
+/* writes into 'dest', of size 'room', the current catalog of 'dbc'.
+ * returns negative on error, or the char count written otherwise */
+static SQLSMALLINT get_current_catalog(esodbc_dbc_st *dbc, SQLWCHAR *dest,
+		SQLSMALLINT room)
 {
-	FIXME;
+	SQLSMALLINT used;
+	SQLWCHAR *catalog = MK_WPTR("my_current_catalog"); // FIXME
+
+	//
+	// TODO: use the new SYS CATALOGS query
+	//
+
+	DBGH(dbc, "current catalog: `" LWPD "`.", catalog);
+	if (! SQL_SUCCEEDED(write_wptr(&dbc->hdr.diag, dest, catalog, room,
+					&used))) {
+		return -1;
+	}
+	return used;
 }
-#endif //0
 
 SQLRETURN EsSQLGetConnectAttrW(
 		SQLHDBC        ConnectionHandle,
@@ -1469,9 +2112,7 @@ SQLRETURN EsSQLGetConnectAttrW(
 		_Out_opt_ SQLINTEGER* StringLengthPtr)
 {
 	esodbc_dbc_st *dbc = DBCH(ConnectionHandle);
-	SQLRETURN ret;
 	SQLSMALLINT used;
-//	SQLWCHAR *val;
 
 	switch(Attribute) {
 		/* https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/automatic-population-of-the-ipd */
@@ -1486,31 +2127,17 @@ SQLRETURN EsSQLGetConnectAttrW(
 
 		/* "the name of the catalog to be used by the data source" */
 		case SQL_ATTR_CURRENT_CATALOG:
-			DBGH(dbc, "requested: catalog name (@0x%p).", dbc->catalog);
-#if 0
-			if (! dbc->conn) {
+			DBGH(dbc, "requested: catalog name.");
+			if (! dbc->es_types) {
 				ERRH(dbc, "no connection active.");
-				/* TODO: check connection state and correct state */
 				RET_HDIAGS(dbc, SQL_STATE_08003);
-			} else if (! get_current_catalog(dbc)) {
+			} else if ((used = get_current_catalog(dbc, (SQLWCHAR *)ValuePtr,
+						(SQLSMALLINT)BufferLength)) < 0) {
 				ERRH(dbc, "failed to get current catalog.");
-				RET_STATE(dbc, dbc->hdr.diag.state);
+				RET_STATE(dbc->hdr.diag.state);
 			}
-#endif //0
-#if 0
-			val = dbc->catalog ? dbc->catalog : MK_WPTR("null");
-			*StringLengthPtr = wcslen(*(SQLWCHAR **)ValuePtr);
-			*StringLengthPtr *= sizeof(SQLWCHAR);
-			*(SQLWCHAR **)ValuePtr = val;
-#else //0
-			// FIXME;
-			ret = write_wptr(&dbc->hdr.diag, (SQLWCHAR *)ValuePtr,
-					MK_WPTR("NulL"), (SQLSMALLINT)BufferLength, &used);
 			if (StringLengthPtr);
 				*StringLengthPtr = (SQLINTEGER)used;
-			return ret;
-			
-#endif //0
 			break;
 
 		case SQL_ATTR_METADATA_ID:
@@ -1557,7 +2184,7 @@ SQLRETURN EsSQLGetConnectAttrW(
 			ERRH(dbc, "unknown Attribute type %d.", Attribute);
 			RET_HDIAGS(DBCH(ConnectionHandle), SQL_STATE_HY092);
 	}
-	
+
 	return SQL_SUCCESS;
 }
 
