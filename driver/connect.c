@@ -22,6 +22,7 @@
 
 #include "connect.h"
 #include "queries.h"
+#include "catalogue.h"
 #include "log.h"
 #include "info.h"
 #include "util.h"
@@ -2095,26 +2096,6 @@ SQLRETURN EsSQLSetConnectAttrW(
 	return SQL_SUCCESS;
 }
 
-/* writes into 'dest', of size 'room', the current catalog of 'dbc'.
- * returns negative on error, or the char count written otherwise */
-static SQLSMALLINT get_current_catalog(esodbc_dbc_st *dbc, SQLWCHAR *dest,
-		SQLSMALLINT room)
-{
-	SQLSMALLINT used;
-	SQLWCHAR *catalog = MK_WPTR("my_current_catalog"); // FIXME
-
-	//
-	// TODO: use the new SYS CATALOGS query
-	//
-
-	DBGH(dbc, "current catalog: `" LWPD "`.", catalog);
-	if (! SQL_SUCCEEDED(write_wptr(&dbc->hdr.diag, dest, catalog, room,
-					&used))) {
-		return -1;
-	}
-	return used;
-}
-
 SQLRETURN EsSQLGetConnectAttrW(
 		SQLHDBC        ConnectionHandle,
 		SQLINTEGER     Attribute,
@@ -2142,7 +2123,7 @@ SQLRETURN EsSQLGetConnectAttrW(
 			if (! dbc->es_types) {
 				ERRH(dbc, "no connection active.");
 				RET_HDIAGS(dbc, SQL_STATE_08003);
-			} else if ((used = get_current_catalog(dbc, (SQLWCHAR *)ValuePtr,
+			} else if ((used = copy_current_catalog(dbc, (SQLWCHAR *)ValuePtr,
 						(SQLSMALLINT)BufferLength)) < 0) {
 				ERRH(dbc, "failed to get current catalog.");
 				RET_STATE(dbc->hdr.diag.state);

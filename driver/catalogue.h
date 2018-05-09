@@ -19,6 +19,12 @@
 #define __CATALOGUE_H__
 
 #include "error.h"
+#include "handles.h"
+
+
+SQLSMALLINT copy_current_catalog(esodbc_dbc_st *dbc, SQLWCHAR *dest,
+		SQLSMALLINT room);
+
 
 SQLRETURN  EsSQLTablesW(
 		SQLHSTMT StatementHandle,

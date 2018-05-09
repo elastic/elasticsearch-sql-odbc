@@ -28,17 +28,109 @@
 #include "info.h"
 #include "queries.h"
 
-// TODO: add type (and schema, when supported)
-#define SQL_TABLES		"SYS TABLES" \
-	" CATALOG LIKE " ESODBC_STRING_DELIM WPFWP_LDESC ESODBC_STRING_DELIM \
+
+#define SYS_CATALOGS \
+	"SYS CATALOGS"
+
+/* SYS TABLES synthax tokens; these need to stay broken down, since this
+ * query makes a difference between a predicate being '%' or left out */
+// TODO: schema, when supported
+#define SQL_TABLES \
+	"SYS TABLES"
+#define SQL_TABLES_CAT \
+	" CATALOG LIKE " ESODBC_STRING_DELIM WPFWP_LDESC ESODBC_STRING_DELIM
+#define SQL_TABLES_TAB \
 	" LIKE " ESODBC_STRING_DELIM WPFWP_LDESC ESODBC_STRING_DELIM
+#define SQL_TABLES_TYP \
+	" TYPE " WPFWP_LDESC
 
 // TODO add schema, when supported
 #define SQL_COLUMNS(...)		"SYS COLUMNS" __VA_ARGS__ \
 	" TABLE LIKE " ESODBC_STRING_DELIM WPFWP_LDESC ESODBC_STRING_DELIM \
 	" LIKE " ESODBC_STRING_DELIM WPFWP_LDESC ESODBC_STRING_DELIM
-#define SQL_COL_CAT				\
+#define SQL_COL_CAT \
 	" CATALOG " ESODBC_STRING_DELIM WPFWP_LDESC ESODBC_STRING_DELIM \
+
+
+/* writes into 'dest', of size 'room', the current catalog of 'dbc'.
+ * returns negative on error, or the char count written otherwise */
+SQLSMALLINT copy_current_catalog(esodbc_dbc_st *dbc, SQLWCHAR *dest,
+		SQLSMALLINT room)
+{
+	esodbc_stmt_st *stmt = NULL;
+	SQLSMALLINT used = -1; /*failure*/
+	SQLLEN row_cnt;
+	SQLLEN ind_len = SQL_NULL_DATA;
+	SQLWCHAR buff[ESODBC_MAX_IDENTIFIER_LEN];
+	SQLWCHAR *catalog;
+
+	if (! SQL_SUCCEEDED(EsSQLAllocHandle(SQL_HANDLE_STMT, dbc, &stmt))) {
+		ERRH(dbc, "failed to alloc a statement handle.");
+		return -1;
+	}
+	assert(stmt);
+
+	if (! SQL_SUCCEEDED(attach_sql(stmt, MK_WPTR(SYS_CATALOGS),
+					sizeof(SYS_CATALOGS) - 1))) {
+		ERRH(dbc, "failed to attach query to statement.");
+		goto end;
+	}
+	if (! SQL_SUCCEEDED(post_statement(stmt))) {
+		ERRH(dbc, "failed to post query.");
+		goto end;
+	}
+
+	/* check that we have received proper number of rows (non-0, less than
+	 * max allowed here) */
+	if (! SQL_SUCCEEDED(EsSQLRowCount(stmt, &row_cnt))) {
+		ERRH(dbc, "failed to get result rows count.");
+		goto end;
+	} else if (row_cnt <= 0) {
+		WARNH(stmt, "Elasticsearch returned no current catalog.");
+		catalog = MK_WPTR(""); /* empty string, it's not quite an error */
+	} else {
+		DBGH(stmt, "Elasticsearch catalogs rows count: %ld.", row_cnt);
+		if (1 < row_cnt) {
+			WARNH(dbc, "Elasticsearch connected to %d clusters, returning "
+					"the first's name as current catalog.", row_cnt);
+		}
+
+		if (! SQL_SUCCEEDED(EsSQLBindCol(stmt, /*col#*/1, SQL_C_WCHAR, buff,
+						sizeof(buff), &ind_len))) {
+			ERRH(dbc, "failed to bind first column.");
+			goto end;
+		}
+		if (! SQL_SUCCEEDED(EsSQLFetch(stmt))) {
+			ERRH(stmt, "failed to fetch results.");
+			goto end;
+		}
+		if (ind_len <= 0) {
+			WARNH(dbc, "NULL catalog received."); /*tho maybe != NULL_DATA */
+			catalog = MK_WPTR("");
+		} else {
+			catalog = buff;
+			DBGH(dbc, "current catalog (first value returned): `" LWPD "`.",
+					catalog);
+		}
+	}
+
+	if (! SQL_SUCCEEDED(write_wptr(&dbc->hdr.diag, dest, catalog, room,
+					&used))) {
+		ERRH(dbc, "failed to copy catalog: `" LWPD "`.", catalog);
+		used = -1; /* write_wptr() can change pointer, and still fail */
+	}
+
+end:
+	/* safe even if no binding occured */
+	if (! SQL_SUCCEEDED(EsSQLFreeStmt(stmt, SQL_UNBIND))) {
+		ERRH(stmt, "failed to unbind statement");
+		used = -1;
+	}
+	if (! SQL_SUCCEEDED(EsSQLFreeHandle(SQL_HANDLE_STMT, stmt))) {
+		ERRH(dbc, "failed to free statement handle!");
+	}
+	return used;
+}
 
 
 SQLRETURN EsSQLTablesW(
