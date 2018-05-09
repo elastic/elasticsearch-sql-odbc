@@ -85,13 +85,18 @@ int wmemncasecmp(const SQLWCHAR *a, const SQLWCHAR *b, size_t len);
  * either of them or until 'count' characters are evaluated. If 'count'
  * parameter is negative, it is ignored.
  *
- * This is useful in comparing SQL strings which the API allows to be passed 
+ * This is useful in comparing SQL strings which the API allows to be passed
  * either as 0-terminated or not (SQL_NTS).
  * The function does a single pass (no length evaluation of the strings).
  * wmemcmp() might read over the boundary of one of the objects, if the
  * provided 'count' paramter is not the minimum of the strings' length.
  */
 int wszmemcmp(const SQLWCHAR *a, const SQLWCHAR *b, long count);
+
+/*
+ * wcsstr() variant for non-NTS.
+ */
+const SQLWCHAR* wcsnstr(const SQLWCHAR *hay, size_t len, SQLWCHAR needle);
 
 typedef struct wstr {
 	SQLWCHAR *str;
@@ -119,7 +124,7 @@ BOOL wstr2bool(wstr_st *val);
 BOOL wstr2long(wstr_st *val, long *out);
 
 #ifdef _WIN32
-/* 
+/*
  * "[D]oes not null-terminate an output string if the input string length is
  * explicitly specified without a terminating null character. To
  * null-terminate an output string for this function, the application should
@@ -155,7 +160,7 @@ typedef cstr_st tstr_st;
 #endif /* UNICODE */
 
 
-/* 
+/*
  * JSON-escapes a string.
  * If string len is 0, it assumes a NTS.
  * If output buffer (jout) is NULL, it returns the buffer size needed for

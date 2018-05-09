@@ -132,6 +132,53 @@ end:
 	return used;
 }
 
+/*
+ * Quote the tokens in a string: "a, b,,c" -> "'a','b',,'c'".
+ * No string sanity done (garbage in, garbage out).
+ */
+size_t quote_tokens(SQLWCHAR *src, size_t len, SQLWCHAR *dest)
+{
+	size_t i;
+	BOOL copying;
+	SQLWCHAR *pos;
+
+	DBG("len=%d.", len);
+	copying = FALSE;
+	pos = dest;
+	for (i = 0; i < len; i ++) {
+		DBG("src[%d]=%C, dest:`" LWPD "`.", i, src[i], dest);
+		switch (src[i]) {
+			/* ignore white space */
+			case L' ':
+			case L'\t':
+				TRACE;
+				if (copying) {
+					*pos ++ = L'\''; /* end current token */
+					copying = FALSE;
+				}
+				continue; /* don't copy WS */
+
+			case L',':
+				TRACE;
+				if (copying) {
+					*pos ++ = L'\''; /* end current token */
+					copying = FALSE;
+				} /* else continue; -- to remove extra `,` */
+				break;
+
+			default:
+				TRACE;
+				if (! copying) {
+					*pos ++ = L'\''; /* start a new token */
+				}
+				copying = TRUE;
+		}
+		*pos ++ = src[i];
+	}
+	/* should not overrun */
+	assert(i < 2/*see typ_buf below*/ * ESODBC_MAX_IDENTIFIER_LEN);
+	return pos - dest;
+}
 
 SQLRETURN EsSQLTablesW(
 		SQLHSTMT StatementHandle,
@@ -146,12 +193,24 @@ SQLRETURN EsSQLTablesW(
 {
 	esodbc_stmt_st *stmt = STMH(StatementHandle);
 	SQLRETURN ret;
-	SQLWCHAR wbuf[sizeof(SQL_TABLES) + 2 * ESODBC_MAX_IDENTIFIER_LEN];
-	SQLWCHAR *table, *schema, *catalog;
-	size_t cnt_tab, cnt_sch, cnt_cat, pos;
+	/* b/c declaring an array with a const doesn't work with MSVC's compiler */
+	enum wbuf_len { wbuf_len = sizeof(SQL_TABLES)
+		+ sizeof(SQL_TABLES_CAT)
+		+ sizeof(SQL_TABLES_TAB)
+		+ sizeof(SQL_TABLES_TYP)
+		+ 3 * ESODBC_MAX_IDENTIFIER_LEN /* it has 4x 0-term space */
+	};
+	SQLWCHAR wbuf[wbuf_len];
+	SQLWCHAR *table, *schema, *catalog, *type;
+	size_t cnt_tab, cnt_sch, cnt_cat, cnt_typ, pos;
+	/* 2x: "a,b,c" -> "'a','b','c'" : each "x," => "'x'," */
+	SQLWCHAR typ_buf[2 * ESODBC_MAX_IDENTIFIER_LEN];
 
 	if (stmt->metadata_id == SQL_TRUE)
 		FIXME; // FIXME
+
+	pos = sizeof(SQL_TABLES) - 1;
+	wmemcpy(wbuf, MK_WPTR(SQL_TABLES), pos);
 
 	if (CatalogName) {
 		catalog = CatalogName;
@@ -159,16 +218,22 @@ SQLRETURN EsSQLTablesW(
 			cnt_cat = wcslen(catalog);
 			if (ESODBC_MAX_IDENTIFIER_LEN < cnt_cat) {
 				ERRH(stmt, "catalog identifier name '" LTPDL "' too long "
-						"(%d. max=%d).", cnt_cat, catalog, cnt_cat,
+						"(%zd. max=%d).", (int)cnt_cat, catalog, cnt_cat,
 						ESODBC_MAX_IDENTIFIER_LEN);
 				RET_HDIAG(stmt, SQL_STATE_HY090, "catalog name too long", 0);
 			}
 		} else {
 			cnt_cat = NameLength1;
 		}
-	} else {
-		catalog = MK_WPTR(SQL_ALL_CATALOGS);
-		cnt_cat = sizeof(SQL_ALL_CATALOGS) - /*0-term*/1;
+
+		cnt_cat = swprintf(wbuf + pos, wbuf_len - pos, SQL_TABLES_CAT,
+				(int)cnt_cat, catalog);
+		if (cnt_cat <= 0) {
+			ERRH(stmt, "failed to print 'catalog' for tables catalog SQL.");
+			RET_HDIAGS(stmt, SQL_STATE_HY000);
+		} else {
+			pos += cnt_cat;
+		}
 	}
 
 	if (SchemaName) {
@@ -177,23 +242,20 @@ SQLRETURN EsSQLTablesW(
 			cnt_sch = wcslen(schema);
 			if (ESODBC_MAX_IDENTIFIER_LEN < cnt_sch) {
 				ERRH(stmt, "schema identifier name '" LTPDL "' too long "
-						"(%d. max=%d).", cnt_sch, schema, cnt_sch,
+						"(%zd. max=%d).", (int)cnt_sch, schema, cnt_sch,
 						ESODBC_MAX_IDENTIFIER_LEN);
 				RET_HDIAG(stmt, SQL_STATE_HY090, "schema name too long", 0);
 			}
 		} else {
 			cnt_sch = NameLength2;
 		}
-	} else {
-		schema = MK_WPTR(SQL_ALL_SCHEMAS);
-		cnt_sch = sizeof(SQL_ALL_SCHEMAS) - /*0-term*/1;
-	}
 
-	/* TODO: server support needed for sch. name filtering */
-	if (cnt_sch && wszmemcmp(schema, MK_WPTR(SQL_ALL_SCHEMAS),
-				(long)cnt_sch)) {
-		ERRH(stmt, "filtering by schemas is not supported.");
-		RET_HDIAG(stmt, SQL_STATE_IM001, "schema filtering not supported", 0);
+		/* TODO: server support needed for sch. name filtering */
+		if (wszmemcmp(schema, MK_WPTR(SQL_ALL_SCHEMAS), (long)cnt_sch)) {
+			ERRH(stmt, "filtering by schemas is not supported.");
+			RET_HDIAG(stmt, SQL_STATE_IM001, "schema filtering not supported",
+					0);
+		}
 	}
 
 	// FIXME: string needs escaping of % \\ _
@@ -203,31 +265,58 @@ SQLRETURN EsSQLTablesW(
 			cnt_tab = wcslen(table);
 			if (ESODBC_MAX_IDENTIFIER_LEN < cnt_tab) {
 				ERRH(stmt, "table identifier name '" LTPDL "' too long "
-						"(%d. max=%d).", cnt_tab, table, cnt_tab,
+						"(%zd. max=%d).", (int)cnt_tab, table, cnt_tab,
 						ESODBC_MAX_IDENTIFIER_LEN);
 				RET_HDIAG(stmt, SQL_STATE_HY090, "table name too long", 0);
 			}
 		} else {
 			cnt_tab = NameLength3;
 		}
-	} else {
-		table = MK_WPTR(ESODBC_ALL_TABLES);
-		cnt_tab = sizeof(ESODBC_ALL_TABLES) - /*0-term*/1;
-	}
-#if 1 // TODO: GH#4334
-	if (cnt_tab == 0) {
-		table = MK_WPTR(ESODBC_ALL_TABLES);
-		cnt_tab = sizeof(ESODBC_ALL_TABLES) - /*0-term*/1;
-	}
-#endif // 1
 
-	/* print SQL to send to server */
-	pos = swprintf(wbuf, sizeof(wbuf)/sizeof(wbuf[0]), SQL_TABLES,
-			(int)cnt_cat, catalog, (int)cnt_tab, table);
-	if (pos <= 0) {
-		ERRH(stmt, "failed to print 'tables' catalog SQL.");
-		RET_HDIAGS(stmt, SQL_STATE_HY000);
+		cnt_tab = swprintf(wbuf + pos, wbuf_len - pos, SQL_TABLES_TAB,
+				(int)cnt_tab, table);
+		if (cnt_tab <= 0) {
+			ERRH(stmt, "failed to print 'table' for tables catalog SQL.");
+			RET_HDIAGS(stmt, SQL_STATE_HY000);
+		} else {
+			pos += cnt_tab;
+		}
 	}
+
+#if 1 // GH#30398
+	if (TableType) {
+		type = TableType;
+		if (NameLength4 == SQL_NTS) {
+			cnt_typ = wcslen(type);
+			if (ESODBC_MAX_IDENTIFIER_LEN < cnt_typ) {
+				ERRH(stmt, "type identifier name '" LTPDL "' too long "
+						"(%zd. max=%d).", (int)cnt_typ, type, cnt_typ,
+						ESODBC_MAX_IDENTIFIER_LEN);
+				RET_HDIAG(stmt, SQL_STATE_HY090, "type name too long", 0);
+			}
+		} else {
+			cnt_typ = NameLength4;
+		}
+
+		/* In this argument, "each value can be enclosed in single quotation
+		 * marks (') or unquoted" => quote if not quoted (see GH#30398). */
+		if (! wcsnstr(type, cnt_typ, L'\'')) {
+			cnt_typ = quote_tokens(type, cnt_typ, typ_buf);
+			type = typ_buf;
+		}
+
+		cnt_typ = swprintf(wbuf + pos, wbuf_len - pos, SQL_TABLES_TYP,
+				(int)cnt_typ, type);
+		if (cnt_typ <= 0) {
+			ERRH(stmt, "failed to print 'type' for tables catalog SQL.");
+			RET_HDIAGS(stmt, SQL_STATE_HY000);
+		} else {
+			pos += cnt_typ;
+		}
+	}
+#endif // 0
+
+	DBGH(stmt, "tables catalog SQL [%d]:`" LWPDL "`.", pos, pos, wbuf);
 
 	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
 	assert(SQL_SUCCEEDED(ret)); /* can't return error */
