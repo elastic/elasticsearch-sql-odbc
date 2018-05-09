@@ -142,16 +142,13 @@ size_t quote_tokens(SQLWCHAR *src, size_t len, SQLWCHAR *dest)
 	BOOL copying;
 	SQLWCHAR *pos;
 
-	DBG("len=%d.", len);
 	copying = FALSE;
 	pos = dest;
 	for (i = 0; i < len; i ++) {
-		DBG("src[%d]=%C, dest:`" LWPD "`.", i, src[i], dest);
 		switch (src[i]) {
 			/* ignore white space */
 			case L' ':
 			case L'\t':
-				TRACE;
 				if (copying) {
 					*pos ++ = L'\''; /* end current token */
 					copying = FALSE;
@@ -159,7 +156,6 @@ size_t quote_tokens(SQLWCHAR *src, size_t len, SQLWCHAR *dest)
 				continue; /* don't copy WS */
 
 			case L',':
-				TRACE;
 				if (copying) {
 					*pos ++ = L'\''; /* end current token */
 					copying = FALSE;
@@ -167,7 +163,6 @@ size_t quote_tokens(SQLWCHAR *src, size_t len, SQLWCHAR *dest)
 				break;
 
 			default:
-				TRACE;
 				if (! copying) {
 					*pos ++ = L'\''; /* start a new token */
 				}
