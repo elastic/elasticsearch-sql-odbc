@@ -32,7 +32,7 @@
 #define SYS_CATALOGS \
 	"SYS CATALOGS"
 
-/* SYS TABLES synthax tokens; these need to stay broken down, since this
+/* SYS TABLES syntax tokens; these need to stay broken down, since this
  * query makes a difference between a predicate being '%' or left out */
 // TODO: schema, when supported
 #define SQL_TABLES \
@@ -278,7 +278,6 @@ SQLRETURN EsSQLTablesW(
 		}
 	}
 
-#if 1 // GH#30398
 	if (TableType) {
 		type = TableType;
 		if (NameLength4 == SQL_NTS) {
@@ -309,7 +308,6 @@ SQLRETURN EsSQLTablesW(
 			pos += cnt_typ;
 		}
 	}
-#endif // 0
 
 	DBGH(stmt, "tables catalog SQL [%d]:`" LWPDL "`.", pos, pos, wbuf);
 
