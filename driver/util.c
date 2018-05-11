@@ -103,7 +103,7 @@ int wmemncasecmp(const SQLWCHAR *a, const SQLWCHAR *b, size_t len)
 		if (diff)
 			break;
 	}
-	//DBG("`" LWPDL "` vs `" LWPDL "` => %d (len=%zd, i=%d).", 
+	//DBG("`" LWPDL "` vs `" LWPDL "` => %d (len=%zd, i=%d).",
 	//		len, a, len, b, diff, len, i);
 	return diff;
 }
@@ -122,6 +122,17 @@ int wszmemcmp(const SQLWCHAR *a, const SQLWCHAR *b, long count)
 		return 0;
 	}
 	return *a - *b;
+}
+
+const SQLWCHAR* wcsnstr(const SQLWCHAR *hay, size_t len, SQLWCHAR needle)
+{
+	size_t i;
+	for (i = 0; i < len; i ++) {
+		if (hay[i] == needle) {
+			return hay + i;
+		}
+	}
+	return NULL;
 }
 
 /* retuns the length of a buffer to hold the escaped variant of the unescaped
