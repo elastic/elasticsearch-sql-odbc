@@ -273,6 +273,7 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			 * set at connection level. */
 			stmt->metadata_id = dbc->metadata_id;
 			stmt->async_enable = dbc->async_enable;
+			stmt->sql2c_conversion = CONVERSION_UNCHECKED;
 
 			DBG("new Statement handle allocated @0x%p.", *OutputHandle);
 			break;

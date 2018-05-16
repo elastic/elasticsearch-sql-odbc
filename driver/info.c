@@ -556,6 +556,32 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			*(SQLUSMALLINT *)InfoValue = ESODBC_TXN_CAPABLE;
 			break;
 
+		case SQL_CONVERT_BIGINT:
+		case SQL_CONVERT_BINARY:
+		case SQL_CONVERT_BIT:
+		case SQL_CONVERT_CHAR:
+		case SQL_CONVERT_DATE:
+		case SQL_CONVERT_DECIMAL:
+		case SQL_CONVERT_DOUBLE:
+		case SQL_CONVERT_FLOAT:
+		case SQL_CONVERT_INTEGER:
+		case SQL_CONVERT_INTERVAL_YEAR_MONTH:
+		case SQL_CONVERT_INTERVAL_DAY_TIME:
+		case SQL_CONVERT_LONGVARBINARY:
+		case SQL_CONVERT_LONGVARCHAR:
+		case SQL_CONVERT_NUMERIC:
+		case SQL_CONVERT_REAL:
+		case SQL_CONVERT_SMALLINT:
+		case SQL_CONVERT_TIME:
+		case SQL_CONVERT_TIMESTAMP:
+		case SQL_CONVERT_TINYINT:
+		case SQL_CONVERT_VARBINARY:
+		case SQL_CONVERT_VARCHAR:
+			DBGH(dbc, "requested: convert data-type support (0).");
+			INFOH(dbc, "no CONVERT scalar function support.");
+			*(SQLUINTEGER *)InfoValue = 0;
+			break;
+
 		default:
 			ERRH(dbc, "unknown InfoType: %u.", InfoType);
 			RET_HDIAGS(dbc, SQL_STATE_HYC00/*096?*/);
