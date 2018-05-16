@@ -1629,6 +1629,10 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 		goto end;
 	}
 
+	/* don't check for data compatiblity (since the check needs data fetched
+	 * by this function) */
+	stmt->sql2c_conversion = CONVERSION_SKIPPED;
+
 	/* fetch the results into the type_row array */
 	if (! SQL_SUCCEEDED(EsSQLFetch(stmt))) {
 		ERRH(stmt, "failed to fetch results.");

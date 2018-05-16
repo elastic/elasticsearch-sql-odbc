@@ -28,8 +28,9 @@
 /* values for SQL_ATTR_MAX_LENGTH statement attribute */
 #define ESODBC_UP_MAX_LENGTH		0 // USHORT_MAX
 #define ESODBC_LO_MAX_LENGTH		0
-/* prepare a STMT for a new SQL operation.
- * To be used with catalog functions, that can be all called with same stmt */
+/* Prepare a STMT for a new SQL operation.
+ * To be used with catalog functions, that can be all called with same stmt.
+ * After SQL_CLOSE, an applicatoin can re-open a cursor for same query. */
 #define ESODBC_SQL_CLOSE			((SQLUSMALLINT)-1)
 
 #define ESODBC_ALL_TABLES			"%"

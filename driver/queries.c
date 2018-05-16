@@ -189,6 +189,9 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 		recno ++;
 	}
 
+	/* new columsn attached, need to check compatiblity */
+	stmt->sql2c_conversion = CONVERSION_UNCHECKED;
+
 	return SQL_SUCCESS;
 }
 
@@ -566,6 +569,9 @@ SQLRETURN EsSQLBindCol(
 			TargetValue, SQL_IS_POINTER);
 	if (ret != SQL_SUCCESS)
 		goto copy_ret;
+
+	/* every binding resets conversion flag */
+	stmt->sql2c_conversion = CONVERSION_UNCHECKED;
 
 	return SQL_SUCCESS;
 
@@ -1190,16 +1196,14 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 	with_info = FALSE;
 	/* iterate over the contents of one table row */
 	for (i = 0; i < ard->count && UJIterArray(&iter_row, &obj); i ++) {
+		arec = &ard->recs[i]; /* access safe if 'i < ard->count' */
 		/* if record not bound skip it */
-		if (! REC_IS_BOUND(&ard->recs[i])) {
+		if (! REC_IS_BOUND(arec)) {
 			DBGH(stmt, "column #%d not bound, skipping it.", i + 1);
 			continue;
 		}
 
-		arec = get_record(ard, i + 1, FALSE);
-		irec = get_record(ird, i + 1, FALSE);
-		assert(arec);
-		assert(irec);
+		irec = &ird->recs[i]; /* access checked by UJIterArray() condition */
 
 		switch (UJGetType(obj)) {
 			default:
@@ -1210,14 +1214,8 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 
 			case UJT_Null:
 				DBGH(stmt, "value [%zd, %d] is NULL.", rowno, i + 1);
-#if 0
-				// FIXME: needed?
-				if (! arec->nullable) {
-					ERRH(stmt, "received a NULL for a not nullable val.");
-					RET_ROW_DIAG(SQL_STATE_HY003, "NULL value received for non"
-							" nullable data type", i + 1);
-				}
-#endif //0
+				/* Note: if ever causing an issue, check
+				 * arec->es_type->nullable before returning NULL to app */
 				ind_len = deferred_address(SQL_DESC_INDICATOR_PTR, pos, arec);
 				if (! ind_len) {
 					ERRH(stmt, "no buffer to signal NULL value.");
@@ -1269,7 +1267,7 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 				SET_ROW_DIAG(rowno, i + 1);
 			case SQL_SUCCESS:
 				break;
-			default:
+			default: /* error */
 				SET_ROW_DIAG(rowno, i + 1);
 				return ret;
 		}
@@ -1286,6 +1284,171 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 
 #undef RET_ROW_DIAG
 #undef SET_ROW_DIAG
+}
+
+/* implements the inverse of the matrix in:
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/converting-data-from-c-to-sql-data-types */
+static BOOL conv_supported(SQLSMALLINT sqltype, SQLSMALLINT ctype)
+{
+	switch (ctype) {
+		/* application will use implementation's type (irec's) */
+		case SQL_C_DEFAULT:
+		/* anything's convertible to [w]char & binary */
+		case SQL_C_CHAR:
+		case SQL_C_WCHAR:
+		case SQL_C_BINARY:
+			return TRUE;
+
+		/* GUID (outlier) is only convertible to same time in both sets */
+		case SQL_C_GUID:
+			return sqltype == SQL_GUID;
+	}
+
+	switch (sqltype) {
+		case SQL_CHAR:
+		case SQL_VARCHAR:
+		case SQL_LONGVARCHAR:
+		case SQL_WCHAR:
+		case SQL_WVARCHAR:
+		case SQL_WLONGVARCHAR:
+			break; /* it's not SQL_C_GUID, checked for above */
+
+		case SQL_DECIMAL:
+		case SQL_NUMERIC:
+		case SQL_SMALLINT:
+		case SQL_INTEGER:
+		case SQL_TINYINT:
+		case SQL_BIGINT:
+			switch (ctype) {
+				case SQL_C_TYPE_DATE:
+				case SQL_C_TYPE_TIME:
+				case SQL_C_TYPE_TIMESTAMP:
+				case SQL_C_GUID:
+					return FALSE;
+			}
+			break;
+
+		case SQL_BIT:
+		case SQL_REAL:
+		case SQL_FLOAT:
+		case SQL_DOUBLE:
+			switch (ctype) {
+				case SQL_C_TYPE_DATE:
+				case SQL_C_TYPE_TIME:
+				case SQL_C_TYPE_TIMESTAMP:
+				case SQL_C_GUID:
+
+				case SQL_C_INTERVAL_MONTH:
+				case SQL_C_INTERVAL_YEAR:
+				case SQL_C_INTERVAL_YEAR_TO_MONTH:
+				case SQL_C_INTERVAL_DAY:
+				case SQL_C_INTERVAL_HOUR:
+				case SQL_C_INTERVAL_MINUTE:
+				case SQL_C_INTERVAL_SECOND:
+				case SQL_C_INTERVAL_DAY_TO_HOUR:
+				case SQL_C_INTERVAL_DAY_TO_MINUTE:
+				case SQL_C_INTERVAL_DAY_TO_SECOND:
+				case SQL_C_INTERVAL_HOUR_TO_MINUTE:
+				case SQL_C_INTERVAL_HOUR_TO_SECOND:
+				case SQL_C_INTERVAL_MINUTE_TO_SECOND:
+					return FALSE;
+			}
+			break;
+
+		case SQL_BINARY:
+		case SQL_VARBINARY:
+		case SQL_LONGVARBINARY:
+			return FALSE; /* it's not SQL_C_BINARY, checked for above */
+
+
+		case SQL_TYPE_DATE:
+			switch (ctype) {
+				case SQL_C_TYPE_DATE:
+				case SQL_C_TYPE_TIMESTAMP:
+					return TRUE;
+			}
+			return FALSE;
+		case SQL_TYPE_TIME:
+			switch (ctype) {
+				case SQL_C_TYPE_TIME:
+				case SQL_C_TYPE_TIMESTAMP:
+					return TRUE;
+			}
+			return FALSE;
+		case SQL_TYPE_TIMESTAMP:
+			switch (ctype) {
+				case SQL_C_TYPE_DATE:
+				case SQL_C_TYPE_TIME:
+				case SQL_C_TYPE_TIMESTAMP:
+					return TRUE;
+			}
+			return FALSE;
+
+		case SQL_INTERVAL_MONTH:
+		case SQL_INTERVAL_YEAR:
+		case SQL_INTERVAL_YEAR_TO_MONTH:
+		case SQL_INTERVAL_DAY:
+		case SQL_INTERVAL_HOUR:
+		case SQL_INTERVAL_MINUTE:
+		case SQL_INTERVAL_SECOND:
+		case SQL_INTERVAL_DAY_TO_HOUR:
+		case SQL_INTERVAL_DAY_TO_MINUTE:
+		case SQL_INTERVAL_DAY_TO_SECOND:
+		case SQL_INTERVAL_HOUR_TO_MINUTE:
+		case SQL_INTERVAL_HOUR_TO_SECOND:
+		case SQL_INTERVAL_MINUTE_TO_SECOND:
+			switch (ctype) {
+				case SQL_C_BIT:
+				case SQL_C_TINYINT:
+				case SQL_C_STINYINT:
+				case SQL_C_UTINYINT:
+				case SQL_C_SBIGINT:
+				case SQL_C_UBIGINT:
+				case SQL_C_SHORT:
+				case SQL_C_SSHORT:
+				case SQL_C_USHORT:
+				case SQL_C_LONG:
+				case SQL_C_SLONG:
+				case SQL_C_ULONG:
+					return TRUE;
+			}
+			return FALSE;
+
+	}
+	return TRUE;
+}
+
+/* check if data types in returned columns are compabile with buffer types
+ * bound for those columns */
+static BOOL sql2c_convertible(esodbc_stmt_st *stmt)
+{
+	SQLSMALLINT i, min;
+	esodbc_desc_st *ard, *ird;
+	esodbc_rec_st* arec, *irec;
+
+	assert(stmt->hdr.dbc->es_types);
+	assert(STMT_HAS_RESULTSET(stmt));
+
+	ard = stmt->ard;
+	ird = stmt->ird;
+
+	min = ard->count < ird->count ? ard->count : ird->count;
+	for (i = 0; i < min; i ++) {
+		arec = &ard->recs[i];
+		if (! REC_IS_BOUND(arec)) {
+			/* skip not bound columns */
+			continue;
+		}
+		irec = &ird->recs[i];
+
+		if (! conv_supported(irec->es_type->c_concise_type, arec->type)) {
+			ERRH(stmt, "types not compatible on column %d: IRD: %d, "
+					"ARD: %d.", i, irec->es_type->c_concise_type, arec->type);
+			return FALSE;
+		}
+	}
+
+	return TRUE;
 }
 
 /*
@@ -1364,6 +1527,36 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 		}
 		ERRH(stmt, "no resultset available on statement.");
 		RET_HDIAGS(stmt, SQL_STATE_HY010);
+	}
+
+	/* Check if the data [type] stored in DB is compatiblie with the buffer
+	 * [type] the application provides. This test can only be done at
+	 * fetch-time, since the application can unbind/rebind columns at any time
+	 * (i.e. also in-between consecutive fetches). */
+	switch (stmt->sql2c_conversion) {
+		case CONVERSION_VIOLATION:
+			ERRH(stmt, "types compibility check had failed already.");
+			RET_HDIAGS(stmt, SQL_STATE_07006);
+			/* RET_ returns */
+
+		case CONVERSION_SKIPPED:
+			DBGH(stmt, "types compatibility skipped.");
+			/* check unnecessary (SYS TYPES, possiblity other metas) */
+			break;
+
+		case CONVERSION_UNCHECKED:
+			if (! sql2c_convertible(stmt)) {
+				stmt->sql2c_conversion = CONVERSION_VIOLATION;
+				ERRH(stmt, "types compibility check: failed!");
+				RET_HDIAGS(stmt, SQL_STATE_07006);
+			} else {
+				DBGH(stmt, "types compibility check: OK.");
+			}
+			stmt->sql2c_conversion = CONVERSION_SUPPORTED;
+			/* no break; */
+
+		default:
+			DBGH(stmt, "ES/app data/buffer types found compatible.");
 	}
 
 	DBGH(stmt, "(`%.*s`); cursor @ %zd / %zd.", stmt->sqllen,
