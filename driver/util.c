@@ -30,7 +30,7 @@ BOOL wstr2long(wstr_st *val, long *out)
 		return FALSE;
 
 	switch (val->str[0]) {
-		case '-':
+		case L'-':
 			negative = TRUE;
 			i ++;
 			break;
@@ -44,9 +44,9 @@ BOOL wstr2long(wstr_st *val, long *out)
 
 	for ( ; i < val->cnt; i ++) {
 		/* is it a number? */
-		if (val->str[i] < '0' || '9' < val->str[i])
+		if (val->str[i] < L'0' || L'9' < val->str[i])
 			return FALSE;
-		digit = val->str[i] - '0';
+		digit = val->str[i] - L'0';
 		/* would it overflow?*/
 		if (LONG_MAX - res < digit)
 			return FALSE;
