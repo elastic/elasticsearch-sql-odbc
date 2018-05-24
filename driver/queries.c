@@ -2054,8 +2054,8 @@ SQLRETURN EsSQLColAttributeW(
 				*(SQLWCHAR **)pCharAttr = MK_WPTR("");
 				*pcbCharAttr = 0;
 			} else {
-				return write_wptr(&stmt->hdr.diag, pcbCharAttr, wptr,
-						cbDescMax, pcbCharAttr);
+				return write_wptr(&stmt->hdr.diag, pCharAttr, wptr, cbDescMax,
+						pcbCharAttr);
 			}
 			break;
 
