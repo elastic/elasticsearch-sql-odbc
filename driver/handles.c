@@ -504,8 +504,7 @@ SQLRETURN EsSQLSetEnvAttr(SQLHENV EnvironmentHandle,
 	return SQL_SUCCESS;
 }
 
-SQLRETURN SQL_API EsSQLGetEnvAttr(SQLHENV EnvironmentHandle,
-		SQLINTEGER Attribute, 
+SQLRETURN EsSQLGetEnvAttr(SQLHENV EnvironmentHandle, SQLINTEGER Attribute,
 		_Out_writes_(_Inexpressible_(BufferLength)) SQLPOINTER Value,
 		SQLINTEGER BufferLength, _Out_opt_ SQLINTEGER *StringLength)
 {
