@@ -18,6 +18,7 @@
 #include <inttypes.h>
 #include <windows.h> /* WideCharToMultiByte() */
 
+#include "ujdecode.h"
 #include "timestamp.h"
 
 #include "queries.h"
@@ -48,6 +49,21 @@
 		(_tsp)->minute = (_tmp)->tm_min; \
 		(_tsp)->second = (_tmp)->tm_sec; \
 	} while (0);
+
+
+/* TODO: this is inefficient: add directly into ujson4c lib (as .size of
+ * ArrayItem struct, inc'd in arrayAddItem()) or local utils file. */
+static size_t UJArraySize(UJObject obj)
+{
+	UJObject _u;
+	size_t size = 0;
+	void *iter = UJBeginArray(obj);
+	if (iter) {
+		while (UJIterArray(&iter, &_u))
+			size ++;
+	}
+	return size;
+}
 
 
 void clear_resultset(esodbc_stmt_st *stmt)
