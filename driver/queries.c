@@ -229,13 +229,13 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
  * even if the call fails.
  * - parses it, preparing iterators for SQLFetch()'ing.
  */
-SQLRETURN attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
+SQLRETURN TEST_API attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 {
 	int unpacked;
 	UJObject obj, columns, rows, cursor;
 	const wchar_t *wcurs;
 	size_t eccnt;
-	wchar_t *keys[] = {
+	const wchar_t *keys[] = {
 		MK_WPTR(JSON_ANSWER_COLUMNS),
 		MK_WPTR(JSON_ANSWER_ROWS),
 		MK_WPTR(JSON_ANSWER_CURSOR)
@@ -338,7 +338,7 @@ SQLRETURN attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 /*
  * Parse an error and push it as statement diagnostic.
  */
-SQLRETURN attach_error(esodbc_stmt_st *stmt, char *buff, size_t blen)
+SQLRETURN TEST_API attach_error(esodbc_stmt_st *stmt, char *buff, size_t blen)
 {
 	UJObject obj, o_status, o_error, o_type, o_reason;
 	const wchar_t *wtype, *wreason;
