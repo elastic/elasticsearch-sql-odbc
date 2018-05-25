@@ -79,7 +79,7 @@ SQLRETURN EsSQLForeignKeysW(
 		_In_reads_opt_(cchFkTableName) SQLWCHAR*      szFkTableName,
 		SQLSMALLINT        cchFkTableName);
 
-SQLRETURN SQL_API EsSQLPrimaryKeysW(
+SQLRETURN EsSQLPrimaryKeysW(
 		SQLHSTMT           hstmt,
 		_In_reads_opt_(cchCatalogName) SQLWCHAR*    szCatalogName,
 		SQLSMALLINT        cchCatalogName,

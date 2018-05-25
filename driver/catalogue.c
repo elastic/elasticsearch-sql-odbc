@@ -488,7 +488,7 @@ SQLRETURN EsSQLForeignKeysW(
 	return SQL_SUCCESS;
 }
 
-SQLRETURN SQL_API EsSQLPrimaryKeysW(
+SQLRETURN EsSQLPrimaryKeysW(
 		SQLHSTMT           hstmt,
 		_In_reads_opt_(cchCatalogName) SQLWCHAR*    szCatalogName,
 		SQLSMALLINT        cchCatalogName,
