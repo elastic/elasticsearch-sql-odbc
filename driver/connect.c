@@ -1607,9 +1607,26 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 	}
 	assert(stmt);
 
-	if (! SQL_SUCCEEDED(EsSQLGetTypeInfoW(stmt, SQL_ALL_TYPES))) {
-		ERRH(stmt, "failed to query Elasticsearch.");
-		goto end;
+#ifdef TESTING
+	/* for testing cases with no ES server available, the connection needs to
+	 * be init'ed with ES types: the test suite passes a JSON answer of ES
+	 * types through the (otherwise) unused window handler pointer */
+	if (dbc->hwin) {
+		cstr_st *types_answer = (cstr_st *)dbc->hwin;
+		dbc->hwin = NULL;
+		if (! SQL_SUCCEEDED(attach_answer(stmt, types_answer->str,
+						types_answer->cnt))) {
+			ERRH(stmt, "failed to attach dummmy ES types answer");
+			goto end;
+		}
+	} else {
+#else /* TESTING */
+	if (TRUE) {
+#endif /* TESTING */
+		if (! SQL_SUCCEEDED(EsSQLGetTypeInfoW(stmt, SQL_ALL_TYPES))) {
+			ERRH(stmt, "failed to query Elasticsearch.");
+			goto end;
+		}
 	}
 
 	/* check that we have as many columns as members in target row struct */
@@ -1992,6 +2009,15 @@ SQLRETURN EsSQLDriverConnectW
 					return SQL_NO_DATA;
 			} while (! SQL_SUCCEEDED(do_connect(dbc, &attrs)));
 			break;
+
+#ifdef TESTING
+		case ESODBC_SQL_DRIVER_TEST:
+			/* abusing the window handler to pass type data for non-network
+			 * tests (see load_es_types()). */
+			assert(! dbc->hwin);
+			dbc->hwin = hwnd;
+			break;
+#endif /* TESTING */
 
 		default:
 			ERRH(dbc, "unknown driver completion mode: %d", fDriverCompletion);
