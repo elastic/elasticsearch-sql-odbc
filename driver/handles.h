@@ -9,8 +9,6 @@
 
 #include  <curl/curl.h>
 
-#include "ujdecode.h"
-
 #include "error.h"
 #include "defs.h"
 
@@ -447,21 +445,6 @@ SQLRETURN EsSQLSetDescRec(
 		(rec)->indicator_ptr != NULL || \
 		(rec)->octet_length_ptr != NULL)
 
-
-/* TODO: this is inefficient: add directly into ujson4c lib (as .size of
- * ArrayItem struct, inc'd in arrayAddItem()) or local utils file. Only added
- * here to be accessible with the statement resultset member. */
-static inline size_t UJArraySize(UJObject obj)
-{
-	UJObject _u; /* unused */
-	size_t size = 0;
-	void *iter = UJBeginArray(obj);
-	if (iter) {
-		while (UJIterArray(&iter, &_u))
-			size ++;
-	}
-	return size;
-}
 
 #endif /* __HANDLES_H__ */
 
