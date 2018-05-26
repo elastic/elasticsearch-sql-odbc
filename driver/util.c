@@ -58,9 +58,29 @@ BOOL wstr2long(wstr_st *val, long *out)
 }
 
 /*
+ * Trims leading and trailing WS of a wide string of 'chars' lenght.
+ * 0-terminator should not be counted (as it's a non-WS).
+ */
+const SQLWCHAR* trim_ws(const SQLWCHAR *wstr, size_t *chars)
+{
+	const SQLWCHAR *wend;
+	size_t cnt = *chars;
+
+	/* right trim */
+	for (wend = wstr + cnt; wstr < wend && iswspace(*wstr); wstr ++)
+		cnt --;
+
+	while ((0 < cnt) && iswspace(wstr[cnt - 1]))
+		cnt --;
+
+	*chars = cnt;
+	return wstr;
+}
+
+/*
  * Converts a wchar_t string to a C string for ANSI characters.
- * 'dst' should be as character-long as 'src', if 'src' is 0-terminated,
- * OR one character longer otherwise (for the 0-term).
+ * 'dst' should be at least as character-long as 'src', if 'src' is
+ * 0-terminated, OR one character longer otherwise (for the 0-term).
  * 'dst' will always be 0-term'd.
  * Returns negative if conversion fails, OR number of converted wchars,
  * including the 0-term.
@@ -69,7 +89,10 @@ BOOL wstr2long(wstr_st *val, long *out)
 int ansi_w2c(const SQLWCHAR *src, char *dst, size_t chars)
 {
 	int i = 0;
-	
+
+	if (chars < 1)
+		return -1;
+
 	do {
 		if (CHAR_MAX < src[i])
 			return -(i + 1);
@@ -78,7 +101,7 @@ int ansi_w2c(const SQLWCHAR *src, char *dst, size_t chars)
 
 	if (chars <= i) { /* equiv to: (src[i] != 0) */
 		/* loop stopped b/c of length -> src is not 0-term'd */
-		dst[i] = 0;
+		dst[i] = 0; /* chars + 1 <= [dst] */
 	}
 	return i + 1;
 }

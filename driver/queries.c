@@ -114,7 +114,7 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 	UJObject col_o, name_o, type_o;
 	wstr_st col_name, col_type;
 	size_t ncols, i;
-	wchar_t *keys[] = {
+	const wchar_t *keys[] = {
 		MK_WPTR(JSON_ANSWER_COL_NAME),
 		MK_WPTR(JSON_ANSWER_COL_TYPE)
 	};
@@ -337,11 +337,11 @@ SQLRETURN TEST_API attach_error(esodbc_stmt_st *stmt, char *buff, size_t blen)
 	size_t wbuflen = sizeof(wbuf)/sizeof(*wbuf);
 	int n;
 	void *state = NULL;
-	wchar_t *outer_keys[] = {
+	const wchar_t *outer_keys[] = {
 		MK_WPTR(JSON_ANSWER_ERROR),
 		MK_WPTR(JSON_ANSWER_STATUS)
 	};
-	wchar_t *err_keys[] = {
+	const wchar_t *err_keys[] = {
 		MK_WPTR(JSON_ANSWER_ERR_TYPE),
 		MK_WPTR(JSON_ANSWER_ERR_REASON)
 	};
@@ -1026,7 +1026,7 @@ static SQLRETURN wstr_to_wstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	return SQL_SUCCESS;
 }
 
-
+/* function expects chars not to count the 0-term */
 static BOOL wstr_to_timestamp_struct(const wchar_t *wstr, size_t chars,
 		TIMESTAMP_STRUCT *tss)
 {
@@ -1037,11 +1037,15 @@ static BOOL wstr_to_timestamp_struct(const wchar_t *wstr, size_t chars,
 
 	DBG("converting ISO 8601 `" LWPDL "` to timestamp.", chars, wstr);
 
-	len = (int)(chars < sizeof(buff) - 1 ? chars : sizeof(buff) - 1);
-	len = ansi_w2c(wstr, buff, len);
+	if (sizeof(buff) - 1 < chars) {
+		ERR("`" LWPDL "` not a TIMESTAMP.", chars, wstr);
+		return FALSE;
+	}
+	len = ansi_w2c(wstr, buff, chars);
+	/* len counts the 0-term */
 	if (len <= 0 || timestamp_parse(buff, len - 1, &tsp) ||
 			(! timestamp_to_tm_local(&tsp, &tmp))) {
-		ERR("data `" LWPDL "` not an ANSI ISO 8601 format.", chars,wstr);
+		ERR("data `" LWPDL "` not an ANSI ISO 8601 format.", chars, wstr);
 		return FALSE;
 	}
 	TM_TO_TIMESTAMP_STRUCT(&tmp, tss);
@@ -1061,18 +1065,81 @@ static BOOL wstr_to_timestamp_struct(const wchar_t *wstr, size_t chars,
  */
 static SQLRETURN wstr_to_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		void *data_ptr, SQLLEN *octet_len_ptr,
-		const wchar_t *wstr, size_t chars)
+		const wchar_t *wstr, size_t chars_0)
 {
+	size_t cnt = chars_0 - 1;
 	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
 	TIMESTAMP_STRUCT *tss = (TIMESTAMP_STRUCT *)data_ptr;
+	SQLWCHAR buff[] = MK_WPTR("1000-10-10T10:10:10.1001001Z");
 
 	if (octet_len_ptr) {
 		*octet_len_ptr = sizeof(*tss);
 	}
 
 	if (data_ptr) {
-		if (! wstr_to_timestamp_struct(wstr, chars, tss)) {
-			RET_HDIAGS(stmt, SQL_STATE_07006);
+		/* right & left trim the data before attempting conversion */
+		wstr = trim_ws(wstr, &cnt);
+
+		switch (irec->concise_type) {
+			case SQL_TYPE_TIMESTAMP:
+				if (! wstr_to_timestamp_struct(wstr, cnt, tss)) {
+					RET_HDIAGS(stmt, SQL_STATE_22018);
+				}
+				break;
+			case SQL_VARCHAR:
+				if (sizeof(ESODBC_TIME_TEMPLATE) - 1 <= cnt) {
+					if (! wstr_to_timestamp_struct(wstr, cnt, tss)) {
+						RET_HDIAGS(stmt, SQL_STATE_22018);
+					}
+				} else if (cnt <= sizeof(ESODBC_DATE_TEMPLATE) - 1) {
+					/* try parse as date */
+					/* peform a quick test first */
+					if (cnt <= 4 || wstr[4] != L'-') { /* template */
+						ERRH(stmt, "`" LWPDL "` not a DATE.", cnt, wstr);
+						RET_HDIAGS(stmt, SQL_STATE_22018);
+					}
+					/* copy active value in template and parse it as TS */
+					/* copying is safe due to branch condition */
+					wcsncpy(buff, wstr, cnt);
+					if (! wstr_to_timestamp_struct(buff,
+								sizeof(buff)/sizeof(buff[0]) - 1, tss)) {
+						RET_HDIAGS(stmt, SQL_STATE_22018);
+					} else {
+						tss->hour = tss->minute = tss->second = 0;
+						tss->fraction = 0;
+					}
+				} else {
+					/* try parse as time */
+					/* peform a quick test first */
+					if (wstr[2] != L':') { /* [date template] < cnt */
+						ERRH(stmt, "`" LWPDL "` not a TIME.", cnt, wstr);
+						RET_HDIAGS(stmt, SQL_STATE_22018);
+					}
+					/* copy active value in template and parse it as TS */
+					/* copying is safe due to branch of 1st if() */
+					wcsncpy(buff + sizeof(ESODBC_DATE_TEMPLATE) - 1, wstr,
+							cnt);
+					buff[sizeof(ESODBC_DATE_TEMPLATE) - 1 + cnt] = L'Z';
+					if (! wstr_to_timestamp_struct(buff,
+								sizeof(ESODBC_DATE_TEMPLATE) + cnt, tss)) {
+						RET_HDIAGS(stmt, SQL_STATE_22018);
+					} else {
+						tss->year = tss->month = tss->day = 0;
+					}
+				}
+				break;
+
+			case SQL_CHAR:
+			case SQL_LONGVARCHAR:
+			case SQL_WCHAR:
+			case SQL_WLONGVARCHAR:
+			case SQL_TYPE_DATE:
+			case SQL_TYPE_TIME:
+				BUGH(stmt, "unexpected (but permitted) SQL type.");
+				RET_HDIAGS(stmt, SQL_STATE_HY004);
+			default:
+				BUGH(stmt, "uncought invalid conversion.");
+				RET_HDIAGS(stmt, SQL_STATE_07006);
 		}
 	} else {
 		DBGH(stmt, "REC@0x%p, NULL data_ptr", arec);
@@ -1086,7 +1153,7 @@ static SQLRETURN wstr_to_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
  */
 static SQLRETURN wstr_to_date(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		void *data_ptr, SQLLEN *octet_len_ptr,
-		const wchar_t *wstr, size_t chars)
+		const wchar_t *wstr, size_t chars_0)
 {
 	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
 	DATE_STRUCT *ds = (DATE_STRUCT *)data_ptr;
@@ -1097,7 +1164,7 @@ static SQLRETURN wstr_to_date(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	}
 
 	if (data_ptr) {
-		if (! wstr_to_timestamp_struct(wstr, chars, &tss))
+		if (! wstr_to_timestamp_struct(wstr, chars_0 - 1, &tss))
 			RET_HDIAGS(stmt, SQL_STATE_07006);
 		ds->year = tss.year;
 		ds->month = tss.month;
@@ -1302,7 +1369,7 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 #undef SET_ROW_DIAG
 }
 
-/* implements the inverse of the matrix in:
+/* implements the rotation of the matrix in:
  * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/converting-data-from-c-to-sql-data-types */
 static BOOL conv_supported(SQLSMALLINT sqltype, SQLSMALLINT ctype)
 {
@@ -1457,7 +1524,7 @@ static BOOL sql2c_convertible(esodbc_stmt_st *stmt)
 		}
 		irec = &ird->recs[i];
 
-		if (! conv_supported(irec->es_type->c_concise_type, arec->type)) {
+		if (! conv_supported(irec->concise_type, arec->type)) {
 			ERRH(stmt, "types not compatible on column %d: IRD: %d, "
 					"ARD: %d.", i, irec->es_type->c_concise_type, arec->type);
 			return FALSE;
