@@ -81,6 +81,11 @@ typedef struct cstr {
 } cstr_st;
 
 /*
+ * Trims leading and trailing WS of a wide string of 'chars' lenght.
+ * 0-terminator should not be counted (as it's a non-WS).
+ */
+const SQLWCHAR* trim_ws(const SQLWCHAR *wstr, size_t *chars);
+/*
  * Copy converted strings from SQLWCHAR to char, for ANSI strings.
  */
 int ansi_w2c(const SQLWCHAR *src, char *dst, size_t chars);
@@ -112,10 +117,14 @@ typedef struct wstr {
 } wstr_st;
 
 /*
- * Turn a static C string t a wstr_st.
+ * Turns a static C string into a wstr_st.
  */
-#define MK_WSTR(_s) \
+#ifndef __cplusplus /* no MSVC support for compound literals with /TP */
+#define MK_WSTR(_s)		\
 	((wstr_st){.str = MK_WPTR(_s), .cnt = sizeof(_s) - 1})
+#else /* !__cplusplus */
+#define WSTR_INIT(_s)	{MK_WPTR(_s), sizeof(_s) - 1}
+#endif /* !__cplusplus */
 /*
  * Test equality of two wstr_st objects.
  */

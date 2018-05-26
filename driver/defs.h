@@ -300,7 +300,10 @@
 /*
  * ISO8601 template ('yyyy-mm-ddThh:mm:ss.sss+hh:mm')
  */
-#define ESODBC_ISO8601_TEMPLATE		"yyyy-mm-ddThh:mm:ss.sssZ"
+#define ESODBC_ISO8601_TEMPLATE		"yyyy-mm-ddThh:mm:ss.sssssssZ"
+/* https://docs.microsoft.com/en-us/sql/relational-databases/native-client-odbc-date-time/data-type-support-for-odbc-date-and-time-improvements */
+#define ESODBC_DATE_TEMPLATE		"yyyy-mm-ddT"
+#define ESODBC_TIME_TEMPLATE		"hh:mm:ss.9999999"
 
 /*
  * ES-to-C-SQL mappings
