@@ -1062,10 +1062,14 @@ static BOOL wstr_to_timestamp_struct(const wchar_t *wstr, size_t chars,
 
 /*
  * -> SQL_C_TYPE_TIMESTAMP
+ *
+ * Conversts an ES/SQL 'date' or a text representation of a
+ * timestamp/date/time value into a TIMESTAMP_STRUCT (indicates the detected
+ * input format into the "format" parameter).
  */
 static SQLRETURN wstr_to_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		void *data_ptr, SQLLEN *octet_len_ptr,
-		const wchar_t *wstr, size_t chars_0)
+		const wchar_t *wstr, size_t chars_0, SQLSMALLINT *format)
 {
 	size_t cnt = chars_0 - 1;
 	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
@@ -1085,47 +1089,57 @@ static SQLRETURN wstr_to_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
 				if (! wstr_to_timestamp_struct(wstr, cnt, tss)) {
 					RET_HDIAGS(stmt, SQL_STATE_22018);
 				}
+				if (format) {
+					*format = SQL_TYPE_TIMESTAMP;
+				}
 				break;
 			case SQL_VARCHAR:
-				if (sizeof(ESODBC_TIME_TEMPLATE) - 1 <= cnt) {
+				if (sizeof(ESODBC_TIME_TEMPLATE) - 1 < cnt) {
+					/* longer than a date-value -> try a timestamp */
 					if (! wstr_to_timestamp_struct(wstr, cnt, tss)) {
 						RET_HDIAGS(stmt, SQL_STATE_22018);
 					}
-				} else if (cnt <= sizeof(ESODBC_DATE_TEMPLATE) - 1) {
-					/* try parse as date */
-					/* peform a quick test first */
-					if (cnt <= 4 || wstr[4] != L'-') { /* template */
-						ERRH(stmt, "`" LWPDL "` not a DATE.", cnt, wstr);
-						RET_HDIAGS(stmt, SQL_STATE_22018);
+					if (format) {
+						*format = SQL_TYPE_TIMESTAMP;
 					}
+				} else if (/*hh:mm:ss*/8 <= cnt && wstr[2] == L':' &&
+						wstr[5] == L':') { /* could this be a time-val? */
 					/* copy active value in template and parse it as TS */
-					/* copying is safe due to branch condition */
+					/* copy is safe: cnt <= [time template] < [buff] */
+					wcsncpy(buff + sizeof(ESODBC_DATE_TEMPLATE) - 1, wstr,
+							cnt);
+					/* there could be a varying number of fractional digits */
+					buff[sizeof(ESODBC_DATE_TEMPLATE) - 1 + cnt] = L'Z';
+					if (! wstr_to_timestamp_struct(buff,
+								sizeof(ESODBC_DATE_TEMPLATE) + cnt, tss)) {
+						ERRH(stmt, "`" LWPDL "` not a TIME.", cnt, wstr);
+						RET_HDIAGS(stmt, SQL_STATE_22018);
+					} else {
+						tss->year = tss->month = tss->day = 0;
+						if (format) {
+							*format = SQL_TYPE_TIME;
+						}
+					}
+				} else if (/*yyyy-mm-dd*/10 <= cnt && wstr[4] == L'-' &&
+						wstr[7] == L'-') { /* could this be a date-val? */
+					/* copy active value in template and parse it as TS */
+					/* copy is safe: cnt <= [time template] < [buff] */
 					wcsncpy(buff, wstr, cnt);
 					if (! wstr_to_timestamp_struct(buff,
 								sizeof(buff)/sizeof(buff[0]) - 1, tss)) {
+						ERRH(stmt, "`" LWPDL "` not a DATE.", cnt, wstr);
 						RET_HDIAGS(stmt, SQL_STATE_22018);
 					} else {
 						tss->hour = tss->minute = tss->second = 0;
 						tss->fraction = 0;
+						if (format) {
+							*format = SQL_TYPE_DATE;
+						}
 					}
 				} else {
-					/* try parse as time */
-					/* peform a quick test first */
-					if (wstr[2] != L':') { /* [date template] < cnt */
-						ERRH(stmt, "`" LWPDL "` not a TIME.", cnt, wstr);
-						RET_HDIAGS(stmt, SQL_STATE_22018);
-					}
-					/* copy active value in template and parse it as TS */
-					/* copying is safe due to branch of 1st if() */
-					wcsncpy(buff + sizeof(ESODBC_DATE_TEMPLATE) - 1, wstr,
-							cnt);
-					buff[sizeof(ESODBC_DATE_TEMPLATE) - 1 + cnt] = L'Z';
-					if (! wstr_to_timestamp_struct(buff,
-								sizeof(ESODBC_DATE_TEMPLATE) + cnt, tss)) {
-						RET_HDIAGS(stmt, SQL_STATE_22018);
-					} else {
-						tss->year = tss->month = tss->day = 0;
-					}
+					ERRH(stmt, "`" LWPDL "` not a DATE/TIME/Timestamp.", cnt,
+							wstr);
+					RET_HDIAGS(stmt, SQL_STATE_22018);
 				}
 				break;
 
@@ -1158,17 +1172,71 @@ static SQLRETURN wstr_to_date(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
 	DATE_STRUCT *ds = (DATE_STRUCT *)data_ptr;
 	TIMESTAMP_STRUCT tss;
+	SQLRETURN ret;
+	SQLSMALLINT fmt;
 
 	if (octet_len_ptr) {
 		*octet_len_ptr = sizeof(*ds);
 	}
 
 	if (data_ptr) {
-		if (! wstr_to_timestamp_struct(wstr, chars_0 - 1, &tss))
-			RET_HDIAGS(stmt, SQL_STATE_07006);
+		ret = wstr_to_timestamp(arec, irec, &tss, NULL, wstr, chars_0, &fmt);
+		if (! SQL_SUCCEEDED(ret)) {
+			return ret;
+		}
+		if (fmt == SQL_TYPE_TIME) {
+			/* it's a time-value */
+			RET_HDIAGS(stmt, SQL_STATE_22018);
+		}
 		ds->year = tss.year;
 		ds->month = tss.month;
 		ds->day = tss.day;
+		if (tss.hour || tss.minute || tss.second || tss.fraction) {
+			/* value's truncated */
+			RET_HDIAGS(stmt, SQL_STATE_01S07);
+		}
+	} else {
+		DBGH(stmt, "REC@0x%p, NULL data_ptr", arec);
+	}
+
+	return SQL_SUCCESS;
+}
+
+/*
+ * -> SQL_C_TYPE_TIME
+ */
+static SQLRETURN wstr_to_time(esodbc_rec_st *arec, esodbc_rec_st *irec,
+		void *data_ptr, SQLLEN *octet_len_ptr,
+		const wchar_t *wstr, size_t chars_0)
+{
+	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
+	TIME_STRUCT *ts = (TIME_STRUCT *)data_ptr;
+	TIMESTAMP_STRUCT tss;
+	SQLRETURN ret;
+	SQLSMALLINT fmt;
+
+	if (octet_len_ptr) {
+		*octet_len_ptr = sizeof(*ts);
+	}
+
+	if (data_ptr) {
+		ret = wstr_to_timestamp(arec, irec, &tss, NULL, wstr, chars_0, &fmt);
+		if (! SQL_SUCCEEDED(ret)) {
+			return ret;
+		}
+		/* need to differentiate between:
+		 * - 1234-12-34T00:00:00Z : valid and
+		 * - 1234-12-34 : invalid */
+		if (fmt == SQL_TYPE_DATE) {
+			RET_HDIAGS(stmt, SQL_STATE_22018);
+		}
+		ts->hour = tss.hour;
+		ts->minute = tss.minute;
+		ts->second = tss.second;
+		if (tss.fraction) {
+			/* value's truncated */
+			RET_HDIAGS(stmt, SQL_STATE_01S07);
+		}
 	} else {
 		DBGH(stmt, "REC@0x%p, NULL data_ptr", arec);
 	}
@@ -1210,9 +1278,12 @@ static SQLRETURN copy_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 					wstr, chars_0);
 		case SQL_C_TYPE_TIMESTAMP:
 			return wstr_to_timestamp(arec, irec, data_ptr, octet_len_ptr,
-					wstr, chars_0);
+					wstr, chars_0, NULL);
 		case SQL_C_TYPE_DATE:
 			return wstr_to_date(arec, irec, data_ptr, octet_len_ptr,
+					wstr, chars_0);
+		case SQL_C_TYPE_TIME:
+			return wstr_to_time(arec, irec, data_ptr, octet_len_ptr,
 					wstr, chars_0);
 
 		default:
