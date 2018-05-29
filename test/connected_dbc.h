@@ -29,6 +29,8 @@ class ConnectedDBC {
 
   ConnectedDBC();
   virtual ~ConnectedDBC();
+
+  void assertState(const SQLWCHAR *state);
 };
 
 #endif /* __CONNECTED_DBC_H__ */

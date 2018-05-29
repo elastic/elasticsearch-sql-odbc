@@ -1,11 +1,12 @@
 
-
 #include <gtest/gtest.h>
 #include "connected_dbc.h"
 
 #include <string.h>
 
-#define SQL /* placeholder; SQL is attached just for debugging */
+/* placeholders; will be undef'd and redef'd */
+#define SQL_VAL
+#define SQL /* attached for troubleshooting purposes */
 
 namespace test {
 
@@ -46,17 +47,18 @@ class ConvertSQL2C_Timestamp : public ::testing::Test, public ConnectedDBC {
 /* ES/SQL 'date' is actually 'timestamp' */
 TEST_F(ConvertSQL2C_Timestamp, Timestamp2Timestamp_noTruncate) {
 
+#undef SQL_VAL
 #undef SQL
-#define SQL "CAST(2345-01-23T12:34:56.789Z)"
+#define SQL_VAL   "2345-01-23T12:34:56.789Z"
+#define SQL   "CAST(" SQL_VAL " AS DATE)"
 
-  const SQLWCHAR *sql = MK_WPTR(SQL);
   const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"" SQL "\", \"type\": \"date\"}\
   ],\
   \"rows\": [\
-    [\"2345-01-23T12:34:56.789Z\"]\
+    [\"" SQL_VAL "\"]\
   ]\
 }\
 ";
@@ -78,17 +80,18 @@ TEST_F(ConvertSQL2C_Timestamp, Timestamp2Timestamp_noTruncate) {
 
 TEST_F(ConvertSQL2C_Timestamp, Timestamp2Timestamp_trimming) {
 
+#undef SQL_VAL
 #undef SQL
-#define SQL "CAST(   2345-01-23T12:34:56.789Z  )"
+#define SQL_VAL "   2345-01-23T12:34:56.789Z  "
+#define SQL   "CAST(" SQL_VAL " AS DATE)"
 
-  const SQLWCHAR *sql = MK_WPTR(SQL);
   const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"" SQL "\", \"type\": \"date\"}\
   ],\
   \"rows\": [\
-    [\"   2345-01-23T12:34:56.789Z  \"]\
+    [\"" SQL_VAL "\"]\
   ]\
 }\
 ";
@@ -110,17 +113,18 @@ TEST_F(ConvertSQL2C_Timestamp, Timestamp2Timestamp_trimming) {
 
 TEST_F(ConvertSQL2C_Timestamp, Date2Timestamp) {
 
+#undef SQL_VAL
 #undef SQL
-#define SQL "CAST(2345-01-23T)"
+#define SQL_VAL "2345-01-23T"
+#define SQL   "CAST(" SQL_VAL " AS TEXT)"
 
-  const SQLWCHAR *sql = MK_WPTR(SQL);
   const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"" SQL "\", \"type\": \"text\"}\
   ],\
   \"rows\": [\
-    [\"2345-01-23T\"]\
+    [\"" SQL_VAL "\"]\
   ]\
 }\
 ";
@@ -142,17 +146,18 @@ TEST_F(ConvertSQL2C_Timestamp, Date2Timestamp) {
 
 TEST_F(ConvertSQL2C_Timestamp, Time2Timestamp) {
 
+#undef SQL_VAL
 #undef SQL
-#define SQL "CAST(10:10:10.1010)"
+#define SQL_VAL "10:10:10.1010"
+#define SQL   "CAST(" SQL_VAL " AS TEXT)"
 
-  const SQLWCHAR *sql = MK_WPTR(SQL);
   const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"" SQL "\", \"type\": \"text\"}\
   ],\
   \"rows\": [\
-    [\"10:10:10.1010\"]\
+    [\"" SQL_VAL "\"]\
   ]\
 }\
 ";
@@ -174,17 +179,18 @@ TEST_F(ConvertSQL2C_Timestamp, Time2Timestamp) {
 
 TEST_F(ConvertSQL2C_Timestamp, Time2Timestamp_trimming) {
 
+#undef SQL_VAL
 #undef SQL
-#define SQL "CAST(  10:10:10.1010   )"
+#define SQL_VAL "  10:10:10.1010   "
+#define SQL   "CAST(" SQL_VAL " AS TEXT)"
 
-  const SQLWCHAR *sql = MK_WPTR(SQL);
   const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"" SQL "\", \"type\": \"text\"}\
   ],\
   \"rows\": [\
-    [\"  10:10:10.1010   \"]\
+    [\"" SQL_VAL "\"]\
   ]\
 }\
 ";
@@ -206,17 +212,18 @@ TEST_F(ConvertSQL2C_Timestamp, Time2Timestamp_trimming) {
 
 TEST_F(ConvertSQL2C_Timestamp, String2Timestamp_invalidFormat_22018) {
 
+#undef SQL_VAL
 #undef SQL
-#define SQL "CAST(invalid 2345-01-23T12:34:56.789Z)"
+#define SQL_VAL "invalid 2345-01-23T12:34:56.789Z"
+#define SQL   "CAST(" SQL_VAL " AS DATE)"
 
-  const SQLWCHAR *sql = MK_WPTR(SQL);
   const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"" SQL "\", \"type\": \"date\"}\
   ],\
   \"rows\": [\
-    [\"invalid 2345-01-23T12:34:56.789Z\"]\
+    [\"" SQL_VAL "\"]\
   ]\
 }\
 ";
@@ -224,29 +231,23 @@ TEST_F(ConvertSQL2C_Timestamp, String2Timestamp_invalidFormat_22018) {
 
   ret = SQLFetch(stmt);
   ASSERT_FALSE(SQL_SUCCEEDED(ret));
-
-  SQLWCHAR state[SQL_SQLSTATE_SIZE+1] = {L'\0'};
-  SQLSMALLINT len;
-  ret = SQLGetDiagField(SQL_HANDLE_STMT, stmt, 1, SQL_DIAG_SQLSTATE, state,
-      (SQL_SQLSTATE_SIZE + 1) * sizeof(state[0]), &len);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-  ASSERT_EQ(len, SQL_SQLSTATE_SIZE * sizeof(state[0]));
-  ASSERT_STREQ(state, L"22018");
+  assertState(L"22018");
 }
 
 TEST_F(ConvertSQL2C_Timestamp, Integer2Timestamp_violation_07006) {
 
+#undef SQL_VAL
 #undef SQL
-#define SQL "select 1"
+#define SQL_VAL "1"
+#define SQL   "select " SQL_VAL
 
-  const SQLWCHAR *sql = MK_WPTR(SQL);
   const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"" SQL "\", \"type\": \"integer\"}\
   ],\
   \"rows\": [\
-    [1]\
+    [" SQL_VAL "]\
   ]\
 }\
 ";
@@ -254,14 +255,7 @@ TEST_F(ConvertSQL2C_Timestamp, Integer2Timestamp_violation_07006) {
 
   ret = SQLFetch(stmt);
   ASSERT_FALSE(SQL_SUCCEEDED(ret));
-
-  SQLWCHAR state[SQL_SQLSTATE_SIZE+1] = {L'\0'};
-  SQLSMALLINT len;
-  ret = SQLGetDiagField(SQL_HANDLE_STMT, stmt, 1, SQL_DIAG_SQLSTATE, state,
-      (SQL_SQLSTATE_SIZE + 1) * sizeof(state[0]), &len);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-  ASSERT_EQ(len, SQL_SQLSTATE_SIZE * sizeof(state[0]));
-  ASSERT_STREQ(state, L"07006");
+  assertState(L"07006");
 }
 
 

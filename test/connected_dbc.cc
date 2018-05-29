@@ -1,5 +1,6 @@
 
 #include <assert.h>
+#include <gtest/gtest.h>
 
 extern "C" {
 #include "util.h"
@@ -123,4 +124,17 @@ ConnectedDBC::~ConnectedDBC() {
 
   ret = SQLFreeHandle(SQL_HANDLE_ENV, env);
   assert(SQL_SUCCEEDED(ret));
+}
+
+void ConnectedDBC::assertState(const SQLWCHAR *state) {
+  SQLRETURN ret;
+  SQLWCHAR buff[SQL_SQLSTATE_SIZE+1] = {L'\0'};
+  SQLSMALLINT len;
+
+  ret = SQLGetDiagField(SQL_HANDLE_STMT, stmt, 1, SQL_DIAG_SQLSTATE, buff,
+      (SQL_SQLSTATE_SIZE + 1) * sizeof(buff[0]), &len);
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+  ASSERT_EQ(len, SQL_SQLSTATE_SIZE * sizeof(buff[0]));
+  ASSERT_STREQ(buff, state);
+
 }
