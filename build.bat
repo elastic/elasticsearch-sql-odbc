@@ -211,41 +211,43 @@ REM USAGE function: output a usage message
 	echo Usage: %1 [argument(s^)]
 	echo.
 	echo The following arguments are supported:
-	echo       help^|*?*  : output this message and exit.
-	echo       32^|64     : set the architecture to x86 or x64, respectively;
-	echo                   if none is specified, autodetection is attempted.
-	echo       setup     : invoke MSVC's build environment setup script before
-	echo                   building (requires 2017 version or later^).
-	echo       clean     : remove all the files in the build dir.
-	echo       proper    : clean both the build and libs dir and exit.
-	echo       fetch     : fetch, patch and build the dependency libs.
-	echo       nobuild   : skip project building (the default is to build^).
-	echo       exports   : dump the exported symbols in the DLL after - and
-	echo                   only if - building the driver.
-	echo       all       : build all artifacts (driver and tests^).
-	echo       suites    : build and run directly each test.
-	echo       test      : run all the defined tests: invoke the 'all' build,
-	echo                   then the 'tests' build.
-	echo       copy      : copy the driver into the test dir (%INSTALL_DIR%^).
-	echo       regadd    : register the driver into the registry;
-	echo                   (needs Administrator privileges^).
-	echo       regdel    : deregister the driver from the registry;
-	echo                   (needs Administrator privileges^).
-	echo       clearlogs : clear the logs (in: %LOGGING_DIR%^).
+	echo    help^|*?*  : output this message and exit.
+	echo    32^|64     : set the architecture to x86 or x64, respectively;
+	echo                 if none is specified, autodetection is attempted.
+	echo    setup     : invoke MSVC's build environment setup script before
+	echo                building (requires 2017 version or later^).
+	echo    clean     : remove all the files in the build dir.
+	echo    proper    : clean both the build and libs dir and exit.
+	echo    fetch     : fetch, patch and build the dependency libs.
+	echo    nobuild   : skip project building (the default is to build^).
+	echo    exports   : dump the exported symbols in the DLL after - and
+	echo                only if - building the driver.
+	echo    all       : build all artifacts (driver and tests^).
+	echo    test      : run all the defined tests: invoke the 'all' build,
+	echo                then the 'tests' build.
+	echo    suites    : compile and run each test individually, stopping at the
+	echo                first failure; the 'all' or 'test' targets must be
+	echo                built beforehand.
+	echo    copy      : copy the driver into the test dir (%INSTALL_DIR%^).
+	echo    regadd    : register the driver into the registry;
+	echo                (needs Administrator privileges^).
+	echo    regdel    : deregister the driver from the registry;
+	echo                (needs Administrator privileges^).
+	echo    clearlogs : clear the logs (in: %LOGGING_DIR%^).
 	echo.
 	echo Multiple arguments can be used concurrently.
 	echo Invoked with no arguments, the script will only initiate a build.
 	echo Example:^> %1 setup 32 fetch
 	echo.
 	echo List of read environment variables:
-	echo       BUILD_DIR          : folder path to build the driver into;
-	echo                            currently set to: `%BUILD_DIR%`.
-	echo       ESODBC_LOG_DIR     : folder path to write logging files into;
-	echo                            currently set to: `%ESODBC_LOG_DIR%`.
-	echo       INSTALL_DIR        : folder path to install the driver into;
-	echo                            currently set to: `%INSTALL_DIR%`.
-	echo       CMAKE              : cmake executable to use (if not in path^);
-	echo                            currently set to: `%CMAKE%`.
+	echo    BUILD_DIR          : folder path to build the driver into;
+	echo                         currently set to: `%BUILD_DIR%`.
+	echo    ESODBC_LOG_DIR     : folder path to write logging files into;
+	echo                         currently set to: `%ESODBC_LOG_DIR%`.
+	echo    INSTALL_DIR        : folder path to install the driver into;
+	echo                         currently set to: `%INSTALL_DIR%`.
+	echo    CMAKE              : cmake executable to use (if not in path^);
+	echo                         currently set to: `%CMAKE%`.
 	echo.
 
 	goto:eof
@@ -362,11 +364,17 @@ REM BUILD function: build various targets
 		MSBuild ALL_BUILD.vcxproj
 	) else if /i not [%ARG:suites=%] == [%ARG%] (
 		echo Building the test projects only.
-		for /f %%i in ("test\test_*.vcxproj") do (
+		for %%i in (test\test_*.vcxproj) do (
 			MSBuild %%~fi
 			if not ERRORLEVEL 1 (
-				echo test\Debug\%%~ni.exe
+				echo Running test\Debug\%%~ni.exe :
 				test\Debug\%%~ni.exe
+				if ERRORLEVEL 1 (
+					goto:eof
+				)
+			) else (
+				echo Building %%~fi failed.
+				goto:eof
 			)
 		)
 	) else (
