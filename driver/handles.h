@@ -311,7 +311,8 @@ typedef struct struct_stmt {
 	resultset_st rset;
 	/* SQL data types conversion to SQL C compatibility (IRD.SQL -> ARD.C) */
 	enum {
-		CONVERSION_VIOLATION = -1,
+		CONVERSION_VIOLATION = -2, /* specs disallowed */
+		CONVERSION_UNSUPPORTED, /* ES/driver not supported */
 		CONVERSION_UNCHECKED, /* 0 */
 		CONVERSION_SUPPORTED,
 		CONVERSION_SKIPPED, /* used with driver's meta queries */
