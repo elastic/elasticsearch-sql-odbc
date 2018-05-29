@@ -1287,6 +1287,7 @@ static SQLRETURN copy_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		case SQL_C_WCHAR:
 			return wstr_to_wstr(arec, irec, data_ptr, octet_len_ptr,
 					wstr, chars_0);
+
 		case SQL_C_TYPE_TIMESTAMP:
 			return wstr_to_timestamp(arec, irec, data_ptr, octet_len_ptr,
 					wstr, chars_0, NULL);
@@ -1451,9 +1452,35 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 #undef SET_ROW_DIAG
 }
 
+static BOOL conv_supported(SQLSMALLINT sqltype, SQLSMALLINT ctype)
+{
+	switch (ctype) {
+		case SQL_C_GUID:
+
+		case SQL_C_INTERVAL_DAY:
+		case SQL_C_INTERVAL_HOUR:
+		case SQL_C_INTERVAL_MINUTE:
+		case SQL_C_INTERVAL_SECOND:
+		case SQL_C_INTERVAL_DAY_TO_HOUR:
+		case SQL_C_INTERVAL_DAY_TO_MINUTE:
+		case SQL_C_INTERVAL_DAY_TO_SECOND:
+		case SQL_C_INTERVAL_HOUR_TO_MINUTE:
+		case SQL_C_INTERVAL_HOUR_TO_SECOND:
+		case SQL_C_INTERVAL_MINUTE_TO_SECOND:
+		case SQL_C_INTERVAL_MONTH:
+		case SQL_C_INTERVAL_YEAR:
+		case SQL_C_INTERVAL_YEAR_TO_MONTH:
+
+		// case SQL_C_TYPE_TIMESTAMP_WITH_TIMEZONE:
+		// case SQL_C_TYPE_TIME_WITH_TIMEZONE:
+			return FALSE;
+	}
+	return TRUE;
+}
+
 /* implements the rotation of the matrix in:
  * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/converting-data-from-c-to-sql-data-types */
-static BOOL conv_supported(SQLSMALLINT sqltype, SQLSMALLINT ctype)
+static BOOL conv_allowed(SQLSMALLINT sqltype, SQLSMALLINT ctype)
 {
 	switch (ctype) {
 		/* application will use implementation's type (irec's) */
@@ -1585,7 +1612,7 @@ static BOOL conv_supported(SQLSMALLINT sqltype, SQLSMALLINT ctype)
 
 /* check if data types in returned columns are compabile with buffer types
  * bound for those columns */
-static BOOL sql2c_convertible(esodbc_stmt_st *stmt)
+static int sql2c_convertible(esodbc_stmt_st *stmt)
 {
 	SQLSMALLINT i, min;
 	esodbc_desc_st *ard, *ird;
@@ -1606,14 +1633,19 @@ static BOOL sql2c_convertible(esodbc_stmt_st *stmt)
 		}
 		irec = &ird->recs[i];
 
-		if (! conv_supported(irec->concise_type, arec->type)) {
-			ERRH(stmt, "types not compatible on column %d: IRD: %d, "
+		if (! conv_allowed(irec->concise_type, arec->type)) {
+			ERRH(stmt, "conversion not allowed on column %d types: IRD: %d, "
 					"ARD: %d.", i, irec->es_type->c_concise_type, arec->type);
-			return FALSE;
+			return CONVERSION_VIOLATION;
+		}
+		if (! conv_supported(irec->concise_type, arec->type)) {
+			ERRH(stmt, "conversion not supported on column %d types: IRD: %d, "
+					"ARD: %d.", i, irec->es_type->c_concise_type, arec->type);
+			return CONVERSION_UNSUPPORTED;
 		}
 	}
 
-	return TRUE;
+	return CONVERSION_SUPPORTED;
 }
 
 /*
@@ -1700,8 +1732,16 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 	 * (i.e. also in-between consecutive fetches). */
 	switch (stmt->sql2c_conversion) {
 		case CONVERSION_VIOLATION:
-			ERRH(stmt, "types compibility check had failed already.");
+			ERRH(stmt, "types compibility check had failed already "
+					"(violation).");
 			RET_HDIAGS(stmt, SQL_STATE_07006);
+			/* RET_ returns */
+
+		case CONVERSION_UNSUPPORTED:
+			ERRH(stmt, "types compibility check had failed already "
+					"(unsupported).");
+			RET_HDIAG(stmt, SQL_STATE_HYC00, "Conversion target type not"
+					" supported", 0);
 			/* RET_ returns */
 
 		case CONVERSION_SKIPPED:
@@ -1710,14 +1750,14 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 			break;
 
 		case CONVERSION_UNCHECKED:
-			if (! sql2c_convertible(stmt)) {
-				stmt->sql2c_conversion = CONVERSION_VIOLATION;
-				ERRH(stmt, "types compibility check: failed!");
-				RET_HDIAGS(stmt, SQL_STATE_07006);
-			} else {
-				DBGH(stmt, "types compibility check: OK.");
+			stmt->sql2c_conversion = sql2c_convertible(stmt);
+			if (stmt->sql2c_conversion < 0) {
+				ERRH(stmt, "convertibility check: failed!");
+				RET_HDIAGS(stmt,
+						stmt->sql2c_conversion == CONVERSION_VIOLATION ?
+						SQL_STATE_07006 : SQL_STATE_HYC00);
 			}
-			stmt->sql2c_conversion = CONVERSION_SUPPORTED;
+			DBGH(stmt, "convertibility check: OK.");
 			/* no break; */
 
 		default:
