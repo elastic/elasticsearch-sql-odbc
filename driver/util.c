@@ -67,11 +67,13 @@ const SQLWCHAR* trim_ws(const SQLWCHAR *wstr, size_t *chars)
 	size_t cnt = *chars;
 
 	/* right trim */
-	for (wend = wstr + cnt; wstr < wend && iswspace(*wstr); wstr ++)
+	for (wend = wstr + cnt; wstr < wend && iswspace(*wstr); wstr ++) {
 		cnt --;
+	}
 
-	while ((0 < cnt) && iswspace(wstr[cnt - 1]))
+	while ((0 < cnt) && iswspace(wstr[cnt - 1])) {
 		cnt --;
+	}
 
 	*chars = cnt;
 	return wstr;
@@ -90,8 +92,9 @@ int ansi_w2c(const SQLWCHAR *src, char *dst, size_t chars)
 {
 	int i = 0;
 
-	if (chars < 1)
+	if (chars < 1) {
 		return -1;
+	}
 
 	do {
 		if (CHAR_MAX < src[i])
