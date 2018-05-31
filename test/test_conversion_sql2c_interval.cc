@@ -97,7 +97,3 @@ TEST_F(ConvertSQL2C_Interval, Integer2Interval_violation_07006) {
 
 } // test namespace
 
-int main(int argc, char **argv) {
-  ::testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
-}
