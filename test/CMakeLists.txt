@@ -10,6 +10,7 @@ if (NOT IS_DIRECTORY ${GTEST_LD_PATH})
 	# build googletest along, tunning it to driver's useage
 	ExternalProject_Add(
 		googletest
+		EXCLUDE_FROM_ALL 1
 		#GIT_REPOSITORY "https://github.com/google/googletest.git"
 		#GIT_SHALLOW ON
 		#GIT_TAG release-1.8.0
@@ -23,6 +24,18 @@ if (NOT IS_DIRECTORY ${GTEST_LD_PATH})
 
 	set(GTEST_LD_PATH ${GTEST_INSTALL_PREFIX}/lib)
 	set(GTEST_INC_PATH ${GTEST_INSTALL_PREFIX}/include)
+	set(GTEST_LIB ${GTEST_LD_PATH}/gtest${CMAKE_STATIC_LIBRARY_SUFFIX})
+	set(GTEST_MAIN_LIB
+		${GTEST_LD_PATH}/gtest_main${CMAKE_STATIC_LIBRARY_SUFFIX})
+else (NOT IS_DIRECTORY ${GTEST_LD_PATH})
+# GoogleTest adds a trailing 'd' to Debug build: find whatever's installed
+# (https://github.com/google/googletest/issues/1268)
+find_library(GTEST_LIB NAMES gtest gtestd PATHS ${GTEST_LD_PATH})
+find_library(GTEST_MAIN_LIB NAMES gtest_main gtest_maind
+	PATHS ${GTEST_LD_PATH})
+if (${GTEST_LIB_NOTFOUND} or ${GTEST_MAIN_LIB_NOTFOUND})
+	message(FATAL_ERROR "Google test libraries not found")
+endif (${GTEST_LIB_NOTFOUND})
 endif (NOT IS_DIRECTORY ${GTEST_LD_PATH})
 message("Googletest paths: load lib: ${GTEST_LD_PATH}, "
 	"include: ${GTEST_INC_PATH}.")
@@ -34,34 +47,58 @@ include_directories(${CMAKE_SOURCE_DIR}/test ${GTEST_INC_PATH})
 # set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/test)
 
 # find all test case source files
-file(GLOB TEST_CASES LIST_DIRECTORIES false 
+file(GLOB TEST_CASES LIST_DIRECTORIES false
 	RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} test_*.cc)
 message("Test cases: ${TEST_CASES}")
 
 set(EXTRA_SRC connected_dbc.cc)
 
-# TODO: a better way for this (path resolution [Debug!] & test staging)
 # copy DLLs linked (later) against, so that test exes can load them
-file(TO_NATIVE_PATH ${CMAKE_BINARY_DIR}/Debug/${DRV_NAME}.dll
+file(TO_NATIVE_PATH ${CMAKE_BINARY_DIR}/${CMAKE_CFG_INTDIR}/${DRV_NAME}${CMAKE_SHARED_LIBRARY_SUFFIX}
 	SRC_PATH_ESODBC_DLL)
-file(TO_NATIVE_PATH ${LIBCURL_LD_PATH}/libcurl.dll
+file(TO_NATIVE_PATH ${LIBCURL_LD_PATH}/libcurl${CMAKE_SHARED_LIBRARY_SUFFIX}
 	SRC_PATH_CURL_DLL)
-file(TO_NATIVE_PATH ${CMAKE_BINARY_DIR}/test/Debug/
+file(TO_NATIVE_PATH ${CMAKE_BINARY_DIR}/test/${CMAKE_CFG_INTDIR}/
 	DST_PATH_DLL)
+
+# gtestd->gtest hack: copy debug libraries to non-debug file names.
+# The trouble is, there's no way to configure this behavior (prevening the 'd'
+# postfixing) and the libs are built later in the process, not when this code
+# is evaluated to generate the project files; which means, no find_library()
+# can be triggered here and no way of knowing which build config is going to
+# be used either.
+file(TO_NATIVE_PATH ${GTEST_INSTALL_PREFIX} GTEST_NATIVE_PREFIX)
+# - existing Release googletest libs built along the project (vs. OS provided)
+file(TO_NATIVE_PATH ${GTEST_LD_PATH}/gtestd${CMAKE_STATIC_LIBRARY_SUFFIX}
+	GTEST_REL_LIB)
+file(TO_NATIVE_PATH ${GTEST_LD_PATH}/gtest_maind${CMAKE_STATIC_LIBRARY_SUFFIX}
+	GTEST_REL_MAIN_LIB)
+# - target googletest lib, no matter the build config
+file(TO_NATIVE_PATH ${GTEST_LIB} GTEST_NATIVE_LIB)
+file(TO_NATIVE_PATH ${GTEST_MAIN_LIB} GTEST_NATIVE_MAIN_LIB)
+
 add_custom_target(install_shared
 	# dir's otherwise created only later on test target execution
 	COMMAND if not exist ${DST_PATH_DLL} mkdir ${DST_PATH_DLL}
 	COMMAND copy ${SRC_PATH_ESODBC_DLL} ${DST_PATH_DLL}
-	COMMAND copy ${SRC_PATH_CURL_DLL} ${DST_PATH_DLL})
+	COMMAND copy ${SRC_PATH_CURL_DLL} ${DST_PATH_DLL}
+	# gtest->gtestd hack
+	COMMAND if exist ${GTEST_NATIVE_PREFIX} if exist ${GTEST_REL_LIB}
+		copy ${GTEST_REL_LIB} ${GTEST_NATIVE_LIB}
+	COMMAND if exist ${GTEST_NATIVE_PREFIX} if exist ${GTEST_REL_MAIN_LIB}
+	copy ${GTEST_REL_MAIN_LIB} ${GTEST_NATIVE_MAIN_LIB}
+	)
 
 foreach (TSRC ${TEST_CASES})
 	string(REPLACE ".cxx" "" TBIN ${TSRC})
 	add_executable(${TBIN} ${TSRC} ${EXTRA_SRC})
 	set_target_properties(${TBIN} PROPERTIES COMPILE_FLAGS ${CMAKE_C_FLAGS})
-	target_link_libraries(${TBIN} ${GTEST_LD_PATH}/gtestd.lib
-		 ${GTEST_LD_PATH}/gtest_maind.lib)
-	target_link_libraries(${TBIN} ${DRV_NAME})
+	target_link_libraries(${TBIN} ${DRV_NAME} ${GTEST_LIB} ${GTEST_MAIN_LIB})
 	add_dependencies(${TBIN} install_shared)
+	if (GTEST_INSTALL_PREFIX)
+		# no pre-existing library on the system -> build gtest(d)
+		add_dependencies(${TBIN} googletest)
+	endif ()
 	add_test(${TBIN} ${TBIN})
 endforeach (TSRC)
 
