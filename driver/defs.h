@@ -87,9 +87,9 @@
 /*
  * Versions
  */
-/* driver version ex. 1.2(u) */
-#define ESODBC_DRIVER_VER	\
-		STR(DRV_VER_MAJOR) "." STR(DRV_VER_MINOR) "(" STR(DRV_ENCODING) ")"
+/* driver version ex. 1.2(b0a34b4,u,d) */
+#define ESODBC_DRIVER_VER	STR(DRV_VER_MAJOR) "." STR(DRV_VER_MINOR) \
+		"(" STR(DRV_SRC_VER) "," STR(DRV_ENCODING) "," STR(DRV_BUILD_TYPE) ")"
 /* TODO: learn it from ES */
 #define ESODBC_ELASTICSEARCH_VER	"7.x"
 #define ESODBC_ELASTICSEARCH_NAME	"Elasticsearch"
