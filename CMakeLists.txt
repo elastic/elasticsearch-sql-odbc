@@ -60,11 +60,24 @@ if (${WIN32})
 	if (${IS_UNICODE})
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DUNICODE /D_UNICODE")
 	endif (${IS_UNICODE})
-	# set the version
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_NAME=${DRV_NAME}")
+
+	# set the all identifiers
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_VER_MAJOR=${DRV_VER_MAJOR}")
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_VER_MINOR=${DRV_VER_MINOR}")
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_ENCODING=${ENCODING}")
-	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_NAME=${DRV_NAME}")
+	# ...including the build type indicator
+	set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /DDRV_BUILD_TYPE=d")
+	set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /DDRV_BUILD_TYPE=r")
+	set(CMAKE_C_FLAGS_RELWITHDEBINFO
+		"${CMAKE_C_FLAGS_RELWITHDEBINFO} /DDRV_BUILD_TYPE=i")
+	set(CMAKE_C_FLAGS_MINSIZEREL
+		"${CMAKE_C_FLAGS_MINSIZEREL} /DDRV_BUILD_TYPE=s")
+
+	# unless building for stripping Release, export the testing functions
+	# (this will allow RelWithDebInfo buliding and still be able to test it)
+	set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /DTEST_API=")
+	set(CMAKE_C_FLAGS_MINSIZEREL "${CMAKE_C_FLAGS_RELEASE} /DTEST_API=")
 else (${WIN32})
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
 endif (${WIN32})
