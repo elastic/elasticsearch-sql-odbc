@@ -47,6 +47,26 @@ set(DRV_NAME "${DRIVER_BASE_NAME}${DRV_VER_MAJOR}${ENCODING}${BARCH}")
 # defined projects like INSTALL.vcproj and ZERO_CHECK.vcproj
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
+
+# which version is the code at?
+execute_process(COMMAND
+	git describe --dirty=+ --broken=X --always --tags
+	WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+	RESULT_VARIABLE CMD_RETURN
+	OUTPUT_VARIABLE CMD_OUTPUT
+	ERROR_VARIABLE CMD_OUTERR
+	)
+#	WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/${DRV_SRC_DIR}"
+if (${CMD_RETURN})
+	message(WARNING "Git command failed:")
+	message("\tret: ${CMD_RETURN}")
+	message("\tout: ${CMD_OUTPUT}")
+	message("\terr: ${CMD_OUTERR}")
+	set(DRV_SRC_VER "n/a")
+else (${CMD_RETURN})
+	set(DRV_SRC_VER ${CMD_OUTPUT})
+endif (${CMD_RETURN})
+
 # Set compiler flags and options.
 if (${WIN32})
 	# set the Visual Studio warning level to 4
@@ -65,6 +85,7 @@ if (${WIN32})
 	# set the all identifiers
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_VER_MAJOR=${DRV_VER_MAJOR}")
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_VER_MINOR=${DRV_VER_MINOR}")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_SRC_VER=${DRV_SRC_VER}")
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_ENCODING=${ENCODING}")
 	# ...including the build type indicator
 	set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /DDRV_BUILD_TYPE=d")
