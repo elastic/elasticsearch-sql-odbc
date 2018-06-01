@@ -212,6 +212,7 @@ message("Driver include paths: " ${ODBC_INC} ${DRV_SRC_DIR}
 #
 add_library(${DRV_NAME} SHARED ${DRV_SRC} ${CMAKE_BINARY_DIR}/${DRV_NAME}.def)
 #generate_export_header(${DRV_NAME})
+target_compile_definitions(${DRV_NAME} PRIVATE "DRIVER_BUILD")
 
 include_directories(${ODBC_INC} ${DRV_SRC_DIR} ${LIBCURL_INC_PATH}
 	${UJSON4C_INC} ${CTIMESTAMP_PATH_SRC})
