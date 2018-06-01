@@ -86,6 +86,13 @@ if /i not [%ARG:clearlogs=%] == [%ARG%] (
 	REM Invoked without 'clearlogs', logs not touched.
 )
 
+REM presence of type: invoke BUILDTYPE "function"
+if /i not [%ARG:type=%] == [%ARG%] (
+	call:BUILDTYPE
+) else (
+	echo Invoked without 'type', default applied (see usage^).
+)
+
 REM absence of nobuild: invoke BUILD "function";
 REM 'all' and 'test' arguments presence checked inside the "function".
 if /i [%ARG:nobuild=%] == [%ARG%] (
@@ -220,6 +227,8 @@ REM USAGE function: output a usage message
 	echo    proper    : clean both the build and libs dir and exit.
 	echo    fetch     : fetch, patch and build the dependency libs.
 	echo    nobuild   : skip project building (the default is to build^).
+	echo    type=T    : selects the build type; T can be one of Debug/Release/
+	echo                RelWithDebInfo/MinSizeRel^); defaults to Debug.
 	echo    exports   : dump the exported symbols in the DLL after - and
 	echo                only if - building the driver.
 	echo    all       : build all artifacts (driver and tests^).
@@ -345,6 +354,23 @@ REM FETCH function: fetch, patch, build the external libs
 
 	goto:eof
 
+REM BUILDTYPE function: set the build config to feed MSBuild
+:BUILDTYPE
+	REM cycle through the args, look for 'type' token and use the follow-up 1
+	set prev=
+	for %%a in (%ARG:"=%) do (
+		if /i [!prev!] == [type] (
+			set MSBUILD_ARGS=/p:Configuration=%%a
+			set CFG_INTDIR=%%a
+			echo Setting the build type to: !MSBUILD_ARGS!
+			goto:eof
+		) else (
+			set prev=%%a
+		)
+	)
+	set MSBUILD_ARGS=
+
+	goto:eof
 
 REM BUILD function: build various targets
 :BUILD
@@ -358,17 +384,17 @@ REM BUILD function: build various targets
 
 	if /i not [%ARG:test=%] == [%ARG%] (
 		echo Building all the project (including tests^).
-		MSBuild ALL_BUILD.vcxproj
+		MSBuild ALL_BUILD.vcxproj %MSBUILD_ARGS%
 	) else if /i not [%ARG:all=%] == [%ARG%] (
 		echo Building all the project.
-		MSBuild ALL_BUILD.vcxproj
+		MSBuild ALL_BUILD.vcxproj %MSBUILD_ARGS%
 	) else if /i not [%ARG:suites=%] == [%ARG%] (
 		echo Building the test projects only.
 		for %%i in (test\test_*.vcxproj) do (
-			MSBuild %%~fi
+			MSBuild %%~fi %MSBUILD_ARGS%
 			if not ERRORLEVEL 1 (
-				echo Running test\Debug\%%~ni.exe :
-				test\Debug\%%~ni.exe
+				echo Running test\%CFG_INTDIR%\%%~ni.exe :
+				test\%CFG_INTDIR%\%%~ni.exe
 				if ERRORLEVEL 1 (
 					goto:eof
 				)
@@ -380,10 +406,10 @@ REM BUILD function: build various targets
 	) else (
 		echo Building the driver only.
 		REM file name expansion, cmd style...
-		for /f %%i in ("%DRIVER_BASE_NAME%*.vcxproj") do MSBuild %%~nxi
+		for /f %%i in ("%DRIVER_BASE_NAME%*.vcxproj") do MSBuild %%~nxi %MSBUILD_ARGS%
 
 		if not ERRORLEVEL 1 if /i not [%ARG:symbols=%] == [%ARG%] (
-			dumpbin /exports Debug\%DRIVER_BASE_NAME%*.dll
+			dumpbin /exports %CFG_INTDIR%\%DRIVER_BASE_NAME%*.dll
 		)
 	)
 
@@ -395,14 +421,14 @@ REM TEST function: run the compiled tests
 	if not exist RUN_TESTS.vcxproj (
 		call:BUILD
 	)
-	MSBuild RUN_TESTS.vcxproj
+	MSBuild RUN_TESTS.vcxproj !MSBUILD_ARGS!
 
 	goto:eof
 
 REM COPY function: copy DLLs (libcurl, odbc) to the test "install" dir
 :COPY
 	echo Copying into test install folder %INSTALL_DIR%.
-	copy Debug\%DRIVER_BASE_NAME%*.dll %INSTALL_DIR%
+	copy %CFG_INTDIR%\%DRIVER_BASE_NAME%*.dll %INSTALL_DIR%
 
 	REM Read LIBCURL_LD_PATH value from cmake's cache
 	for /f "tokens=2 delims==" %%i in ('%CMAKE% -L %BUILD_DIR% 2^>NUL ^| find "LIBCURL_LD_PATH"') do set LIBCURL_LD_PATH=%%i
@@ -435,11 +461,11 @@ REM REGADD function: add driver into the registry
 	echo Adding driver into the registry.
 
 	REM check if driver exists, otherwise the filename is unknown
-	if not exist %BUILD_DIR%\Debug\%DRIVER_BASE_NAME%*.dll (
+	if not exist %BUILD_DIR%\%CFG_INTDIR%\%DRIVER_BASE_NAME%*.dll (
 		echo Error: Driver can only be added into the registry once built.
 		goto end
 	)
-	for /f %%i in ("%BUILD_DIR%\Debug\%DRIVER_BASE_NAME%*.dll") do set DRVNAME=%%~nxi
+	for /f %%i in ("%BUILD_DIR%\%CFG_INTDIR%\%DRIVER_BASE_NAME%*.dll") do set DRVNAME=%%~nxi
 
 	echo Adding ESODBC driver %INSTALL_DIR%\!DRVNAME! to the registry.
 
