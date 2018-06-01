@@ -34,13 +34,11 @@
 #include "sql.h"
 #include "sqlext.h"
 
-#ifndef NDEBUG
 /* export attribute for internal functions used for testing */
+#ifndef TEST_API /* Release builds define this to an empty macro */
 #define TEST_API	__declspec(dllexport)
 #define TESTING		/* compiles in the testing code */
-#else /* !NDEBUG */
-#define TEST_API
-#endif /* !NDEBUG */
+#endif /* TEST_API */
 
 /*
  * Assert two integral types have same storage and sign.
