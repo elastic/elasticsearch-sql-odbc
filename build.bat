@@ -1,4 +1,20 @@
 @echo off
+REM
+REM ELASTICSEARCH CONFIDENTIAL
+REM __________________
+REM
+REM  [2018] Elasticsearch Incorporated. All Rights Reserved.
+REM
+REM NOTICE:  All information contained herein is, and remains
+REM the property of Elasticsearch Incorporated and its suppliers,
+REM if any.  The intellectual and technical concepts contained
+REM herein are proprietary to Elasticsearch Incorporated
+REM and its suppliers and may be covered by U.S. and Foreign Patents,
+REM patents in process, and are protected by trade secret or copyright law.
+REM Dissemination of this information or reproduction of this material
+REM is strictly forbidden unless prior written permission is obtained
+REM from Elasticsearch Incorporated.
+REM
 REM This is just a helper script for building the ODBC driver in development.
 
 setlocal EnableExtensions EnableDelayedExpansion
