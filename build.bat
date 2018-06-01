@@ -1,4 +1,9 @@
 @echo off
+rem
+rem Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+rem or more contributor license agreements. Licensed under the Elastic License;
+rem you may not use this file except in compliance with the Elastic License.
+rem
 REM This is just a helper script for building the ODBC driver in development.
 
 setlocal EnableExtensions EnableDelayedExpansion
