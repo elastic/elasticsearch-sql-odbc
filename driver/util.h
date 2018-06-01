@@ -36,7 +36,11 @@
 
 /* export attribute for internal functions used for testing */
 #ifndef TEST_API /* Release builds define this to an empty macro */
+#ifdef DRIVER_BUILD
 #define TEST_API	__declspec(dllexport)
+#else /* _EXPORTS */
+#define TEST_API	__declspec(dllimport)
+#endif /* _EXPORTS */
 #define TESTING		/* compiles in the testing code */
 #endif /* TEST_API */
 
