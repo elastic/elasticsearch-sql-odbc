@@ -28,9 +28,14 @@
 /* values for SQL_ATTR_MAX_LENGTH statement attribute */
 #define ESODBC_UP_MAX_LENGTH		0 // USHORT_MAX
 #define ESODBC_LO_MAX_LENGTH		0
-/* prepare a STMT for a new SQL operation.
- * To be used with catalog functions, that can be all called with same stmt */
+/* Prepare a STMT for a new SQL operation.
+ * To be used with catalog functions, that can be all called with same stmt.
+ * After SQL_CLOSE, an applicatoin can re-open a cursor for same query. */
 #define ESODBC_SQL_CLOSE			((SQLUSMALLINT)-1)
+#ifdef TESTING
+/* connecting mode for testing */
+#define ESODBC_SQL_DRIVER_TEST		((SQLUSMALLINT)-1)
+#endif /* TESTING */
 
 #define ESODBC_ALL_TABLES			"%"
 #define ESODBC_ALL_COLUMNS			"%"
@@ -71,9 +76,9 @@
 /*
  * Versions
  */
-/* driver version ex. 1.2(u) */
-#define ESODBC_DRIVER_VER	\
-		STR(DRV_VER_MAJOR) "." STR(DRV_VER_MINOR) "(" STR(DRV_ENCODING) ")"
+/* driver version ex. 1.2(b0a34b4,u,d) */
+#define ESODBC_DRIVER_VER	STR(DRV_VER_MAJOR) "." STR(DRV_VER_MINOR) \
+		"(" STR(DRV_SRC_VER) "," STR(DRV_ENCODING) "," STR(DRV_BUILD_TYPE) ")"
 /* TODO: learn it from ES */
 #define ESODBC_ELASTICSEARCH_VER	"7.x"
 #define ESODBC_ELASTICSEARCH_NAME	"Elasticsearch"
@@ -284,7 +289,10 @@
 /*
  * ISO8601 template ('yyyy-mm-ddThh:mm:ss.sss+hh:mm')
  */
-#define ESODBC_ISO8601_TEMPLATE		"yyyy-mm-ddThh:mm:ss.sssZ"
+#define ESODBC_ISO8601_TEMPLATE		"yyyy-mm-ddThh:mm:ss.sssssssZ"
+/* https://docs.microsoft.com/en-us/sql/relational-databases/native-client-odbc-date-time/data-type-support-for-odbc-date-and-time-improvements */
+#define ESODBC_DATE_TEMPLATE		"yyyy-mm-ddT"
+#define ESODBC_TIME_TEMPLATE		"hh:mm:ss.9999999"
 
 /*
  * ES-to-C-SQL mappings
@@ -293,37 +301,54 @@
  */
 /* -6: SQL_TINYINT -> SQL_C_TINYINT */
 #define ESODBC_ES_TO_CSQL_BYTE			SQL_C_TINYINT
+#define ESODBC_ES_TO_SQL_BYTE			SQL_TINYINT
 /* 5: SQL_SMALLINT -> SQL_C_SHORT */
 #define ESODBC_ES_TO_CSQL_SHORT			SQL_C_SSHORT
+#define ESODBC_ES_TO_SQL_SHORT			SQL_SMALLINT
 /* 4: SQL_INTEGER -> SQL_C_LONG */
 #define ESODBC_ES_TO_CSQL_INTEGER		SQL_C_SLONG
+#define ESODBC_ES_TO_SQL_INTEGER		SQL_INTEGER
 /* -5: SQL_BIGINT -> SQL_C_SBIGINT */
 #define ESODBC_ES_TO_CSQL_LONG			SQL_C_SBIGINT
+#define ESODBC_ES_TO_SQL_LONG			SQL_BIGINT
 /* 6: SQL_FLOAT -> SQL_C_DOUBLE */
 #define ESODBC_ES_TO_CSQL_HALF_FLOAT	SQL_C_DOUBLE
+#define ESODBC_ES_TO_SQL_HALF_FLOAT		SQL_FLOAT
 /* 6: SQL_FLOAT -> SQL_C_DOUBLE */
 #define ESODBC_ES_TO_CSQL_SCALED_FLOAT	SQL_C_DOUBLE
+#define ESODBC_ES_TO_SQL_SCALED_FLOAT	SQL_FLOAT
 /* 7: SQL_REAL -> SQL_C_DOUBLE */
 #define ESODBC_ES_TO_CSQL_FLOAT			SQL_C_FLOAT
+#define ESODBC_ES_TO_SQL_FLOAT			SQL_REAL
 /* 8: SQL_DOUBLE -> SQL_C_FLOAT */
 #define ESODBC_ES_TO_CSQL_DOUBLE		SQL_C_DOUBLE
+#define ESODBC_ES_TO_SQL_DOUBLE			SQL_DOUBLE
 /* 16: ??? -> SQL_C_TINYINT */
 #define ESODBC_ES_TO_CSQL_BOOLEAN		SQL_C_STINYINT
+#define ESODBC_ES_TO_SQL_BOOLEAN		ESODBC_SQL_BOOLEAN
 /* 12: SQL_VARCHAR -> SQL_C_WCHAR */
-#define ESODBC_ES_TO_CSQL_KEYWORD		SQL_C_WCHAR
+#define ESODBC_ES_TO_CSQL_KEYWORD		SQL_C_WCHAR /* XXX: CBOR needs _CHAR */
+#define ESODBC_ES_TO_SQL_KEYWORD		SQL_VARCHAR
 /* 12: SQL_VARCHAR -> SQL_C_WCHAR */
-#define ESODBC_ES_TO_CSQL_TEXT			SQL_C_WCHAR
+#define ESODBC_ES_TO_CSQL_TEXT			SQL_C_WCHAR /* XXX: CBOR needs _CHAR */
+#define ESODBC_ES_TO_SQL_TEXT			SQL_VARCHAR
 /* 93: SQL_TYPE_TIMESTAMP -> SQL_C_TYPE_TIMESTAMP */
 #define ESODBC_ES_TO_CSQL_DATE			SQL_C_TYPE_TIMESTAMP
+#define ESODBC_ES_TO_SQL_DATE			SQL_TYPE_TIMESTAMP
 /* -3: SQL_VARBINARY -> SQL_C_BINARY */
 #define ESODBC_ES_TO_CSQL_BINARY		SQL_C_BINARY
+#define ESODBC_ES_TO_SQL_BINARY			SQL_VARBINARY
 /* 0: SQL_TYPE_NULL -> SQL_C_TINYINT */
 #define ESODBC_ES_TO_CSQL_NULL			SQL_C_STINYINT
+#define ESODBC_ES_TO_SQL_NULL			SQL_TYPE_NULL
 /* 1111: ??? -> SQL_C_BINARY */
 #define ESODBC_ES_TO_CSQL_UNSUPPORTED	SQL_C_BINARY
+#define ESODBC_ES_TO_SQL_UNSUPPORTED	ESODBC_SQL_UNSUPPORTED
 /* 2002: ??? -> SQL_C_BINARY */
 #define ESODBC_ES_TO_CSQL_OBJECT		SQL_C_BINARY
+#define ESODBC_ES_TO_SQL_OBJECT			ESODBC_SQL_OBJECT
 /* 2002: ??? -> SQL_C_BINARY */
 #define ESODBC_ES_TO_CSQL_NESTED		SQL_C_BINARY
+#define ESODBC_ES_TO_SQL_NESTED			ESODBC_SQL_NESTED
 
 #endif /* __DEFS_H__ */

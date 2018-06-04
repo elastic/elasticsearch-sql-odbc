@@ -9,8 +9,6 @@
 
 #include  <curl/curl.h>
 
-#include "ujdecode.h"
-
 #include "error.h"
 #include "defs.h"
 
@@ -311,6 +309,14 @@ typedef struct struct_stmt {
 
 	/* result set */
 	resultset_st rset;
+	/* SQL data types conversion to SQL C compatibility (IRD.SQL -> ARD.C) */
+	enum {
+		CONVERSION_VIOLATION = -2, /* specs disallowed */
+		CONVERSION_UNSUPPORTED, /* ES/driver not supported */
+		CONVERSION_UNCHECKED, /* 0 */
+		CONVERSION_SUPPORTED,
+		CONVERSION_SKIPPED, /* used with driver's meta queries */
+	} sql2c_conversion;
 } esodbc_stmt_st;
 
 
@@ -334,8 +340,7 @@ SQLRETURN EsSQLSetEnvAttr(SQLHENV EnvironmentHandle,
 		SQLINTEGER Attribute, 
 		_In_reads_bytes_opt_(StringLength) SQLPOINTER Value,
 		SQLINTEGER StringLength);
-SQLRETURN SQL_API EsSQLGetEnvAttr(SQLHENV EnvironmentHandle,
-		SQLINTEGER Attribute, 
+SQLRETURN EsSQLGetEnvAttr(SQLHENV EnvironmentHandle, SQLINTEGER Attribute,
 		_Out_writes_(_Inexpressible_(BufferLength)) SQLPOINTER Value,
 		SQLINTEGER BufferLength, _Out_opt_ SQLINTEGER *StringLength);
 
@@ -441,21 +446,6 @@ SQLRETURN EsSQLSetDescRec(
 		(rec)->indicator_ptr != NULL || \
 		(rec)->octet_length_ptr != NULL)
 
-
-/* TODO: this is inefficient: add directly into ujson4c lib (as .size of
- * ArrayItem struct, inc'd in arrayAddItem()) or local utils file. Only added
- * here to be accessible with the statement resultset member. */
-static inline size_t UJArraySize(UJObject obj)
-{
-	UJObject _u; /* unused */
-	size_t size = 0;
-	void *iter = UJBeginArray(obj);
-	if (iter) {
-		while (UJIterArray(&iter, &_u))
-			size ++;
-	}
-	return size;
-}
 
 #endif /* __HANDLES_H__ */
 

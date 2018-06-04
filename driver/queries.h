@@ -10,9 +10,11 @@
 #include "handles.h"
 
 void clear_resultset(esodbc_stmt_st *stmt);
-SQLRETURN attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen);
-SQLRETURN attach_error(esodbc_stmt_st *stmt, char *buff, size_t blen);
-SQLRETURN attach_sql(esodbc_stmt_st *stmt, const SQLWCHAR *sql, size_t tlen);
+SQLRETURN TEST_API attach_answer(esodbc_stmt_st *stmt, char *buff,
+		size_t blen);
+SQLRETURN TEST_API attach_error(esodbc_stmt_st *stmt, char *buff, size_t blen);
+SQLRETURN TEST_API attach_sql(esodbc_stmt_st *stmt, const SQLWCHAR *sql,
+		size_t tlen);
 void detach_sql(esodbc_stmt_st *stmt);
 
 

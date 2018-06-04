@@ -1165,8 +1165,9 @@ static SQLRETURN do_connect(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 }
 
 
-/* Maps ES/SQL type to C SQL. */
-SQLSMALLINT type_elastic2csql(wstr_st *type_name)
+/* Maps ES/SQL type name to C SQL and SQL id values. */
+static BOOL elastic_name2types(wstr_st *type_name,
+		SQLSMALLINT *c_sql, SQLSMALLINT *sql)
 {
 	switch (type_name->cnt) {
 		/* 4: BYTE, LONG, TEXT, DATE, NULL */
@@ -1175,31 +1176,41 @@ SQLSMALLINT type_elastic2csql(wstr_st *type_name)
 				case (SQLWCHAR)'b':
 					if (! wmemncasecmp(type_name->str,
 								MK_WPTR(JSON_COL_BYTE), type_name->cnt)) {
-						return ESODBC_ES_TO_CSQL_BYTE;
+						*c_sql = ESODBC_ES_TO_CSQL_BYTE;
+						*sql = ESODBC_ES_TO_SQL_BYTE;
+						return TRUE;
 					}
 					break;
 				case (SQLWCHAR)'l':
 					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_LONG),
 								type_name->cnt)) {
-						return ESODBC_ES_TO_CSQL_LONG;
+						*c_sql = ESODBC_ES_TO_CSQL_LONG;
+						*sql = ESODBC_ES_TO_SQL_LONG;
+						return TRUE;
 						}
 					break;
 				case (SQLWCHAR)'t':
 					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_TEXT),
 								type_name->cnt)) {
-						return ESODBC_ES_TO_CSQL_TEXT;
+						*c_sql = ESODBC_ES_TO_CSQL_TEXT;
+						*sql = ESODBC_ES_TO_SQL_TEXT;
+						return TRUE;
 					}
 					break;
 				case (SQLWCHAR)'d':
 					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_DATE),
 								type_name->cnt)) {
-						return ESODBC_ES_TO_CSQL_DATE;
+						*c_sql = ESODBC_ES_TO_CSQL_DATE;
+						*sql = ESODBC_ES_TO_SQL_DATE;
+						return TRUE;
 					}
 					break;
 				case (SQLWCHAR)'n':
 					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_NULL),
 								type_name->cnt)) {
-						return ESODBC_ES_TO_CSQL_NULL;
+						*c_sql = ESODBC_ES_TO_CSQL_NULL;
+						*sql = ESODBC_ES_TO_SQL_NULL;
+						return TRUE;
 					}
 					break;
 			}
@@ -1211,13 +1222,17 @@ SQLSMALLINT type_elastic2csql(wstr_st *type_name)
 				case (SQLWCHAR)'s':
 					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_SHORT),
 								type_name->cnt)) {
-						return ESODBC_ES_TO_CSQL_SHORT;
+						*c_sql = ESODBC_ES_TO_CSQL_SHORT;
+						*sql = ESODBC_ES_TO_SQL_SHORT;
+						return TRUE;
 					}
 					break;
 				case (SQLWCHAR)'f':
 					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_FLOAT),
 								type_name->cnt)) {
-						return ESODBC_ES_TO_CSQL_FLOAT;
+						*c_sql = ESODBC_ES_TO_CSQL_FLOAT;
+						*sql = ESODBC_ES_TO_SQL_FLOAT;
+						return TRUE;
 					}
 					break;
 			}
@@ -1229,25 +1244,33 @@ SQLSMALLINT type_elastic2csql(wstr_st *type_name)
 				case (SQLWCHAR)'d':
 					if (! wmemncasecmp(type_name->str,
 								MK_WPTR(JSON_COL_DOUBLE), type_name->cnt)) {
-						return ESODBC_ES_TO_CSQL_DOUBLE;
+						*c_sql = ESODBC_ES_TO_CSQL_DOUBLE;
+						*sql = ESODBC_ES_TO_SQL_DOUBLE;
+						return TRUE;
 					}
 					break;
 				case (SQLWCHAR)'b':
 					if (! wmemncasecmp(type_name->str,
 								MK_WPTR(JSON_COL_BINARY), type_name->cnt)) {
-						return ESODBC_ES_TO_CSQL_BINARY;
+						*c_sql = ESODBC_ES_TO_CSQL_BINARY;
+						*sql = ESODBC_ES_TO_SQL_BINARY;
+						return TRUE;
 					}
 					break;
 				case (SQLWCHAR)'o':
 					if (! wmemncasecmp(type_name->str,
 								MK_WPTR(JSON_COL_OBJECT), type_name->cnt)) {
-						return ESODBC_ES_TO_CSQL_OBJECT;
+						*c_sql = ESODBC_ES_TO_CSQL_OBJECT;
+						*sql = ESODBC_ES_TO_SQL_OBJECT;
+						return TRUE;
 					}
 					break;
 				case (SQLWCHAR)'n':
 					if (! wmemncasecmp(type_name->str,
 								MK_WPTR(JSON_COL_NESTED), type_name->cnt)) {
-						return ESODBC_ES_TO_CSQL_NESTED;
+						*c_sql = ESODBC_ES_TO_CSQL_NESTED;
+						*sql = ESODBC_ES_TO_SQL_NESTED;
+						return TRUE;
 					}
 					break;
 			}
@@ -1259,17 +1282,23 @@ SQLSMALLINT type_elastic2csql(wstr_st *type_name)
 				case (SQLWCHAR)'i': /* integer */
 					if (wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_INTEGER),
 								type_name->cnt) == 0)
-						return ESODBC_ES_TO_CSQL_INTEGER;
+						*c_sql = ESODBC_ES_TO_CSQL_INTEGER;
+						*sql = ESODBC_ES_TO_SQL_INTEGER;
+						return TRUE;
 					break;
 				case (SQLWCHAR)'b': /* boolean */
 					if (wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_BOOLEAN),
 								type_name->cnt) == 0)
-						return ESODBC_ES_TO_CSQL_BOOLEAN;
+						*c_sql = ESODBC_ES_TO_CSQL_BOOLEAN;
+						*sql = ESODBC_ES_TO_SQL_BOOLEAN;
+						return TRUE;
 					break;
 				case (SQLWCHAR)'k': /* keyword */
 					if (wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_KEYWORD),
 								type_name->cnt) == 0)
-						return ESODBC_ES_TO_CSQL_KEYWORD;
+						*c_sql = ESODBC_ES_TO_CSQL_KEYWORD;
+						*sql = ESODBC_ES_TO_SQL_KEYWORD;
+						return TRUE;
 					break;
 			}
 			break;
@@ -1278,7 +1307,9 @@ SQLSMALLINT type_elastic2csql(wstr_st *type_name)
 		case sizeof(JSON_COL_HALF_FLOAT) - 1:
 			if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_HALF_FLOAT),
 						type_name->cnt)) {
-				return ESODBC_ES_TO_CSQL_HALF_FLOAT;
+				*c_sql = ESODBC_ES_TO_CSQL_HALF_FLOAT;
+				*sql = ESODBC_ES_TO_SQL_HALF_FLOAT;
+				return TRUE;
 			}
 			break;
 
@@ -1286,7 +1317,9 @@ SQLSMALLINT type_elastic2csql(wstr_st *type_name)
 		case sizeof(JSON_COL_UNSUPPORTED) - 1:
 			if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_UNSUPPORTED),
 						type_name->cnt)) {
-				return ESODBC_ES_TO_CSQL_UNSUPPORTED;
+				*c_sql = ESODBC_ES_TO_CSQL_UNSUPPORTED;
+				*sql = ESODBC_ES_TO_SQL_UNSUPPORTED;
+				return TRUE;
 			}
 			break;
 
@@ -1294,14 +1327,16 @@ SQLSMALLINT type_elastic2csql(wstr_st *type_name)
 		case sizeof(JSON_COL_SCALED_FLOAT) - 1:
 			if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_SCALED_FLOAT),
 						type_name->cnt)) {
-				return ESODBC_ES_TO_CSQL_SCALED_FLOAT;
+				*c_sql = ESODBC_ES_TO_CSQL_SCALED_FLOAT;
+				*sql = ESODBC_ES_TO_SQL_SCALED_FLOAT;
+				return TRUE;
 			}
 			break;
 
 	}
 	ERR("unrecognized Elastic type `" LWPDL "` (%zd).", LWSTR(type_name),
 			type_name->cnt);
-	return SQL_UNKNOWN_TYPE;
+	return FALSE;
 }
 
 /*
@@ -1446,6 +1481,7 @@ static void* copy_types_rows(estype_row_st *type_row, SQLULEN rows_fetched,
 {
 	SQLWCHAR *pos;
 	int i;
+	SQLSMALLINT sql_type;
 
 	/* start pointer where the strings will be copied in */
 	pos = (SQLWCHAR *)&types[rows_fetched];
@@ -1510,11 +1546,19 @@ static void* copy_types_rows(estype_row_st *type_row, SQLULEN rows_fetched,
 		}
 
 		/* resolve ES type to SQL C type */
-		types[i].c_concise_type = type_elastic2csql(&types[i].type_name);
-		if (types[i].c_concise_type == SQL_UNKNOWN_TYPE) {
+		if (! elastic_name2types(&types[i].type_name, &types[i].c_concise_type,
+					&sql_type)) {
 			/* ES version newer than driver's? */
 			ERR("failed to convert type name `" LWPDL "` to SQL C type.",
 					LWSTR(&types[i].type_name));
+			return NULL;
+		}
+		/* .data_type is used in data conversions -> make sure the SQL type
+		 * derived from type's name is the same with type reported value */
+		if (sql_type != types[i].data_type) {
+			ERR("type `" LWPDL "` derived (%d) and reported (%d) SQL type "
+					"identifiers differ.", LWSTR(&types[i].type_name),
+					sql_type, types[i].data_type);
 			return NULL;
 		}
 		/* set meta type */
@@ -1563,9 +1607,26 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 	}
 	assert(stmt);
 
-	if (! SQL_SUCCEEDED(EsSQLGetTypeInfoW(stmt, SQL_ALL_TYPES))) {
-		ERRH(stmt, "failed to query Elasticsearch.");
-		goto end;
+#ifdef TESTING
+	/* for testing cases with no ES server available, the connection needs to
+	 * be init'ed with ES types: the test suite passes a JSON answer of ES
+	 * types through the (otherwise) unused window handler pointer */
+	if (dbc->hwin) {
+		cstr_st *types_answer = (cstr_st *)dbc->hwin;
+		dbc->hwin = NULL;
+		if (! SQL_SUCCEEDED(attach_answer(stmt, types_answer->str,
+						types_answer->cnt))) {
+			ERRH(stmt, "failed to attach dummmy ES types answer");
+			goto end;
+		}
+	} else {
+#else /* TESTING */
+	if (TRUE) {
+#endif /* TESTING */
+		if (! SQL_SUCCEEDED(EsSQLGetTypeInfoW(stmt, SQL_ALL_TYPES))) {
+			ERRH(stmt, "failed to query Elasticsearch.");
+			goto end;
+		}
 	}
 
 	/* check that we have as many columns as members in target row struct */
@@ -1628,6 +1689,10 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 	if (! bind_types_cols(stmt, type_row)) {
 		goto end;
 	}
+
+	/* don't check for data compatiblity (since the check needs data fetched
+	 * by this function) */
+	stmt->sql2c_conversion = CONVERSION_SKIPPED;
 
 	/* fetch the results into the type_row array */
 	if (! SQL_SUCCEEDED(EsSQLFetch(stmt))) {
@@ -1944,6 +2009,15 @@ SQLRETURN EsSQLDriverConnectW
 					return SQL_NO_DATA;
 			} while (! SQL_SUCCEEDED(do_connect(dbc, &attrs)));
 			break;
+
+#ifdef TESTING
+		case ESODBC_SQL_DRIVER_TEST:
+			/* abusing the window handler to pass type data for non-network
+			 * tests (see load_es_types()). */
+			assert(! dbc->hwin);
+			dbc->hwin = hwnd;
+			break;
+#endif /* TESTING */
 
 		default:
 			ERRH(dbc, "unknown driver completion mode: %d", fDriverCompletion);

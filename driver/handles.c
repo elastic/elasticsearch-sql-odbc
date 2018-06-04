@@ -262,6 +262,7 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			 * set at connection level. */
 			stmt->metadata_id = dbc->metadata_id;
 			stmt->async_enable = dbc->async_enable;
+			stmt->sql2c_conversion = CONVERSION_UNCHECKED;
 
 			DBG("new Statement handle allocated @0x%p.", *OutputHandle);
 			break;
@@ -503,8 +504,7 @@ SQLRETURN EsSQLSetEnvAttr(SQLHENV EnvironmentHandle,
 	return SQL_SUCCESS;
 }
 
-SQLRETURN SQL_API EsSQLGetEnvAttr(SQLHENV EnvironmentHandle,
-		SQLINTEGER Attribute, 
+SQLRETURN EsSQLGetEnvAttr(SQLHENV EnvironmentHandle, SQLINTEGER Attribute,
 		_Out_writes_(_Inexpressible_(BufferLength)) SQLPOINTER Value,
 		SQLINTEGER BufferLength, _Out_opt_ SQLINTEGER *StringLength)
 {

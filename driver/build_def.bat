@@ -16,3 +16,6 @@ echo.>> %OUTFILE%
 echo EXPORTS>> %OUTFILE%
 echo.>> %OUTFILE%
 powershell -NoLogo -ExecutionPolicy Bypass -Command %FILTER%>> %OUTFILE%
+echo.>> %OUTFILE%
+REM minimize the exposure of this unwanted export
+echo JSON_DecodeObject @1 NONAME PRIVATE>> %OUTFILE%

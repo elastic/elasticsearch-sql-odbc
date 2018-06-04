@@ -7,6 +7,7 @@
 #include <inttypes.h>
 #include <windows.h> /* WideCharToMultiByte() */
 
+#include "ujdecode.h"
 #include "timestamp.h"
 
 #include "queries.h"
@@ -37,6 +38,21 @@
 		(_tsp)->minute = (_tmp)->tm_min; \
 		(_tsp)->second = (_tmp)->tm_sec; \
 	} while (0);
+
+
+/* TODO: this is inefficient: add directly into ujson4c lib (as .size of
+ * ArrayItem struct, inc'd in arrayAddItem()) or local utils file. */
+static size_t UJArraySize(UJObject obj)
+{
+	UJObject _u;
+	size_t size = 0;
+	void *iter = UJBeginArray(obj);
+	if (iter) {
+		while (UJIterArray(&iter, &_u))
+			size ++;
+	}
+	return size;
+}
 
 
 void clear_resultset(esodbc_stmt_st *stmt)
@@ -98,7 +114,7 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 	UJObject col_o, name_o, type_o;
 	wstr_st col_name, col_type;
 	size_t ncols, i;
-	wchar_t *keys[] = {
+	const wchar_t *keys[] = {
 		MK_WPTR(JSON_ANSWER_COL_NAME),
 		MK_WPTR(JSON_ANSWER_COL_TYPE)
 	};
@@ -189,6 +205,9 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 		recno ++;
 	}
 
+	/* new columsn attached, need to check compatiblity */
+	stmt->sql2c_conversion = CONVERSION_UNCHECKED;
+
 	return SQL_SUCCESS;
 }
 
@@ -199,13 +218,13 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
  * even if the call fails.
  * - parses it, preparing iterators for SQLFetch()'ing.
  */
-SQLRETURN attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
+SQLRETURN TEST_API attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 {
 	int unpacked;
 	UJObject obj, columns, rows, cursor;
 	const wchar_t *wcurs;
 	size_t eccnt;
-	wchar_t *keys[] = {
+	const wchar_t *keys[] = {
 		MK_WPTR(JSON_ANSWER_COLUMNS),
 		MK_WPTR(JSON_ANSWER_ROWS),
 		MK_WPTR(JSON_ANSWER_CURSOR)
@@ -308,7 +327,7 @@ SQLRETURN attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 /*
  * Parse an error and push it as statement diagnostic.
  */
-SQLRETURN attach_error(esodbc_stmt_st *stmt, char *buff, size_t blen)
+SQLRETURN TEST_API attach_error(esodbc_stmt_st *stmt, char *buff, size_t blen)
 {
 	UJObject obj, o_status, o_error, o_type, o_reason;
 	const wchar_t *wtype, *wreason;
@@ -318,11 +337,11 @@ SQLRETURN attach_error(esodbc_stmt_st *stmt, char *buff, size_t blen)
 	size_t wbuflen = sizeof(wbuf)/sizeof(*wbuf);
 	int n;
 	void *state = NULL;
-	wchar_t *outer_keys[] = {
+	const wchar_t *outer_keys[] = {
 		MK_WPTR(JSON_ANSWER_ERROR),
 		MK_WPTR(JSON_ANSWER_STATUS)
 	};
-	wchar_t *err_keys[] = {
+	const wchar_t *err_keys[] = {
 		MK_WPTR(JSON_ANSWER_ERR_TYPE),
 		MK_WPTR(JSON_ANSWER_ERR_REASON)
 	};
@@ -566,6 +585,9 @@ SQLRETURN EsSQLBindCol(
 			TargetValue, SQL_IS_POINTER);
 	if (ret != SQL_SUCCESS)
 		goto copy_ret;
+
+	/* every binding resets conversion flag */
+	stmt->sql2c_conversion = CONVERSION_UNCHECKED;
 
 	return SQL_SUCCESS;
 
@@ -1004,7 +1026,7 @@ static SQLRETURN wstr_to_wstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	return SQL_SUCCESS;
 }
 
-
+/* function expects chars not to count the 0-term */
 static BOOL wstr_to_timestamp_struct(const wchar_t *wstr, size_t chars,
 		TIMESTAMP_STRUCT *tss)
 {
@@ -1015,11 +1037,15 @@ static BOOL wstr_to_timestamp_struct(const wchar_t *wstr, size_t chars,
 
 	DBG("converting ISO 8601 `" LWPDL "` to timestamp.", chars, wstr);
 
-	len = (int)(chars < sizeof(buff) - 1 ? chars : sizeof(buff) - 1);
-	len = ansi_w2c(wstr, buff, len);
+	if (sizeof(buff) - 1 < chars) {
+		ERR("`" LWPDL "` not a TIMESTAMP.", chars, wstr);
+		return FALSE;
+	}
+	len = ansi_w2c(wstr, buff, chars);
+	/* len counts the 0-term */
 	if (len <= 0 || timestamp_parse(buff, len - 1, &tsp) ||
 			(! timestamp_to_tm_local(&tsp, &tmp))) {
-		ERR("data `" LWPDL "` not an ANSI ISO 8601 format.", chars,wstr);
+		ERR("data `" LWPDL "` not an ANSI ISO 8601 format.", chars, wstr);
 		return FALSE;
 	}
 	TM_TO_TIMESTAMP_STRUCT(&tmp, tss);
@@ -1036,21 +1062,98 @@ static BOOL wstr_to_timestamp_struct(const wchar_t *wstr, size_t chars,
 
 /*
  * -> SQL_C_TYPE_TIMESTAMP
+ *
+ * Conversts an ES/SQL 'date' or a text representation of a
+ * timestamp/date/time value into a TIMESTAMP_STRUCT (indicates the detected
+ * input format into the "format" parameter).
  */
 static SQLRETURN wstr_to_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		void *data_ptr, SQLLEN *octet_len_ptr,
-		const wchar_t *wstr, size_t chars)
+		const wchar_t *wstr, size_t chars_0, SQLSMALLINT *format)
 {
+	size_t cnt = chars_0 - 1;
 	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
 	TIMESTAMP_STRUCT *tss = (TIMESTAMP_STRUCT *)data_ptr;
+	SQLWCHAR buff[] = MK_WPTR("1000-10-10T10:10:10.1001001Z");
 
 	if (octet_len_ptr) {
 		*octet_len_ptr = sizeof(*tss);
 	}
 
 	if (data_ptr) {
-		if (! wstr_to_timestamp_struct(wstr, chars, tss)) {
-			RET_HDIAGS(stmt, SQL_STATE_07006);
+		/* right & left trim the data before attempting conversion */
+		wstr = trim_ws(wstr, &cnt);
+
+		switch (irec->concise_type) {
+			case SQL_TYPE_TIMESTAMP:
+				if (! wstr_to_timestamp_struct(wstr, cnt, tss)) {
+					RET_HDIAGS(stmt, SQL_STATE_22018);
+				}
+				if (format) {
+					*format = SQL_TYPE_TIMESTAMP;
+				}
+				break;
+			case SQL_VARCHAR:
+				if (sizeof(ESODBC_TIME_TEMPLATE) - 1 < cnt) {
+					/* longer than a date-value -> try a timestamp */
+					if (! wstr_to_timestamp_struct(wstr, cnt, tss)) {
+						RET_HDIAGS(stmt, SQL_STATE_22018);
+					}
+					if (format) {
+						*format = SQL_TYPE_TIMESTAMP;
+					}
+				} else if (/*hh:mm:ss*/8 <= cnt && wstr[2] == L':' &&
+						wstr[5] == L':') { /* could this be a time-val? */
+					/* copy active value in template and parse it as TS */
+					/* copy is safe: cnt <= [time template] < [buff] */
+					wcsncpy(buff + sizeof(ESODBC_DATE_TEMPLATE) - 1, wstr,
+							cnt);
+					/* there could be a varying number of fractional digits */
+					buff[sizeof(ESODBC_DATE_TEMPLATE) - 1 + cnt] = L'Z';
+					if (! wstr_to_timestamp_struct(buff,
+								sizeof(ESODBC_DATE_TEMPLATE) + cnt, tss)) {
+						ERRH(stmt, "`" LWPDL "` not a TIME.", cnt, wstr);
+						RET_HDIAGS(stmt, SQL_STATE_22018);
+					} else {
+						tss->year = tss->month = tss->day = 0;
+						if (format) {
+							*format = SQL_TYPE_TIME;
+						}
+					}
+				} else if (/*yyyy-mm-dd*/10 <= cnt && wstr[4] == L'-' &&
+						wstr[7] == L'-') { /* could this be a date-val? */
+					/* copy active value in template and parse it as TS */
+					/* copy is safe: cnt <= [time template] < [buff] */
+					wcsncpy(buff, wstr, cnt);
+					if (! wstr_to_timestamp_struct(buff,
+								sizeof(buff)/sizeof(buff[0]) - 1, tss)) {
+						ERRH(stmt, "`" LWPDL "` not a DATE.", cnt, wstr);
+						RET_HDIAGS(stmt, SQL_STATE_22018);
+					} else {
+						tss->hour = tss->minute = tss->second = 0;
+						tss->fraction = 0;
+						if (format) {
+							*format = SQL_TYPE_DATE;
+						}
+					}
+				} else {
+					ERRH(stmt, "`" LWPDL "` not a DATE/TIME/Timestamp.", cnt,
+							wstr);
+					RET_HDIAGS(stmt, SQL_STATE_22018);
+				}
+				break;
+
+			case SQL_CHAR:
+			case SQL_LONGVARCHAR:
+			case SQL_WCHAR:
+			case SQL_WLONGVARCHAR:
+			case SQL_TYPE_DATE:
+			case SQL_TYPE_TIME:
+				BUGH(stmt, "unexpected (but permitted) SQL type.");
+				RET_HDIAGS(stmt, SQL_STATE_HY004);
+			default:
+				BUGH(stmt, "uncought invalid conversion.");
+				RET_HDIAGS(stmt, SQL_STATE_07006);
 		}
 	} else {
 		DBGH(stmt, "REC@0x%p, NULL data_ptr", arec);
@@ -1064,22 +1167,76 @@ static SQLRETURN wstr_to_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
  */
 static SQLRETURN wstr_to_date(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		void *data_ptr, SQLLEN *octet_len_ptr,
-		const wchar_t *wstr, size_t chars)
+		const wchar_t *wstr, size_t chars_0)
 {
 	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
 	DATE_STRUCT *ds = (DATE_STRUCT *)data_ptr;
 	TIMESTAMP_STRUCT tss;
+	SQLRETURN ret;
+	SQLSMALLINT fmt;
 
 	if (octet_len_ptr) {
 		*octet_len_ptr = sizeof(*ds);
 	}
 
 	if (data_ptr) {
-		if (! wstr_to_timestamp_struct(wstr, chars, &tss))
-			RET_HDIAGS(stmt, SQL_STATE_07006);
+		ret = wstr_to_timestamp(arec, irec, &tss, NULL, wstr, chars_0, &fmt);
+		if (! SQL_SUCCEEDED(ret)) {
+			return ret;
+		}
+		if (fmt == SQL_TYPE_TIME) {
+			/* it's a time-value */
+			RET_HDIAGS(stmt, SQL_STATE_22018);
+		}
 		ds->year = tss.year;
 		ds->month = tss.month;
 		ds->day = tss.day;
+		if (tss.hour || tss.minute || tss.second || tss.fraction) {
+			/* value's truncated */
+			RET_HDIAGS(stmt, SQL_STATE_01S07);
+		}
+	} else {
+		DBGH(stmt, "REC@0x%p, NULL data_ptr", arec);
+	}
+
+	return SQL_SUCCESS;
+}
+
+/*
+ * -> SQL_C_TYPE_TIME
+ */
+static SQLRETURN wstr_to_time(esodbc_rec_st *arec, esodbc_rec_st *irec,
+		void *data_ptr, SQLLEN *octet_len_ptr,
+		const wchar_t *wstr, size_t chars_0)
+{
+	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
+	TIME_STRUCT *ts = (TIME_STRUCT *)data_ptr;
+	TIMESTAMP_STRUCT tss;
+	SQLRETURN ret;
+	SQLSMALLINT fmt;
+
+	if (octet_len_ptr) {
+		*octet_len_ptr = sizeof(*ts);
+	}
+
+	if (data_ptr) {
+		ret = wstr_to_timestamp(arec, irec, &tss, NULL, wstr, chars_0, &fmt);
+		if (! SQL_SUCCEEDED(ret)) {
+			return ret;
+		}
+		/* need to differentiate between:
+		 * - 1234-12-34T00:00:00Z : valid and
+		 * - 1234-12-34 : invalid */
+		if (fmt == SQL_TYPE_DATE) {
+			RET_HDIAGS(stmt, SQL_STATE_22018);
+		}
+		ts->hour = tss.hour;
+		ts->minute = tss.minute;
+		ts->second = tss.second;
+		if (tss.fraction) {
+			/* value's truncated */
+			RET_HDIAGS(stmt, SQL_STATE_01S07);
+		}
 	} else {
 		DBGH(stmt, "REC@0x%p, NULL data_ptr", arec);
 	}
@@ -1119,11 +1276,15 @@ static SQLRETURN copy_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		case SQL_C_WCHAR:
 			return wstr_to_wstr(arec, irec, data_ptr, octet_len_ptr,
 					wstr, chars_0);
+
 		case SQL_C_TYPE_TIMESTAMP:
 			return wstr_to_timestamp(arec, irec, data_ptr, octet_len_ptr,
-					wstr, chars_0);
+					wstr, chars_0, NULL);
 		case SQL_C_TYPE_DATE:
 			return wstr_to_date(arec, irec, data_ptr, octet_len_ptr,
+					wstr, chars_0);
+		case SQL_C_TYPE_TIME:
+			return wstr_to_time(arec, irec, data_ptr, octet_len_ptr,
 					wstr, chars_0);
 
 		default:
@@ -1190,16 +1351,14 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 	with_info = FALSE;
 	/* iterate over the contents of one table row */
 	for (i = 0; i < ard->count && UJIterArray(&iter_row, &obj); i ++) {
+		arec = &ard->recs[i]; /* access safe if 'i < ard->count' */
 		/* if record not bound skip it */
-		if (! REC_IS_BOUND(&ard->recs[i])) {
+		if (! REC_IS_BOUND(arec)) {
 			DBGH(stmt, "column #%d not bound, skipping it.", i + 1);
 			continue;
 		}
 
-		arec = get_record(ard, i + 1, FALSE);
-		irec = get_record(ird, i + 1, FALSE);
-		assert(arec);
-		assert(irec);
+		irec = &ird->recs[i]; /* access checked by UJIterArray() condition */
 
 		switch (UJGetType(obj)) {
 			default:
@@ -1210,14 +1369,8 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 
 			case UJT_Null:
 				DBGH(stmt, "value [%zd, %d] is NULL.", rowno, i + 1);
-#if 0
-				// FIXME: needed?
-				if (! arec->nullable) {
-					ERRH(stmt, "received a NULL for a not nullable val.");
-					RET_ROW_DIAG(SQL_STATE_HY003, "NULL value received for non"
-							" nullable data type", i + 1);
-				}
-#endif //0
+				/* Note: if ever causing an issue, check
+				 * arec->es_type->nullable before returning NULL to app */
 				ind_len = deferred_address(SQL_DESC_INDICATOR_PTR, pos, arec);
 				if (! ind_len) {
 					ERRH(stmt, "no buffer to signal NULL value.");
@@ -1269,7 +1422,7 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 				SET_ROW_DIAG(rowno, i + 1);
 			case SQL_SUCCESS:
 				break;
-			default:
+			default: /* error */
 				SET_ROW_DIAG(rowno, i + 1);
 				return ret;
 		}
@@ -1286,6 +1439,202 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 
 #undef RET_ROW_DIAG
 #undef SET_ROW_DIAG
+}
+
+static BOOL conv_supported(SQLSMALLINT sqltype, SQLSMALLINT ctype)
+{
+	switch (ctype) {
+		case SQL_C_GUID:
+
+		case SQL_C_INTERVAL_DAY:
+		case SQL_C_INTERVAL_HOUR:
+		case SQL_C_INTERVAL_MINUTE:
+		case SQL_C_INTERVAL_SECOND:
+		case SQL_C_INTERVAL_DAY_TO_HOUR:
+		case SQL_C_INTERVAL_DAY_TO_MINUTE:
+		case SQL_C_INTERVAL_DAY_TO_SECOND:
+		case SQL_C_INTERVAL_HOUR_TO_MINUTE:
+		case SQL_C_INTERVAL_HOUR_TO_SECOND:
+		case SQL_C_INTERVAL_MINUTE_TO_SECOND:
+		case SQL_C_INTERVAL_MONTH:
+		case SQL_C_INTERVAL_YEAR:
+		case SQL_C_INTERVAL_YEAR_TO_MONTH:
+
+		// case SQL_C_TYPE_TIMESTAMP_WITH_TIMEZONE:
+		// case SQL_C_TYPE_TIME_WITH_TIMEZONE:
+			return FALSE;
+	}
+	return TRUE;
+}
+
+/* implements the rotation of the matrix in:
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/converting-data-from-c-to-sql-data-types */
+static BOOL conv_allowed(SQLSMALLINT sqltype, SQLSMALLINT ctype)
+{
+	switch (ctype) {
+		/* application will use implementation's type (irec's) */
+		case SQL_C_DEFAULT:
+		/* anything's convertible to [w]char & binary */
+		case SQL_C_CHAR:
+		case SQL_C_WCHAR:
+		case SQL_C_BINARY:
+			return TRUE;
+
+		/* GUID (outlier) is only convertible to same time in both sets */
+		case SQL_C_GUID:
+			return sqltype == SQL_GUID;
+	}
+
+	switch (sqltype) {
+		case SQL_CHAR:
+		case SQL_VARCHAR:
+		case SQL_LONGVARCHAR:
+		case SQL_WCHAR:
+		case SQL_WVARCHAR:
+		case SQL_WLONGVARCHAR:
+			break; /* it's not SQL_C_GUID, checked for above */
+
+		case SQL_DECIMAL:
+		case SQL_NUMERIC:
+		case SQL_SMALLINT:
+		case SQL_INTEGER:
+		case SQL_TINYINT:
+		case SQL_BIGINT:
+			switch (ctype) {
+				case SQL_C_TYPE_DATE:
+				case SQL_C_TYPE_TIME:
+				case SQL_C_TYPE_TIMESTAMP:
+				case SQL_C_GUID:
+					return FALSE;
+			}
+			break;
+
+		case SQL_BIT:
+		case SQL_REAL:
+		case SQL_FLOAT:
+		case SQL_DOUBLE:
+			switch (ctype) {
+				case SQL_C_TYPE_DATE:
+				case SQL_C_TYPE_TIME:
+				case SQL_C_TYPE_TIMESTAMP:
+				case SQL_C_GUID:
+
+				case SQL_C_INTERVAL_MONTH:
+				case SQL_C_INTERVAL_YEAR:
+				case SQL_C_INTERVAL_YEAR_TO_MONTH:
+				case SQL_C_INTERVAL_DAY:
+				case SQL_C_INTERVAL_HOUR:
+				case SQL_C_INTERVAL_MINUTE:
+				case SQL_C_INTERVAL_SECOND:
+				case SQL_C_INTERVAL_DAY_TO_HOUR:
+				case SQL_C_INTERVAL_DAY_TO_MINUTE:
+				case SQL_C_INTERVAL_DAY_TO_SECOND:
+				case SQL_C_INTERVAL_HOUR_TO_MINUTE:
+				case SQL_C_INTERVAL_HOUR_TO_SECOND:
+				case SQL_C_INTERVAL_MINUTE_TO_SECOND:
+					return FALSE;
+			}
+			break;
+
+		case SQL_BINARY:
+		case SQL_VARBINARY:
+		case SQL_LONGVARBINARY:
+			return FALSE; /* it's not SQL_C_BINARY, checked for above */
+
+
+		case SQL_TYPE_DATE:
+			switch (ctype) {
+				case SQL_C_TYPE_DATE:
+				case SQL_C_TYPE_TIMESTAMP:
+					return TRUE;
+			}
+			return FALSE;
+		case SQL_TYPE_TIME:
+			switch (ctype) {
+				case SQL_C_TYPE_TIME:
+				case SQL_C_TYPE_TIMESTAMP:
+					return TRUE;
+			}
+			return FALSE;
+		case SQL_TYPE_TIMESTAMP:
+			switch (ctype) {
+				case SQL_C_TYPE_DATE:
+				case SQL_C_TYPE_TIME:
+				case SQL_C_TYPE_TIMESTAMP:
+					return TRUE;
+			}
+			return FALSE;
+
+		case SQL_INTERVAL_MONTH:
+		case SQL_INTERVAL_YEAR:
+		case SQL_INTERVAL_YEAR_TO_MONTH:
+		case SQL_INTERVAL_DAY:
+		case SQL_INTERVAL_HOUR:
+		case SQL_INTERVAL_MINUTE:
+		case SQL_INTERVAL_SECOND:
+		case SQL_INTERVAL_DAY_TO_HOUR:
+		case SQL_INTERVAL_DAY_TO_MINUTE:
+		case SQL_INTERVAL_DAY_TO_SECOND:
+		case SQL_INTERVAL_HOUR_TO_MINUTE:
+		case SQL_INTERVAL_HOUR_TO_SECOND:
+		case SQL_INTERVAL_MINUTE_TO_SECOND:
+			switch (ctype) {
+				case SQL_C_BIT:
+				case SQL_C_TINYINT:
+				case SQL_C_STINYINT:
+				case SQL_C_UTINYINT:
+				case SQL_C_SBIGINT:
+				case SQL_C_UBIGINT:
+				case SQL_C_SHORT:
+				case SQL_C_SSHORT:
+				case SQL_C_USHORT:
+				case SQL_C_LONG:
+				case SQL_C_SLONG:
+				case SQL_C_ULONG:
+					return TRUE;
+			}
+			return FALSE;
+
+	}
+	return TRUE;
+}
+
+/* check if data types in returned columns are compabile with buffer types
+ * bound for those columns */
+static int sql2c_convertible(esodbc_stmt_st *stmt)
+{
+	SQLSMALLINT i, min;
+	esodbc_desc_st *ard, *ird;
+	esodbc_rec_st* arec, *irec;
+
+	assert(stmt->hdr.dbc->es_types);
+	assert(STMT_HAS_RESULTSET(stmt));
+
+	ard = stmt->ard;
+	ird = stmt->ird;
+
+	min = ard->count < ird->count ? ard->count : ird->count;
+	for (i = 0; i < min; i ++) {
+		arec = &ard->recs[i];
+		if (! REC_IS_BOUND(arec)) {
+			/* skip not bound columns */
+			continue;
+		}
+		irec = &ird->recs[i];
+
+		if (! conv_allowed(irec->concise_type, arec->type)) {
+			ERRH(stmt, "conversion not allowed on column %d types: IRD: %d, "
+					"ARD: %d.", i, irec->es_type->c_concise_type, arec->type);
+			return CONVERSION_VIOLATION;
+		}
+		if (! conv_supported(irec->concise_type, arec->type)) {
+			ERRH(stmt, "conversion not supported on column %d types: IRD: %d, "
+					"ARD: %d.", i, irec->es_type->c_concise_type, arec->type);
+			return CONVERSION_UNSUPPORTED;
+		}
+	}
+
+	return CONVERSION_SUPPORTED;
 }
 
 /*
@@ -1364,6 +1713,44 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 		}
 		ERRH(stmt, "no resultset available on statement.");
 		RET_HDIAGS(stmt, SQL_STATE_HY010);
+	}
+
+	/* Check if the data [type] stored in DB is compatiblie with the buffer
+	 * [type] the application provides. This test can only be done at
+	 * fetch-time, since the application can unbind/rebind columns at any time
+	 * (i.e. also in-between consecutive fetches). */
+	switch (stmt->sql2c_conversion) {
+		case CONVERSION_VIOLATION:
+			ERRH(stmt, "types compibility check had failed already "
+					"(violation).");
+			RET_HDIAGS(stmt, SQL_STATE_07006);
+			/* RET_ returns */
+
+		case CONVERSION_UNSUPPORTED:
+			ERRH(stmt, "types compibility check had failed already "
+					"(unsupported).");
+			RET_HDIAG(stmt, SQL_STATE_HYC00, "Conversion target type not"
+					" supported", 0);
+			/* RET_ returns */
+
+		case CONVERSION_SKIPPED:
+			DBGH(stmt, "types compatibility skipped.");
+			/* check unnecessary (SYS TYPES, possiblity other metas) */
+			break;
+
+		case CONVERSION_UNCHECKED:
+			stmt->sql2c_conversion = sql2c_convertible(stmt);
+			if (stmt->sql2c_conversion < 0) {
+				ERRH(stmt, "convertibility check: failed!");
+				RET_HDIAGS(stmt,
+						stmt->sql2c_conversion == CONVERSION_VIOLATION ?
+						SQL_STATE_07006 : SQL_STATE_HYC00);
+			}
+			DBGH(stmt, "convertibility check: OK.");
+			/* no break; */
+
+		default:
+			DBGH(stmt, "ES/app data/buffer types found compatible.");
 	}
 
 	DBGH(stmt, "(`%.*s`); cursor @ %zd / %zd.", stmt->sqllen,
@@ -1861,8 +2248,8 @@ SQLRETURN EsSQLColAttributeW(
 				*(SQLWCHAR **)pCharAttr = MK_WPTR("");
 				*pcbCharAttr = 0;
 			} else {
-				return write_wptr(&stmt->hdr.diag, pcbCharAttr, wptr,
-						cbDescMax, pcbCharAttr);
+				return write_wptr(&stmt->hdr.diag, pCharAttr, wptr, cbDescMax,
+						pcbCharAttr);
 			}
 			break;
 
