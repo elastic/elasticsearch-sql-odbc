@@ -1281,24 +1281,27 @@ static BOOL elastic_name2types(wstr_st *type_name,
 			switch (tolower(type_name->str[0])) {
 				case (SQLWCHAR)'i': /* integer */
 					if (wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_INTEGER),
-								type_name->cnt) == 0)
+								type_name->cnt) == 0) {
 						*c_sql = ESODBC_ES_TO_CSQL_INTEGER;
 						*sql = ESODBC_ES_TO_SQL_INTEGER;
 						return TRUE;
+					}
 					break;
 				case (SQLWCHAR)'b': /* boolean */
 					if (wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_BOOLEAN),
-								type_name->cnt) == 0)
+								type_name->cnt) == 0) {
 						*c_sql = ESODBC_ES_TO_CSQL_BOOLEAN;
 						*sql = ESODBC_ES_TO_SQL_BOOLEAN;
 						return TRUE;
+					}
 					break;
 				case (SQLWCHAR)'k': /* keyword */
 					if (wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_KEYWORD),
-								type_name->cnt) == 0)
+								type_name->cnt) == 0) {
 						*c_sql = ESODBC_ES_TO_CSQL_KEYWORD;
 						*sql = ESODBC_ES_TO_SQL_KEYWORD;
 						return TRUE;
+					}
 					break;
 			}
 			break;
