@@ -38,11 +38,11 @@
  */
 #define ASSERT_INTEGER_TYPES_EQUAL(a, b) \
 	assert((sizeof(a) == sizeof(b)) && \
-			( (0 < (a)0 - 1 && 0 < (b)0 - 1) || \
-			  (0 > (a)0 - 1 && 0 > (b)0 - 1) ))
+		( (0 < (a)0 - 1 && 0 < (b)0 - 1) || \
+			(0 > (a)0 - 1 && 0 > (b)0 - 1) ))
 
-/* 
- * Stringifying in two preproc. passes 
+/*
+ * Stringifying in two preproc. passes
  */
 #define _STR(_x)	# _x
 #define STR(_x)		_STR(_x)
@@ -75,7 +75,7 @@ typedef struct cstr {
  * Trims leading and trailing WS of a wide string of 'chars' lenght.
  * 0-terminator should not be counted (as it's a non-WS).
  */
-const SQLWCHAR* trim_ws(const SQLWCHAR *wstr, size_t *chars);
+const SQLWCHAR *trim_ws(const SQLWCHAR *wstr, size_t *chars);
 /*
  * Copy converted strings from SQLWCHAR to char, for ANSI strings.
  */
@@ -100,7 +100,7 @@ int wszmemcmp(const SQLWCHAR *a, const SQLWCHAR *b, long count);
 /*
  * wcsstr() variant for non-NTS.
  */
-const SQLWCHAR* wcsnstr(const SQLWCHAR *hay, size_t len, SQLWCHAR needle);
+const SQLWCHAR *wcsnstr(const SQLWCHAR *hay, size_t len, SQLWCHAR needle);
 
 typedef struct wstr {
 	SQLWCHAR *str;
@@ -126,7 +126,7 @@ typedef struct wstr {
  */
 #define EQ_CASE_WSTR(s1, s2) \
 	((s1)->cnt == (s2)->cnt && \
-	 wmemncasecmp((s1)->str, (s2)->str, (s1)->cnt) == 0)
+		wmemncasecmp((s1)->str, (s2)->str, (s1)->cnt) == 0)
 
 BOOL wstr2bool(wstr_st *val);
 BOOL wstr2long(wstr_st *val, long *out);
@@ -143,22 +143,22 @@ BOOL wstr2long(wstr_st *val, long *out);
  */
 #define WCS2U8(_wstr, _wchars, _u8, _ubytes) \
 	WideCharToMultiByte(CP_UTF8, WC_NO_BEST_FIT_CHARS, \
-			_wstr, _wchars, _u8, _ubytes, \
-			NULL, NULL)
+		_wstr, _wchars, _u8, _ubytes, \
+		NULL, NULL)
 #define WCS2U8_BUFF_INSUFFICIENT \
 	(GetLastError() == ERROR_INSUFFICIENT_BUFFER)
 #define WCS2U8_ERRNO() GetLastError()
 
 #else /* _WIN32 */
 #error "unsupported platform" /* TODO */
-	/* "[R]eturns the number of bytes written into the multibyte output
-	 * string, excluding the terminating NULL (if any)".  Copies until \0 is
-	 * met in wstr or buffer runs out.  If \0 is met, it's copied, but not
-	 * counted in return. (silly fn) */
-	/* "[T]he multibyte character string at mbstr is null-terminated
-	 * only if wcstombs encounters a wide-character null character
-	 * during conversion." */
-	// wcstombs(charp, wstr, octet_length);
+/* "[R]eturns the number of bytes written into the multibyte output
+ * string, excluding the terminating NULL (if any)".  Copies until \0 is
+ * met in wstr or buffer runs out.  If \0 is met, it's copied, but not
+ * counted in return. (silly fn) */
+/* "[T]he multibyte character string at mbstr is null-terminated
+ * only if wcstombs encounters a wide-character null character
+ * during conversion." */
+// wcstombs(charp, wstr, octet_length);
 #endif /* _WIN32 */
 
 #ifdef UNICODE

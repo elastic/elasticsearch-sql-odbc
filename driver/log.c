@@ -160,11 +160,11 @@ static void log_file_write(char *buff, size_t pos)
 
 	/* write the buffer to file */
 	if (! WriteFile(
-				log_handle, /*handle*/
-				buff, /* buffer */
-				(DWORD)(pos * sizeof(buff[0])), /*bytes to write */
-				&written /* bytes written */,
-				NULL /*overlap*/)) {
+			log_handle, /*handle*/
+			buff, /* buffer */
+			(DWORD)(pos * sizeof(buff[0])), /*bytes to write */
+			&written /* bytes written */,
+			NULL /*overlap*/)) {
 		log_file_handle(/* close */FALSE);
 	} else {
 #ifndef NDEBUG
@@ -176,7 +176,7 @@ static void log_file_write(char *buff, size_t pos)
 }
 
 static inline void log_file(int level, int werrno, const char *func,
-		const char *srcfile, int lineno, const char *fmt, va_list args)
+	const char *srcfile, int lineno, const char *fmt, va_list args)
 {
 	time_t now = time(NULL);
 	int ret;
@@ -185,7 +185,7 @@ static inline void log_file(int level, int werrno, const char *func,
 	char ebuff[LOG_ERRNO_BUF_SIZE];
 	const char *sfile, *next;
 	/* keep in sync with esodbc_log_levels */
-	static const char* level2str[] = { "ERROR", "WARN", "INFO", "DEBUG", };
+	static const char *level2str[] = { "ERROR", "WARN", "INFO", "DEBUG", };
 	assert(level < sizeof(level2str)/sizeof(level2str[0]));
 
 	/* FIXME: 4!WINx */
@@ -213,42 +213,49 @@ static inline void log_file(int level, int werrno, const char *func,
 	/* write the debugging prefix */
 	/* XXX: add release (file o.a.) printing? */
 	if ((ret = snprintf(buff + pos, sizeof(buff) - pos, " - [%s] %s()@%s:%d ",
-					level2str[level], func, sfile, lineno)) < 0)
+					level2str[level], func, sfile, lineno)) < 0) {
 		return;
-	else
+	} else {
 		pos += ret;
+	}
 
 	/* write the error number details */
 	if (werrno) {
 		ret = snprintf(buff + pos, sizeof(buff) - pos, "(%d:", errno);
-		if (ret < 0)
+		if (ret < 0) {
 			return;
-		else
+		} else {
 			pos += ret;
+		}
 
 		/* FIXME: 4!WINx */
-		if (strerror_s(ebuff, sizeof(ebuff), errno))
+		if (strerror_s(ebuff, sizeof(ebuff), errno)) {
 			return;
+		}
 		ret = snprintf(buff + pos, sizeof(buff) - pos, "%s) ", ebuff);
-		if (ret < 0)
+		if (ret < 0) {
 			return;
-		else
+		} else {
 			pos += ret;
+		}
 	}
 
 	/* write user's message */
 	ret = vsnprintf(buff + pos, sizeof(buff) - pos, fmt, args);
-	if (ret < 0)
+	if (ret < 0) {
 		return;
-	else
+	} else {
 		pos += ret;
+	}
 
 	/* if overrunning, correct the pos, to be able to add a \n\0 */
-	if (sizeof(buff) < pos + /*\n\0*/2)
+	if (sizeof(buff) < pos + /*\n\0*/2) {
 		pos = sizeof(buff) - 2;
+	}
 	ret = snprintf(buff + pos, sizeof(buff) - pos, "\n");
-	if (0 <= ret)
+	if (0 <= ret) {
 		pos += ret;
+	}
 	assert(pos <= sizeof(buff));
 
 	AcquireSRWLockExclusive(&log_mux);
@@ -257,10 +264,10 @@ static inline void log_file(int level, int werrno, const char *func,
 }
 
 void _esodbc_log(int lvl, int werrno, const char *func,
-		const char *srcfile, int lineno, const char *fmt, ...)
+	const char *srcfile, int lineno, const char *fmt, ...)
 {
 	va_list args;
-    va_start(args, fmt);
+	va_start(args, fmt);
 	log_file(lvl, werrno, func, srcfile, lineno, fmt, args);
 	va_end(args);
 }

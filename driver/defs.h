@@ -78,7 +78,7 @@
  */
 /* driver version ex. 1.2(b0a34b4,u,d) */
 #define ESODBC_DRIVER_VER	STR(DRV_VER_MAJOR) "." STR(DRV_VER_MINOR) \
-		"(" STR(DRV_SRC_VER) "," STR(DRV_ENCODING) "," STR(DRV_BUILD_TYPE) ")"
+	"(" STR(DRV_SRC_VER) "," STR(DRV_ENCODING) "," STR(DRV_BUILD_TYPE) ")"
 /* TODO: learn it from ES */
 #define ESODBC_ELASTICSEARCH_VER	"7.x"
 #define ESODBC_ELASTICSEARCH_NAME	"Elasticsearch"
@@ -131,8 +131,8 @@
  * transactions; this would need to be updated if updating ones will be
  * introduced. */
 #define ESODBC_DEF_TXN_ISOLATION				(0 | \
-		SQL_TXN_READ_UNCOMMITTED | SQL_TXN_READ_COMMITTED | \
-		SQL_TXN_REPEATABLE_READ | SQL_TXN_SERIALIZABLE)
+	SQL_TXN_READ_UNCOMMITTED | SQL_TXN_READ_COMMITTED | \
+	SQL_TXN_REPEATABLE_READ | SQL_TXN_SERIALIZABLE)
 
 /* no schema support, but accepted (=currently ignored) by driver */
 #define ESODBC_SCHEMA_USAGE						SQL_SU_PROCEDURE_INVOCATION
@@ -142,14 +142,14 @@
  * - not supported in: TABLE/INDEX/PRIVILEGE DEFINITION.
  */
 #define ESODBC_CATALOG_USAGE					(0 | \
-		SQL_CU_DML_STATEMENTS | SQL_CU_PROCEDURE_INVOCATION)
+	SQL_CU_DML_STATEMENTS | SQL_CU_PROCEDURE_INVOCATION)
 /* identifiers are case sensitive */
 #define ESODBC_QUOTED_IDENTIFIER_CASE			SQL_IC_SENSITIVE
 /* what's allowed in an identifier name (eg. table, column, index) except
  * [a-zA-Z0-9_], accepted in a delimited specification -> all printable ASCII
  * (assuming ASCII is the limitation?? TODO ), 0x20-0x7E. */
 #define ESODBC_SPECIAL_CHARACTERS				" !\"#$%&'()*+,-./" /*[0-9]*/ \
-		";<=>?@" /*[A-Z]*/ "[\\]^" /*[_]*/ "`" /*[a-z]*/ "{|}~"
+	";<=>?@" /*[A-Z]*/ "[\\]^" /*[_]*/ "`" /*[a-z]*/ "{|}~"
 /* is 'column AS name' accepted? */
 #define ESODBC_COLUMN_ALIAS						"Y"
 /* no procedures support */
@@ -163,8 +163,8 @@
  * QUANTIFIED COMPARISON, UNIQUE.
  */
 #define ESODBC_SQL92_PREDICATES					(0 | \
-		SQL_SP_BETWEEN | SQL_SP_COMPARISON  | SQL_SP_EXISTS | SQL_SP_IN | \
-		SQL_SP_ISNOTNULL | SQL_SP_ISNULL | SQL_SP_LIKE)
+	SQL_SP_BETWEEN | SQL_SP_COMPARISON  | SQL_SP_EXISTS | SQL_SP_IN | \
+	SQL_SP_ISNOTNULL | SQL_SP_ISNULL | SQL_SP_LIKE)
 /*
  * No JOIN support.
  */
@@ -188,11 +188,11 @@
  * Note: CEIL supported, CEILING not.
  */
 #define ESODBC_NUMERIC_FUNCTIONS				(0 | \
-		SQL_FN_NUM_ABS | SQL_FN_NUM_ACOS | SQL_FN_NUM_ASIN | SQL_FN_NUM_ATAN |\
-		SQL_FN_NUM_CEILING | SQL_FN_NUM_COS | SQL_FN_NUM_DEGREES | \
-		SQL_FN_NUM_EXP | SQL_FN_NUM_FLOOR | SQL_FN_NUM_LOG | \
-		SQL_FN_NUM_LOG10 | SQL_FN_NUM_PI | SQL_FN_NUM_RADIANS | \
-		SQL_FN_NUM_ROUND | SQL_FN_NUM_SIN | SQL_FN_NUM_SQRT | SQL_FN_NUM_TAN)
+	SQL_FN_NUM_ABS | SQL_FN_NUM_ACOS | SQL_FN_NUM_ASIN | SQL_FN_NUM_ATAN |\
+	SQL_FN_NUM_CEILING | SQL_FN_NUM_COS | SQL_FN_NUM_DEGREES | \
+	SQL_FN_NUM_EXP | SQL_FN_NUM_FLOOR | SQL_FN_NUM_LOG | \
+	SQL_FN_NUM_LOG10 | SQL_FN_NUM_PI | SQL_FN_NUM_RADIANS | \
+	SQL_FN_NUM_ROUND | SQL_FN_NUM_SIN | SQL_FN_NUM_SQRT | SQL_FN_NUM_TAN)
 /*
  * Timedate functions support:
  * - supported: EXTRACT, HOUR, MINUTE, MONTH, SECOND, WEEK, YEAR;
@@ -201,9 +201,9 @@
  * Wrong `_` name?: DAYOFMONTH, DAYOFWEEK, DAYOFYEAR (mysql, db2, oracle)
  */
 #define ESODBC_TIMEDATE_FUNCTIONS				(0 | \
-		SQL_FN_TD_EXTRACT | SQL_FN_TD_HOUR | SQL_FN_TD_MINUTE | \
-		SQL_FN_TD_MONTH | SQL_FN_TD_SECOND | SQL_FN_TD_WEEK | SQL_FN_TD_YEAR)
-		//SQL_FN_TD_DAYOFMONTH | SQL_FN_TD_DAYOFWEEK | SQL_FN_TD_DAYOFYEAR
+	SQL_FN_TD_EXTRACT | SQL_FN_TD_HOUR | SQL_FN_TD_MINUTE | \
+	SQL_FN_TD_MONTH | SQL_FN_TD_SECOND | SQL_FN_TD_WEEK | SQL_FN_TD_YEAR)
+//SQL_FN_TD_DAYOFMONTH | SQL_FN_TD_DAYOFWEEK | SQL_FN_TD_DAYOFYEAR
 /*
  * TIMESTAMPDIFF timestamp intervals:
  * - supported: none.
@@ -236,8 +236,8 @@
  * - not supported: DISTINCT.
  */
 #define ESODBC_AGGREGATE_FUNCTIONS				(0 | \
-		SQL_AF_ALL | SQL_AF_AVG | SQL_AF_COUNT | SQL_AF_MAX | SQL_AF_MIN | \
-		SQL_AF_SUM)
+	SQL_AF_ALL | SQL_AF_AVG | SQL_AF_COUNT | SQL_AF_MAX | SQL_AF_MIN | \
+	SQL_AF_SUM)
 
 
 /*** SQL92 support ***/

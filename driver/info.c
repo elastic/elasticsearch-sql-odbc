@@ -110,14 +110,15 @@ static SQLUSMALLINT esodbc_functions[] = {
  * bytes length (eg.  SQLGetInfo, SQLGetDiagField, SQLGetConnectAttr,
  * EsSQLColAttributeW). */
 SQLRETURN write_wptr(esodbc_diag_st *diag,
-		SQLWCHAR *dest, const SQLWCHAR *src,
-		SQLSMALLINT /*B*/avail, SQLSMALLINT /*B*/*usedp)
+	SQLWCHAR *dest, const SQLWCHAR *src,
+	SQLSMALLINT /*B*/avail, SQLSMALLINT /*B*/*usedp)
 {
 	size_t src_cnt, awail;
 	SQLSMALLINT used;
 
-	if (! dest)
+	if (! dest) {
 		avail = 0;
+	}
 	/* needs to be multiple of SQLWCHAR units (2 on Win) */
 	if (avail % sizeof(SQLWCHAR)) {
 		ERR("invalid buffer length provided: %d.", avail);
@@ -130,7 +131,7 @@ SQLRETURN write_wptr(esodbc_diag_st *diag,
 	used = (SQLSMALLINT)src_cnt * sizeof(SQLWCHAR);
 	if (! usedp) {
 		WARN("invalid output buffer provided (NULL) to collect used "
-				"space.");
+			"space.");
 		//RET_cDIAG(diag, SQL_STATE_HY013, "invalid used provided (NULL)", 0);
 	} else {
 		/* how many bytes are available to return (not how many would be
@@ -141,15 +142,15 @@ SQLRETURN write_wptr(esodbc_diag_st *diag,
 	if (! dest) {
 		/* only return how large of a buffer we need */
 		INFO("NULL out buff: returning needed buffer size only (%d).",
-				used);
+			used);
 	} else {
 		if (awail <= src_cnt) { /* =, since src_cnt doesn't count the \0 */
 			wcsncpy(dest, src, awail - /* 0-term */1);
 			dest[awail - 1] = 0;
 
 			INFO("not enough buffer size to write required string (plus "
-					"terminator): `" LWPD "` [%zd]; available: %d.", src,
-					src_cnt, awail);
+				"terminator): `" LWPD "` [%zd]; available: %d.", src,
+				src_cnt, awail);
 			RET_DIAG(diag, SQL_STATE_01004, NULL, 0);
 		} else {
 			wcsncpy(dest, src, src_cnt + /* 0-term */1);
@@ -167,10 +168,10 @@ SQLRETURN write_wptr(esodbc_diag_st *diag,
  * """
  */
 SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
-		SQLUSMALLINT InfoType,
-		_Out_writes_bytes_opt_(BufferLength) SQLPOINTER InfoValue,
-		SQLSMALLINT BufferLength,
-		_Out_opt_ SQLSMALLINT *StringLengthPtr)
+	SQLUSMALLINT InfoType,
+	_Out_writes_bytes_opt_(BufferLength) SQLPOINTER InfoValue,
+	SQLSMALLINT BufferLength,
+	_Out_opt_ SQLSMALLINT *StringLengthPtr)
 {
 	esodbc_dbc_st *dbc = DBCH(ConnectionHandle);
 	SQLINTEGER string_len;
@@ -205,14 +206,14 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		case SQL_MAX_CONCURRENT_ACTIVITIES:
 			*(SQLUSMALLINT *)InfoValue = ESODBC_MAX_CONCURRENT_ACTIVITIES;
 			DBGH(dbc, "requested: max active statements per connection: %d.",
-					*(SQLUSMALLINT *)InfoValue);
+				*(SQLUSMALLINT *)InfoValue);
 			break;
 
 		case SQL_CURSOR_COMMIT_BEHAVIOR:
 		case SQL_CURSOR_ROLLBACK_BEHAVIOR:
 			DBGH(dbc, "requested: cursor %s behavior.",
-					InfoType == SQL_CURSOR_COMMIT_BEHAVIOR ?
-					"commit" : "rollback");
+				InfoType == SQL_CURSOR_COMMIT_BEHAVIOR ?
+				"commit" : "rollback");
 			/* assume this is the  of equivalent of
 			 * JDBC's HOLD_CURSORS_OVER_COMMIT */
 			*(SQLUSMALLINT *)InfoValue = SQL_CB_PRESERVE;
@@ -238,14 +239,14 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 
 		case SQL_DATA_SOURCE_READ_ONLY:
 			DBGH(dbc, "requested: if data source is read only (`%s`).",
-					ESODBC_DATA_SOURCE_READ_ONLY);
+				ESODBC_DATA_SOURCE_READ_ONLY);
 			return write_wptr(&dbc->hdr.diag, InfoValue,
 					MK_WPTR(ESODBC_DATA_SOURCE_READ_ONLY), BufferLength,
 					StringLengthPtr);
 
 		case SQL_SEARCH_PATTERN_ESCAPE:
 			DBGH(dbc, "requested: escape character (`%s`).",
-					ESODBC_PATTERN_ESCAPE);
+				ESODBC_PATTERN_ESCAPE);
 			return write_wptr(&dbc->hdr.diag, InfoValue,
 					MK_WPTR(ESODBC_PATTERN_ESCAPE), BufferLength,
 					StringLengthPtr);
@@ -272,7 +273,7 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		case SQL_CATALOG_NAME_SEPARATOR: /* SQL_QUALIFIER_NAME_SEPARATOR */
 			/* JDBC[0]: getCatalogSeparator() */
 			DBGH(dbc, "requested: catalogue separator (`%s`).",
-					ESODBC_CATALOG_SEPARATOR);
+				ESODBC_CATALOG_SEPARATOR);
 			return write_wptr(&dbc->hdr.diag, InfoValue,
 					MK_WPTR(ESODBC_CATALOG_SEPARATOR), BufferLength,
 					StringLengthPtr);
@@ -335,8 +336,9 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			ret = EsSQLGetConnectAttrW(ConnectionHandle,
 					SQL_ATTR_CURRENT_CATALOG, InfoValue,
 					(SQLINTEGER)BufferLength, &string_len);
-			if (StringLengthPtr)
+			if (StringLengthPtr) {
 				*StringLengthPtr = (SQLSMALLINT)string_len;
+			}
 			return ret;
 
 		case SQL_SCHEMA_TERM:
@@ -355,7 +357,7 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		case SQL_PROCEDURES:
 		case SQL_ACCESSIBLE_PROCEDURES:
 			DBGH(dbc, "requested: procedures support (`%s`).",
-					ESODBC_PROCEDURES);
+				ESODBC_PROCEDURES);
 			return write_wptr(&dbc->hdr.diag, InfoValue,
 					MK_WPTR(ESODBC_PROCEDURES), BufferLength,
 					StringLengthPtr);
@@ -376,98 +378,98 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 
 		case SQL_SQL92_PREDICATES:
 			DBGH(dbc, "requested: SQL92 predicates (%lu).",
-					ESODBC_SQL92_PREDICATES);
+				ESODBC_SQL92_PREDICATES);
 			*(SQLUINTEGER *)InfoValue = ESODBC_SQL92_PREDICATES;
 			break;
 
 		case SQL_SQL92_RELATIONAL_JOIN_OPERATORS:
 			DBGH(dbc, "requested: SQL92 relational joins operators (%lu).",
-					ESODBC_SQL92_RELATIONAL_JOIN_OPERATORS);
+				ESODBC_SQL92_RELATIONAL_JOIN_OPERATORS);
 			*(SQLUINTEGER *)InfoValue = ESODBC_SQL92_RELATIONAL_JOIN_OPERATORS;
 			break;
 
 		case SQL_OJ_CAPABILITIES: /* SQL_OUTER_JOIN_CAPABILITIES */
 			DBGH(dbc, "requested: outer joins capabilities (%lu).",
-					ESODBC_OJ_CAPABILITIES);
+				ESODBC_OJ_CAPABILITIES);
 			*(SQLUINTEGER *)InfoValue = ESODBC_OJ_CAPABILITIES;
 			break;
 
 		case SQL_SQL92_DATETIME_FUNCTIONS:
 			DBGH(dbc, "requested: SQL92 datetime functions (%lu).",
-					ESODBC_SQL92_DATETIME_FUNCTIONS);
+				ESODBC_SQL92_DATETIME_FUNCTIONS);
 			*(SQLUINTEGER *)InfoValue = ESODBC_SQL92_DATETIME_FUNCTIONS;
 			break;
 
 		//case SQL_STRING_FUNCTIONS:
 		case SQL_SQL92_STRING_FUNCTIONS:
 			DBGH(dbc, "requested: SQL92 string functions (%lu).",
-					ESODBC_SQL92_STRING_FUNCTIONS);
+				ESODBC_SQL92_STRING_FUNCTIONS);
 			*(SQLUINTEGER *)InfoValue = ESODBC_SQL92_STRING_FUNCTIONS;
 			break;
 
 		case SQL_SQL92_NUMERIC_VALUE_FUNCTIONS:
 			DBGH(dbc, "requested: SQL92 numeric value functions (%lu).",
-					ESODBC_SQL92_NUMERIC_VALUE_FUNCTIONS);
+				ESODBC_SQL92_NUMERIC_VALUE_FUNCTIONS);
 			*(SQLUINTEGER *)InfoValue = ESODBC_SQL92_NUMERIC_VALUE_FUNCTIONS;
 			break;
 
 		case SQL_SQL92_VALUE_EXPRESSIONS:
 			DBGH(dbc, "requested: SQL92 value expressions (%lu).",
-					ODBC_SQL92_VALUE_EXPRESSIONS);
+				ODBC_SQL92_VALUE_EXPRESSIONS);
 			*(SQLUINTEGER *)InfoValue = ODBC_SQL92_VALUE_EXPRESSIONS;
 			break;
 
 		case SQL_CONVERT_FUNCTIONS:
 			DBGH(dbc, "requested: convert functions (%lu).",
-					ESODBC_CONVERT_FUNCTIONS);
+				ESODBC_CONVERT_FUNCTIONS);
 			*(SQLUINTEGER *)InfoValue = ESODBC_CONVERT_FUNCTIONS;
 			break;
 
 		case SQL_SYSTEM_FUNCTIONS:
 			DBGH(dbc, "requested: system functions (%lu).",
-					ESODBC_SYSTEM_FUNCTIONS);
+				ESODBC_SYSTEM_FUNCTIONS);
 			*(SQLUINTEGER *)InfoValue = ESODBC_SYSTEM_FUNCTIONS;
 			break;
 
 		case SQL_DATETIME_LITERALS:
 			DBGH(dbc, "requested: SQL92 datetime literals (%lu).",
-					ESODBC_DATETIME_LITERALS);
+				ESODBC_DATETIME_LITERALS);
 			*(SQLUINTEGER *)InfoValue = ESODBC_DATETIME_LITERALS;
 			break;
 
 		case SQL_TIMEDATE_DIFF_INTERVALS:
 			DBGH(dbc, "requested: timedate diff intervals (%lu).",
-					ESODBC_TIMEDATE_DIFF_INTERVALS);
+				ESODBC_TIMEDATE_DIFF_INTERVALS);
 			*(SQLUINTEGER *)InfoValue = ESODBC_TIMEDATE_DIFF_INTERVALS;
 			break;
 
 		case SQL_TIMEDATE_ADD_INTERVALS:
 			DBGH(dbc, "requested: timedate add intervals (%lu).",
-					ESODBC_TIMEDATE_ADD_INTERVALS);
+				ESODBC_TIMEDATE_ADD_INTERVALS);
 			*(SQLUINTEGER *)InfoValue = ESODBC_TIMEDATE_ADD_INTERVALS;
 			break;
 
 		case SQL_TIMEDATE_FUNCTIONS:
 			DBGH(dbc, "requested: timedate functions (%lu).",
-					ESODBC_TIMEDATE_FUNCTIONS);
+				ESODBC_TIMEDATE_FUNCTIONS);
 			*(SQLUINTEGER *)InfoValue = ESODBC_TIMEDATE_FUNCTIONS;
 			break;
 
 		case SQL_NUMERIC_FUNCTIONS:
 			DBGH(dbc, "requested: numeric functions (%lu).",
-					ESODBC_NUMERIC_FUNCTIONS);
+				ESODBC_NUMERIC_FUNCTIONS);
 			*(SQLUINTEGER *)InfoValue = ESODBC_NUMERIC_FUNCTIONS;
 			break;
 
 		case SQL_STRING_FUNCTIONS:
 			DBGH(dbc, "requested: string functions (%lu).",
-					ESODBC_STRING_FUNCTIONS);
+				ESODBC_STRING_FUNCTIONS);
 			*(SQLUINTEGER *)InfoValue = ESODBC_STRING_FUNCTIONS;
 			break;
 
 		case SQL_AGGREGATE_FUNCTIONS:
 			DBGH(dbc, "requested: aggregate functions (%lu).",
-					ESODBC_AGGREGATE_FUNCTIONS);
+				ESODBC_AGGREGATE_FUNCTIONS);
 			*(SQLUINTEGER *)InfoValue = ESODBC_AGGREGATE_FUNCTIONS;
 			break;
 
@@ -483,13 +485,13 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 
 		case SQL_QUOTED_IDENTIFIER_CASE:
 			DBGH(dbc, "requested: quoted identifier case (%lu).",
-					ESODBC_QUOTED_IDENTIFIER_CASE);
+				ESODBC_QUOTED_IDENTIFIER_CASE);
 			*(SQLUSMALLINT *)InfoValue = ESODBC_QUOTED_IDENTIFIER_CASE;
 			break;
 
 		case SQL_SPECIAL_CHARACTERS:
 			DBGH(dbc, "requested: special characters (`%s`).",
-					ESODBC_SPECIAL_CHARACTERS);
+				ESODBC_SPECIAL_CHARACTERS);
 			return write_wptr(&dbc->hdr.diag, InfoValue,
 					MK_WPTR(ESODBC_SPECIAL_CHARACTERS), BufferLength,
 					StringLengthPtr);
@@ -497,7 +499,7 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 
 		case SQL_MAX_IDENTIFIER_LEN:
 			DBGH(dbc, "requested: max identifier len (%u).",
-					ESODBC_MAX_IDENTIFIER_LEN);
+				ESODBC_MAX_IDENTIFIER_LEN);
 			*(SQLUSMALLINT *)InfoValue = ESODBC_MAX_IDENTIFIER_LEN;
 			break;
 
@@ -509,13 +511,13 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 
 		case SQL_SQL_CONFORMANCE:
 			DBGH(dbc, "requested: SQL conformance (%lu).",
-					ESODBC_SQL_CONFORMANCE);
+				ESODBC_SQL_CONFORMANCE);
 			*(SQLUINTEGER *)InfoValue = ESODBC_SQL_CONFORMANCE;
 			break;
 
 		case SQL_ODBC_INTERFACE_CONFORMANCE:
 			DBGH(dbc, "requested: ODBC interface conformance (%lu).",
-					ESODBC_ODBC_INTERFACE_CONFORMANCE);
+				ESODBC_ODBC_INTERFACE_CONFORMANCE);
 			*(SQLUINTEGER *)InfoValue = ESODBC_ODBC_INTERFACE_CONFORMANCE;
 			break;
 
@@ -527,21 +529,21 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 
 		case SQL_DBMS_VER:
 			DBGH(dbc, "requested: DBMS version (`%s`).",
-					ESODBC_ELASTICSEARCH_VER);
+				ESODBC_ELASTICSEARCH_VER);
 			return write_wptr(&dbc->hdr.diag, InfoValue,
 					MK_WPTR(ESODBC_ELASTICSEARCH_VER), BufferLength,
 					StringLengthPtr);
 
 		case SQL_DBMS_NAME:
 			DBGH(dbc, "requested: DBMS name (`%s`).",
-					ESODBC_ELASTICSEARCH_NAME);
+				ESODBC_ELASTICSEARCH_NAME);
 			return write_wptr(&dbc->hdr.diag, InfoValue,
 					MK_WPTR(ESODBC_ELASTICSEARCH_NAME), BufferLength,
 					StringLengthPtr);
 
 		case SQL_TXN_CAPABLE: /* SQL_TRANSACTION_CAPABLE */
 			DBGH(dbc, "requested: transaction capable (%u).",
-					ESODBC_TXN_CAPABLE);
+				ESODBC_TXN_CAPABLE);
 			*(SQLUSMALLINT *)InfoValue = ESODBC_TXN_CAPABLE;
 			break;
 
@@ -582,13 +584,13 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 /* TODO: see error.h: esodbc_errors definition note (2.x apps support) */
 /* Note: with SQL_DIAG_SQLSTATE DM provides a NULL StringLengthPtr */
 SQLRETURN EsSQLGetDiagFieldW(
-		SQLSMALLINT HandleType,
-		SQLHANDLE Handle,
-		SQLSMALLINT RecNumber,
-		SQLSMALLINT DiagIdentifier,
-		_Out_writes_opt_(_Inexpressible_(BufferLength)) SQLPOINTER DiagInfoPtr,
-		SQLSMALLINT BufferLength,
-		_Out_opt_ SQLSMALLINT *StringLengthPtr)
+	SQLSMALLINT HandleType,
+	SQLHANDLE Handle,
+	SQLSMALLINT RecNumber,
+	SQLSMALLINT DiagIdentifier,
+	_Out_writes_opt_(_Inexpressible_(BufferLength)) SQLPOINTER DiagInfoPtr,
+	SQLSMALLINT BufferLength,
+	_Out_opt_ SQLSMALLINT *StringLengthPtr)
 {
 	esodbc_diag_st *diag, dummy;
 	SQLSMALLINT used;
@@ -712,7 +714,7 @@ SQLRETURN EsSQLGetDiagFieldW(
 					esodbc_errors[diag->state].code, wptr);
 			return write_wptr(&dummy, DiagInfoPtr, wptr, BufferLength,
 					StringLengthPtr);
-		
+
 		case SQL_DIAG_CONNECTION_NAME:
 		/* same as SQLGetInfo(SQL_DATA_SOURCE_NAME) */
 		case SQL_DIAG_SERVER_NAME: /* TODO: keep same as _CONNECTION_NAME? */
@@ -732,7 +734,7 @@ SQLRETURN EsSQLGetDiagFieldW(
 			DBGH(Handle, "inquired connection name (`"LWPD"`)", wptr);
 			return write_wptr(&dummy, DiagInfoPtr, wptr, BufferLength,
 					StringLengthPtr);
-		
+
 
 		case SQL_DIAG_MESSAGE_TEXT: //break;
 		case SQL_DIAG_NATIVE: //break;
@@ -824,50 +826,57 @@ SQLRETURN EsSQLGetDiagRecW
 
 	if (diag->state == SQL_STATE_00000) {
 		INFOH(Handle, "no diagnostic record available for handle type %d.",
-				HandleType);
+			HandleType);
 		return SQL_NO_DATA;
 	}
 
 	/* not documented in API, but both below can be null. */
 	/* API assumes there's always enough buffer here.. */
 	/* no err indicator */
-	if (Sqlstate)
+	if (Sqlstate) {
 		wcscpy(Sqlstate, esodbc_errors[diag->state].code);
-	if (NativeError)
+	}
+	if (NativeError) {
 		*NativeError = diag->native_code;
+	}
 
 	ret = write_wptr(&dummy, MessageText, diag->text,
 			BufferLength * sizeof(*MessageText), &used);
-	if (TextLength)
+	if (TextLength) {
 		*TextLength = used / sizeof(*MessageText);
+	}
 	return ret;
 }
 
 
 SQLRETURN EsSQLGetFunctions(SQLHDBC ConnectionHandle,
-		SQLUSMALLINT FunctionId,
-		_Out_writes_opt_(_Inexpressible_("Buffer length pfExists points to depends on fFunction value.")) SQLUSMALLINT *Supported)
+	SQLUSMALLINT FunctionId,
+	_Out_writes_opt_
+	(_Inexpressible_("Buffer length pfExists points to depends on fFunction value."))
+	SQLUSMALLINT *Supported)
 {
 	int i;
 
 	if (FunctionId == SQL_API_ODBC3_ALL_FUNCTIONS) {
 		DBGH(ConnectionHandle, "ODBC 3.x application asking for supported "
-				"function set.");
+			"function set.");
 		memset(Supported, 0,
-				SQL_API_ODBC3_ALL_FUNCTIONS_SIZE * sizeof(SQLSMALLINT));
-		for (i = 0; i < ESODBC_FUNC_SIZE; i++)
+			SQL_API_ODBC3_ALL_FUNCTIONS_SIZE * sizeof(SQLSMALLINT));
+		for (i = 0; i < ESODBC_FUNC_SIZE; i++) {
 			SQL_FUNC_SET(Supported, esodbc_functions[i]);
+		}
 	} else if (FunctionId == SQL_API_ALL_FUNCTIONS) {
 		DBGH(ConnectionHandle, "ODBC 2.x application asking for supported "
-				"function set.");
+			"function set.");
 		memset(Supported, SQL_FALSE,
-				SQL_API_ODBC2_ALL_FUNCTIONS_SIZE * sizeof(SQLUSMALLINT));
+			SQL_API_ODBC2_ALL_FUNCTIONS_SIZE * sizeof(SQLUSMALLINT));
 		for (i = 0; i < ESODBC_FUNC_SIZE; i++)
-			if (esodbc_functions[i] < SQL_API_ODBC2_ALL_FUNCTIONS_SIZE)
+			if (esodbc_functions[i] < SQL_API_ODBC2_ALL_FUNCTIONS_SIZE) {
 				Supported[esodbc_functions[i]] = SQL_TRUE;
+			}
 	} else {
 		DBGH(ConnectionHandle, "application asking for support of function "
-				"#%d.", FunctionId);
+			"#%d.", FunctionId);
 		*Supported = SQL_FALSE;
 		for (i = 0; i < ESODBC_FUNC_SIZE; i++)
 			if (esodbc_functions[i] == FunctionId) {
@@ -908,8 +917,9 @@ SQLRETURN EsSQLGetTypeInfoW(SQLHSTMT StatementHandle, SQLSMALLINT DataType)
 	assert(SQL_SUCCEEDED(ret)); /* can't return error */
 	ret = attach_sql(stmt, MK_WPTR(SQL_TYPES_STATEMENT),
 			sizeof(SQL_TYPES_STATEMENT) - 1);
-	if (SQL_SUCCEEDED(ret))
+	if (SQL_SUCCEEDED(ret)) {
 		ret = post_statement(stmt);
+	}
 	return ret;
 }
 

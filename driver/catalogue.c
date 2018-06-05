@@ -44,7 +44,7 @@
 /* writes into 'dest', of size 'room', the current catalog of 'dbc'.
  * returns negative on error, or the char count written otherwise */
 SQLSMALLINT copy_current_catalog(esodbc_dbc_st *dbc, SQLWCHAR *dest,
-		SQLSMALLINT room)
+	SQLSMALLINT room)
 {
 	esodbc_stmt_st *stmt = NULL;
 	SQLSMALLINT used = -1; /*failure*/
@@ -60,7 +60,7 @@ SQLSMALLINT copy_current_catalog(esodbc_dbc_st *dbc, SQLWCHAR *dest,
 	assert(stmt);
 
 	if (! SQL_SUCCEEDED(attach_sql(stmt, MK_WPTR(SYS_CATALOGS),
-					sizeof(SYS_CATALOGS) - 1))) {
+				sizeof(SYS_CATALOGS) - 1))) {
 		ERRH(dbc, "failed to attach query to statement.");
 		goto end;
 	}
@@ -81,11 +81,11 @@ SQLSMALLINT copy_current_catalog(esodbc_dbc_st *dbc, SQLWCHAR *dest,
 		DBGH(stmt, "Elasticsearch catalogs rows count: %ld.", row_cnt);
 		if (1 < row_cnt) {
 			WARNH(dbc, "Elasticsearch connected to %d clusters, returning "
-					"the first's name as current catalog.", row_cnt);
+				"the first's name as current catalog.", row_cnt);
 		}
 
 		if (! SQL_SUCCEEDED(EsSQLBindCol(stmt, /*col#*/1, SQL_C_WCHAR, buff,
-						sizeof(buff), &ind_len))) {
+					sizeof(buff), &ind_len))) {
 			ERRH(dbc, "failed to bind first column.");
 			goto end;
 		}
@@ -99,12 +99,12 @@ SQLSMALLINT copy_current_catalog(esodbc_dbc_st *dbc, SQLWCHAR *dest,
 		} else {
 			catalog = buff;
 			DBGH(dbc, "current catalog (first value returned): `" LWPD "`.",
-					catalog);
+				catalog);
 		}
 	}
 
 	if (! SQL_SUCCEEDED(write_wptr(&dbc->hdr.diag, dest, catalog, room,
-					&used))) {
+				&used))) {
 		ERRH(dbc, "failed to copy catalog: `" LWPD "`.", catalog);
 		used = -1; /* write_wptr() can change pointer, and still fail */
 	}
@@ -165,24 +165,24 @@ size_t quote_tokens(SQLWCHAR *src, size_t len, SQLWCHAR *dest)
 }
 
 SQLRETURN EsSQLTablesW(
-		SQLHSTMT StatementHandle,
-		_In_reads_opt_(NameLength1) SQLWCHAR *CatalogName,
-		SQLSMALLINT NameLength1,
-		_In_reads_opt_(NameLength2) SQLWCHAR *SchemaName,
-		SQLSMALLINT NameLength2,
-		_In_reads_opt_(NameLength3) SQLWCHAR *TableName,
-		SQLSMALLINT NameLength3,
-		_In_reads_opt_(NameLength4) SQLWCHAR *TableType,
-		SQLSMALLINT NameLength4)
+	SQLHSTMT StatementHandle,
+	_In_reads_opt_(NameLength1) SQLWCHAR *CatalogName,
+	SQLSMALLINT NameLength1,
+	_In_reads_opt_(NameLength2) SQLWCHAR *SchemaName,
+	SQLSMALLINT NameLength2,
+	_In_reads_opt_(NameLength3) SQLWCHAR *TableName,
+	SQLSMALLINT NameLength3,
+	_In_reads_opt_(NameLength4) SQLWCHAR *TableType,
+	SQLSMALLINT NameLength4)
 {
 	esodbc_stmt_st *stmt = STMH(StatementHandle);
 	SQLRETURN ret;
 	/* b/c declaring an array with a const doesn't work with MSVC's compiler */
 	enum wbuf_len { wbuf_len = sizeof(SQL_TABLES)
-		+ sizeof(SQL_TABLES_CAT)
-		+ sizeof(SQL_TABLES_TAB)
-		+ sizeof(SQL_TABLES_TYP)
-		+ 3 * ESODBC_MAX_IDENTIFIER_LEN /* it has 4x 0-term space */
+			+ sizeof(SQL_TABLES_CAT)
+			+ sizeof(SQL_TABLES_TAB)
+			+ sizeof(SQL_TABLES_TYP)
+			+ 3 * ESODBC_MAX_IDENTIFIER_LEN /* it has 4x 0-term space */
 	};
 	SQLWCHAR wbuf[wbuf_len];
 	SQLWCHAR *table, *schema, *catalog, *type;
@@ -190,8 +190,9 @@ SQLRETURN EsSQLTablesW(
 	/* 2x: "a,b,c" -> "'a','b','c'" : each "x," => "'x'," */
 	SQLWCHAR typ_buf[2 * ESODBC_MAX_IDENTIFIER_LEN];
 
-	if (stmt->metadata_id == SQL_TRUE)
-		FIXME; // FIXME
+	if (stmt->metadata_id == SQL_TRUE) {
+		FIXME;    // FIXME
+	}
 
 	pos = sizeof(SQL_TABLES) - 1;
 	wmemcpy(wbuf, MK_WPTR(SQL_TABLES), pos);
@@ -202,8 +203,8 @@ SQLRETURN EsSQLTablesW(
 			cnt_cat = wcslen(catalog);
 			if (ESODBC_MAX_IDENTIFIER_LEN < cnt_cat) {
 				ERRH(stmt, "catalog identifier name '" LTPDL "' too long "
-						"(%zd. max=%d).", (int)cnt_cat, catalog, cnt_cat,
-						ESODBC_MAX_IDENTIFIER_LEN);
+					"(%zd. max=%d).", (int)cnt_cat, catalog, cnt_cat,
+					ESODBC_MAX_IDENTIFIER_LEN);
 				RET_HDIAG(stmt, SQL_STATE_HY090, "catalog name too long", 0);
 			}
 		} else {
@@ -226,8 +227,8 @@ SQLRETURN EsSQLTablesW(
 			cnt_sch = wcslen(schema);
 			if (ESODBC_MAX_IDENTIFIER_LEN < cnt_sch) {
 				ERRH(stmt, "schema identifier name '" LTPDL "' too long "
-						"(%zd. max=%d).", (int)cnt_sch, schema, cnt_sch,
-						ESODBC_MAX_IDENTIFIER_LEN);
+					"(%zd. max=%d).", (int)cnt_sch, schema, cnt_sch,
+					ESODBC_MAX_IDENTIFIER_LEN);
 				RET_HDIAG(stmt, SQL_STATE_HY090, "schema name too long", 0);
 			}
 		} else {
@@ -238,7 +239,7 @@ SQLRETURN EsSQLTablesW(
 		if (wszmemcmp(schema, MK_WPTR(SQL_ALL_SCHEMAS), (long)cnt_sch)) {
 			ERRH(stmt, "filtering by schemas is not supported.");
 			RET_HDIAG(stmt, SQL_STATE_IM001, "schema filtering not supported",
-					0);
+				0);
 		}
 	}
 
@@ -249,8 +250,8 @@ SQLRETURN EsSQLTablesW(
 			cnt_tab = wcslen(table);
 			if (ESODBC_MAX_IDENTIFIER_LEN < cnt_tab) {
 				ERRH(stmt, "table identifier name '" LTPDL "' too long "
-						"(%zd. max=%d).", (int)cnt_tab, table, cnt_tab,
-						ESODBC_MAX_IDENTIFIER_LEN);
+					"(%zd. max=%d).", (int)cnt_tab, table, cnt_tab,
+					ESODBC_MAX_IDENTIFIER_LEN);
 				RET_HDIAG(stmt, SQL_STATE_HY090, "table name too long", 0);
 			}
 		} else {
@@ -273,8 +274,8 @@ SQLRETURN EsSQLTablesW(
 			cnt_typ = wcslen(type);
 			if (ESODBC_MAX_IDENTIFIER_LEN < cnt_typ) {
 				ERRH(stmt, "type identifier name '" LTPDL "' too long "
-						"(%zd. max=%d).", (int)cnt_typ, type, cnt_typ,
-						ESODBC_MAX_IDENTIFIER_LEN);
+					"(%zd. max=%d).", (int)cnt_typ, type, cnt_typ,
+					ESODBC_MAX_IDENTIFIER_LEN);
 				RET_HDIAG(stmt, SQL_STATE_HY090, "type name too long", 0);
 			}
 		} else {
@@ -303,34 +304,36 @@ SQLRETURN EsSQLTablesW(
 	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
 	assert(SQL_SUCCEEDED(ret)); /* can't return error */
 	ret = attach_sql(stmt, wbuf, pos);
-	if (SQL_SUCCEEDED(ret))
+	if (SQL_SUCCEEDED(ret)) {
 		ret = post_statement(stmt);
+	}
 	return ret;
 }
 
 SQLRETURN EsSQLColumnsW
 (
-    SQLHSTMT           hstmt,
-    _In_reads_opt_(cchCatalogName) SQLWCHAR*    szCatalogName,
-    SQLSMALLINT        cchCatalogName,
-    _In_reads_opt_(cchSchemaName) SQLWCHAR*     szSchemaName,
-    SQLSMALLINT        cchSchemaName,
-    _In_reads_opt_(cchTableName) SQLWCHAR*      szTableName,
-    SQLSMALLINT        cchTableName,
-    _In_reads_opt_(cchColumnName) SQLWCHAR*     szColumnName,
-    SQLSMALLINT        cchColumnName
+	SQLHSTMT           hstmt,
+	_In_reads_opt_(cchCatalogName) SQLWCHAR    *szCatalogName,
+	SQLSMALLINT        cchCatalogName,
+	_In_reads_opt_(cchSchemaName) SQLWCHAR     *szSchemaName,
+	SQLSMALLINT        cchSchemaName,
+	_In_reads_opt_(cchTableName) SQLWCHAR      *szTableName,
+	SQLSMALLINT        cchTableName,
+	_In_reads_opt_(cchColumnName) SQLWCHAR     *szColumnName,
+	SQLSMALLINT        cchColumnName
 )
 {
 	esodbc_stmt_st *stmt = STMH(hstmt);
 	SQLRETURN ret;
 	SQLWCHAR wbuf[sizeof(SQL_COLUMNS(SQL_COL_CAT)) +
-		3 * ESODBC_MAX_IDENTIFIER_LEN];
+										 3 * ESODBC_MAX_IDENTIFIER_LEN];
 	SQLWCHAR *catalog, *schema, *table, *column;
 	size_t cnt_cat, cnt_sch, cnt_tab, cnt_col, pos;
 
-	if (stmt->metadata_id == SQL_TRUE)
-		FIXME; // FIXME
-	
+	if (stmt->metadata_id == SQL_TRUE) {
+		FIXME;    // FIXME
+	}
+
 	/* TODO: server support needed for cat. & sch. name filtering */
 
 	if (szCatalogName) {
@@ -339,8 +342,8 @@ SQLRETURN EsSQLColumnsW
 			cnt_cat = wcslen(catalog);
 			if (ESODBC_MAX_IDENTIFIER_LEN < cnt_cat) {
 				ERRH(stmt, "catalog identifier name '" LTPDL "' too long "
-						"(%d. max=%d).", cnt_cat, catalog, cnt_cat,
-						ESODBC_MAX_IDENTIFIER_LEN);
+					"(%d. max=%d).", cnt_cat, catalog, cnt_cat,
+					ESODBC_MAX_IDENTIFIER_LEN);
 				RET_HDIAG(stmt, SQL_STATE_HY090, "catalog name too long", 0);
 			}
 		} else {
@@ -356,8 +359,8 @@ SQLRETURN EsSQLColumnsW
 			cnt_sch = wcslen(schema);
 			if (ESODBC_MAX_IDENTIFIER_LEN < cnt_sch) {
 				ERRH(stmt, "schema identifier name '" LTPDL "' too long "
-						"(%d. max=%d).", cnt_sch, schema, cnt_sch,
-						ESODBC_MAX_IDENTIFIER_LEN);
+					"(%d. max=%d).", cnt_sch, schema, cnt_sch,
+					ESODBC_MAX_IDENTIFIER_LEN);
 				RET_HDIAG(stmt, SQL_STATE_HY090, "schema name too long", 0);
 			}
 		} else {
@@ -370,7 +373,7 @@ SQLRETURN EsSQLColumnsW
 
 	/* TODO: server support needed for sch. name filtering */
 	if (cnt_sch && wszmemcmp(schema, MK_WPTR(SQL_ALL_SCHEMAS),
-				(long)cnt_sch)) {
+			(long)cnt_sch)) {
 		ERRH(stmt, "filtering by schemas is not supported.");
 		RET_HDIAG(stmt, SQL_STATE_IM001, "schema filtering not supported", 0);
 	}
@@ -382,8 +385,8 @@ SQLRETURN EsSQLColumnsW
 			cnt_tab = wcslen(table);
 			if (ESODBC_MAX_IDENTIFIER_LEN < cnt_tab) {
 				ERRH(stmt, "table identifier name '" LTPDL "' too long "
-						"(%d. max=%d).", cnt_tab, table, cnt_tab,
-						ESODBC_MAX_IDENTIFIER_LEN);
+					"(%d. max=%d).", cnt_tab, table, cnt_tab,
+					ESODBC_MAX_IDENTIFIER_LEN);
 				RET_HDIAG(stmt, SQL_STATE_HY090, "table name too long", 0);
 			}
 		} else {
@@ -400,8 +403,8 @@ SQLRETURN EsSQLColumnsW
 			cnt_col = wcslen(column);
 			if (ESODBC_MAX_IDENTIFIER_LEN < cnt_col) {
 				ERRH(stmt, "column identifier name '" LTPDL "' too long "
-						"(%d. max=%d).", cnt_col, column, cnt_col,
-						ESODBC_MAX_IDENTIFIER_LEN);
+					"(%d. max=%d).", cnt_col, column, cnt_col,
+					ESODBC_MAX_IDENTIFIER_LEN);
 				RET_HDIAG(stmt, SQL_STATE_HY090, "column name too long", 0);
 			}
 		} else {
@@ -430,23 +433,24 @@ SQLRETURN EsSQLColumnsW
 	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
 	assert(SQL_SUCCEEDED(ret)); /* can't return error */
 	ret = attach_sql(stmt, wbuf, pos);
-	if (SQL_SUCCEEDED(ret))
+	if (SQL_SUCCEEDED(ret)) {
 		ret = post_statement(stmt);
+	}
 	return ret;
 }
 
 SQLRETURN EsSQLSpecialColumnsW
 (
-    SQLHSTMT           hstmt,
-    SQLUSMALLINT       fColType,
-    _In_reads_opt_(cchCatalogName) SQLWCHAR*    szCatalogName,
-    SQLSMALLINT        cchCatalogName,
-    _In_reads_opt_(cchSchemaName) SQLWCHAR*     szSchemaName,
-    SQLSMALLINT        cchSchemaName,
-    _In_reads_opt_(cchTableName) SQLWCHAR*      szTableName,
-    SQLSMALLINT        cchTableName,
-    SQLUSMALLINT       fScope,
-    SQLUSMALLINT       fNullable
+	SQLHSTMT           hstmt,
+	SQLUSMALLINT       fColType,
+	_In_reads_opt_(cchCatalogName) SQLWCHAR    *szCatalogName,
+	SQLSMALLINT        cchCatalogName,
+	_In_reads_opt_(cchSchemaName) SQLWCHAR     *szSchemaName,
+	SQLSMALLINT        cchSchemaName,
+	_In_reads_opt_(cchTableName) SQLWCHAR      *szTableName,
+	SQLSMALLINT        cchTableName,
+	SQLUSMALLINT       fScope,
+	SQLUSMALLINT       fNullable
 )
 {
 	// TODO: is there a "rowid" equivalent: ID uniquely a ROW in the table?
@@ -458,19 +462,19 @@ SQLRETURN EsSQLSpecialColumnsW
 
 
 SQLRETURN EsSQLForeignKeysW(
-		SQLHSTMT           hstmt,
-		_In_reads_opt_(cchPkCatalogName) SQLWCHAR*    szPkCatalogName,
-		SQLSMALLINT        cchPkCatalogName,
-		_In_reads_opt_(cchPkSchemaName) SQLWCHAR*     szPkSchemaName,
-		SQLSMALLINT        cchPkSchemaName,
-		_In_reads_opt_(cchPkTableName) SQLWCHAR*      szPkTableName,
-		SQLSMALLINT        cchPkTableName,
-		_In_reads_opt_(cchFkCatalogName) SQLWCHAR*    szFkCatalogName,
-		SQLSMALLINT        cchFkCatalogName,
-		_In_reads_opt_(cchFkSchemaName) SQLWCHAR*     szFkSchemaName,
-		SQLSMALLINT        cchFkSchemaName,
-		_In_reads_opt_(cchFkTableName) SQLWCHAR*      szFkTableName,
-		SQLSMALLINT        cchFkTableName)
+	SQLHSTMT           hstmt,
+	_In_reads_opt_(cchPkCatalogName) SQLWCHAR    *szPkCatalogName,
+	SQLSMALLINT        cchPkCatalogName,
+	_In_reads_opt_(cchPkSchemaName) SQLWCHAR     *szPkSchemaName,
+	SQLSMALLINT        cchPkSchemaName,
+	_In_reads_opt_(cchPkTableName) SQLWCHAR      *szPkTableName,
+	SQLSMALLINT        cchPkTableName,
+	_In_reads_opt_(cchFkCatalogName) SQLWCHAR    *szFkCatalogName,
+	SQLSMALLINT        cchFkCatalogName,
+	_In_reads_opt_(cchFkSchemaName) SQLWCHAR     *szFkSchemaName,
+	SQLSMALLINT        cchFkSchemaName,
+	_In_reads_opt_(cchFkTableName) SQLWCHAR      *szFkTableName,
+	SQLSMALLINT        cchFkTableName)
 {
 	WARNH(hstmt, "no foreign keys supported.");
 	STMT_FORCE_NODATA(STMH(hstmt));
@@ -478,13 +482,13 @@ SQLRETURN EsSQLForeignKeysW(
 }
 
 SQLRETURN EsSQLPrimaryKeysW(
-		SQLHSTMT           hstmt,
-		_In_reads_opt_(cchCatalogName) SQLWCHAR*    szCatalogName,
-		SQLSMALLINT        cchCatalogName,
-		_In_reads_opt_(cchSchemaName) SQLWCHAR*     szSchemaName,
-		SQLSMALLINT        cchSchemaName,
-		_In_reads_opt_(cchTableName) SQLWCHAR*      szTableName,
-		SQLSMALLINT        cchTableName)
+	SQLHSTMT           hstmt,
+	_In_reads_opt_(cchCatalogName) SQLWCHAR    *szCatalogName,
+	SQLSMALLINT        cchCatalogName,
+	_In_reads_opt_(cchSchemaName) SQLWCHAR     *szSchemaName,
+	SQLSMALLINT        cchSchemaName,
+	_In_reads_opt_(cchTableName) SQLWCHAR      *szTableName,
+	SQLSMALLINT        cchTableName)
 {
 	WARNH(hstmt, "no primary keys supported.");
 	STMT_FORCE_NODATA(STMH(hstmt));
