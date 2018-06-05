@@ -616,8 +616,9 @@ SQLRETURN EsSQLGetDiagFieldW(
 	switch(DiagIdentifier) {
 		/* Header Fields */
 		case SQL_DIAG_NUMBER:
-			if (StringLengthPtr);
+			if (StringLengthPtr) {
 				*StringLengthPtr = sizeof(SQLINTEGER);
+			}
 			if (DiagInfoPtr) {
 				// FIXME: check HandleType's record count (1 or 0)
 				*(SQLINTEGER *)DiagInfoPtr = 0;
