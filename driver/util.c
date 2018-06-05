@@ -12,11 +12,13 @@
 
 BOOL wstr2bool(wstr_st *val)
 {
+	/*INDENT-OFF*/
 	switch (val->cnt) {
 		case /*0*/1: return ! EQ_CASE_WSTR(val, &MK_WSTR("0"));
 		case /*no*/2: return ! EQ_CASE_WSTR(val, &MK_WSTR("no"));
 		case /*false*/5: return ! EQ_CASE_WSTR(val, &MK_WSTR("false"));
 	}
+	/*INDENT-ON*/
 	return TRUE;
 }
 
@@ -198,6 +200,7 @@ size_t json_escape(const char *jin, size_t inlen, char *jout, size_t outlen)
 		return json_escaped_len(jin, inlen);
 
 	for (i = 0, pos = 0; i < inlen; i ++) {
+		/*INDENT-OFF*/
 		uchar = jin[i];
 		switch(uchar) {
 			do {
@@ -236,6 +239,7 @@ size_t json_escape(const char *jin, size_t inlen, char *jout, size_t outlen)
 				}
 				break;
 		}
+		/*INDENT-ON*/
 	}
 	return pos;
 #undef I16TOA

@@ -613,6 +613,7 @@ SQLRETURN EsSQLGetDiagFieldW(
 
 	diag = &HDRH(Handle)->diag;
 
+	/*INDENT-OFF*/
 	switch(DiagIdentifier) {
 		/* Header Fields */
 		case SQL_DIAG_NUMBER:
@@ -761,6 +762,7 @@ SQLRETURN EsSQLGetDiagFieldW(
 			ERRH(Handle, "unknown DiagIdentifier: %d.", DiagIdentifier);
 			return SQL_ERROR;
 	}
+	/*INDENT-ON*/
 
 	assert(0); // FIXME: shouldn't get here
 	return SQL_ERROR;

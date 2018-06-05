@@ -37,7 +37,7 @@
 		(_tsp)->hour = (_tmp)->tm_hour; \
 		(_tsp)->minute = (_tmp)->tm_min; \
 		(_tsp)->second = (_tmp)->tm_sec; \
-	} while (0);
+	} while (0)
 
 
 /* TODO: this is inefficient: add directly into ujson4c lib (as .size of
@@ -724,16 +724,17 @@ static inline void write_copied_octets(SQLLEN *octet_len_ptr, size_t copied,
 	 * or binary data" */
 	max = (ird_mt == METATYPE_STRING || ird_mt == METATYPE_BIN) ? attr_max : 0;
 
-	if (0 < max)
+	if (0 < max) {
 		/* put the value of SQL_ATTR_MAX_LENGTH attribute..  even
 		 * if this would be larger than what the data actually
 		 * occupies after conversion: "the driver has no way of
 		 * figuring out what the actual length is" */
 		*octet_len_ptr = max;
-	else
+	} else {
 		/* if no "network" truncation done, indicate data's length, no
 		 * matter if truncated to buffer's size or not */
 		*octet_len_ptr = copied;
+	}
 }
 
 /* if an application doesn't specify the conversion, use column's type */
@@ -2196,6 +2197,7 @@ SQLRETURN EsSQLColAttributeW(
 
 	ASSERT_IXD_HAS_ES_TYPE(rec);
 
+	/*INDENT-OFF*/
 	switch (iField) {
 		/* SQLSMALLINT */
 		do {
@@ -2290,6 +2292,7 @@ SQLRETURN EsSQLColAttributeW(
 			ERRH(stmt, "unknown field type %d.", iField);
 			RET_HDIAGS(stmt, SQL_STATE_HY091);
 	}
+	/*INDENT-ON*/
 
 	return SQL_SUCCESS;
 #undef PNUMATTR_ASSIGN

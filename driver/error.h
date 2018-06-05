@@ -142,7 +142,7 @@ typedef enum {
 } esodbc_state_et;
 
 
-
+/*INDENT-OFF*/
 /*
  * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/sqlstate-mappings :
  * """
@@ -418,6 +418,7 @@ static esodbc_errors_st esodbc_errors[] = {
 	{MK_WPTR("IM015"), MK_WPTR("Corrupt file data source"), 
 		SQL_ERROR},
 };
+/*INDENT-ON*/
 
 
 #define ESODBC_DIAG_PREFIX	"[Elastic][EsODBC " ESODBC_DRIVER_VER " Driver]"
@@ -426,9 +427,8 @@ typedef struct {
 	esodbc_state_et state;
 	/* [vendor-identifier][ODBC-component-identifier]component-supplied-text */
 	SQLWCHAR text[SQL_MAX_MESSAGE_LENGTH];
-	/* length of characters in the buffer */
-	SQLUSMALLINT text_len; /* in characters, not bytes, w/o the 0-term */
-							/* (SQLSMALLINT)wcslen(native_text) */
+	/* count of characters used in the buffer */
+	SQLUSMALLINT text_len;
 	/* returned in SQLGetDiagField()/SQL_DIAG_NATIVE, SQLGetDiagRecW() */
 	SQLINTEGER native_code;
 	SQLLEN row_number;

@@ -19,7 +19,7 @@
 	do { \
 		switch(type) { \
 			/* numeric pointers */ \
-			/* SQLNUMERIC/SQLDATE/SQLDECIMAL/SQLCHAR/etc. = unsigned char */ \
+			/* SQLNUMERIC/SQLDATE/SQLCHAR/etc. = unsigned char */ \
 			/* SQLSCHAR = char */ \
 			case 'c': /* char signed */ \
 				_n = snprintf(_bf + _ps, _AVAIL, "%hhd", \
@@ -62,8 +62,7 @@
 						(void *)(uintptr_t)val); \
 				break; \
 			case 'W': /* wchar_t* */ \
-				/* TODO: this can be problematic, for untouched buffs: add
-				 * len! */ \
+				/* TODO: problematic for untouched buffs: add len! */ \
 				_n = snprintf(_bf + _ps, _AVAIL, "`" LWPD "`[%zd]", \
 							  val ? (wchar_t *)(uintptr_t)val : TS_NULL, \
 							  val ? wcslen((wchar_t *)(uintptr_t)val) : 0); \
@@ -285,6 +284,7 @@
 		_TRACE_ENDING; \
 	} while(0)
 
+/*INDENT-OFF*/ //astyle trips on these following two defs
 #define TRACE13(out, fmt, p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, \
 		p12) \
 	do { \
@@ -325,6 +325,7 @@
 		_PRINT_PARAM(fmt[13], p13, 1); \
 		_TRACE_ENDING; \
 	} while(0)
+/*INDENT-ON*/
 
 
 #endif /* __TRACING_H__ */

@@ -534,7 +534,6 @@ SQLRETURN EsSQLGetEnvAttr(SQLHENV EnvironmentHandle, SQLINTEGER Attribute,
 
 
 
-
 SQLRETURN EsSQLSetStmtAttrW(
 		SQLHSTMT           StatementHandle,
 		SQLINTEGER         Attribute,
@@ -546,6 +545,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 	esodbc_desc_st *desc;
 	esodbc_stmt_st *stmt = STMH(StatementHandle);
 
+	/*INDENT-OFF*/
 	switch(Attribute) {
 		case SQL_ATTR_USE_BOOKMARKS:
 			DBGH(stmt, "setting use-bookmarks to: %u.", (SQLULEN)ValuePtr);
@@ -576,9 +576,10 @@ SQLRETURN EsSQLSetStmtAttrW(
 		} while (0);
 			ret = EsSQLSetDescFieldW(desc, NO_REC_NR, SQL_DESC_BIND_OFFSET_PTR,
 					ValuePtr, BufferLength);
-			if (ret != SQL_SUCCESS) /* _WITH_INFO wud be "error" here */
+			if (ret != SQL_SUCCESS) { /* _WITH_INFO wud be "error" here */
 				/* if SetDescField() fails, DM will check statement's diag */
 				HDIAG_COPY(desc, stmt);
+			}
 			return ret;
 
 		do {
@@ -597,9 +598,10 @@ SQLRETURN EsSQLSetStmtAttrW(
 		} while (0);
 			ret = EsSQLSetDescFieldW(desc, NO_REC_NR, SQL_DESC_ARRAY_SIZE,
 					ValuePtr, BufferLength);
-			if (ret != SQL_SUCCESS) /* _WITH_INFO wud be "error" here */
+			if (ret != SQL_SUCCESS) { /* _WITH_INFO wud be "error" here */
 				/* if SetDescField() fails, DM will check statement's diag */
 				HDIAG_COPY(desc, stmt);
+			}
 			return ret;
 
 		do {
@@ -627,9 +629,10 @@ SQLRETURN EsSQLSetStmtAttrW(
 					/* note: SetStmt()'s spec defineds the ValuePtr as
 					 * SQLULEN, but SetDescField()'s as SQLUINTEGER.. */
 					ValuePtr, BufferLength);
-			if (ret != SQL_SUCCESS) /* _WITH_INFO wud be "error" here */
+			if (ret != SQL_SUCCESS) { /* _WITH_INFO wud be "error" here */
 				/* if SetDescField() fails, DM will check statement's diag */
 				HDIAG_COPY(desc, stmt);
+			}
 			return ret;
 
 		do {
@@ -660,9 +663,10 @@ SQLRETURN EsSQLSetStmtAttrW(
 		} while (0);
 			ret = EsSQLSetDescFieldW(desc, NO_REC_NR, 
 					SQL_DESC_ARRAY_STATUS_PTR, ValuePtr, BufferLength);
-			if (ret != SQL_SUCCESS) /* _WITH_INFO wud be "error" here */
+			if (ret != SQL_SUCCESS) { /* _WITH_INFO wud be "error" here */
 				/* if SetDescField() fails, DM will check statement's diag */
 				HDIAG_COPY(desc, stmt);
+			}
 			return ret;
 
 		do {
@@ -681,9 +685,10 @@ SQLRETURN EsSQLSetStmtAttrW(
 		} while (0);
 			ret = EsSQLSetDescFieldW(desc, NO_REC_NR, 
 					SQL_DESC_ROWS_PROCESSED_PTR, ValuePtr, BufferLength);
-			if (ret != SQL_SUCCESS) /* _WITH_INFO wud be "error" here */
+			if (ret != SQL_SUCCESS) { /* _WITH_INFO wud be "error" here */
 				/* if SetDescField() fails, DM will check statement's diag */
 				HDIAG_COPY(desc, stmt);
+			}
 			return ret;
 
 		case SQL_ATTR_APP_ROW_DESC:
@@ -760,6 +765,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 			ERRH(stmt, "unknown Attribute: %d.", Attribute);
 			RET_HDIAGS(stmt, SQL_STATE_HY092);
 	}
+	/*INDENT-ON*/
 
 	return SQL_SUCCESS;
 }
@@ -775,6 +781,7 @@ SQLRETURN EsSQLGetStmtAttrW(
 	esodbc_stmt_st *stmt = STMH(StatementHandle);
 	SQLRETURN ret;
 
+	/*INDENT-OFF*/
 	switch (Attribute) {
 		do {
 		case SQL_ATTR_APP_ROW_DESC: desc = stmt->ard; break;
@@ -828,9 +835,10 @@ SQLRETURN EsSQLGetStmtAttrW(
 		} while (0);
 			ret = EsSQLGetDescFieldW(desc, NO_REC_NR, SQL_DESC_ARRAY_SIZE,
 					ValuePtr, BufferLength, NULL);
-			if (ret != SQL_SUCCESS) /* _WITH_INFO wud be "error" here */
+			if (ret != SQL_SUCCESS) { /* _WITH_INFO wud be "error" here */
 				/* if SetDescField() fails, DM will check statement's diag */
 				HDIAG_COPY(desc, stmt);
+			}
 			return ret;
 
 		case SQL_ATTR_USE_BOOKMARKS:
@@ -842,9 +850,11 @@ SQLRETURN EsSQLGetStmtAttrW(
 			ERRH(stmt, "unknown attribute: %d.", Attribute);
 			RET_HDIAGS(stmt, SQL_STATE_HY092);
 	}
+	/*INDENT-ON*/
 
 	return SQL_SUCCESS;
 }
+/*INDENT-ON*/
 
 
 /*
@@ -1021,6 +1031,7 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
 	return SQL_STATE_00000;
 }
 
+/*INDENT-OFF*/
 /*
  * Access permission matrix (TSV) lifted and rearanged from:
  * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetdescfield-function#fieldidentifier-argument
@@ -1068,6 +1079,7 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
  * SQL_DESC_SCALE		rw	rw	r	rw
  * SQL_DESC_TYPE		rw	rw	r	rw
  */
+/*INDENT-ON*/
 // TODO: individual tests just for this
 /*
  * Check access to record headers/fields.
@@ -1190,12 +1202,14 @@ static void get_rec_default(SQLSMALLINT field_id, SQLINTEGER buff_len,
 			return;
 	}
 
+	/*INDENT-OFF*/
 	switch (buff_len) {
 		case SQL_IS_INTEGER: sz = sizeof(SQLINTEGER); break;
 		case SQL_IS_UINTEGER: sz = sizeof(SQLULEN); break;
 		case SQL_IS_SMALLINT: sz = sizeof(SQLSMALLINT); break;
 		default: sz = 0;
 	}
+	/*INDENT-ON*/
 
 	if (sz)
 		memset(buff, 0, sz);
@@ -1414,6 +1428,7 @@ SQLRETURN EsSQLGetDescFieldW(
 
 	ASSERT_IXD_HAS_ES_TYPE(rec);
 
+	/*INDENT-OFF*/
 	/* record fields */
 	switch (FieldIdentifier) {
 		/* <SQLPOINTER> */
@@ -1556,6 +1571,7 @@ SQLRETURN EsSQLGetDescFieldW(
 			ERRH(desc, "unknown FieldIdentifier: %d.", FieldIdentifier);
 			RET_HDIAGS(desc, SQL_STATE_HY091);
 	}
+	/*INDENT-ON*/
 
 	return SQL_SUCCESS;
 }
@@ -2107,6 +2123,7 @@ SQLRETURN EsSQLSetDescFieldW(
 	if (FieldIdentifier != SQL_DESC_DATA_PTR)
 		rec->data_ptr = NULL;
 
+	/*INDENT-OFF*/
 	/* record fields */
 	switch (FieldIdentifier) {
 		case SQL_DESC_TYPE:
@@ -2286,6 +2303,7 @@ SQLRETURN EsSQLSetDescFieldW(
 			ERRH(desc, "unknown FieldIdentifier: %d.", FieldIdentifier);
 			RET_HDIAGS(desc, SQL_STATE_HY091);
 	}
+	/*INDENT-ON*/
 
 	return SQL_SUCCESS;
 }
