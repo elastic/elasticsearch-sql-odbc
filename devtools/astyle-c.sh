@@ -10,7 +10,7 @@
 
 # By default, format the driver source code (no arguments are received);
 # else append the arguments to the pre-set formating parameters 
-if [ $# -lt 2 ] ; then
+if [ $# -lt 1 ] ; then
 	ARGS=`git rev-parse --show-toplevel`/driver/*.[ch]
 else
 	ARGS=${@:1}
