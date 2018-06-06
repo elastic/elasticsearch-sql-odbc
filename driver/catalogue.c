@@ -325,8 +325,8 @@ SQLRETURN EsSQLColumnsW
 {
 	esodbc_stmt_st *stmt = STMH(hstmt);
 	SQLRETURN ret;
-	SQLWCHAR wbuf[sizeof(SQL_COLUMNS(SQL_COL_CAT)) +
-										 3 * ESODBC_MAX_IDENTIFIER_LEN];
+	SQLWCHAR wbuf[sizeof(SQL_COLUMNS(SQL_COL_CAT))
+		+ 3 * ESODBC_MAX_IDENTIFIER_LEN];
 	SQLWCHAR *catalog, *schema, *table, *column;
 	size_t cnt_cat, cnt_sch, cnt_tab, cnt_col, pos;
 
