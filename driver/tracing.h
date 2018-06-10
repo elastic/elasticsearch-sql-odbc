@@ -18,58 +18,57 @@
 #define _PRINT_PARAM_VAL(type, val) \
 	do { \
 		switch(type) { \
-			/* numeric pointers */ \
-			/* SQLNUMERIC/SQLDATE/SQLDECIMAL/SQLCHAR/etc. = unsigned char */ \
-			/* SQLSCHAR = char */ \
+				/* numeric pointers */ \
+				/* SQLNUMERIC/SQLDATE/SQLCHAR/etc. = unsigned char */ \
+				/* SQLSCHAR = char */ \
 			case 'c': /* char signed */ \
 				_n = snprintf(_bf + _ps, _AVAIL, "%hhd", \
-							  val ? *(char *)(uintptr_t)val : 0); \
+						val ? *(char *)(uintptr_t)val : 0); \
 				break; \
 			case 'C': /* char unsigned */ \
 				_n = snprintf(_bf + _ps, _AVAIL, "%hhu", \
-							  val ? *(unsigned char *)(uintptr_t)val : 0); \
+						val ? *(unsigned char *)(uintptr_t)val : 0); \
 				break; \
-			/* SQL[U]SMALLINT = [unsigned] short */ \
+				/* SQL[U]SMALLINT = [unsigned] short */ \
 			case 't': /* short signed */ \
 				_n = snprintf(_bf + _ps, _AVAIL, "%hd", \
-							  val ? *(short *)(uintptr_t)val : 0); \
+						val ? *(short *)(uintptr_t)val : 0); \
 				break; \
 			case 'T': /* short unsigned */ \
 				_n = snprintf(_bf + _ps, _AVAIL, "%hu", \
-							  val ? *(unsigned short *)(uintptr_t)val : 0); \
+						val ? *(unsigned short *)(uintptr_t)val : 0); \
 				break; \
-			/* SQL[U]INTEGER = [unsigned] long */ \
+				/* SQL[U]INTEGER = [unsigned] long */ \
 			case 'g': /* long signed */ \
 				_n = snprintf(_bf + _ps, _AVAIL, "%ld", \
-							  val ? *(long *)(uintptr_t)val : 0); \
+						val ? *(long *)(uintptr_t)val : 0); \
 				break; \
 			case 'G': /* long unsigned */ \
 				_n = snprintf(_bf + _ps, _AVAIL, "%lu", \
-							  val ? *(unsigned long *)(uintptr_t)val : 0); \
+						val ? *(unsigned long *)(uintptr_t)val : 0); \
 				break; \
-			/* SQL[U]LEN = [unsigned] long OR [u]int64_t (64b _WIN32) */ \
+				/* SQL[U]LEN = [unsigned] long OR [u]int64_t (64b _WIN32) */ \
 			case 'n': /* long/int64_t signed */ \
 				_n = snprintf(_bf + _ps, _AVAIL, "%lld", \
-							  val ? *(int64_t *)(uintptr_t)val : 0); \
+						val ? *(int64_t *)(uintptr_t)val : 0); \
 				break; \
 			case 'N': /* long/int64_t unsigned */ \
 				_n = snprintf(_bf + _ps, _AVAIL, "%llu", \
-							  val ? *(uint64_t *)(uintptr_t)val : 0); \
+						val ? *(uint64_t *)(uintptr_t)val : 0); \
 				break; \
-			/* non-numeric pointers */ \
+				/* non-numeric pointers */ \
 			case 'p': /* void* */ \
 				_n = snprintf(_bf + _ps, _AVAIL, "@0x%p", \
 						(void *)(uintptr_t)val); \
 				break; \
 			case 'W': /* wchar_t* */ \
-				/* TODO: this can be problematic, for untouched buffs: add
-				 * len! */ \
+				/* TODO: problematic for untouched buffs: add len! */ \
 				_n = snprintf(_bf + _ps, _AVAIL, "`" LWPD "`[%zd]", \
-							  val ? (wchar_t *)(uintptr_t)val : TS_NULL, \
-							  val ? wcslen((wchar_t *)(uintptr_t)val) : 0); \
+						val ? (wchar_t *)(uintptr_t)val : TS_NULL, \
+						val ? wcslen((wchar_t *)(uintptr_t)val) : 0); \
 				break; \
-			/* imediat values */ \
-			/* longs */ \
+				/* imediat values */ \
+				/* longs */ \
 			case 'l': /* long signed */ \
 				_n = snprintf(_bf + _ps, _AVAIL, "%ld", \
 						(long)(intptr_t)val); \
@@ -78,7 +77,7 @@
 				_n = snprintf(_bf + _ps, _AVAIL, "%lu", \
 						(unsigned long)(uintptr_t)val); \
 				break;\
-			/* ints */ \
+				/* ints */ \
 			case 'd': /* int signed */ \
 				_n = snprintf(_bf + _ps, _AVAIL, "%d", \
 						(int)(intptr_t)val); \
@@ -127,13 +126,13 @@
 #define _TRACE_OUT	"EXIT: "
 
 #define _TRACE_DECLARATION(end) \
-		char _bf[1024]; /*"ought to be enough for anybody"*/\
-		int _ps = 0; \
-		_ps += snprintf(_bf + _ps, _AVAIL, end ? _TRACE_OUT : _TRACE_IN)
+	char _bf[1024]; /*"ought to be enough for anybody"*/\
+	int _ps = 0; \
+	_ps += snprintf(_bf + _ps, _AVAIL, end ? _TRACE_OUT : _TRACE_IN)
 
 #define _TRACE_ENDING \
-		_ps += snprintf(_bf + _ps, _AVAIL, "."); \
-		LOG(TRACE_LOG_LEVEL, "%s", _bf)
+	_ps += snprintf(_bf + _ps, _AVAIL, "."); \
+	LOG(TRACE_LOG_LEVEL, "%s", _bf)
 
 #define TRACE1(out, fmt, p0) \
 	do { \
@@ -285,6 +284,7 @@
 		_TRACE_ENDING; \
 	} while(0)
 
+/*INDENT-OFF*/ //astyle trips on these following two defs
 #define TRACE13(out, fmt, p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, \
 		p12) \
 	do { \
@@ -325,6 +325,7 @@
 		_PRINT_PARAM(fmt[13], p13, 1); \
 		_TRACE_ENDING; \
 	} while(0)
+/*INDENT-ON*/
 
 
 #endif /* __TRACING_H__ */

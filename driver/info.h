@@ -9,43 +9,45 @@
 
 #include "sqlext.h"
 
-/* 
- * TODO: move into a util.h 
+/*
+ * TODO: move into a util.h
  * TODO: change sign to ...src, lsrc, dst, dlen... (lsrc is nearly always
  * known)
  */
 SQLRETURN write_wptr(esodbc_diag_st *diag,
-		SQLWCHAR *dest, const SQLWCHAR *src,
-		SQLSMALLINT /*B*/avail, SQLSMALLINT /*B*/*usedp);
+	SQLWCHAR *dest, const SQLWCHAR *src,
+	SQLSMALLINT /*B*/avail, SQLSMALLINT /*B*/*usedp);
 
 SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
-		SQLUSMALLINT InfoType, 
-		_Out_writes_bytes_opt_(BufferLength) SQLPOINTER InfoValue,
-		SQLSMALLINT BufferLength,
-		_Out_opt_ SQLSMALLINT *StringLengthPtr);
+	SQLUSMALLINT InfoType,
+	_Out_writes_bytes_opt_(BufferLength) SQLPOINTER InfoValue,
+	SQLSMALLINT BufferLength,
+	_Out_opt_ SQLSMALLINT *StringLengthPtr);
 
 SQLRETURN EsSQLGetDiagFieldW(
-		SQLSMALLINT HandleType, 
-		SQLHANDLE Handle,
-		SQLSMALLINT RecNumber,
-		SQLSMALLINT DiagIdentifier,
-		_Out_writes_opt_(_Inexpressible_(BufferLength)) SQLPOINTER DiagInfoPtr,
-		SQLSMALLINT BufferLength,
-		_Out_opt_ SQLSMALLINT *StringLengthPtr);
+	SQLSMALLINT HandleType,
+	SQLHANDLE Handle,
+	SQLSMALLINT RecNumber,
+	SQLSMALLINT DiagIdentifier,
+	_Out_writes_opt_(_Inexpressible_(BufferLength)) SQLPOINTER DiagInfoPtr,
+	SQLSMALLINT BufferLength,
+	_Out_opt_ SQLSMALLINT *StringLengthPtr);
 
 SQLRETURN EsSQLGetDiagRecW(
-		SQLSMALLINT HandleType,
-		SQLHANDLE Handle,
-		SQLSMALLINT RecNumber,
-		_Out_writes_opt_(6) SQLWCHAR *Sqlstate,
-		SQLINTEGER *NativeError,
-		_Out_writes_opt_(BufferLength) SQLWCHAR *MessageText,
-		SQLSMALLINT BufferLength,
-		_Out_opt_ SQLSMALLINT *TextLength);
+	SQLSMALLINT HandleType,
+	SQLHANDLE Handle,
+	SQLSMALLINT RecNumber,
+	_Out_writes_opt_(6) SQLWCHAR *Sqlstate,
+	SQLINTEGER *NativeError,
+	_Out_writes_opt_(BufferLength) SQLWCHAR *MessageText,
+	SQLSMALLINT BufferLength,
+	_Out_opt_ SQLSMALLINT *TextLength);
 
 SQLRETURN EsSQLGetFunctions(SQLHDBC ConnectionHandle,
-		SQLUSMALLINT FunctionId, 
-		_Out_writes_opt_(_Inexpressible_("Buffer length pfExists points to depends on fFunction value.")) SQLUSMALLINT *Supported);
+	SQLUSMALLINT FunctionId,
+	_Out_writes_opt_
+	(_Inexpressible_("Buffer length pfExists points to depends on fFunction value."))
+	SQLUSMALLINT *Supported);
 
 SQLRETURN EsSQLGetTypeInfoW(SQLHSTMT StatementHandle, SQLSMALLINT DataType);
 

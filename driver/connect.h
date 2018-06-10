@@ -18,29 +18,29 @@ void cleanup_dbc(esodbc_dbc_st *dbc);
 
 SQLRETURN EsSQLDriverConnectW
 (
-		SQLHDBC             hdbc,
-		SQLHWND             hwnd,
-		_In_reads_(cchConnStrIn) SQLWCHAR* szConnStrIn,
-		SQLSMALLINT         cchConnStrIn,
-		_Out_writes_opt_(cchConnStrOutMax) SQLWCHAR* szConnStrOut,
-		SQLSMALLINT         cchConnStrOutMax,
-		_Out_opt_ SQLSMALLINT*        pcchConnStrOut,
-		SQLUSMALLINT        fDriverCompletion
+	SQLHDBC             hdbc,
+	SQLHWND             hwnd,
+	_In_reads_(cchConnStrIn) SQLWCHAR *szConnStrIn,
+	SQLSMALLINT         cchConnStrIn,
+	_Out_writes_opt_(cchConnStrOutMax) SQLWCHAR *szConnStrOut,
+	SQLSMALLINT         cchConnStrOutMax,
+	_Out_opt_ SQLSMALLINT        *pcchConnStrOut,
+	SQLUSMALLINT        fDriverCompletion
 );
 
 SQLRETURN EsSQLDisconnect(SQLHDBC ConnectionHandle);
 
 SQLRETURN EsSQLSetConnectAttrW(
-		SQLHDBC ConnectionHandle,
-		SQLINTEGER Attribute,
-		_In_reads_bytes_opt_(StringLength) SQLPOINTER Value,
-		SQLINTEGER StringLength);
+	SQLHDBC ConnectionHandle,
+	SQLINTEGER Attribute,
+	_In_reads_bytes_opt_(StringLength) SQLPOINTER Value,
+	SQLINTEGER StringLength);
 SQLRETURN EsSQLGetConnectAttrW(
-		SQLHDBC        ConnectionHandle,
-		SQLINTEGER     Attribute,
-		_Out_writes_opt_(_Inexpressible_(cbValueMax)) SQLPOINTER ValuePtr,
-		SQLINTEGER     BufferLength,
-		_Out_opt_ SQLINTEGER* StringLengthPtr);
+	SQLHDBC        ConnectionHandle,
+	SQLINTEGER     Attribute,
+	_Out_writes_opt_(_Inexpressible_(cbValueMax)) SQLPOINTER ValuePtr,
+	SQLINTEGER     BufferLength,
+	_Out_opt_ SQLINTEGER *StringLengthPtr);
 
 #endif /* __CONNECT_H__ */
 

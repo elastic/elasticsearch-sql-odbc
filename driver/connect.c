@@ -164,13 +164,14 @@ BOOL connect_init()
 	code = curl_global_init(CURL_GLOBAL_ALL);
 	if (code != CURLE_OK) {
 		ERR("libcurl: failed to initialize: '%s' (%d).",
-				curl_easy_strerror(code), code);
+			curl_easy_strerror(code), code);
 		return FALSE;
 	}
 
 	http_headers = curl_slist_append(http_headers, HTTP_ACCEPT_JSON);
-	if (http_headers)
+	if (http_headers) {
 		http_headers = curl_slist_append(http_headers, HTTP_CONTENT_TYPE_JSON);
+	}
 	if (! http_headers) {
 		ERR("libcurl: failed to init headers.");
 		return FALSE;
@@ -192,7 +193,7 @@ void connect_cleanup()
  * multiplied with nmemb."
  */
 static size_t write_callback(char *ptr, size_t size, size_t nmemb,
-		void *userdata)
+	void *userdata)
 {
 	esodbc_dbc_st *dbc = (esodbc_dbc_st *)userdata;
 	char *wbuf;
@@ -203,21 +204,21 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb,
 	have = size * nmemb;
 
 	DBGH(dbc, "libcurl: new data chunk of size [%zd] x %zd arrived; "
-			"available buffer: %zd/%zd.", nmemb, size, avail, dbc->alen);
+		"available buffer: %zd/%zd.", nmemb, size, avail, dbc->alen);
 
 	/* do I need to grow the existing buffer? */
 	if (avail < have) {
 		/* calculate how much space to allocate. start from existing length,
 		 * if set, othewise from a constant (on first allocation). */
 		for (need = dbc->alen ? dbc->alen : ESODBC_BODY_BUF_START_SIZE;
-				need < dbc->apos + have; need *= 2)
+			need < dbc->apos + have; need *= 2)
 			;
 		DBGH(dbc, "libcurl: growing buffer for new chunk of %zd "
-				"from %zd to %zd.", have, dbc->alen, need);
+			"from %zd to %zd.", have, dbc->alen, need);
 		if (dbc->amax < need) { /* would I need more than max? */
 			if (dbc->amax <= (size_t)dbc->alen) { /* am I at max already? */
 				ERRH(dbc, "libcurl: can't grow past max %zd; have: %zd",
-						dbc->amax, have);
+					dbc->amax, have);
 				return 0;
 			} else { /* am not: alloc max possible (possibly still < need!) */
 				need = dbc->amax;
@@ -273,7 +274,7 @@ static SQLRETURN init_curl(esodbc_dbc_st *dbc)
 	res = curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_err_buff);
 	if (res != CURLE_OK) {
 		ERRH(dbc, "libcurl: failed to set errorbuffer: %s (%d).",
-				curl_easy_strerror(res), res);
+			curl_easy_strerror(res), res);
 		/* not fatal */
 	}
 #endif /* NDEBUG */
@@ -282,7 +283,7 @@ static SQLRETURN init_curl(esodbc_dbc_st *dbc)
 	res = curl_easy_setopt(curl, CURLOPT_URL, dbc->url);
 	if (res != CURLE_OK) {
 		ERRH(dbc, "libcurl: failed to set URL `%s`: %s (%d).", dbc->url,
-				curl_easy_strerror(res), res);
+			curl_easy_strerror(res), res);
 		SET_HDIAG(dbc, SQL_STATE_HY000, "failed to init the transport", 0);
 		goto err;
 	}
@@ -290,7 +291,7 @@ static SQLRETURN init_curl(esodbc_dbc_st *dbc)
 	res = curl_easy_setopt(curl, CURLOPT_POST, 1L);
 	if (res != CURLE_OK) {
 		ERRH(dbc, "libcurl: failed to set POST method: %s (%d).",
-				curl_easy_strerror(res), res);
+			curl_easy_strerror(res), res);
 		SET_HDIAG(dbc, SQL_STATE_HY000, "failed to init the transport", 0);
 		goto err;
 	}
@@ -299,7 +300,7 @@ static SQLRETURN init_curl(esodbc_dbc_st *dbc)
 	res = curl_easy_setopt(curl, CURLOPT_HTTPHEADER, http_headers);
 	if (res != CURLE_OK) {
 		ERRH(dbc, "libcurl: failed to set headers: %s (%d).",
-				curl_easy_strerror(res), res);
+			curl_easy_strerror(res), res);
 		SET_HDIAG(dbc, SQL_STATE_HY000, "failed to init the transport", 0);
 		goto err;
 	}
@@ -308,7 +309,7 @@ static SQLRETURN init_curl(esodbc_dbc_st *dbc)
 	res = curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, dbc->follow);
 	if (res != CURLE_OK) {
 		ERRH(dbc, "libcurl: failed to set redirection: %s (%d).",
-				curl_easy_strerror(res), res);
+			curl_easy_strerror(res), res);
 		SET_HDIAG(dbc, SQL_STATE_HY000, "failed to init the transport", 0);
 		goto err;
 	}
@@ -317,7 +318,7 @@ static SQLRETURN init_curl(esodbc_dbc_st *dbc)
 	res = curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
 	if (res != CURLE_OK) {
 		ERRH(dbc, "libcurl: failed to set write callback: %s (%d).",
-				curl_easy_strerror(res), res);
+			curl_easy_strerror(res), res);
 		SET_HDIAG(dbc, SQL_STATE_HY000, "failed to init the transport", 0);
 		goto err;
 	}
@@ -325,7 +326,7 @@ static SQLRETURN init_curl(esodbc_dbc_st *dbc)
 	res = curl_easy_setopt(curl, CURLOPT_WRITEDATA, dbc);
 	if (res != CURLE_OK) {
 		ERRH(dbc, "libcurl: failed to set callback argument: %s (%d).",
-				curl_easy_strerror(res), res);
+			curl_easy_strerror(res), res);
 		SET_HDIAG(dbc, SQL_STATE_HY000, "failed to init the transport", 0);
 		goto err;
 	}
@@ -335,15 +336,17 @@ static SQLRETURN init_curl(esodbc_dbc_st *dbc)
 	return SQL_SUCCESS;
 
 err:
-	if (curl)
+	if (curl) {
 		curl_easy_cleanup(curl);
+	}
 	RET_STATE(dbc->hdr.diag.state);
 }
 
 static void cleanup_curl(esodbc_dbc_st *dbc)
 {
-	if (! dbc->curl)
+	if (! dbc->curl) {
 		return;
+	}
 	DBGH(dbc, "libcurl: handle 0x%p cleanup.", dbc->curl);
 	curl_easy_cleanup(dbc->curl); /* TODO: _reset() rather? */
 	dbc->curl = NULL;
@@ -353,9 +356,9 @@ static void cleanup_curl(esodbc_dbc_st *dbc)
  * Sends a POST request given the body
  */
 static SQLRETURN post_request(esodbc_stmt_st *stmt,
-		long timeout, /* req timeout; set to negative for default */
-		const char *u8body, /* stringified JSON object, UTF-8 encoded */
-		size_t blen /* size of the u8body buffer */)
+	long timeout, /* req timeout; set to negative for default */
+	const char *u8body, /* stringified JSON object, UTF-8 encoded */
+	size_t blen /* size of the u8body buffer */)
 {
 	// char *const answer, /* buffer to receive the answer in */
 	// long avail /*size of the answer buffer */)
@@ -367,16 +370,18 @@ static SQLRETURN post_request(esodbc_stmt_st *stmt,
 
 	DBGH(stmt, "posting request `%.*s` (%zd).", blen, u8body, blen);
 
-	if (! dbc->curl)
+	if (! dbc->curl) {
 		init_curl(dbc);
+	}
 
 	/* set timeout as: statment, with highest prio, dbc next. */
-	if (0 <= timeout)
+	if (0 <= timeout) {
 		to = timeout;
-	else if (0 <= dbc->timeout)
+	} else if (0 <= dbc->timeout) {
 		to = dbc->timeout;
-	else
+	} else {
 		to = -1;
+	}
 
 
 	/* set total timeout for request */
@@ -397,7 +402,7 @@ static SQLRETURN post_request(esodbc_stmt_st *stmt,
 			goto err;
 		} else {
 			DBGH(stmt, "libcurl: set curl 0x%p post fieldsize to %ld.",
-					dbc->curl, blen);
+				dbc->curl, blen);
 		}
 		/* body itself */
 		res = curl_easy_setopt(dbc->curl, CURLOPT_POSTFIELDS, u8body);
@@ -405,7 +410,7 @@ static SQLRETURN post_request(esodbc_stmt_st *stmt,
 			goto err;
 		} else {
 			DBGH(stmt, "libcurl: set curl 0x%p post fields to `%.*s`.",
-					dbc->curl, blen, u8body);
+				dbc->curl, blen, u8body);
 		}
 	} else {
 		assert(blen == 0);
@@ -424,19 +429,22 @@ static SQLRETURN post_request(esodbc_stmt_st *stmt,
 	dbc->apos = 0;
 	dbc->alen = 0;
 
-	if (res != CURLE_OK)
+	if (res != CURLE_OK) {
 		goto err;
+	}
 	res = curl_easy_getinfo(dbc->curl, CURLINFO_RESPONSE_CODE, &code);
-	if (res != CURLE_OK)
+	if (res != CURLE_OK) {
 		goto err;
+	}
 	DBGH(stmt, "libcurl: request succesfull, received code %ld and %zd bytes"
-			" back.", code, apos);
+		" back.", code, apos);
 
 	if (code != 200) {
 		ERRH(stmt, "libcurl: non-200 HTTP response code %ld received.", code);
 		/* expect a 200 with body; everything else is failure (todo?)  */
-		if (400 <= code)
+		if (400 <= code) {
 			return attach_error(stmt, abuff, apos);
+		}
 		goto err_net;
 	}
 
@@ -444,8 +452,8 @@ static SQLRETURN post_request(esodbc_stmt_st *stmt,
 
 err:
 	ERRH(stmt, "libcurl: request failed (timeout:%ld, body:`%.*s`) "
-			"failed: '%s' (%d).", timeout, blen, u8body,
-			res != CURLE_OK ? curl_easy_strerror(res) : "<unspecified>", res);
+		"failed: '%s' (%d).", timeout, blen, u8body,
+		res != CURLE_OK ? curl_easy_strerror(res) : "<unspecified>", res);
 err_net: /* the error occured after the request hit hit the network */
 	cleanup_curl(dbc);
 	if (abuff) {
@@ -485,7 +493,7 @@ SQLRETURN post_statement(esodbc_stmt_st *stmt)
 				sizeof(u8curs));
 		if (u8len <= 0) {
 			ERRH(stmt, "failed to convert cursor `" LWPDL "` to UTF8: %d.",
-					stmt->rset.eccnt, stmt->rset.ecurs, WCS2U8_ERRNO());
+				stmt->rset.eccnt, stmt->rset.ecurs, WCS2U8_ERRNO());
 			RET_HDIAGS(stmt, SQL_STATE_24000);
 		}
 
@@ -507,9 +515,9 @@ SQLRETURN post_statement(esodbc_stmt_st *stmt)
 	/* allocate memory for the stringified buffer, if needed */
 	if (sizeof(buff) < bodylen) {
 		WARNH(dbc, "local buffer too small (%zd), need %zdB; will alloc.",
-				sizeof(buff), bodylen);
+			sizeof(buff), bodylen);
 		WARNH(dbc, "local buffer too small, SQL: `%.*s`.", stmt->sqllen,
-				stmt->u8sql);
+			stmt->u8sql);
 		body = malloc(bodylen);
 		if (! body) {
 			ERRNH(stmt, "failed to alloc %zdB.", bodylen);
@@ -525,7 +533,7 @@ SQLRETURN post_statement(esodbc_stmt_st *stmt)
 		memcpy(body, JSON_SQL_CURSOR_START, pos);
 		pos += json_escape(u8curs, u8len, body + pos, bodylen - pos);
 		memcpy(body + pos, JSON_SQL_CURSOR_END,
-				sizeof(JSON_SQL_CURSOR_END) - /*WITH \0*/0);
+			sizeof(JSON_SQL_CURSOR_END) - /*WITH \0*/0);
 		pos += sizeof(JSON_SQL_CURSOR_END) - /* but don't account for it */1;
 	} else { /* copy QUERY object */
 		pos = sizeof(JSON_SQL_QUERY_START) - 1;
@@ -534,25 +542,26 @@ SQLRETURN post_statement(esodbc_stmt_st *stmt)
 
 		if (dbc->fetch.slen) {
 			memcpy(body + pos, JSON_SQL_QUERY_MID_FETCH,
-					sizeof(JSON_SQL_QUERY_MID_FETCH) - 1);
+				sizeof(JSON_SQL_QUERY_MID_FETCH) - 1);
 			pos += sizeof(JSON_SQL_QUERY_MID_FETCH) - 1;
 			memcpy(body + pos, dbc->fetch.str, dbc->fetch.slen);
 			pos += dbc->fetch.slen;
 		} else {
 			memcpy(body + pos, JSON_SQL_QUERY_MID,
-					sizeof(JSON_SQL_QUERY_MID) - 1);
+				sizeof(JSON_SQL_QUERY_MID) - 1);
 			pos += sizeof(JSON_SQL_QUERY_MID) - 1;
 		}
 
 		memcpy(body + pos, JSON_SQL_QUERY_END,
-				sizeof(JSON_SQL_QUERY_END) - /*WITH \0*/0);
+			sizeof(JSON_SQL_QUERY_END) - /*WITH \0*/0);
 		pos += sizeof(JSON_SQL_QUERY_END) - /* but don't account for it */1;
 	}
 
 	ret = post_request(stmt, dbc->timeout, body, pos);
 
-	if (body != buff)
-		free(body); /* hehe */
+	if (body != buff) {
+		free(body);    /* hehe */
+	}
 
 	return ret;
 }
@@ -566,21 +575,21 @@ static SQLRETURN test_connect(CURL *curl)
 	res = curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 1L);
 	if (res != CURLE_OK) {
 		ERR("libcurl: failed to set connect_only: %s (%d).",
-				curl_easy_strerror(res), res);
+			curl_easy_strerror(res), res);
 		return SQL_ERROR;
 	}
 
 	res = curl_easy_perform(curl);
 	if (res != CURLE_OK) {
 		ERR("libcurl: failed connect: %s (%d).",
-				curl_easy_strerror(res), res);
+			curl_easy_strerror(res), res);
 		return SQL_ERROR;
 	}
 
 	res = curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 0L);
 	if (res != CURLE_OK) {
 		ERR("libcurl: failed to unset connect_only: %s (%d).",
-				curl_easy_strerror(res), res);
+			curl_easy_strerror(res), res);
 		return SQL_ERROR;
 	}
 
@@ -589,7 +598,7 @@ static SQLRETURN test_connect(CURL *curl)
 }
 
 static BOOL assign_config_attr(config_attrs_st *attrs,
-		wstr_st *keyword, wstr_st *value, BOOL overwrite)
+	wstr_st *keyword, wstr_st *value, BOOL overwrite)
 {
 	struct {
 		wstr_st *kw;
@@ -614,19 +623,20 @@ static BOOL assign_config_attr(config_attrs_st *attrs,
 	};
 
 	for (iter = &map[0]; iter->kw; iter ++) {
-		if (! EQ_CASE_WSTR(iter->kw, keyword))
+		if (! EQ_CASE_WSTR(iter->kw, keyword)) {
 			continue;
+		}
 		/* it's a match: has it been assigned already? */
 		if (iter->val->cnt) {
 			if (! overwrite) {
 				INFO("multiple occurances of keyword '" LWPDL "'; "
-						"ignoring new `" LWPDL "`, keeping `" LWPDL "`.",
-						LWSTR(iter->kw), LWSTR(value), LWSTR(iter->val));
+					"ignoring new `" LWPDL "`, keeping `" LWPDL "`.",
+					LWSTR(iter->kw), LWSTR(value), LWSTR(iter->val));
 				continue;
 			}
 			INFO("multiple occurances of keyword '" LWPDL "'; "
-					"overwriting old `" LWPDL "` with new `" LWPDL "`.",
-					LWSTR(iter->kw), LWSTR(iter->val), LWSTR(value));
+				"overwriting old `" LWPDL "` with new `" LWPDL "`.",
+				LWSTR(iter->kw), LWSTR(iter->val), LWSTR(value));
 		}
 		*iter->val = *value;
 		return TRUE;
@@ -639,7 +649,7 @@ static BOOL assign_config_attr(config_attrs_st *attrs,
  * Advance position in string, skipping white space.
  * if exended is true, `;` will be treated as white space too.
  */
-static SQLWCHAR* skip_ws(SQLWCHAR **pos, SQLWCHAR *end, BOOL extended)
+static SQLWCHAR *skip_ws(SQLWCHAR **pos, SQLWCHAR *end, BOOL extended)
 {
 	while (*pos < end) {
 		switch(**pos) {
@@ -658,7 +668,7 @@ static SQLWCHAR* skip_ws(SQLWCHAR **pos, SQLWCHAR *end, BOOL extended)
 					(*pos)++;
 					break;
 				}
-				// no break;
+			// no break;
 
 			default:
 				return *pos;
@@ -676,7 +686,7 @@ static SQLWCHAR* skip_ws(SQLWCHAR **pos, SQLWCHAR *end, BOOL extended)
  * Braces within braces are allowed.
  */
 static BOOL parse_token(BOOL is_value, SQLWCHAR **pos, SQLWCHAR *end,
-		wstr_st *token)
+	wstr_st *token)
 {
 	BOOL brace_escaped = FALSE;
 	int open_braces = 0;
@@ -688,7 +698,7 @@ static BOOL parse_token(BOOL is_value, SQLWCHAR **pos, SQLWCHAR *end,
 			case '\\':
 				if (! is_value) {
 					ERR("keywords and data source names cannot contain "
-							"the backslash.");
+						"the backslash.");
 					return FALSE;
 				}
 				(*pos)++;
@@ -698,17 +708,19 @@ static BOOL parse_token(BOOL is_value, SQLWCHAR **pos, SQLWCHAR *end,
 			case '\t':
 			case '\r':
 			case '\n':
-				if (open_braces || is_value)
+				if (open_braces || is_value) {
 					(*pos)++;
-				else
+				} else {
 					stop = TRUE;
+				}
 				break;
 
 			case '=':
-				if (open_braces || is_value)
+				if (open_braces || is_value) {
 					(*pos)++;
-				else
+				} else {
 					stop = TRUE;
+				}
 				break;
 
 			case ';':
@@ -734,11 +746,11 @@ static BOOL parse_token(BOOL is_value, SQLWCHAR **pos, SQLWCHAR *end,
 				break;
 
 			case '{':
-				if (*pos == start)
+				if (*pos == start) {
 					open_braces ++;
-				else if (open_braces) {
+				} else if (open_braces) {
 					ERR("token started with opening brace, so can't use "
-							"inner braces");
+						"inner braces");
 					/* b/c: `{foo{ = }}bar} = val`; `foo{bar}baz` is fine */
 					return FALSE;
 				}
@@ -769,7 +781,7 @@ static BOOL parse_token(BOOL is_value, SQLWCHAR **pos, SQLWCHAR *end,
 	return TRUE;
 }
 
-static SQLWCHAR* parse_separator(SQLWCHAR **pos, SQLWCHAR *end)
+static SQLWCHAR *parse_separator(SQLWCHAR **pos, SQLWCHAR *end)
 {
 	if (*pos < end) {
 		if (**pos == '=') {
@@ -797,7 +809,7 @@ static SQLWCHAR* parse_separator(SQLWCHAR **pos, SQLWCHAR *end)
  *  * brances need to be returned to out-str;
  */
 static BOOL parse_connection_string(config_attrs_st *attrs,
-		SQLWCHAR* szConnStrIn, SQLSMALLINT cchConnStrIn)
+	SQLWCHAR *szConnStrIn, SQLSMALLINT cchConnStrIn)
 {
 
 	SQLWCHAR *pos;
@@ -811,33 +823,35 @@ static BOOL parse_connection_string(config_attrs_st *attrs,
 	while (skip_ws(&pos, end, TRUE)) {
 		if (! parse_token(FALSE, &pos, end, &keyword)) {
 			ERR("failed to parse keyword at position %zd",
-					pos - szConnStrIn);
+				pos - szConnStrIn);
 			return FALSE;
 		}
 
-		if (! skip_ws(&pos, end, FALSE))
+		if (! skip_ws(&pos, end, FALSE)) {
 			return FALSE;
+		}
 
 		if (! parse_separator(&pos, end)) {
 			ERR("failed to parse separator (`=`) at position %zd",
-					pos - szConnStrIn);
+				pos - szConnStrIn);
 			return FALSE;
 		}
 
-		if (! skip_ws(&pos, end, FALSE))
+		if (! skip_ws(&pos, end, FALSE)) {
 			return FALSE;
+		}
 
 		if (! parse_token(TRUE, &pos, end, &value)) {
 			ERR("failed to parse value at position %zd",
-					pos - szConnStrIn);
+				pos - szConnStrIn);
 			return FALSE;
 		}
 
 		DBG("read connection string attribute: `" LWPDL "` = `" LWPDL
-				"`.",  LWSTR(&keyword), LWSTR(&value));
+			"`.",  LWSTR(&keyword), LWSTR(&value));
 		if (! assign_config_attr(attrs, &keyword, &value, TRUE))
 			WARN("keyword '" LWPDL "' is unknown, ignoring it.",
-					LWSTR(&keyword));
+				LWSTR(&keyword));
 	}
 
 	return TRUE;
@@ -863,8 +877,8 @@ static inline BOOL needs_braces(wstr_st *token)
 
 /* build a connection string to be written in the DSN files */
 static BOOL write_connection_string(config_attrs_st *attrs,
-		SQLWCHAR *szConnStrOut, SQLSMALLINT cchConnStrOutMax,
-		SQLSMALLINT *pcchConnStrOut)
+	SQLWCHAR *szConnStrOut, SQLSMALLINT cchConnStrOutMax,
+	SQLSMALLINT *pcchConnStrOut)
 {
 	int n, braces;
 	size_t pos;
@@ -904,16 +918,17 @@ static BOOL write_connection_string(config_attrs_st *attrs,
 					pos += iter->val->cnt + braces;
 					continue;
 				}
-				if (braces)
+				if (braces) {
 					format = WPFCP_DESC "={" WPFWP_LDESC "};";
-				else
+				} else {
 					format = WPFCP_DESC "=" WPFWP_LDESC ";";
+				}
 				n = swprintf(szConnStrOut + pos, cchConnStrOutMax - pos,
 						format, iter->kw, LWSTR(iter->val));
 				if (n < 0) {
 					ERRN("failed to outprint connection string (space "
-							"left: %d; needed: %d).", cchConnStrOutMax - pos,
-							iter->val->cnt);
+						"left: %d; needed: %d).", cchConnStrOutMax - pos,
+						iter->val->cnt);
 					return FALSE;
 				} else {
 					pos += n;
@@ -929,7 +944,7 @@ static BOOL write_connection_string(config_attrs_st *attrs,
 	*pcchConnStrOut = (SQLSMALLINT)pos;
 
 	DBG("Output connection string: `" LWPD "`; out len: %d.",
-			szConnStrOut, pos);
+		szConnStrOut, pos);
 	return TRUE;
 }
 
@@ -950,19 +965,19 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 	secure = wstr2bool(&attrs->secure);
 	cnt = swprintf(urlw, sizeof(urlw)/sizeof(urlw[0]),
 			L"http" WPFCP_DESC "://" WPFWP_LDESC ":" WPFWP_LDESC
-				ELASTIC_SQL_PATH, secure ? "s" : "", LWSTR(&attrs->server),
-				LWSTR(&attrs->port));
+			ELASTIC_SQL_PATH, secure ? "s" : "", LWSTR(&attrs->server),
+			LWSTR(&attrs->port));
 	if (cnt < 0) {
 		ERRNH(dbc, "failed to print URL out of server: `" LWPDL "` [%zd], "
-				"port: `" LWPDL "` [%zd].", LWSTR(&attrs->server),
-				LWSTR(&attrs->port));
+			"port: `" LWPDL "` [%zd].", LWSTR(&attrs->server),
+			LWSTR(&attrs->port));
 		goto err;
 	}
 	/* length of URL converted to U8 */
 	n = WCS2U8(urlw, cnt, NULL, 0);
 	if (! n) {
 		ERRNH(dbc, "failed to estimate U8 conversion space necessary for `"
-				LWPDL " [%d]`.", cnt, urlw, cnt);
+			LWPDL " [%d]`.", cnt, urlw, cnt);
 		goto err;
 	}
 	dbc->url = malloc(n + /*0-term*/1);
@@ -989,7 +1004,7 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 	 */
 	if (! wstr2long(&attrs->timeout, &timeout)) {
 		ERRH(dbc, "failed to convert '" LWPDL "' to long.",
-				LWSTR(&attrs->timeout));
+			LWSTR(&attrs->timeout));
 		goto err;
 	}
 	if (timeout < 0) {
@@ -1004,12 +1019,12 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 	 */
 	if (! wstr2long(&attrs->max_body_size, &max_body_size)) {
 		ERRH(dbc, "failed to convert '" LWPDL "' to long.",
-				LWSTR(&attrs->max_body_size));
+			LWSTR(&attrs->max_body_size));
 		goto err;
 	}
 	if (max_body_size < 0) {
 		ERRH(dbc, "'%s' setting can't be negative (%ld).",
-				CONNSTR_KW_MAX_BODY_SIZE_MB, max_body_size);
+			CONNSTR_KW_MAX_BODY_SIZE_MB, max_body_size);
 		goto err;
 	} else {
 		dbc->amax = max_body_size * 1024 * 1024;
@@ -1021,12 +1036,12 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 	 */
 	if (! wstr2long(&attrs->max_fetch_size, &max_fetch_size)) {
 		ERRH(dbc, "failed to convert '" LWPDL "' to long.",
-				LWSTR(&attrs->max_fetch_size));
+			LWSTR(&attrs->max_fetch_size));
 		goto err;
 	}
 	if (max_fetch_size < 0) {
 		ERRH(dbc, "'%s' setting can't be negative (%ld).",
-				CONNSTR_KW_MAX_FETCH_SIZE, max_fetch_size);
+			CONNSTR_KW_MAX_FETCH_SIZE, max_fetch_size);
 		goto err;
 	} else {
 		dbc->fetch.max = max_fetch_size;
@@ -1055,45 +1070,55 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 		dbc->pack_json = FALSE;
 	} else {
 		ERRH(dbc, "unknown packing encoding '" LWPDL "'.",
-				LWSTR(&attrs->packing));
+			LWSTR(&attrs->packing));
 		goto err;
 	}
 	INFOH(dbc, "pack JSON: %s.", dbc->pack_json ? "true" : "false");
 
 	return SQL_SUCCESS;
 err:
-	if (state == SQL_STATE_HY000)
+	if (state == SQL_STATE_HY000) {
 		RET_HDIAG(dbc, state, "invalid configuration parameter", 0);
+	}
 	RET_HDIAGS(dbc, state);
 }
 
 static inline void assign_defaults(config_attrs_st *attrs)
 {
 	/* assign defaults where not assigned and applicable */
-	if (! attrs->server.cnt)
+	if (! attrs->server.cnt) {
 		attrs->server = MK_WSTR(ESODBC_DEF_SERVER);
-	if (! attrs->port.cnt)
+	}
+	if (! attrs->port.cnt) {
 		attrs->port = MK_WSTR(ESODBC_DEF_PORT);
-	if (! attrs->secure.cnt)
+	}
+	if (! attrs->secure.cnt) {
 		attrs->secure = MK_WSTR(ESODBC_DEF_SECURE);
-	if (! attrs->timeout.cnt)
+	}
+	if (! attrs->timeout.cnt) {
 		attrs->timeout = MK_WSTR(ESODBC_DEF_TIMEOUT);
-	if (! attrs->follow.cnt)
+	}
+	if (! attrs->follow.cnt) {
 		attrs->follow = MK_WSTR(ESODBC_DEF_FOLLOW);
+	}
 
 	/* no default packing */
 
-	if (! attrs->packing.cnt)
+	if (! attrs->packing.cnt) {
 		attrs->packing = MK_WSTR(ESODBC_DEF_PACKING);
-	if (! attrs->max_fetch_size.cnt)
+	}
+	if (! attrs->max_fetch_size.cnt) {
 		attrs->max_fetch_size = MK_WSTR(ESODBC_DEF_FETCH_SIZE);
-	if (! attrs->max_body_size.cnt)
+	}
+	if (! attrs->max_body_size.cnt) {
 		attrs->max_body_size = MK_WSTR(ESODBC_DEF_MAX_BODY_SIZE_MB);
+	}
 
 	/* default: no trace file */
 
-	if (! attrs->trace_level.cnt)
+	if (! attrs->trace_level.cnt) {
 		attrs->trace_level = MK_WSTR(ESODBC_DEF_TRACE_LEVEL);
+	}
 }
 
 /* release all resources, except the handler itself */
@@ -1138,8 +1163,9 @@ static SQLRETURN do_connect(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 	cleanup_dbc(dbc);
 
 	ret = process_config(dbc, attrs);
-	if (! SQL_SUCCEEDED(ret))
+	if (! SQL_SUCCEEDED(ret)) {
 		return ret;
+	}
 
 	/* init libcurl objects */
 	ret = init_curl(dbc);
@@ -1167,7 +1193,7 @@ static SQLRETURN do_connect(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 
 /* Maps ES/SQL type name to C SQL and SQL id values. */
 static BOOL elastic_name2types(wstr_st *type_name,
-		SQLSMALLINT *c_sql, SQLSMALLINT *sql)
+	SQLSMALLINT *c_sql, SQLSMALLINT *sql)
 {
 	switch (type_name->cnt) {
 		/* 4: BYTE, LONG, TEXT, DATE, NULL */
@@ -1175,7 +1201,7 @@ static BOOL elastic_name2types(wstr_st *type_name,
 			switch (tolower(type_name->str[0])) {
 				case (SQLWCHAR)'b':
 					if (! wmemncasecmp(type_name->str,
-								MK_WPTR(JSON_COL_BYTE), type_name->cnt)) {
+							MK_WPTR(JSON_COL_BYTE), type_name->cnt)) {
 						*c_sql = ESODBC_ES_TO_CSQL_BYTE;
 						*sql = ESODBC_ES_TO_SQL_BYTE;
 						return TRUE;
@@ -1183,15 +1209,15 @@ static BOOL elastic_name2types(wstr_st *type_name,
 					break;
 				case (SQLWCHAR)'l':
 					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_LONG),
-								type_name->cnt)) {
+							type_name->cnt)) {
 						*c_sql = ESODBC_ES_TO_CSQL_LONG;
 						*sql = ESODBC_ES_TO_SQL_LONG;
 						return TRUE;
-						}
+					}
 					break;
 				case (SQLWCHAR)'t':
 					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_TEXT),
-								type_name->cnt)) {
+							type_name->cnt)) {
 						*c_sql = ESODBC_ES_TO_CSQL_TEXT;
 						*sql = ESODBC_ES_TO_SQL_TEXT;
 						return TRUE;
@@ -1199,7 +1225,7 @@ static BOOL elastic_name2types(wstr_st *type_name,
 					break;
 				case (SQLWCHAR)'d':
 					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_DATE),
-								type_name->cnt)) {
+							type_name->cnt)) {
 						*c_sql = ESODBC_ES_TO_CSQL_DATE;
 						*sql = ESODBC_ES_TO_SQL_DATE;
 						return TRUE;
@@ -1207,7 +1233,7 @@ static BOOL elastic_name2types(wstr_st *type_name,
 					break;
 				case (SQLWCHAR)'n':
 					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_NULL),
-								type_name->cnt)) {
+							type_name->cnt)) {
 						*c_sql = ESODBC_ES_TO_CSQL_NULL;
 						*sql = ESODBC_ES_TO_SQL_NULL;
 						return TRUE;
@@ -1221,7 +1247,7 @@ static BOOL elastic_name2types(wstr_st *type_name,
 			switch (tolower(type_name->str[0])) {
 				case (SQLWCHAR)'s':
 					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_SHORT),
-								type_name->cnt)) {
+							type_name->cnt)) {
 						*c_sql = ESODBC_ES_TO_CSQL_SHORT;
 						*sql = ESODBC_ES_TO_SQL_SHORT;
 						return TRUE;
@@ -1229,7 +1255,7 @@ static BOOL elastic_name2types(wstr_st *type_name,
 					break;
 				case (SQLWCHAR)'f':
 					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_FLOAT),
-								type_name->cnt)) {
+							type_name->cnt)) {
 						*c_sql = ESODBC_ES_TO_CSQL_FLOAT;
 						*sql = ESODBC_ES_TO_SQL_FLOAT;
 						return TRUE;
@@ -1243,7 +1269,7 @@ static BOOL elastic_name2types(wstr_st *type_name,
 			switch (tolower(type_name->str[0])) {
 				case (SQLWCHAR)'d':
 					if (! wmemncasecmp(type_name->str,
-								MK_WPTR(JSON_COL_DOUBLE), type_name->cnt)) {
+							MK_WPTR(JSON_COL_DOUBLE), type_name->cnt)) {
 						*c_sql = ESODBC_ES_TO_CSQL_DOUBLE;
 						*sql = ESODBC_ES_TO_SQL_DOUBLE;
 						return TRUE;
@@ -1251,7 +1277,7 @@ static BOOL elastic_name2types(wstr_st *type_name,
 					break;
 				case (SQLWCHAR)'b':
 					if (! wmemncasecmp(type_name->str,
-								MK_WPTR(JSON_COL_BINARY), type_name->cnt)) {
+							MK_WPTR(JSON_COL_BINARY), type_name->cnt)) {
 						*c_sql = ESODBC_ES_TO_CSQL_BINARY;
 						*sql = ESODBC_ES_TO_SQL_BINARY;
 						return TRUE;
@@ -1259,7 +1285,7 @@ static BOOL elastic_name2types(wstr_st *type_name,
 					break;
 				case (SQLWCHAR)'o':
 					if (! wmemncasecmp(type_name->str,
-								MK_WPTR(JSON_COL_OBJECT), type_name->cnt)) {
+							MK_WPTR(JSON_COL_OBJECT), type_name->cnt)) {
 						*c_sql = ESODBC_ES_TO_CSQL_OBJECT;
 						*sql = ESODBC_ES_TO_SQL_OBJECT;
 						return TRUE;
@@ -1267,7 +1293,7 @@ static BOOL elastic_name2types(wstr_st *type_name,
 					break;
 				case (SQLWCHAR)'n':
 					if (! wmemncasecmp(type_name->str,
-								MK_WPTR(JSON_COL_NESTED), type_name->cnt)) {
+							MK_WPTR(JSON_COL_NESTED), type_name->cnt)) {
 						*c_sql = ESODBC_ES_TO_CSQL_NESTED;
 						*sql = ESODBC_ES_TO_SQL_NESTED;
 						return TRUE;
@@ -1281,24 +1307,27 @@ static BOOL elastic_name2types(wstr_st *type_name,
 			switch (tolower(type_name->str[0])) {
 				case (SQLWCHAR)'i': /* integer */
 					if (wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_INTEGER),
-								type_name->cnt) == 0)
+							type_name->cnt) == 0) {
 						*c_sql = ESODBC_ES_TO_CSQL_INTEGER;
 						*sql = ESODBC_ES_TO_SQL_INTEGER;
 						return TRUE;
+					}
 					break;
 				case (SQLWCHAR)'b': /* boolean */
 					if (wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_BOOLEAN),
-								type_name->cnt) == 0)
+							type_name->cnt) == 0) {
 						*c_sql = ESODBC_ES_TO_CSQL_BOOLEAN;
 						*sql = ESODBC_ES_TO_SQL_BOOLEAN;
 						return TRUE;
+					}
 					break;
 				case (SQLWCHAR)'k': /* keyword */
 					if (wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_KEYWORD),
-								type_name->cnt) == 0)
+							type_name->cnt) == 0) {
 						*c_sql = ESODBC_ES_TO_CSQL_KEYWORD;
 						*sql = ESODBC_ES_TO_SQL_KEYWORD;
 						return TRUE;
+					}
 					break;
 			}
 			break;
@@ -1306,7 +1335,7 @@ static BOOL elastic_name2types(wstr_st *type_name,
 		/* 10: HALF_FLOAT */
 		case sizeof(JSON_COL_HALF_FLOAT) - 1:
 			if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_HALF_FLOAT),
-						type_name->cnt)) {
+					type_name->cnt)) {
 				*c_sql = ESODBC_ES_TO_CSQL_HALF_FLOAT;
 				*sql = ESODBC_ES_TO_SQL_HALF_FLOAT;
 				return TRUE;
@@ -1316,7 +1345,7 @@ static BOOL elastic_name2types(wstr_st *type_name,
 		/* 11: UNSUPPORTED */
 		case sizeof(JSON_COL_UNSUPPORTED) - 1:
 			if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_UNSUPPORTED),
-						type_name->cnt)) {
+					type_name->cnt)) {
 				*c_sql = ESODBC_ES_TO_CSQL_UNSUPPORTED;
 				*sql = ESODBC_ES_TO_SQL_UNSUPPORTED;
 				return TRUE;
@@ -1326,7 +1355,7 @@ static BOOL elastic_name2types(wstr_st *type_name,
 		/* 12: SCALED_FLOAT */
 		case sizeof(JSON_COL_SCALED_FLOAT) - 1:
 			if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_SCALED_FLOAT),
-						type_name->cnt)) {
+					type_name->cnt)) {
 				*c_sql = ESODBC_ES_TO_CSQL_SCALED_FLOAT;
 				*sql = ESODBC_ES_TO_SQL_SCALED_FLOAT;
 				return TRUE;
@@ -1335,7 +1364,7 @@ static BOOL elastic_name2types(wstr_st *type_name,
 
 	}
 	ERR("unrecognized Elastic type `" LWPDL "` (%zd).", LWSTR(type_name),
-			type_name->cnt);
+		type_name->cnt);
 	return FALSE;
 }
 
@@ -1366,13 +1395,15 @@ static void set_display_size(esodbc_estype_st *es_type)
 		case SQL_SMALLINT: /* SHORT */
 		case SQL_INTEGER: /* INTEGER */
 			es_type->display_size = es_type->column_size;
-			if (! es_type->unsigned_attribute)
+			if (! es_type->unsigned_attribute) {
 				es_type->display_size ++;
+			}
 			break;
 		case SQL_BIGINT: /* LONG */
 			es_type->display_size = es_type->column_size;
-			if (es_type->unsigned_attribute)
+			if (es_type->unsigned_attribute) {
 				es_type->display_size ++;
+			}
 			break;
 
 		case SQL_BINARY:
@@ -1444,8 +1475,8 @@ static BOOL bind_types_cols(esodbc_stmt_st *stmt, estype_row_st *type_row)
 			(SQLPOINTER)(uintptr_t)type_row[0]._member : \
 			(SQLPOINTER)&type_row[0]._member; \
 		if (! SQL_SUCCEEDED(EsSQLBindCol(stmt, _col_nr, _c_type, \
-						_ptr, sizeof(type_row[0]._member), \
-						&type_row[0]._member ## _loi))) { \
+					_ptr, sizeof(type_row[0]._member), \
+					&type_row[0]._member ## _loi))) { \
 			ERRH(stmt, "failed to bind column #" STR(_col_nr) "."); \
 			return FALSE; \
 		} \
@@ -1476,8 +1507,8 @@ static BOOL bind_types_cols(esodbc_stmt_st *stmt, estype_row_st *type_row)
 	return TRUE;
 }
 
-static void* copy_types_rows(estype_row_st *type_row, SQLULEN rows_fetched,
-		esodbc_estype_st *types)
+static void *copy_types_rows(estype_row_st *type_row, SQLULEN rows_fetched,
+	esodbc_estype_st *types)
 {
 	SQLWCHAR *pos;
 	int i;
@@ -1509,7 +1540,7 @@ static void* copy_types_rows(estype_row_st *type_row, SQLULEN rows_fetched,
 				type_row[i]._wmember ## _loi / sizeof(SQLWCHAR); \
 			types[i]._wmember.str = pos; \
 			wmemcpy(types[i]._wmember.str, \
-					type_row[i]._wmember, types[i]._wmember.cnt + /*\0*/1); \
+				type_row[i]._wmember, types[i]._wmember.cnt + /*\0*/1); \
 			pos += types[i]._wmember.cnt + /*\0*/1; \
 		} \
 	} while (0)
@@ -1541,24 +1572,24 @@ static void* copy_types_rows(estype_row_st *type_row, SQLULEN rows_fetched,
 		/* warn if scales extremes are different */
 		if (types[i].maximum_scale != types[i].minimum_scale) {
 			ERR("type `" LWPDL "` returned with non-equal max/min "
-					"scale: %d/%d.", LWSTR(&types[i].type_name),
-					types[i].maximum_scale, types[i].minimum_scale);
+				"scale: %d/%d.", LWSTR(&types[i].type_name),
+				types[i].maximum_scale, types[i].minimum_scale);
 		}
 
 		/* resolve ES type to SQL C type */
 		if (! elastic_name2types(&types[i].type_name, &types[i].c_concise_type,
-					&sql_type)) {
+				&sql_type)) {
 			/* ES version newer than driver's? */
 			ERR("failed to convert type name `" LWPDL "` to SQL C type.",
-					LWSTR(&types[i].type_name));
+				LWSTR(&types[i].type_name));
 			return NULL;
 		}
 		/* .data_type is used in data conversions -> make sure the SQL type
 		 * derived from type's name is the same with type reported value */
 		if (sql_type != types[i].data_type) {
 			ERR("type `" LWPDL "` derived (%d) and reported (%d) SQL type "
-					"identifiers differ.", LWSTR(&types[i].type_name),
-					sql_type, types[i].data_type);
+				"identifiers differ.", LWSTR(&types[i].type_name),
+				sql_type, types[i].data_type);
 			return NULL;
 		}
 		/* set meta type */
@@ -1567,7 +1598,7 @@ static void* copy_types_rows(estype_row_st *type_row, SQLULEN rows_fetched,
 
 		/* fix SQL_DATA_TYPE and SQL_DATETIME_SUB columns TODO: GH issue */
 		concise_to_type_code(types[i].data_type, &types[i].sql_data_type,
-				&types[i].sql_datetime_sub);
+			&types[i].sql_datetime_sub);
 
 		set_display_size(types + i);
 	}
@@ -1615,7 +1646,7 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 		cstr_st *types_answer = (cstr_st *)dbc->hwin;
 		dbc->hwin = NULL;
 		if (! SQL_SUCCEEDED(attach_answer(stmt, types_answer->str,
-						types_answer->cnt))) {
+					types_answer->cnt))) {
 			ERRH(stmt, "failed to attach dummmy ES types answer");
 			goto end;
 		}
@@ -1635,7 +1666,7 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 		goto end;
 	} else if (col_cnt != ESODBC_TYPES_MEMBERS) {
 		ERRH(stmt, "Elasticsearch returned an unexpected number of columns "
-				"(%d vs expected %d).", col_cnt, ESODBC_TYPES_MEMBERS);
+			"(%d vs expected %d).", col_cnt, ESODBC_TYPES_MEMBERS);
 		goto end;
 	} else {
 		DBGH(stmt, "Elasticsearch types columns count: %d.", col_cnt);
@@ -1651,7 +1682,7 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 		goto end;
 	} else if (ESODBC_MAX_ROW_ARRAY_SIZE < row_cnt) {
 		ERRH(stmt, "Elasticsearch returned too many types (%d vs limit %zd).",
-				row_cnt, ESODBC_MAX_ROW_ARRAY_SIZE);
+			row_cnt, ESODBC_MAX_ROW_ARRAY_SIZE);
 		goto end;
 	} else {
 		DBGH(stmt, "Elasticsearch types rows count: %ld.", row_cnt);
@@ -1659,15 +1690,15 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 
 	/* indicate bind type: row-wise (i.e. row size) */
 	if (! SQL_SUCCEEDED(EsSQLSetStmtAttrW(stmt, SQL_ATTR_ROW_BIND_TYPE,
-					(SQLPOINTER)sizeof(type_row[0]), 0))) {
+				(SQLPOINTER)sizeof(type_row[0]), 0))) {
 		ERRH(stmt, "failed to set bind type to row-wise.");
 		goto end;
 	}
 	/* indicate rowset size */
 	if (! SQL_SUCCEEDED(EsSQLSetStmtAttrW(stmt, SQL_ATTR_ROW_ARRAY_SIZE,
-					(SQLPOINTER)ESODBC_MAX_ROW_ARRAY_SIZE, 0))) {
+				(SQLPOINTER)ESODBC_MAX_ROW_ARRAY_SIZE, 0))) {
 		ERRH(stmt, "failed to set rowset size (%zd).",
-				ESODBC_MAX_ROW_ARRAY_SIZE);
+			ESODBC_MAX_ROW_ARRAY_SIZE);
 		goto end;
 	}
 	/* indicate array to write row status into; initialize with error first */
@@ -1675,13 +1706,13 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 		row_status[i] = SQL_ROW_ERROR;
 	}
 	if (! SQL_SUCCEEDED(EsSQLSetStmtAttrW(stmt, SQL_ATTR_ROW_STATUS_PTR,
-					row_status, 0))) {
+				row_status, 0))) {
 		ERRH(stmt, "failed to set row status array.");
 		goto end;
 	}
 	/* indicate pointer to write how many rows were fetched into */
 	if (! SQL_SUCCEEDED(EsSQLSetStmtAttrW(stmt, SQL_ATTR_ROWS_FETCHED_PTR,
-					&rows_fetched, 0))) {
+				&rows_fetched, 0))) {
 		ERRH(stmt, "failed to set fetched size pointer.");
 		goto end;
 	}
@@ -1712,7 +1743,7 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 	for (i = 0; i < rows_fetched; i ++) {
 		if (row_status[i] != SQL_ROW_SUCCESS) {
 			ERRH(stmt, "row #%d not succesfully fetched; status: %d.", i,
-					row_status[i]);
+				row_status[i]);
 			goto end;
 		}
 		if (type_row[i].type_name_loi != SQL_NULL_DATA) {
@@ -1750,7 +1781,7 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 	}
 	/* I didn't overrun the buffer */
 	assert((char *)pos - (char *)(types + rows_fetched) <=
-			(intptr_t)(strs_len));
+		(intptr_t)(strs_len));
 
 	ret = TRUE;
 end:
@@ -1802,13 +1833,13 @@ static BOOL read_system_info(config_attrs_st *attrs, TCHAR *buff)
 	}
 	/* try accessing local user's config first, if that fails, systems' */
 	if (RegOpenKeyEx(HKEY_CURRENT_USER, val, /*options*/0, KEY_READ,
-				&hkey) != ERROR_SUCCESS) {
+			&hkey) != ERROR_SUCCESS) {
 		INFO("failed to open registry key `" REG_HKCU "\\" LWPD "`.",
-				val);
+			val);
 		if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, val, /*options*/0, KEY_READ,
-					&hkey) != ERROR_SUCCESS) {
+				&hkey) != ERROR_SUCCESS) {
 			INFO("failed to open registry key `" REG_HKLM "\\" LWPD "`.",
-					val);
+				val);
 			goto end;
 		} else {
 			ktree = REG_HKLM;
@@ -1818,25 +1849,25 @@ static BOOL read_system_info(config_attrs_st *attrs, TCHAR *buff)
 	}
 
 	if (RegQueryInfoKey(hkey, /*key class*/NULL, /*len of key class*/NULL,
-				/*reserved*/NULL, /*no subkeys*/NULL, /*longest subkey*/NULL,
-				/*longest subkey class name*/NULL, &valsno, &maxvallen,
-				&maxdatalen, /*sec descr*/NULL,
-				/*update time */NULL) != ERROR_SUCCESS) {
+			/*reserved*/NULL, /*no subkeys*/NULL, /*longest subkey*/NULL,
+			/*longest subkey class name*/NULL, &valsno, &maxvallen,
+			&maxdatalen, /*sec descr*/NULL,
+			/*update time */NULL) != ERROR_SUCCESS) {
 		ERRN("Failed to query registery key info for path `%s\\" LWPD
-				"`.", ktree, val);
+			"`.", ktree, val);
 		goto end;
 	} else {
 		DBG("Subkey '%s\\" LWPD "': vals: %d, lengthiest name: %d, "
-				"lengthiest data: %d.", ktree, val, valsno, maxvallen,
-				maxdatalen);
+			"lengthiest data: %d.", ktree, val, valsno, maxvallen,
+			maxdatalen);
 		// malloc buffers?
 		if (MAX_REG_VAL_NAME < maxvallen)
 			BUG("value name buffer too small (%d), needed: %dB.",
-					MAX_REG_VAL_NAME, maxvallen);
+				MAX_REG_VAL_NAME, maxvallen);
 		if (MAX_REG_DATA_SIZE < maxdatalen)
 			BUG("value data buffer too small (%d), needed: %dB.",
-					MAX_REG_DATA_SIZE, maxdatalen);
-			/* connection could still succeeded, so carry on */
+				MAX_REG_DATA_SIZE, maxdatalen);
+		/* connection could still succeeded, so carry on */
 	}
 
 	for (i = 0, j = 0; i < valsno; i ++) {
@@ -1844,24 +1875,28 @@ static BOOL read_system_info(config_attrs_st *attrs, TCHAR *buff)
 		datalen = MAX_REG_DATA_SIZE;
 		d = (BYTE *)&buff[j * datalen];
 		if (RegEnumValue(hkey, i, val, &vallen, /*reserved*/NULL, &valtype,
-					d, &datalen) != ERROR_SUCCESS) {
+				d, &datalen) != ERROR_SUCCESS) {
 			ERR("failed to read register subkey value.");
 			goto end;
 		}
 		if (valtype != REG_SZ) {
 			INFO("unused register values of type %d -- skipping.",
-					valtype);
+				valtype);
 			continue;
 		}
-		tval = (tstr_st){val, vallen};
-		tdata = (tstr_st){(SQLTCHAR *)d, datalen};
+		tval = (tstr_st) {
+			val, vallen
+		};
+		tdata = (tstr_st) {
+			(SQLTCHAR *)d, datalen
+		};
 		if (assign_config_attr(attrs, &tval, &tdata, FALSE)) {
 			j ++;
 			DBG("reg entry`" LTPDL "`: `" LTPDL "` assigned.",
-					LTSTR(&tval), LTSTR(&tdata));
+				LTSTR(&tval), LTSTR(&tdata));
 		} else {
 			INFO("ignoring reg entry `" LTPDL "`: `" LTPDL "`.",
-					LTSTR(&tval), LTSTR(&tdata));
+				LTSTR(&tval), LTSTR(&tdata));
 			/* entry not directly relevant to driver config */
 		}
 	}
@@ -1888,27 +1923,27 @@ static BOOL prompt_user(config_attrs_st *attrs, BOOL disable_conn)
 
 SQLRETURN EsSQLDriverConnectW
 (
-		SQLHDBC             hdbc,
-		SQLHWND             hwnd,
-		/* "A full connection string, a partial connection string, or an empty
-		 * string" */
-		_In_reads_(cchConnStrIn) SQLWCHAR* szConnStrIn,
-		/* "Length of *InConnectionString, in characters if the string is
-		 * Unicode, or bytes if string is ANSI or DBCS." */
-		SQLSMALLINT         cchConnStrIn,
-		/* "Pointer to a buffer for the completed connection string. Upon
-		 * successful connection to the target data source, this buffer
-		 * contains the completed connection string." */
-		_Out_writes_opt_(cchConnStrOutMax) SQLWCHAR* szConnStrOut,
-		/* "Length of the *OutConnectionString buffer, in characters." */
-		SQLSMALLINT         cchConnStrOutMax,
-		/* "Pointer to a buffer in which to return the total number of
-		 * characters (excluding the null-termination character) available to
-		 * return in *OutConnectionString" */
-		_Out_opt_ SQLSMALLINT*        pcchConnStrOut,
-		/* "Flag that indicates whether the Driver Manager or driver must
-		 * prompt for more connection information" */
-		SQLUSMALLINT        fDriverCompletion
+	SQLHDBC             hdbc,
+	SQLHWND             hwnd,
+	/* "A full connection string, a partial connection string, or an empty
+	 * string" */
+	_In_reads_(cchConnStrIn) SQLWCHAR *szConnStrIn,
+	/* "Length of *InConnectionString, in characters if the string is
+	 * Unicode, or bytes if string is ANSI or DBCS." */
+	SQLSMALLINT         cchConnStrIn,
+	/* "Pointer to a buffer for the completed connection string. Upon
+	 * successful connection to the target data source, this buffer
+	 * contains the completed connection string." */
+	_Out_writes_opt_(cchConnStrOutMax) SQLWCHAR *szConnStrOut,
+	/* "Length of the *OutConnectionString buffer, in characters." */
+	SQLSMALLINT         cchConnStrOutMax,
+	/* "Pointer to a buffer in which to return the total number of
+	 * characters (excluding the null-termination character) available to
+	 * return in *OutConnectionString" */
+	_Out_opt_ SQLSMALLINT        *pcchConnStrOut,
+	/* "Flag that indicates whether the Driver Manager or driver must
+	 * prompt for more connection information" */
+	SQLUSMALLINT        fDriverCompletion
 )
 {
 	esodbc_dbc_st *dbc = DBCH(hdbc);
@@ -1924,12 +1959,12 @@ SQLRETURN EsSQLDriverConnectW
 
 	if (szConnStrIn) {
 		DBGH(dbc, "Input connection string: '"LWPD"'[%d].", szConnStrIn,
-				cchConnStrIn);
+			cchConnStrIn);
 		/* parse conn str into attrs */
 		if (! parse_connection_string(&attrs, szConnStrIn, cchConnStrIn)) {
 			ERRH(dbc, "failed to parse connection string `" LWPDL "`.",
-					cchConnStrIn < 0 ? wcslen(szConnStrIn) : cchConnStrIn,
-					szConnStrIn);
+				cchConnStrIn < 0 ? wcslen(szConnStrIn) : cchConnStrIn,
+				szConnStrIn);
 			RET_HDIAGS(dbc, SQL_STATE_HY000);
 		}
 		/* original received DSN saved for later query by the app */
@@ -1942,7 +1977,7 @@ SQLRETURN EsSQLDriverConnectW
 			 * to "DEFAULT", the driver retrieves the information for the
 			 * Default data source. */
 			INFOH(dbc, "no DRIVER or DSN keyword found in connection string: "
-					"using the \"DEFAULT\" DSN.");
+				"using the \"DEFAULT\" DSN.");
 			attrs.dsn = MK_WSTR("DEFAULT");
 		}
 	} else {
@@ -1958,11 +1993,11 @@ SQLRETURN EsSQLDriverConnectW
 		 * duplicates information in the connection string, the driver uses
 		 * the information in the connection string." */
 		INFOH(dbc, "configuring the driver by DSN '" LWPDL "'.",
-				LWSTR(&attrs.dsn));
+			LWSTR(&attrs.dsn));
 		if (! read_system_info(&attrs, buff)) {
 			/* warn, but try to carry on */
 			WARNH(dbc, "failed to read system info for DSN '" LWPDL "' data.",
-					LWSTR(&attrs.dsn));
+				LWSTR(&attrs.dsn));
 			/* DM should take care of this, but just in case */
 			if (! EQ_WSTR(&attrs.dsn, &MK_WSTR("DEFAULT"))) {
 				attrs.dsn = MK_WSTR("DEFAULT");
@@ -1985,19 +2020,22 @@ SQLRETURN EsSQLDriverConnectW
 	switch (fDriverCompletion) {
 		case SQL_DRIVER_NOPROMPT:
 			ret = do_connect(dbc, &attrs);
-			if (! SQL_SUCCEEDED(ret))
+			if (! SQL_SUCCEEDED(ret)) {
 				return ret;
+			}
 			break;
 
 		case SQL_DRIVER_COMPLETE_REQUIRED:
 			disable_conn = TRUE;
-			//no break;
+		//no break;
 		case SQL_DRIVER_COMPLETE:
 			/* try connect first, then, if that fails, prompt user */
 			while (! SQL_SUCCEEDED(do_connect(dbc, &attrs))) {
 				if (! prompt_user(&attrs, disable_conn))
 					/* user canceled */
+				{
 					return SQL_NO_DATA;
+				}
 			}
 			break;
 
@@ -2006,7 +2044,9 @@ SQLRETURN EsSQLDriverConnectW
 				/* prompt user first, then try connect */
 				if (! prompt_user(&attrs, FALSE))
 					/* user canceled */
+				{
 					return SQL_NO_DATA;
+				}
 			} while (! SQL_SUCCEEDED(do_connect(dbc, &attrs)));
 			break;
 
@@ -2027,7 +2067,7 @@ SQLRETURN EsSQLDriverConnectW
 	if (! load_es_types(dbc)) {
 		ERRH(dbc, "failed to load Elasticsearch/SQL types.");
 		RET_HDIAG(dbc, SQL_STATE_HY000,
-				"failed to load Elasticsearch/SQL types", 0);
+			"failed to load Elasticsearch/SQL types", 0);
 	}
 
 	/* save the original DSN for later inquiry by app */
@@ -2048,7 +2088,7 @@ SQLRETURN EsSQLDriverConnectW
 				pcchConnStrOut)) {
 			ERRH(dbc, "failed to build output connection string.");
 			RET_HDIAG(dbc, SQL_STATE_HY000, "failed to build connection "
-					"string", 0);
+				"string", 0);
 		}
 	}
 
@@ -2089,10 +2129,10 @@ SQLRETURN EsSQLDisconnect(SQLHDBC ConnectionHandle)
  * """
  */
 SQLRETURN EsSQLSetConnectAttrW(
-		SQLHDBC ConnectionHandle,
-		SQLINTEGER Attribute,
-		_In_reads_bytes_opt_(StringLength) SQLPOINTER Value,
-		SQLINTEGER StringLength)
+	SQLHDBC ConnectionHandle,
+	SQLINTEGER Attribute,
+	_In_reads_bytes_opt_(StringLength) SQLPOINTER Value,
+	SQLINTEGER StringLength)
 {
 	esodbc_dbc_st *dbc = DBCH(ConnectionHandle);
 
@@ -2101,7 +2141,7 @@ SQLRETURN EsSQLSetConnectAttrW(
 			/* this driver doesn't behave differently based on app being ANSI
 			 * or Unicode. */
 			INFOH(dbc, "no ANSI/Unicode specific behaviour (app is: %s).",
-					(uintptr_t)Value == SQL_AA_TRUE ? "ANSI" : "Unicode");
+				(uintptr_t)Value == SQL_AA_TRUE ? "ANSI" : "Unicode");
 			/* TODO: API doesn't require to set a state? */
 			//state = SQL_STATE_IM001;
 			return SQL_ERROR; /* error means ANSI */
@@ -2109,13 +2149,13 @@ SQLRETURN EsSQLSetConnectAttrW(
 		case SQL_ATTR_LOGIN_TIMEOUT:
 			if (dbc->es_types) {
 				ERRH(dbc, "connection already established, can't set "
-						"connection timeout anymore (to %u).",
-						(SQLUINTEGER)(uintptr_t)Value);
+					"connection timeout anymore (to %u).",
+					(SQLUINTEGER)(uintptr_t)Value);
 				RET_HDIAG(dbc, SQL_STATE_HY011, "connection established, "
-						"can't set connection timeout.", 0);
+					"can't set connection timeout.", 0);
 			}
 			INFOH(dbc, "setting connection timeout to: %u, from previous: %u.",
-					dbc->timeout, (SQLUINTEGER)(uintptr_t)Value);
+				dbc->timeout, (SQLUINTEGER)(uintptr_t)Value);
 			dbc->timeout = (long)(uintptr_t)Value;
 			break;
 
@@ -2147,7 +2187,7 @@ SQLRETURN EsSQLSetConnectAttrW(
 
 		case SQL_ATTR_TXN_ISOLATION:
 			DBGH(dbc, "setting transaction isolation to: %u.",
-					(SQLUINTEGER)(uintptr_t)Value);
+				(SQLUINTEGER)(uintptr_t)Value);
 			dbc->txn_isolation = (SQLUINTEGER)(uintptr_t)Value;
 			break;
 
@@ -2160,11 +2200,11 @@ SQLRETURN EsSQLSetConnectAttrW(
 }
 
 SQLRETURN EsSQLGetConnectAttrW(
-		SQLHDBC        ConnectionHandle,
-		SQLINTEGER     Attribute,
-		_Out_writes_opt_(_Inexpressible_(cbValueMax)) SQLPOINTER ValuePtr,
-		SQLINTEGER     BufferLength,
-		_Out_opt_ SQLINTEGER* StringLengthPtr)
+	SQLHDBC        ConnectionHandle,
+	SQLINTEGER     Attribute,
+	_Out_writes_opt_(_Inexpressible_(cbValueMax)) SQLPOINTER ValuePtr,
+	SQLINTEGER     BufferLength,
+	_Out_opt_ SQLINTEGER *StringLengthPtr)
 {
 	esodbc_dbc_st *dbc = DBCH(ConnectionHandle);
 	SQLSMALLINT used;
@@ -2187,12 +2227,12 @@ SQLRETURN EsSQLGetConnectAttrW(
 				ERRH(dbc, "no connection active.");
 				RET_HDIAGS(dbc, SQL_STATE_08003);
 			} else if ((used = copy_current_catalog(dbc, (SQLWCHAR *)ValuePtr,
-						(SQLSMALLINT)BufferLength)) < 0) {
+							(SQLSMALLINT)BufferLength)) < 0) {
 				ERRH(dbc, "failed to get current catalog.");
 				RET_STATE(dbc->hdr.diag.state);
 			}
 			if (StringLengthPtr);
-				*StringLengthPtr = (SQLINTEGER)used;
+			*StringLengthPtr = (SQLINTEGER)used;
 			break;
 
 		case SQL_ATTR_METADATA_ID:
@@ -2211,7 +2251,7 @@ SQLRETURN EsSQLGetConnectAttrW(
 
 		case SQL_ATTR_TXN_ISOLATION:
 			DBGH(dbc, "requested: transaction isolation: %u.",
-					dbc->txn_isolation);
+				dbc->txn_isolation);
 			*(SQLUINTEGER *)ValuePtr = dbc->txn_isolation;
 			break;
 

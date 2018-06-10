@@ -1,0 +1,41 @@
+#!/bin/bash
+
+# hook the script with:
+# $ git config core.hooksPath devtools/githooks/
+
+
+SRC_HOME=${SRC_HOME:-`git rev-parse --show-toplevel`}
+C_FORMATTER="$SRC_HOME/devtools/astyle-c.sh"
+CC_FORMATTER="$SRC_HOME/devtools/astyle-cc.sh --dry-run -Q"
+
+# driver source files only
+DRV_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep 'driver.*\.[ch][c]\?$')
+# test source files only
+TEST_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep 'test.*\.[ch][c]\?$')
+
+[ -z "$DRV_FILES" ] && [ -z "$TEST_FILES" ] && exit 0
+
+function checkfmt() {
+  [ $# -lt 2 ] && return 0
+  FORMATTER=$1
+  FILES=$2
+
+  unformatted=$($FORMATTER --dry-run -Q $FILES)
+  [ -z "$unformatted" ] && return 0
+
+  echo >&2 "Source files must be formatted with astyle. Please run:"
+  for src in $unformatted; do
+    # astyle outputs "Formatted somefile.c"
+    if [[ $src =~ \.[ch][c]?$ ]] ; then
+      echo >&2 "$FORMATTER $src"
+    fi
+  done
+
+  return 1
+}
+
+checkfmt $C_FORMATTER $DRV_FILES || exit 1
+# checkfmt $CC_FORMATTER $TEST_FILES || exit 1
+
+
+exit 0

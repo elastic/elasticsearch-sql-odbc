@@ -17,16 +17,17 @@ void init_diagnostic(esodbc_diag_st *dest)
 }
 
 /* TODO: must the diagnostic be "cleared" after a succesful invokation?? */
-SQLRETURN post_diagnostic(esodbc_diag_st *dest, esodbc_state_et state, 
-		SQLWCHAR *text, SQLINTEGER code)
+SQLRETURN post_diagnostic(esodbc_diag_st *dest, esodbc_state_et state,
+	SQLWCHAR *text, SQLINTEGER code)
 {
 	size_t pos, tcnt, ebufsz;
-	
+
 	ebufsz = sizeof(dest->text)/sizeof(dest->text[0]);
-	
+
 	/* if no text specified, use the default */
-	if (! text)
+	if (! text) {
 		text = esodbc_errors[state].message;
+	}
 	tcnt = wcslen(text);
 
 	dest->state = state;
@@ -45,14 +46,14 @@ SQLRETURN post_diagnostic(esodbc_diag_st *dest, esodbc_state_et state,
 		dest->text_len = (int)(pos + tcnt);
 	}
 	DBG("diagnostic message: `" LWPD "` [%d], native code: %d.",
-			dest->text, dest->text_len, dest->native_code);
+		dest->text, dest->text_len, dest->native_code);
 
 	RET_STATE(state);
 
 }
 
-SQLRETURN post_row_diagnostic(esodbc_diag_st *dest, esodbc_state_et state, 
-		SQLWCHAR *text, SQLINTEGER code, SQLLEN nrow, SQLINTEGER ncol)
+SQLRETURN post_row_diagnostic(esodbc_diag_st *dest, esodbc_state_et state,
+	SQLWCHAR *text, SQLINTEGER code, SQLLEN nrow, SQLINTEGER ncol)
 {
 	dest->row_number = nrow;
 	dest->column_number = ncol;

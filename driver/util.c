@@ -12,11 +12,13 @@
 
 BOOL wstr2bool(wstr_st *val)
 {
+	/*INDENT-OFF*/
 	switch (val->cnt) {
 		case /*0*/1: return ! EQ_CASE_WSTR(val, &MK_WSTR("0"));
 		case /*no*/2: return ! EQ_CASE_WSTR(val, &MK_WSTR("no"));
 		case /*false*/5: return ! EQ_CASE_WSTR(val, &MK_WSTR("false"));
 	}
+	/*INDENT-ON*/
 	return TRUE;
 }
 
@@ -26,8 +28,9 @@ BOOL wstr2long(wstr_st *val, long *out)
 	int i = 0;
 	BOOL negative;
 
-	if (val->cnt < 1)
+	if (val->cnt < 1) {
 		return FALSE;
+	}
 
 	switch (val->str[0]) {
 		case L'-':
@@ -44,12 +47,14 @@ BOOL wstr2long(wstr_st *val, long *out)
 
 	for ( ; i < val->cnt; i ++) {
 		/* is it a number? */
-		if (val->str[i] < L'0' || L'9' < val->str[i])
+		if (val->str[i] < L'0' || L'9' < val->str[i]) {
 			return FALSE;
+		}
 		digit = val->str[i] - L'0';
 		/* would it overflow?*/
-		if (LONG_MAX - res < digit)
+		if (LONG_MAX - res < digit) {
 			return FALSE;
+		}
 		res *= 10;
 		res += digit;
 	}
@@ -61,7 +66,7 @@ BOOL wstr2long(wstr_st *val, long *out)
  * Trims leading and trailing WS of a wide string of 'chars' lenght.
  * 0-terminator should not be counted (as it's a non-WS).
  */
-const SQLWCHAR* trim_ws(const SQLWCHAR *wstr, size_t *chars)
+const SQLWCHAR *trim_ws(const SQLWCHAR *wstr, size_t *chars)
 {
 	const SQLWCHAR *wend;
 	size_t cnt = *chars;
@@ -97,8 +102,9 @@ int ansi_w2c(const SQLWCHAR *src, char *dst, size_t chars)
 	}
 
 	do {
-		if (CHAR_MAX < src[i])
+		if (CHAR_MAX < src[i]) {
 			return -(i + 1);
+		}
 		dst[i] = (char)src[i];
 	} while (src[i] && (++i < chars));
 
@@ -115,8 +121,9 @@ int wmemncasecmp(const SQLWCHAR *a, const SQLWCHAR *b, size_t len)
 	int diff = 0; /* if len == 0 */
 	for (i = 0; i < len; i ++) {
 		diff = towlower(a[i]) - towlower(b[i]);
-		if (diff)
+		if (diff) {
 			break;
+		}
 	}
 	//DBG("`" LWPDL "` vs `" LWPDL "` => %d (len=%zd, i=%d).",
 	//		len, a, len, b, diff, len, i);
@@ -139,7 +146,7 @@ int wszmemcmp(const SQLWCHAR *a, const SQLWCHAR *b, long count)
 	return *a - *b;
 }
 
-const SQLWCHAR* wcsnstr(const SQLWCHAR *hay, size_t len, SQLWCHAR needle)
+const SQLWCHAR *wcsnstr(const SQLWCHAR *hay, size_t len, SQLWCHAR needle)
 {
 	size_t i;
 	for (i = 0; i < len; i ++) {
@@ -177,7 +184,7 @@ static inline size_t json_escaped_len(const char *json, size_t len)
 	return newlen;
 }
 
-/* 
+/*
  * JSON-escapes a string.
  * If string len is 0, it assumes a NTS.
  * If output buffer (jout) is NULL, it returns the buffer size needed for
@@ -192,12 +199,15 @@ size_t json_escape(const char *jin, size_t inlen, char *jout, size_t outlen)
 
 #define I16TOA(_x)	(10 <= (_x)) ? 'A' + (_x) - 10 : '0' + (_x)
 
-	if (! inlen)
+	if (! inlen) {
 		inlen = strlen(jin);
-	if (! jout)
+	}
+	if (! jout) {
 		return json_escaped_len(jin, inlen);
+	}
 
 	for (i = 0, pos = 0; i < inlen; i ++) {
+		/*INDENT-OFF*/
 		uchar = jin[i];
 		switch(uchar) {
 			do {
@@ -236,6 +246,7 @@ size_t json_escape(const char *jin, size_t inlen, char *jout, size_t outlen)
 				}
 				break;
 		}
+		/*INDENT-ON*/
 	}
 	return pos;
 #undef I16TOA

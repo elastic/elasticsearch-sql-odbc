@@ -60,8 +60,8 @@ enum osodbc_log_levels {
 BOOL log_init();
 void log_cleanup();
 
-void _esodbc_log(int lvl, int werrno, const char *func, 
-		const char *srcfile, int lineno, const char *fmt, ...);
+void _esodbc_log(int lvl, int werrno, const char *func,
+	const char *srcfile, int lineno, const char *fmt, ...);
 extern int _esodbc_log_level;
 
 #define _LOG(lvl, werr, fmt, ...) \
@@ -94,15 +94,20 @@ extern int _esodbc_log_level;
  */
 
 /* get handle type prefix  */
-static inline char* _hhtype2str(void *handle)
+static inline char *_hhtype2str(void *handle)
 {
-	if (! handle)
+	if (! handle) {
 		return "";
+	}
 	switch (HDRH(handle)->type) {
-		case SQL_HANDLE_ENV: return "ENV";
-		case SQL_HANDLE_DBC: return "DBC";
-		case SQL_HANDLE_STMT: return "STMT";
-		case SQL_HANDLE_DESC: return "DESC";
+		case SQL_HANDLE_ENV:
+			return "ENV";
+		case SQL_HANDLE_DBC:
+			return "DBC";
+		case SQL_HANDLE_STMT:
+			return "STMT";
+		case SQL_HANDLE_DESC:
+			return "DESC";
 	}
 	/* likely mem corruption, it'll probably crash */
 	BUG("unknown handle (@0x%p) type (%d)", handle, HDRH(handle)->type);

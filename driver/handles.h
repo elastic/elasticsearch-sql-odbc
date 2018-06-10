@@ -100,7 +100,7 @@ typedef struct elasticsearch_type {
 	 * rec.datetime_interval_code == 0, then this member would equal the
 	 * concise one (above); else, rec.type will contain the right value
 	 * already (i.e. they'd be the same for SQL and SQL C data types). */
-	
+
 	/* helper member, to characterize the type */
 	esodbc_metatype_et	meta_type;
 	SQLLEN				display_size;
@@ -108,10 +108,10 @@ typedef struct elasticsearch_type {
 
 
 /*
- * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/connection-handles : 
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/connection-handles :
  * """
  * The state of the connection
- * The current connection-level diagnostics 
+ * The current connection-level diagnostics
  * The handles of statements and descriptors currently allocated on the
  * connection
  * The current settings of each connection attribute
@@ -144,7 +144,7 @@ typedef struct struct_dbc {
 	HWND hwin;
 	/* "the catalog is a database", "For a single-tier driver, the catalog
 	 * might be a directory" */
-	SQLWCHAR *catalog; 
+	SQLWCHAR *catalog;
 	// TODO: statement list?
 
 	/* options */
@@ -270,7 +270,7 @@ typedef struct struct_resultset {
 	size_t vrows; /* (count of) visited rows in current result set  */
 	size_t frows; /* (count of) fetched rows across *entire* result set  */
 
-	 SQLULEN array_pos; /* position in ARD array to write_in/resume_at */
+	SQLULEN array_pos; /* position in ARD array to write_in/resume_at */
 } resultset_st;
 
 /*
@@ -305,7 +305,7 @@ typedef struct struct_stmt {
 	SQLULEN async_enable; // default: copied from connection
 	/* "the maximum amount of data that the driver returns from a character or
 	 * binary column" */
-	SQLULEN max_length; 
+	SQLULEN max_length;
 
 	/* result set */
 	resultset_st rset;
@@ -322,14 +322,14 @@ typedef struct struct_stmt {
 
 
 SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count);
-esodbc_rec_st* get_record(esodbc_desc_st *desc, SQLSMALLINT rec_no, BOOL grow);
+esodbc_rec_st *get_record(esodbc_desc_st *desc, SQLSMALLINT rec_no, BOOL grow);
 void dump_record(esodbc_rec_st *rec);
 
 /* TODO: move to some utils.h */
-void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type, 
-		SQLSMALLINT *code);
-esodbc_metatype_et concise_to_meta(SQLSMALLINT concise_type, 
-		desc_type_et desc_type);
+void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type,
+	SQLSMALLINT *code);
+esodbc_metatype_et concise_to_meta(SQLSMALLINT concise_type,
+	desc_type_et desc_type);
 
 SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 	SQLHANDLE InputHandle, _Out_ SQLHANDLE *OutputHandle);
@@ -337,76 +337,76 @@ SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle);
 SQLRETURN EsSQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option);
 
 SQLRETURN EsSQLSetEnvAttr(SQLHENV EnvironmentHandle,
-		SQLINTEGER Attribute, 
-		_In_reads_bytes_opt_(StringLength) SQLPOINTER Value,
-		SQLINTEGER StringLength);
+	SQLINTEGER Attribute,
+	_In_reads_bytes_opt_(StringLength) SQLPOINTER Value,
+	SQLINTEGER StringLength);
 SQLRETURN EsSQLGetEnvAttr(SQLHENV EnvironmentHandle, SQLINTEGER Attribute,
-		_Out_writes_(_Inexpressible_(BufferLength)) SQLPOINTER Value,
-		SQLINTEGER BufferLength, _Out_opt_ SQLINTEGER *StringLength);
+	_Out_writes_(_Inexpressible_(BufferLength)) SQLPOINTER Value,
+	SQLINTEGER BufferLength, _Out_opt_ SQLINTEGER *StringLength);
 
 
 SQLRETURN EsSQLSetStmtAttrW(
-		SQLHSTMT           StatementHandle,
-		SQLINTEGER         Attribute,
-		SQLPOINTER         ValuePtr,
-		SQLINTEGER         BufferLength);
+	SQLHSTMT           StatementHandle,
+	SQLINTEGER         Attribute,
+	SQLPOINTER         ValuePtr,
+	SQLINTEGER         BufferLength);
 SQLRETURN EsSQLGetStmtAttrW(
-		SQLHSTMT     StatementHandle,
-		SQLINTEGER   Attribute,
-		SQLPOINTER   ValuePtr,
-		SQLINTEGER   BufferLength,
-		SQLINTEGER  *StringLengthPtr);
+	SQLHSTMT     StatementHandle,
+	SQLINTEGER   Attribute,
+	SQLPOINTER   ValuePtr,
+	SQLINTEGER   BufferLength,
+	SQLINTEGER  *StringLengthPtr);
 
 SQLRETURN EsSQLGetDescFieldW(
-		SQLHDESC        DescriptorHandle,
-		SQLSMALLINT     RecNumber,
-		SQLSMALLINT     FieldIdentifier,
-		_Out_writes_opt_(_Inexpressible_(BufferLength))
-		SQLPOINTER      ValuePtr,
-		SQLINTEGER      BufferLength,
-		SQLINTEGER      *StringLengthPtr);
+	SQLHDESC        DescriptorHandle,
+	SQLSMALLINT     RecNumber,
+	SQLSMALLINT     FieldIdentifier,
+	_Out_writes_opt_(_Inexpressible_(BufferLength))
+	SQLPOINTER      ValuePtr,
+	SQLINTEGER      BufferLength,
+	SQLINTEGER      *StringLengthPtr);
 SQLRETURN EsSQLGetDescRecW(
-		SQLHDESC        DescriptorHandle,
-		SQLSMALLINT     RecNumber,
-		_Out_writes_opt_(BufferLength)
-		SQLWCHAR        *Name,
-		_Out_opt_ 
-		SQLSMALLINT     BufferLength,
-		_Out_opt_ 
-		SQLSMALLINT     *StringLengthPtr,
-		_Out_opt_ 
-		SQLSMALLINT     *TypePtr,
-		_Out_opt_ 
-		SQLSMALLINT     *SubTypePtr,
-		_Out_opt_ 
-		SQLLEN          *LengthPtr,
-		_Out_opt_ 
-		SQLSMALLINT     *PrecisionPtr,
-		_Out_opt_ 
-		SQLSMALLINT     *ScalePtr,
-		_Out_opt_ 
-		SQLSMALLINT     *NullablePtr);
+	SQLHDESC        DescriptorHandle,
+	SQLSMALLINT     RecNumber,
+	_Out_writes_opt_(BufferLength)
+	SQLWCHAR        *Name,
+	_Out_opt_
+	SQLSMALLINT     BufferLength,
+	_Out_opt_
+	SQLSMALLINT     *StringLengthPtr,
+	_Out_opt_
+	SQLSMALLINT     *TypePtr,
+	_Out_opt_
+	SQLSMALLINT     *SubTypePtr,
+	_Out_opt_
+	SQLLEN          *LengthPtr,
+	_Out_opt_
+	SQLSMALLINT     *PrecisionPtr,
+	_Out_opt_
+	SQLSMALLINT     *ScalePtr,
+	_Out_opt_
+	SQLSMALLINT     *NullablePtr);
 
 /* use with RecNumber for header fields */
 #define NO_REC_NR	-1
 
 SQLRETURN EsSQLSetDescFieldW(
-		SQLHDESC        DescriptorHandle,
-		SQLSMALLINT     RecNumber,
-		SQLSMALLINT     FieldIdentifier,
-		SQLPOINTER      Value,
-		SQLINTEGER      BufferLength);
+	SQLHDESC        DescriptorHandle,
+	SQLSMALLINT     RecNumber,
+	SQLSMALLINT     FieldIdentifier,
+	SQLPOINTER      Value,
+	SQLINTEGER      BufferLength);
 SQLRETURN EsSQLSetDescRec(
-		SQLHDESC DescriptorHandle,
-		SQLSMALLINT RecNumber,
-		SQLSMALLINT Type,
-		SQLSMALLINT SubType,
-		SQLLEN Length,
-		SQLSMALLINT Precision,
-		SQLSMALLINT Scale,
-		_Inout_updates_bytes_opt_(Length) SQLPOINTER Data, 
-		_Inout_opt_ SQLLEN *StringLength,
-		_Inout_opt_ SQLLEN *Indicator);
+	SQLHDESC DescriptorHandle,
+	SQLSMALLINT RecNumber,
+	SQLSMALLINT Type,
+	SQLSMALLINT SubType,
+	SQLLEN Length,
+	SQLSMALLINT Precision,
+	SQLSMALLINT Scale,
+	_Inout_updates_bytes_opt_(Length) SQLPOINTER Data,
+	_Inout_opt_ SQLLEN *StringLength,
+	_Inout_opt_ SQLLEN *Indicator);
 
 
 #define ENVH(_h)	((esodbc_env_st *)(_h))
@@ -442,9 +442,9 @@ SQLRETURN EsSQLSetDescRec(
 /* "An application can unbind the data buffer for a column but still have a
  * length/indicator buffer bound for the column" */
 #define REC_IS_BOUND(rec)			( \
-		(rec)->data_ptr != NULL || \
-		(rec)->indicator_ptr != NULL || \
-		(rec)->octet_length_ptr != NULL)
+	(rec)->data_ptr != NULL || \
+	(rec)->indicator_ptr != NULL || \
+	(rec)->octet_length_ptr != NULL)
 
 
 #endif /* __HANDLES_H__ */

@@ -39,8 +39,9 @@ static inline void free_desc_recs(esodbc_desc_st *desc)
 	int i;
 	/* IRD's pointers are 0-copy, no need to free them */
 	if (desc->type != DESC_TYPE_IRD)
-		for (i = 0; i < desc->count; i++)
+		for (i = 0; i < desc->count; i++) {
 			free_rec_fields(&desc->recs[i]);
+		}
 	free(desc->recs);
 	desc->recs = NULL;
 	desc->count = 0;
@@ -53,8 +54,8 @@ static void init_hheader(esodbc_hhdr_st *hdr, SQLSMALLINT type, void *parent)
 	hdr->parent = parent;
 }
 
-void init_desc(esodbc_desc_st *desc, esodbc_stmt_st *stmt, desc_type_et type, 
-		SQLSMALLINT alloc_type)
+void init_desc(esodbc_desc_st *desc, esodbc_stmt_st *stmt, desc_type_et type,
+	SQLSMALLINT alloc_type)
 {
 	memset(desc, 0, sizeof(esodbc_desc_st));
 
@@ -63,14 +64,15 @@ void init_desc(esodbc_desc_st *desc, esodbc_stmt_st *stmt, desc_type_et type,
 	desc->type = type;
 	desc->alloc_type = alloc_type;
 	/* a user can only alloc an anon type -> can't have IxD on _USER type */
-	assert((alloc_type == SQL_DESC_ALLOC_USER && type == DESC_TYPE_ANON) || 
-			(alloc_type == SQL_DESC_ALLOC_AUTO));
+	assert((alloc_type == SQL_DESC_ALLOC_USER && type == DESC_TYPE_ANON) ||
+		(alloc_type == SQL_DESC_ALLOC_AUTO));
 
 	desc->array_size = ESODBC_DEF_ARRAY_SIZE;
 	// desc->array_status_ptr = NULL; /* formal, 0'd above */
 	// desc->bind_offset_ptr = NULL; /* formal, 0'd above */
-	if (type == DESC_TYPE_ARD || type == DESC_TYPE_APD)
+	if (type == DESC_TYPE_ARD || type == DESC_TYPE_APD) {
 		desc->bind_type = SQL_BIND_BY_COLUMN;
+	}
 	// desc->count = 0; /* formal, 0'd above */
 	// desc->rows_processed_ptr = NULL; /* formal, 0'd above */
 }
@@ -84,8 +86,9 @@ static void clear_desc(esodbc_stmt_st *stmt, desc_type_et dtype, BOOL reinit)
 			desc = stmt->ard;
 			break;
 		case DESC_TYPE_IRD:
-			if (STMT_HAS_RESULTSET(stmt))
+			if (STMT_HAS_RESULTSET(stmt)) {
 				clear_resultset(stmt);
+			}
 			desc = stmt->ird;
 			break;
 		case DESC_TYPE_APD:
@@ -98,10 +101,12 @@ static void clear_desc(esodbc_stmt_st *stmt, desc_type_et dtype, BOOL reinit)
 			BUG("no such descriptor of type %d.", dtype);
 			return;
 	}
-	if (desc->recs)
+	if (desc->recs) {
 		free_desc_recs(desc);
-	if (reinit)
+	}
+	if (reinit) {
 		init_desc(desc, desc->hdr.stmt, desc->type, desc->alloc_type);
+	}
 }
 
 void dump_record(esodbc_rec_st *rec)
@@ -174,7 +179,7 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 	esodbc_hhdr_st *hdr;
 
 	switch(HandleType) {
-		/* 
+		/*
 		 * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlallochandle-function :
 		 * """
 		 * If the Driver Manager cannot allocate memory for *OutputHandlePtr
@@ -215,8 +220,8 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			 */
 			if (! ENVH(InputHandle)->version) {
 				ERR("no version set in env when allocating DBC.");
-				RET_HDIAG(ENVH(InputHandle), SQL_STATE_HY010, 
-						"enviornment has no version set yet", 0);
+				RET_HDIAG(ENVH(InputHandle), SQL_STATE_HY010,
+					"enviornment has no version set yet", 0);
 			}
 			dbc = (esodbc_dbc_st *)calloc(1, sizeof(esodbc_dbc_st));
 			*OutputHandle = (SQLHANDLE *)dbc;
@@ -240,7 +245,7 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			*OutputHandle = stmt;
 			if (! stmt) {
 				ERRN("failed to callocate statement handle.");
-				RET_HDIAGS(dbc, SQL_STATE_HY001); 
+				RET_HDIAGS(dbc, SQL_STATE_HY001);
 			}
 
 			init_desc(&stmt->i_ard, stmt, DESC_TYPE_ARD, SQL_DESC_ALLOC_AUTO);
@@ -271,10 +276,10 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			*OutputHandle = (SQLHANDLE *)calloc(1, sizeof(esodbc_desc_st));
 			if (! *OutputHandle) {
 				ERRN("failed to callocate descriptor handle.");
-				RET_HDIAGS(STMH(InputHandle), SQL_STATE_HY001); 
+				RET_HDIAGS(STMH(InputHandle), SQL_STATE_HY001);
 			}
-			init_desc(*OutputHandle, InputHandle, DESC_TYPE_ANON, 
-					SQL_DESC_ALLOC_USER);
+			init_desc(*OutputHandle, InputHandle, DESC_TYPE_ANON,
+				SQL_DESC_ALLOC_USER);
 			DBG("new Descriptor handle allocated @0x%p.", *OutputHandle);
 			// FIXME: assign/chain to statement?
 			break;
@@ -380,7 +385,7 @@ SQLRETURN EsSQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option)
 			/*TODO: if freeing, the app/DM might reuse the handler; if
 			 * doing nothing, it might leak mem. */
 			ERRH(stmt, "DROPing is deprecated -- no action taken! "
-					"(might leak memory)");
+				"(might leak memory)");
 			//return SQLFreeStmt(SQL_HANDLE_STMT, (SQLHANDLE)StatementHandle);
 			break;
 
@@ -405,7 +410,7 @@ SQLRETURN EsSQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option)
 		case ESODBC_SQL_CLOSE:
 			DBGH(stmt, "ES-closing.");
 			detach_sql(stmt);
-			/* no break */
+		/* no break */
 		/* "Closes the cursor associated with StatementHandle and discards all
 		 * pending results." */
 		case SQL_CLOSE:
@@ -445,9 +450,9 @@ SQLRETURN EsSQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option)
  * calls SQLGetInfo with SQL_DRIVER_ODBC_VER.
  */
 SQLRETURN EsSQLSetEnvAttr(SQLHENV EnvironmentHandle,
-		SQLINTEGER Attribute, 
-		_In_reads_bytes_opt_(StringLength) SQLPOINTER Value,
-		SQLINTEGER StringLength)
+	SQLINTEGER Attribute,
+	_In_reads_bytes_opt_(StringLength) SQLPOINTER Value,
+	SQLINTEGER StringLength)
 {
 	/*
 	 * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetenvattr-function :
@@ -464,8 +469,8 @@ SQLRETURN EsSQLSetEnvAttr(SQLHENV EnvironmentHandle,
 		/* TODO: connection pooling? */
 		case SQL_ATTR_CONNECTION_POOLING:
 		case SQL_ATTR_CP_MATCH:
-			RET_HDIAG(ENVH(EnvironmentHandle), SQL_STATE_HYC00, 
-					"Connection pooling not yet supported", 0);
+			RET_HDIAG(ENVH(EnvironmentHandle), SQL_STATE_HYC00,
+				"Connection pooling not yet supported", 0);
 
 		case SQL_ATTR_ODBC_VERSION:
 			switch ((intptr_t)Value) {
@@ -478,42 +483,42 @@ SQLRETURN EsSQLSetEnvAttr(SQLHENV EnvironmentHandle,
 					break;
 				default:
 					ERRH(EnvironmentHandle, "application version %zd not "
-							"supported.", (intptr_t)Value);
-					RET_HDIAG(ENVH(EnvironmentHandle), SQL_STATE_HYC00, 
-							"application version not supported", 0);
+						"supported.", (intptr_t)Value);
+					RET_HDIAG(ENVH(EnvironmentHandle), SQL_STATE_HYC00,
+						"application version not supported", 0);
 			}
 			ENVH(EnvironmentHandle)->version = (SQLUINTEGER)(uintptr_t)Value;
 			DBGH(EnvironmentHandle, "set version to %u.",
-					ENVH(EnvironmentHandle)->version);
+				ENVH(EnvironmentHandle)->version);
 			break;
 
 		/* "If SQL_TRUE, the driver returns string data null-terminated" */
 		case SQL_ATTR_OUTPUT_NTS:
 			if ((intptr_t)Value != SQL_TRUE)
-				RET_HDIAG(ENVH(EnvironmentHandle), SQL_STATE_HYC00, 
-						"Driver always returns null terminated strings", 0);
+				RET_HDIAG(ENVH(EnvironmentHandle), SQL_STATE_HYC00,
+					"Driver always returns null terminated strings", 0);
 			break;
 
 		default:
 			ERRH(EnvironmentHandle, "unsupported Attribute value: %d.",
-					Attribute);
-			RET_HDIAG(ENVH(EnvironmentHandle), SQL_STATE_HY024, 
-					"Unsupported attribute value", 0);
+				Attribute);
+			RET_HDIAG(ENVH(EnvironmentHandle), SQL_STATE_HY024,
+				"Unsupported attribute value", 0);
 	}
 
 	return SQL_SUCCESS;
 }
 
 SQLRETURN EsSQLGetEnvAttr(SQLHENV EnvironmentHandle, SQLINTEGER Attribute,
-		_Out_writes_(_Inexpressible_(BufferLength)) SQLPOINTER Value,
-		SQLINTEGER BufferLength, _Out_opt_ SQLINTEGER *StringLength)
+	_Out_writes_(_Inexpressible_(BufferLength)) SQLPOINTER Value,
+	SQLINTEGER BufferLength, _Out_opt_ SQLINTEGER *StringLength)
 {
 	switch (Attribute) {
 		/* TODO: connection pooling? */
 		case SQL_ATTR_CONNECTION_POOLING:
 		case SQL_ATTR_CP_MATCH:
-			RET_HDIAG(ENVH(EnvironmentHandle), SQL_STATE_HYC00, 
-					"Connection pooling not yet supported", 0);
+			RET_HDIAG(ENVH(EnvironmentHandle), SQL_STATE_HYC00,
+				"Connection pooling not yet supported", 0);
 
 		case SQL_ATTR_ODBC_VERSION:
 			*((SQLUINTEGER *)Value) = ENVH(EnvironmentHandle)->version;
@@ -524,9 +529,9 @@ SQLRETURN EsSQLGetEnvAttr(SQLHENV EnvironmentHandle, SQLINTEGER Attribute,
 
 		default:
 			ERRH(EnvironmentHandle, "unsupported Attribute value: %d.",
-					Attribute);
-			RET_HDIAG(ENVH(EnvironmentHandle), SQL_STATE_HY024, 
-					"Unsupported attribute value", 0);
+				Attribute);
+			RET_HDIAG(ENVH(EnvironmentHandle), SQL_STATE_HY024,
+				"Unsupported attribute value", 0);
 	}
 
 	return SQL_SUCCESS;
@@ -534,18 +539,18 @@ SQLRETURN EsSQLGetEnvAttr(SQLHENV EnvironmentHandle, SQLINTEGER Attribute,
 
 
 
-
 SQLRETURN EsSQLSetStmtAttrW(
-		SQLHSTMT           StatementHandle,
-		SQLINTEGER         Attribute,
-		SQLPOINTER         ValuePtr,
-		SQLINTEGER         BufferLength)
+	SQLHSTMT           StatementHandle,
+	SQLINTEGER         Attribute,
+	SQLPOINTER         ValuePtr,
+	SQLINTEGER         BufferLength)
 {
 	SQLRETURN ret;
 	SQLULEN ulen;
 	esodbc_desc_st *desc;
 	esodbc_stmt_st *stmt = STMH(StatementHandle);
 
+	/*INDENT-OFF*/
 	switch(Attribute) {
 		case SQL_ATTR_USE_BOOKMARKS:
 			DBGH(stmt, "setting use-bookmarks to: %u.", (SQLULEN)ValuePtr);
@@ -576,9 +581,10 @@ SQLRETURN EsSQLSetStmtAttrW(
 		} while (0);
 			ret = EsSQLSetDescFieldW(desc, NO_REC_NR, SQL_DESC_BIND_OFFSET_PTR,
 					ValuePtr, BufferLength);
-			if (ret != SQL_SUCCESS) /* _WITH_INFO wud be "error" here */
+			if (ret != SQL_SUCCESS) { /* _WITH_INFO wud be "error" here */
 				/* if SetDescField() fails, DM will check statement's diag */
 				HDIAG_COPY(desc, stmt);
+			}
 			return ret;
 
 		do {
@@ -597,9 +603,10 @@ SQLRETURN EsSQLSetStmtAttrW(
 		} while (0);
 			ret = EsSQLSetDescFieldW(desc, NO_REC_NR, SQL_DESC_ARRAY_SIZE,
 					ValuePtr, BufferLength);
-			if (ret != SQL_SUCCESS) /* _WITH_INFO wud be "error" here */
+			if (ret != SQL_SUCCESS) { /* _WITH_INFO wud be "error" here */
 				/* if SetDescField() fails, DM will check statement's diag */
 				HDIAG_COPY(desc, stmt);
+			}
 			return ret;
 
 		do {
@@ -627,9 +634,10 @@ SQLRETURN EsSQLSetStmtAttrW(
 					/* note: SetStmt()'s spec defineds the ValuePtr as
 					 * SQLULEN, but SetDescField()'s as SQLUINTEGER.. */
 					ValuePtr, BufferLength);
-			if (ret != SQL_SUCCESS) /* _WITH_INFO wud be "error" here */
+			if (ret != SQL_SUCCESS) { /* _WITH_INFO wud be "error" here */
 				/* if SetDescField() fails, DM will check statement's diag */
 				HDIAG_COPY(desc, stmt);
+			}
 			return ret;
 
 		do {
@@ -660,9 +668,10 @@ SQLRETURN EsSQLSetStmtAttrW(
 		} while (0);
 			ret = EsSQLSetDescFieldW(desc, NO_REC_NR, 
 					SQL_DESC_ARRAY_STATUS_PTR, ValuePtr, BufferLength);
-			if (ret != SQL_SUCCESS) /* _WITH_INFO wud be "error" here */
+			if (ret != SQL_SUCCESS) { /* _WITH_INFO wud be "error" here */
 				/* if SetDescField() fails, DM will check statement's diag */
 				HDIAG_COPY(desc, stmt);
+			}
 			return ret;
 
 		do {
@@ -681,9 +690,10 @@ SQLRETURN EsSQLSetStmtAttrW(
 		} while (0);
 			ret = EsSQLSetDescFieldW(desc, NO_REC_NR, 
 					SQL_DESC_ROWS_PROCESSED_PTR, ValuePtr, BufferLength);
-			if (ret != SQL_SUCCESS) /* _WITH_INFO wud be "error" here */
+			if (ret != SQL_SUCCESS) { /* _WITH_INFO wud be "error" here */
 				/* if SetDescField() fails, DM will check statement's diag */
 				HDIAG_COPY(desc, stmt);
+			}
 			return ret;
 
 		case SQL_ATTR_APP_ROW_DESC:
@@ -760,21 +770,23 @@ SQLRETURN EsSQLSetStmtAttrW(
 			ERRH(stmt, "unknown Attribute: %d.", Attribute);
 			RET_HDIAGS(stmt, SQL_STATE_HY092);
 	}
+	/*INDENT-ON*/
 
 	return SQL_SUCCESS;
 }
 
 SQLRETURN EsSQLGetStmtAttrW(
-		SQLHSTMT     StatementHandle,
-		SQLINTEGER   Attribute,
-		SQLPOINTER   ValuePtr,
-		SQLINTEGER   BufferLength,
-		SQLINTEGER  *StringLengthPtr)
+	SQLHSTMT     StatementHandle,
+	SQLINTEGER   Attribute,
+	SQLPOINTER   ValuePtr,
+	SQLINTEGER   BufferLength,
+	SQLINTEGER  *StringLengthPtr)
 {
 	esodbc_desc_st *desc;
 	esodbc_stmt_st *stmt = STMH(StatementHandle);
 	SQLRETURN ret;
 
+	/*INDENT-OFF*/
 	switch (Attribute) {
 		do {
 		case SQL_ATTR_APP_ROW_DESC: desc = stmt->ard; break;
@@ -828,9 +840,10 @@ SQLRETURN EsSQLGetStmtAttrW(
 		} while (0);
 			ret = EsSQLGetDescFieldW(desc, NO_REC_NR, SQL_DESC_ARRAY_SIZE,
 					ValuePtr, BufferLength, NULL);
-			if (ret != SQL_SUCCESS) /* _WITH_INFO wud be "error" here */
+			if (ret != SQL_SUCCESS) { /* _WITH_INFO wud be "error" here */
 				/* if SetDescField() fails, DM will check statement's diag */
 				HDIAG_COPY(desc, stmt);
+			}
 			return ret;
 
 		case SQL_ATTR_USE_BOOKMARKS:
@@ -842,9 +855,11 @@ SQLRETURN EsSQLGetStmtAttrW(
 			ERRH(stmt, "unknown attribute: %d.", Attribute);
 			RET_HDIAGS(stmt, SQL_STATE_HY092);
 	}
+	/*INDENT-ON*/
 
 	return SQL_SUCCESS;
 }
+/*INDENT-ON*/
 
 
 /*
@@ -892,8 +907,8 @@ SQLRETURN EsSQLGetStmtAttrW(
  * SQL_DESC_UPDATABLE	SQL_IS_SMALLINT
  */
 static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
-		/*writable == buff is a pointer to write into (=Get)*/
-		SQLINTEGER buff_len, BOOL writable)
+	/*writable == buff is a pointer to write into (=Get)*/
+	SQLINTEGER buff_len, BOOL writable)
 {
 	switch (field_id) {
 		/* pointer to a character string */
@@ -910,18 +925,18 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
 		case SQL_DESC_TYPE_NAME:
 			if (buff_len < 0 && buff_len != SQL_NTS) {
 				ERR("buffer is for a character string and its length is "
-						"negative (%d).", buff_len);
+					"negative (%d).", buff_len);
 				return SQL_STATE_HY090;
 			}
 			if (buff_len % sizeof(SQLWCHAR)) {
 				ERR("buffer not alligned to SQLWCHAR size (%d).",
-						buff_len);
+					buff_len);
 				return SQL_STATE_HY090;
 			}
 			if ((! writable) && (ESODBC_MAX_IDENTIFIER_LEN < buff_len)) {
 				ERR("trying to set field %d to a string buffer larger "
-						"than max allowed (%d).", field_id,
-						ESODBC_MAX_IDENTIFIER_LEN);
+					"than max allowed (%d).", field_id,
+					ESODBC_MAX_IDENTIFIER_LEN);
 				return SQL_STATE_22001;
 			}
 			return SQL_STATE_00000;
@@ -942,7 +957,7 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
 		case SQL_DESC_ARRAY_STATUS_PTR:
 			if (0 < buff_len) {
 				ERR("buffer is for binary buffer, but length indicator "
-						"is positive (%d).", buff_len);
+					"is positive (%d).", buff_len);
 				return SQL_STATE_HY090;
 			}
 			return SQL_STATE_00000;
@@ -953,7 +968,7 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
 				/* spec says the length "should" be it's size => this check
 				 * might be too strict? */
 				ERR("buffer is for pointer, but its length indicator "
-						"doesn't match (%d).", buff_len);
+					"doesn't match (%d).", buff_len);
 				return SQL_STATE_HY090;
 			}
 			return SQL_STATE_00000;
@@ -962,7 +977,9 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
 	if (! writable)
 		/* this call is from SetDescField, so length for integer types are
 		 * ignored */
+	{
 		return SQL_STATE_00000;
+	}
 
 	switch (field_id) {
 		/* SQL_IS_INTEGER */
@@ -975,7 +992,7 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
 		case SQL_DESC_OCTET_LENGTH:
 			if (buff_len != SQL_IS_INTEGER) {
 				ERR("buffer is for interger, but its length indicator "
-						"doesn't match (%d).", buff_len);
+					"doesn't match (%d).", buff_len);
 				return SQL_STATE_HY090;
 			}
 			break;
@@ -985,7 +1002,7 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
 		case SQL_DESC_LENGTH:
 			if (buff_len != SQL_IS_UINTEGER) {
 				ERR("buffer is for uint, but its length indicator "
-						"doesn't match (%d).", buff_len);
+					"doesn't match (%d).", buff_len);
 				return SQL_STATE_HY090;
 			}
 			break;
@@ -1008,7 +1025,7 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
 		case SQL_DESC_UPDATABLE:
 			if (buff_len != SQL_IS_SMALLINT) {
 				ERR("buffer is for short, but its length indicator "
-						"doesn't match (%d).", buff_len);
+					"doesn't match (%d).", buff_len);
 				return SQL_STATE_HY090;
 			}
 			break;
@@ -1021,6 +1038,7 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
 	return SQL_STATE_00000;
 }
 
+/*INDENT-OFF*/
 /*
  * Access permission matrix (TSV) lifted and rearanged from:
  * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetdescfield-function#fieldidentifier-argument
@@ -1068,14 +1086,15 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
  * SQL_DESC_SCALE		rw	rw	r	rw
  * SQL_DESC_TYPE		rw	rw	r	rw
  */
+/*INDENT-ON*/
 // TODO: individual tests just for this
 /*
  * Check access to record headers/fields.
  * IxD must have es_type pointer set and it's value is not checked at
  * header/field access time -> only this function guards against NP deref'ing.
  */
-static BOOL check_access(desc_type_et desc_type, SQLSMALLINT field_id, 
-		char mode /* O_RDONLY | O_RDWR */)
+static BOOL check_access(desc_type_et desc_type, SQLSMALLINT field_id,
+	char mode /* O_RDONLY | O_RDWR */)
 {
 	BOOL ret;
 
@@ -1087,7 +1106,7 @@ static BOOL check_access(desc_type_et desc_type, SQLSMALLINT field_id,
 
 	switch (field_id) {
 		case SQL_DESC_ALLOC_TYPE:
-			ret = mode == O_RDONLY; 
+			ret = mode == O_RDONLY;
 			break;
 		case SQL_DESC_ARRAY_STATUS_PTR:
 			ret = TRUE;
@@ -1135,7 +1154,7 @@ static BOOL check_access(desc_type_et desc_type, SQLSMALLINT field_id,
 
 		case SQL_DESC_NAME:
 		case SQL_DESC_UNNAMED:
-			ret = desc_type == DESC_TYPE_IPD || 
+			ret = desc_type == DESC_TYPE_IPD ||
 				(desc_type == DESC_TYPE_IPD && mode == O_RDONLY);
 			break;
 
@@ -1159,7 +1178,8 @@ static BOOL check_access(desc_type_et desc_type, SQLSMALLINT field_id,
 					ret = mode == O_RDONLY;
 					break;
 				// just for compiler warning, ANON mode checked above;
-				default: ret = FALSE;
+				default:
+					ret = FALSE;
 			}
 			break;
 
@@ -1168,15 +1188,15 @@ static BOOL check_access(desc_type_et desc_type, SQLSMALLINT field_id,
 			ret = FALSE;
 	}
 	LOG(ret ? LOG_LEVEL_DBG : LOG_LEVEL_ERR,
-			"Descriptor type: %d, Field ID: %d, mode=%s => grant: %s.", 
-			desc_type, field_id, 
-			mode == O_RDONLY ? "read" : "read/write",
-			ret ? "OK" : "NOT");
+		"Descriptor type: %d, Field ID: %d, mode=%s => grant: %s.",
+		desc_type, field_id,
+		mode == O_RDONLY ? "read" : "read/write",
+		ret ? "OK" : "NOT");
 	return ret;
 }
 
-static void get_rec_default(SQLSMALLINT field_id, SQLINTEGER buff_len, 
-		SQLPOINTER buff)
+static void get_rec_default(SQLSMALLINT field_id, SQLINTEGER buff_len,
+	SQLPOINTER buff)
 {
 	size_t sz;
 
@@ -1190,15 +1210,18 @@ static void get_rec_default(SQLSMALLINT field_id, SQLINTEGER buff_len,
 			return;
 	}
 
+	/*INDENT-OFF*/
 	switch (buff_len) {
 		case SQL_IS_INTEGER: sz = sizeof(SQLINTEGER); break;
 		case SQL_IS_UINTEGER: sz = sizeof(SQLULEN); break;
 		case SQL_IS_SMALLINT: sz = sizeof(SQLSMALLINT); break;
 		default: sz = 0;
 	}
+	/*INDENT-ON*/
 
-	if (sz)
+	if (sz) {
 		memset(buff, 0, sz);
+	}
 }
 
 static inline void init_rec(esodbc_rec_st *rec, esodbc_desc_st *desc)
@@ -1220,13 +1243,13 @@ SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count)
 
 	if (desc->count == new_count) {
 		LOGH(new_count ? LOG_LEVEL_INFO : LOG_LEVEL_DBG, 0, desc,
-				"new descriptor count equals old one, %d.", new_count);
+			"new descriptor count equals old one, %d.", new_count);
 		return SQL_SUCCESS;
 	}
 
 	if (ESODBC_MAX_DESC_COUNT < new_count) {
 		ERRH(desc, "count value (%d) higher than allowed max (%d).",
-				new_count, ESODBC_MAX_DESC_COUNT);
+			new_count, ESODBC_MAX_DESC_COUNT);
 		RET_HDIAGS(desc, SQL_STATE_07009);
 	}
 
@@ -1244,15 +1267,17 @@ SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count)
 		}
 		if (new_count < desc->count) { /* shrinking array */
 			DBGH(desc, "recs array is shrinking %d -> %d.", desc->count,
-					new_count);
-			for (i = new_count - 1; i < desc->count; i ++)
+				new_count);
+			for (i = new_count - 1; i < desc->count; i ++) {
 				free_rec_fields(&desc->recs[i]);
+			}
 		} else { /* growing array */
 			DBGH(desc, "recs array is growing %d -> %d.", desc->count,
-					new_count);
+				new_count);
 			/* init all new records */
-			for (i = desc->count; i < new_count; i ++)
+			for (i = desc->count; i < new_count; i ++) {
 				init_rec(&recs[i], desc);
+			}
 		}
 	}
 
@@ -1265,15 +1290,16 @@ SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count)
  * Returns the record with desired 1-based index.
  * Grow the array if needed (desired index higher than current count).
  */
-esodbc_rec_st* get_record(esodbc_desc_st *desc, SQLSMALLINT rec_no, BOOL grow)
+esodbc_rec_st *get_record(esodbc_desc_st *desc, SQLSMALLINT rec_no, BOOL grow)
 {
 	assert(0 <= rec_no);
 
 	if (desc->count < rec_no) {
-		if (! grow)
+		if (! grow) {
 			return NULL;
-		else if (! SQL_SUCCEEDED(update_rec_count(desc, rec_no)))
+		} else if (! SQL_SUCCEEDED(update_rec_count(desc, rec_no))) {
 			return NULL;
+		}
 	}
 	return &desc->recs[rec_no - 1];
 }
@@ -1295,13 +1321,13 @@ static SQLSMALLINT recount_bound(esodbc_desc_st *desc)
  * not required to return the value that SQL_DESC_DATA_PTR was set to."
  */
 SQLRETURN EsSQLGetDescFieldW(
-		SQLHDESC        DescriptorHandle,
-		SQLSMALLINT     RecNumber,
-		SQLSMALLINT     FieldIdentifier,
-		_Out_writes_opt_(_Inexpressible_(BufferLength))
-		SQLPOINTER      ValuePtr,
-		SQLINTEGER      BufferLength, /* byte count, also for wchar's */
-		SQLINTEGER      *StringLengthPtr)
+	SQLHDESC        DescriptorHandle,
+	SQLSMALLINT     RecNumber,
+	SQLSMALLINT     FieldIdentifier,
+	_Out_writes_opt_(_Inexpressible_(BufferLength))
+	SQLPOINTER      ValuePtr,
+	SQLINTEGER      BufferLength, /* byte count, also for wchar's */
+	SQLINTEGER      *StringLengthPtr)
 {
 	esodbc_desc_st *desc = DSCH(DescriptorHandle);
 	esodbc_state_et state;
@@ -1310,16 +1336,16 @@ SQLRETURN EsSQLGetDescFieldW(
 	SQLINTEGER intgr;
 	esodbc_rec_st *rec;
 
-	if (! check_access(desc->type, FieldIdentifier, 
-				O_RDONLY)) {
+	if (! check_access(desc->type, FieldIdentifier,
+			O_RDONLY)) {
 		int llev;
 #if 0
-		/* 
+		/*
 		 * Actually, the spec ask to return success, but just set nothing: ???
 		 * "When an application calls SQLGetDescField to retrieve the value of
 		 * a field that is undefined for a particular descriptor type, the
 		 * function returns SQL_SUCCESS but the value returned for the field
-		 * is undefined." 
+		 * is undefined."
 		 */
 		llev = LOG_LEVEL_ERR;
 		state = SQL_STATE_HY091;
@@ -1328,9 +1354,9 @@ SQLRETURN EsSQLGetDescFieldW(
 		state = SQL_STATE_01000;
 #endif /* 0 */
 		LOGH(llev, 0, desc, "field (%d) access check failed: not defined for "
-				"desciptor (type: %d).", FieldIdentifier, desc->type);
-		RET_HDIAG(desc, state, 
-				"field type not defined for descriptor", 0);
+			"desciptor (type: %d).", FieldIdentifier, desc->type);
+		RET_HDIAG(desc, state,
+			"field type not defined for descriptor", 0);
 	}
 
 	state = check_buff(FieldIdentifier, ValuePtr, BufferLength, TRUE);
@@ -1344,26 +1370,26 @@ SQLRETURN EsSQLGetDescFieldW(
 		case SQL_DESC_ALLOC_TYPE:
 			*(SQLSMALLINT *)ValuePtr = desc->alloc_type;
 			DBGH(desc, "returning: desc alloc type: %u.",
-					*(SQLSMALLINT *)ValuePtr);
+				*(SQLSMALLINT *)ValuePtr);
 			return SQL_SUCCESS;
 
 		case SQL_DESC_ARRAY_SIZE:
 			*(SQLULEN *)ValuePtr = desc->array_size;
 			DBGH(desc, "returning: desc array size: %u.",
-					*(SQLULEN *)ValuePtr);
+				*(SQLULEN *)ValuePtr);
 			return SQL_SUCCESS;
 
 		case SQL_DESC_ARRAY_STATUS_PTR:
-			*(SQLUSMALLINT **)ValuePtr = 
+			*(SQLUSMALLINT **)ValuePtr =
 				desc->array_status_ptr;
 			DBGH(desc, "returning: status array ptr: 0x%p.",
-					(SQLUSMALLINT *)ValuePtr);
+				(SQLUSMALLINT *)ValuePtr);
 			return SQL_SUCCESS;
 
 		case SQL_DESC_BIND_OFFSET_PTR:
 			*(SQLLEN **)ValuePtr = desc->bind_offset_ptr;
 			DBGH(desc, "returning binding offset ptr: 0x%p.",
-					(SQLLEN *)ValuePtr);
+				(SQLLEN *)ValuePtr);
 			return SQL_SUCCESS;
 
 		case SQL_DESC_BIND_TYPE:
@@ -1382,18 +1408,18 @@ SQLRETURN EsSQLGetDescFieldW(
 			return SQL_SUCCESS;
 	}
 
-	/* 
+	/*
 	 * The field is a record field -> get the record to apply the field to.
 	 */
 	if (RecNumber < 0) { /* TODO: need to check also if AxD, as per spec?? */
 		ERRH(desc, "negative record number provided (%d) with record field "
-				"(%d).", RecNumber, FieldIdentifier);
-		RET_HDIAG(desc, SQL_STATE_07009, 
-				"Negative record number provided with record field", 0);
+			"(%d).", RecNumber, FieldIdentifier);
+		RET_HDIAG(desc, SQL_STATE_07009,
+			"Negative record number provided with record field", 0);
 	} else if (RecNumber == 0) {
 		ERRH(desc, "unsupported record number 0."); /* TODO: bookmarks? */
-		RET_HDIAG(desc, SQL_STATE_07009, 
-				"Unsupported record number 0", 0);
+		RET_HDIAG(desc, SQL_STATE_07009,
+			"Unsupported record number 0", 0);
 	} else {
 		/*
 		 * "When an application calls SQLGetDescField to retrieve the value of
@@ -1404,16 +1430,17 @@ SQLRETURN EsSQLGetDescFieldW(
 		rec = get_record(desc, RecNumber, FALSE);
 		if (! rec) {
 			WARNH(desc, "record #%d not yet set; returning defaults.",
-					RecNumber);
+				RecNumber);
 			get_rec_default(FieldIdentifier, BufferLength, ValuePtr);
 			return SQL_SUCCESS;
 		}
 		DBGH(desc, "getting field %d of record #%d @ 0x%p.", FieldIdentifier,
-				RecNumber, rec);
+			RecNumber, rec);
 	}
 
 	ASSERT_IXD_HAS_ES_TYPE(rec);
 
+	/*INDENT-OFF*/
 	/* record fields */
 	switch (FieldIdentifier) {
 		/* <SQLPOINTER> */
@@ -1556,6 +1583,7 @@ SQLRETURN EsSQLGetDescFieldW(
 			ERRH(desc, "unknown FieldIdentifier: %d.", FieldIdentifier);
 			RET_HDIAGS(desc, SQL_STATE_HY091);
 	}
+	/*INDENT-ON*/
 
 	return SQL_SUCCESS;
 }
@@ -1572,26 +1600,26 @@ SQLRETURN EsSQLGetDescFieldW(
  * not required to return the value that SQL_DESC_DATA_PTR was set to."
  */
 SQLRETURN EsSQLGetDescRecW(
-		SQLHDESC        DescriptorHandle,
-		SQLSMALLINT     RecNumber,
-		_Out_writes_opt_(BufferLength)
-		SQLWCHAR        *Name,
-		_Out_opt_ 
-		SQLSMALLINT     BufferLength,
-		_Out_opt_ 
-		SQLSMALLINT     *StringLengthPtr,
-		_Out_opt_ 
-		SQLSMALLINT     *TypePtr,
-		_Out_opt_ 
-		SQLSMALLINT     *SubTypePtr,
-		_Out_opt_ 
-		SQLLEN          *LengthPtr,
-		_Out_opt_ 
-		SQLSMALLINT     *PrecisionPtr,
-		_Out_opt_ 
-		SQLSMALLINT     *ScalePtr,
-		_Out_opt_ 
-		SQLSMALLINT     *NullablePtr)
+	SQLHDESC        DescriptorHandle,
+	SQLSMALLINT     RecNumber,
+	_Out_writes_opt_(BufferLength)
+	SQLWCHAR        *Name,
+	_Out_opt_
+	SQLSMALLINT     BufferLength,
+	_Out_opt_
+	SQLSMALLINT     *StringLengthPtr,
+	_Out_opt_
+	SQLSMALLINT     *TypePtr,
+	_Out_opt_
+	SQLSMALLINT     *SubTypePtr,
+	_Out_opt_
+	SQLLEN          *LengthPtr,
+	_Out_opt_
+	SQLSMALLINT     *PrecisionPtr,
+	_Out_opt_
+	SQLSMALLINT     *ScalePtr,
+	_Out_opt_
+	SQLSMALLINT     *NullablePtr)
 {
 	RET_NOT_IMPLEMENTED;
 }
@@ -1611,7 +1639,7 @@ SQLRETURN EsSQLGetDescRecW(
  * BIGINTs, do differ)!
  */
 void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type,
-		SQLSMALLINT *code)
+	SQLSMALLINT *code)
 {
 	switch (concise) {
 		case SQL_DATE:
@@ -1621,13 +1649,13 @@ void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type,
 			break;
 		case SQL_TIME:
 		case SQL_TYPE_TIME:
-		//case SQL_TYPE_TIME_WITH_TIMEZONE: //4.0
+			//case SQL_TYPE_TIME_WITH_TIMEZONE: //4.0
 			*type = SQL_DATETIME;
 			*code = SQL_CODE_TIME;
 			break;
 		case SQL_TIMESTAMP:
 		case SQL_TYPE_TIMESTAMP:
-		//case SQL_TYPE_TIMESTAMP_WITH_TIMEZONE: // 4.0
+			//case SQL_TYPE_TIMESTAMP_WITH_TIMEZONE: // 4.0
 			*type = SQL_DATETIME;
 			*code = SQL_CODE_TIMESTAMP;
 			break;
@@ -1702,11 +1730,12 @@ static void set_defaults_from_type(esodbc_rec_st *rec)
 			rec->precision = 0;
 			break;
 		case METATYPE_DATETIME:
-			if (rec->datetime_interval_code == SQL_CODE_DATE || 
-					rec->datetime_interval_code == SQL_CODE_TIME)
+			if (rec->datetime_interval_code == SQL_CODE_DATE ||
+				rec->datetime_interval_code == SQL_CODE_TIME) {
 				rec->precision = 0;
-			else if (rec->datetime_interval_code == SQL_CODE_TIMESTAMP)
+			} else if (rec->datetime_interval_code == SQL_CODE_TIMESTAMP) {
 				rec->precision = 6;
+			}
 			break;
 		case METATYPE_EXACT_NUMERIC:
 			rec->scale = 0;
@@ -1758,8 +1787,8 @@ static esodbc_metatype_et sqltype_to_meta(SQLSMALLINT concise)
 		case SQL_TYPE_DATE:
 		case SQL_TYPE_TIME:
 		case SQL_TYPE_TIMESTAMP:
-		// case SQL_TYPE_UTCDATETIME:
-		// case SQL_TYPE_UTCTIME:
+			// case SQL_TYPE_UTCDATETIME:
+			// case SQL_TYPE_UTCTIME:
 			return METATYPE_DATETIME;
 
 		/* interval (note: SQL_INTERVAL is verbose, not concise) */
@@ -1797,14 +1826,14 @@ static esodbc_metatype_et sqlctype_to_meta(SQLSMALLINT concise)
 		/* character */
 		case SQL_C_CHAR:
 		case SQL_C_WCHAR:
-		// case SQL_C_TCHAR:
+			// case SQL_C_TCHAR:
 			return METATYPE_STRING;
 		/* binary */
 		case SQL_C_BINARY:
 #ifdef _WIN64
 		case SQL_C_BOOKMARK:
 #endif
-		//case SQL_C_VARBOOKMARK:
+			//case SQL_C_VARBOOKMARK:
 			return METATYPE_BIN;
 
 		/* numeric exact */
@@ -1835,7 +1864,7 @@ static esodbc_metatype_et sqlctype_to_meta(SQLSMALLINT concise)
 		// case SQL_C_TYPE_TIME_WITH_TIMEZONE:
 		case SQL_C_TIMESTAMP:
 		case SQL_C_TYPE_TIMESTAMP:
-		// case SQL_C_TYPE_TIMESTAMP_WITH_TIMEZONE:
+			// case SQL_C_TYPE_TIMESTAMP_WITH_TIMEZONE:
 			return METATYPE_DATETIME;
 
 		/* interval */
@@ -1876,15 +1905,15 @@ static esodbc_metatype_et sqlctype_to_meta(SQLSMALLINT concise)
  */
 static BOOL consistency_check(esodbc_desc_st *desc, esodbc_rec_st *rec)
 {
-	SQLSMALLINT type, code; 
+	SQLSMALLINT type, code;
 
 	/* validity of C / SQL datatypes is checked when setting the meta_type */
 
 	concise_to_type_code(rec->concise_type, &type, &code);
 	if (rec->type != type || rec->datetime_interval_code != code) {
 		ERRH(desc, "inconsistent types for rec 0x%p: concise: %d, verbose: %d, "
-				"code: %d.", rec, rec->concise_type, rec->type, 
-				rec->datetime_interval_code);
+			"code: %d.", rec, rec->concise_type, rec->type,
+			rec->datetime_interval_code);
 		return FALSE;
 	}
 
@@ -1893,7 +1922,7 @@ static BOOL consistency_check(esodbc_desc_st *desc, esodbc_rec_st *rec)
 		/* TODO: actually check validity of precision/scale for data type */
 		if ((! rec->precision) || (! rec->scale)) {
 			ERRH(desc, "invalid numeric precision/scale: %d/%d for data type "
-					"%d.", rec->precision, rec->scale, rec->type);
+				"%d.", rec->precision, rec->scale, rec->type);
 			return FALSE;
 		}
 	}
@@ -1901,17 +1930,17 @@ static BOOL consistency_check(esodbc_desc_st *desc, esodbc_rec_st *rec)
 	if (rec->meta_type == METATYPE_DATETIME || 0) { // FIXME
 //			rec->meta_type == METATYPE_INTERVAL) {
 		/* TODO: actually check validity of precision for data type */
-		/* 
+		/*
 		 * TODO: this should be rec->length, acc to:
-		 * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/column-size 
+		 * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/column-size
 		 * but rec->precision, acc to:
 		 * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetdescrec-function#consistency-checks
 		 * ???
 		 */
 		if (! rec->precision) {
 			ERRH(desc, "invalid time/timestamp/interval with seconds/time "
-					"precision %d for concise type %d.", 
-					rec->precision, rec->concise_type);
+				"precision %d for concise type %d.",
+				rec->precision, rec->concise_type);
 			return FALSE;
 		}
 	}
@@ -1921,8 +1950,8 @@ static BOOL consistency_check(esodbc_desc_st *desc, esodbc_rec_st *rec)
 		/* TODO: actually check the validity of dt_i_precision for data type */
 		if (! rec->datetime_interval_precision) {
 			ERRH(desc, "invalid datetime_interval_precision %d for interval "
-					"concise type %d.", rec->datetime_interval_precision,
-					rec->concise_type);
+				"concise type %d.", rec->datetime_interval_precision,
+				rec->concise_type);
 			return FALSE;
 		}
 	}
@@ -1931,7 +1960,7 @@ static BOOL consistency_check(esodbc_desc_st *desc, esodbc_rec_st *rec)
 }
 
 esodbc_metatype_et concise_to_meta(SQLSMALLINT concise_type,
-		desc_type_et desc_type)
+	desc_type_et desc_type)
 {
 	switch (desc_type) {
 		case DESC_TYPE_ARD:
@@ -1973,11 +2002,11 @@ esodbc_metatype_et concise_to_meta(SQLSMALLINT concise_type,
  * field to a null pointer."
  */
 SQLRETURN EsSQLSetDescFieldW(
-		SQLHDESC        DescriptorHandle,
-		SQLSMALLINT     RecNumber,
-		SQLSMALLINT     FieldIdentifier,
-		SQLPOINTER      ValuePtr,
-		SQLINTEGER      BufferLength)
+	SQLHDESC        DescriptorHandle,
+	SQLSMALLINT     RecNumber,
+	SQLSMALLINT     FieldIdentifier,
+	SQLPOINTER      ValuePtr,
+	SQLINTEGER      BufferLength)
 {
 	esodbc_desc_st *desc = DSCH(DescriptorHandle);
 	esodbc_state_et state;
@@ -1992,12 +2021,12 @@ SQLRETURN EsSQLSetDescFieldW(
 	if (! check_access(desc->type, FieldIdentifier, O_RDWR)) {
 		/* "The SQL_DESC_DATA_PTR field of an IPD is not normally set;
 		 * however, an application can do so to force a consistency check of
-		 * IPD fields." 
+		 * IPD fields."
 		 * TODO: the above won't work with the generic check implementation:
 		 * is it worth hacking an exception here? (since IPD/.data_ptr is
 		 * marked RO) */
 		ERRH(desc, "field access check failed: not defined or RO for "
-				"desciptor.");
+			"desciptor.");
 		RET_HDIAGS(desc, SQL_STATE_HY091);
 	}
 
@@ -2014,8 +2043,8 @@ SQLRETURN EsSQLSetDescFieldW(
 			DBGH(desc, "setting desc array size to: %u.", ulen);
 			if (ESODBC_MAX_ROW_ARRAY_SIZE < ulen) {
 				WARNH(desc, "provided desc array size (%u) larger than allowed "
-						"max (%u) -- set value adjusted to max.", ulen,
-						ESODBC_MAX_ROW_ARRAY_SIZE);
+					"max (%u) -- set value adjusted to max.", ulen,
+					ESODBC_MAX_ROW_ARRAY_SIZE);
 				desc->array_size = ESODBC_MAX_ROW_ARRAY_SIZE;
 				RET_HDIAGS(desc, SQL_STATE_01S02);
 			} else if (ulen < 1) {
@@ -2040,15 +2069,15 @@ SQLRETURN EsSQLSetDescFieldW(
 
 		case SQL_DESC_BIND_TYPE:
 			DBGH(desc, "setting bind type to: %u.",
-					(SQLUINTEGER)(uintptr_t)ValuePtr);
+				(SQLUINTEGER)(uintptr_t)ValuePtr);
 			desc->bind_type = (SQLUINTEGER)(uintptr_t)ValuePtr;
 			return SQL_SUCCESS;
 
-		/* 
+		/*
 		 * "Specifies the 1-based index of the highest-numbered record that
 		 * contains data."
 		 * "Is not a count of all data columns or of all parameters that are
-		 * bound, but the number of the highest-numbered record." 
+		 * bound, but the number of the highest-numbered record."
 		 *
 		 * "If the highest-numbered column or parameter is unbound, then
 		 * SQL_DESC_COUNT is changed to the number of the next
@@ -2074,18 +2103,18 @@ SQLRETURN EsSQLSetDescFieldW(
 			return SQL_SUCCESS;
 	}
 
-	/* 
+	/*
 	 * The field is a record field -> get the record to apply the field to.
 	 */
 	if (RecNumber < 0) { /* TODO: need to check also if AxD, as per spec?? */
 		ERRH(desc, "negative record number provided (%d) with record field "
-				"(%d).", RecNumber, FieldIdentifier);
-		RET_HDIAG(desc, SQL_STATE_07009, 
-				"Negative record number provided with record field", 0);
+			"(%d).", RecNumber, FieldIdentifier);
+		RET_HDIAG(desc, SQL_STATE_07009,
+			"Negative record number provided with record field", 0);
 	} else if (RecNumber == 0) {
 		ERRH(desc, "unsupported record number 0."); /* TODO: bookmarks? */
-		RET_HDIAG(desc, SQL_STATE_07009, 
-				"Unsupported record number 0", 0);
+		RET_HDIAG(desc, SQL_STATE_07009,
+			"Unsupported record number 0", 0);
 	} else { /* apparently one can set a record before the count is set */
 		rec = get_record(desc, RecNumber, TRUE);
 		if (! rec) {
@@ -2093,7 +2122,7 @@ SQLRETURN EsSQLSetDescFieldW(
 			RET_STATE(desc->hdr.diag.state);
 		}
 		DBGH(desc, "setting field %d of record #%d @ 0x%p.", FieldIdentifier,
-				RecNumber, rec);
+			RecNumber, rec);
 	}
 
 	/*
@@ -2104,9 +2133,11 @@ SQLRETURN EsSQLSetDescFieldW(
 	 * NOTE: the record can actually still be bound by the length/indicator
 	 * buffer(s), so the above "binding" definition is incomplete.
 	 */
-	if (FieldIdentifier != SQL_DESC_DATA_PTR)
+	if (FieldIdentifier != SQL_DESC_DATA_PTR) {
 		rec->data_ptr = NULL;
+	}
 
+	/*INDENT-OFF*/
 	/* record fields */
 	switch (FieldIdentifier) {
 		case SQL_DESC_TYPE:
@@ -2286,6 +2317,7 @@ SQLRETURN EsSQLSetDescFieldW(
 			ERRH(desc, "unknown FieldIdentifier: %d.", FieldIdentifier);
 			RET_HDIAGS(desc, SQL_STATE_HY091);
 	}
+	/*INDENT-ON*/
 
 	return SQL_SUCCESS;
 }
@@ -2310,16 +2342,16 @@ SQLRETURN EsSQLSetDescFieldW(
  * consistency check cannot be performed on an IRD."
  */
 SQLRETURN EsSQLSetDescRec(
-		SQLHDESC DescriptorHandle,
-		SQLSMALLINT RecNumber,
-		SQLSMALLINT Type,
-		SQLSMALLINT SubType,
-		SQLLEN Length,
-		SQLSMALLINT Precision,
-		SQLSMALLINT Scale,
-		_Inout_updates_bytes_opt_(Length) SQLPOINTER Data, 
-		_Inout_opt_ SQLLEN *StringLength,
-		_Inout_opt_ SQLLEN *Indicator)
+	SQLHDESC DescriptorHandle,
+	SQLSMALLINT RecNumber,
+	SQLSMALLINT Type,
+	SQLSMALLINT SubType,
+	SQLLEN Length,
+	SQLSMALLINT Precision,
+	SQLSMALLINT Scale,
+	_Inout_updates_bytes_opt_(Length) SQLPOINTER Data,
+	_Inout_opt_ SQLLEN *StringLength,
+	_Inout_opt_ SQLLEN *Indicator)
 {
 	/*
 	 * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/column-wise-binding :
