@@ -178,6 +178,15 @@ typedef cstr_st tstr_st;
  */
 size_t json_escape(const char *jin, size_t inlen, char *jout, size_t outlen);
 
+/*
+ * Copy a WSTR back to application.
+ * The WSTR must not count the 0-tem.
+ * The function checks against the correct size of available bytes, copies the
+ * wstr according to avaialble space and indicates the available bytes to copy
+ * back into provided buffer (if not NULL).
+ */
+SQLRETURN write_wstr(SQLHANDLE hnd, SQLWCHAR *dest, wstr_st *src,
+	SQLSMALLINT /*B*/avail, SQLSMALLINT /*B*/*usedp);
 
 /*
  * Printing aids.

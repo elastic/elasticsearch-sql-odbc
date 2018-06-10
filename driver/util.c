@@ -7,6 +7,8 @@
 #include <string.h>
 
 #include "util.h"
+#include "log.h"
+#include "error.h"
 
 
 
@@ -252,5 +254,63 @@ size_t json_escape(const char *jin, size_t inlen, char *jout, size_t outlen)
 #undef I16TOA
 }
 
+/* Note: for input/output size indication (avail/usedp), some functions
+ * require character count (eg. SQLGetDiagRec, SQLDescribeCol), some others
+ * bytes length (eg.  SQLGetInfo, SQLGetDiagField, SQLGetConnectAttr,
+ * EsSQLColAttributeW). */
+/*
+ * Copy a WSTR back to application; typically with non-SQLFetch() calls.
+ * The WSTR must not count the 0-tem.
+ * The function checks against the correct size of available bytes, copies the
+ * wstr according to avaialble space and indicates the available bytes to copy
+ * back into provided buffer (if not NULL).
+ */
+SQLRETURN write_wstr(SQLHANDLE hnd, SQLWCHAR *dest, wstr_st *src,
+	SQLSMALLINT /*B*/avail, SQLSMALLINT /*B*/*usedp)
+{
+	size_t awail;
+
+	/* cnt must not count the 0-term (XXX: ever need to copy 0s?) */
+	assert(src->cnt <= 0 || src->str[src->cnt - 1]);
+
+	DBGH(hnd, "copying %zd wchars (`" LWPDL "`) into buffer @0x%p, of %dB "
+		"len; out-len @0x%p.", src->cnt, LWSTR(src), dest, avail, usedp);
+
+	if (usedp) {
+		/* how many bytes are available to return (not how many would be
+		 * written into the buffer (which could be less));
+		 * it excludes the 0-term .*/
+		*usedp = (SQLSMALLINT)(src->cnt * sizeof(src->str[0]));
+	} else {
+		INFOH(hnd, "NULL required-space-buffer provided.");
+	}
+
+	if (dest) {
+		/* needs to be multiple of SQLWCHAR units (2 on Win) */
+		if (avail % sizeof(SQLWCHAR)) {
+			ERRH(hnd, "invalid buffer length provided: %d.", avail);
+			RET_DIAG(&HDRH(hnd)->diag, SQL_STATE_HY090, NULL, 0);
+		} else {
+			awail = avail/sizeof(SQLWCHAR);
+		}
+
+		if (awail <= src->cnt) { /* =, since src->cnt doesn't count the \0 */
+			wcsncpy(dest, src->str, awail - /* 0-term */1);
+			dest[awail - 1] = 0;
+
+			INFOH(hnd, "not enough buffer size to write required string (plus "
+				"terminator): `" LWPD "` [%zd]; available: %d.",
+				LWSTR(src), src->cnt, awail);
+			RET_DIAG(&HDRH(hnd)->diag, SQL_STATE_01004, NULL, 0);
+		} else {
+			wcsncpy(dest, src->str, src->cnt + /* 0-term */1);
+		}
+	} else {
+		/* only return how large of a buffer we need */
+		INFOH(hnd, "NULL out buff.");
+	}
+
+	return SQL_SUCCESS;
+}
 
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */

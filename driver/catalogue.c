@@ -51,7 +51,7 @@ SQLSMALLINT copy_current_catalog(esodbc_dbc_st *dbc, SQLWCHAR *dest,
 	SQLLEN row_cnt;
 	SQLLEN ind_len = SQL_NULL_DATA;
 	SQLWCHAR buff[ESODBC_MAX_IDENTIFIER_LEN];
-	SQLWCHAR *catalog;
+	wstr_st catalog;
 
 	if (! SQL_SUCCEEDED(EsSQLAllocHandle(SQL_HANDLE_STMT, dbc, &stmt))) {
 		ERRH(dbc, "failed to alloc a statement handle.");
@@ -76,7 +76,7 @@ SQLSMALLINT copy_current_catalog(esodbc_dbc_st *dbc, SQLWCHAR *dest,
 		goto end;
 	} else if (row_cnt <= 0) {
 		WARNH(stmt, "Elasticsearch returned no current catalog.");
-		catalog = MK_WPTR(""); /* empty string, it's not quite an error */
+		catalog = MK_WSTR(""); /* empty string, it's not quite an error */
 	} else {
 		DBGH(stmt, "Elasticsearch catalogs rows count: %ld.", row_cnt);
 		if (1 < row_cnt) {
@@ -95,18 +95,19 @@ SQLSMALLINT copy_current_catalog(esodbc_dbc_st *dbc, SQLWCHAR *dest,
 		}
 		if (ind_len <= 0) {
 			WARNH(dbc, "NULL catalog received."); /*tho maybe != NULL_DATA */
-			catalog = MK_WPTR("");
+			catalog = MK_WSTR("");
 		} else {
-			catalog = buff;
-			DBGH(dbc, "current catalog (first value returned): `" LWPD "`.",
-				catalog);
+			catalog = (wstr_st) {
+				buff, ind_len
+			};
+			DBGH(dbc, "current catalog (first value returned): `" LWPDL "`.",
+				LWSTR(&catalog));
 		}
 	}
 
-	if (! SQL_SUCCEEDED(write_wptr(&dbc->hdr.diag, dest, catalog, room,
-				&used))) {
-		ERRH(dbc, "failed to copy catalog: `" LWPD "`.", catalog);
-		used = -1; /* write_wptr() can change pointer, and still fail */
+	if (! SQL_SUCCEEDED(write_wstr(dbc, dest, &catalog, room, &used))) {
+		ERRH(dbc, "failed to copy catalog: `" LWPDL "`.", LWSTR(&catalog));
+		used = -1; /* write_wstr() can change pointer, and still fail */
 	}
 
 end:

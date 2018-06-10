@@ -9,14 +9,6 @@
 
 #include "sqlext.h"
 
-/*
- * TODO: move into a util.h
- * TODO: change sign to ...src, lsrc, dst, dlen... (lsrc is nearly always
- * known)
- */
-SQLRETURN write_wptr(esodbc_diag_st *diag,
-	SQLWCHAR *dest, const SQLWCHAR *src,
-	SQLSMALLINT /*B*/avail, SQLSMALLINT /*B*/*usedp);
 
 SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 	SQLUSMALLINT InfoType,
