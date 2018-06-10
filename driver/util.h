@@ -111,10 +111,11 @@ typedef struct wstr {
  * Turns a static C string into a wstr_st.
  */
 #ifndef __cplusplus /* no MSVC support for compound literals with /TP */
-#define MK_WSTR(_s)		\
-	((wstr_st){.str = MK_WPTR(_s), .cnt = sizeof(_s) - 1})
+#	define MK_WSTR(_s)	((wstr_st){.str = MK_WPTR(_s), .cnt = sizeof(_s) - 1})
+#	define MK_CSTR(_s)	((cstr_st){.str = _s, .cnt = sizeof(_s) - 1})
 #else /* !__cplusplus */
-#define WSTR_INIT(_s)	{MK_WPTR(_s), sizeof(_s) - 1}
+#	define WSTR_INIT(_s)	{MK_WPTR(_s), sizeof(_s) - 1}
+#	define CSTR_INIT(_s)	{_s, sizeof(_s) - 1}
 #endif /* !__cplusplus */
 /*
  * Test equality of two wstr_st objects.
@@ -199,31 +200,30 @@ SQLRETURN write_wstr(SQLHANDLE hnd, SQLWCHAR *dest, wstr_st *src,
 #ifdef _WIN32
 /* funny M$ 'inverted' logic */
 /* wprintf wide_t pointer descriptor */
-#define WPFWP_DESC		L"%s"
-#define WPFWP_LDESC		L"%.*s"
+#	define WPFWP_DESC		L"%s"
+#	define WPFWP_LDESC		L"%.*s"
 /* printf wide_t pointer descriptor */
-#define PFWP_DESC		"%S"
-#define PFWP_LDESC		"%.*S"
+#	define PFWP_DESC		"%S"
+#	define PFWP_LDESC		"%.*S"
 /* wprintf char pointer descriptor */
-#define WPFCP_DESC		L"%S"
-#define WPFCP_LDESC		L"%.*S"
+#	define WPFCP_DESC		L"%S"
+#	define WPFCP_LDESC		L"%.*S"
 /* printf char pointer descriptor */
-#define PFCP_DESC		"%s"
-#define PFCP_LDESC		"%.*s"
+#	define PFCP_DESC		"%s"
+#	define PFCP_LDESC		"%.*s"
 #else /* _WIN32 */
 /* wprintf wide_t pointer descriptor */
-#define WPFWP_DESC		L"%S"
-#define WPFWP_LDESC		L"%.*S"
+#	define WPFWP_DESC		L"%S"
+#	define WPFWP_LDESC		L"%.*S"
 /* printf wide_t pointer descriptor */
-#define PFWP_DESC		"%S"
-#define PFWP_LDESC		"%.*S"
-/* silly M$ */
+#	define PFWP_DESC		"%S"
+#	define PFWP_LDESC		"%.*S"
 /* wprintf char pointer descriptor */
-#define WPFCP_DESC		L"%s"
-#define WPFCP_LDESC		L"%.*s"
+#	define WPFCP_DESC		L"%s"
+#	define WPFCP_LDESC		L"%.*s"
 /* printf char pointer descriptor */
-#define PFCP_DESC		"%s"
-#define PFCP_LDESC		"%.*s"
+#	define PFCP_DESC		"%s"
+#	define PFCP_LDESC		"%.*s"
 #endif /* _WIN32 */
 
 

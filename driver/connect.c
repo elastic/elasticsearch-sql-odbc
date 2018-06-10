@@ -1571,8 +1571,8 @@ static void *copy_types_rows(estype_row_st *type_row, SQLULEN rows_fetched,
 
 		/* warn if scales extremes are different */
 		if (types[i].maximum_scale != types[i].minimum_scale) {
-			ERR("type `" LWPDL "` returned with non-equal max/min "
-				"scale: %d/%d.", LWSTR(&types[i].type_name),
+			INFO("type `" LWPDL "` returned with non-equal max/min "
+				"scale: %d/%d -- using the max.", LWSTR(&types[i].type_name),
 				types[i].maximum_scale, types[i].minimum_scale);
 		}
 

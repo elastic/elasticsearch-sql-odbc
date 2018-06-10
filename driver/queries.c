@@ -5,6 +5,7 @@
  */
 
 #include <inttypes.h>
+#include <stdlib.h>
 #include <windows.h> /* WideCharToMultiByte() */
 
 #include "ujdecode.h"
@@ -115,7 +116,7 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 	SQLSMALLINT recno;
 	void *iter;
 	UJObject col_o, name_o, type_o;
-	wstr_st col_name, col_type;
+	wstr_st col_type;
 	size_t ncols, i;
 	const wchar_t *keys[] = {
 		MK_WPTR(JSON_ANSWER_COL_NAME),
@@ -150,8 +151,10 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 		rec = &ird->recs[recno]; // +recno
 
 		ASSERT_INTEGER_TYPES_EQUAL(wchar_t, SQLWCHAR);
-		col_name.str = (SQLWCHAR *)UJReadString(name_o, &col_name.cnt);
-		rec->name = col_name.cnt ? col_name.str : MK_WPTR("");
+		rec->name.str = (SQLWCHAR *)UJReadString(name_o, &rec->name.cnt);
+		if (! rec->name.str) {
+			rec->name = MK_WSTR("");
+		}
 
 		col_type.str = (SQLWCHAR *)UJReadString(type_o, &col_type.cnt);
 
@@ -189,13 +192,13 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 		/* "If a base column name does not exist (as in the case of columns
 		 * that are expressions), then this variable contains an empty
 		 * string." */
-		rec->base_column_name = MK_WPTR("");
+		rec->base_column_name = MK_WSTR("");
 		/* "If a column does not have a label, the column name is returned. If
 		 * the column is unlabeled and unnamed, an empty string is ret" */
-		rec->label = rec->name ? rec->name : MK_WPTR("");
+		rec->label = rec->name.cnt ? rec->name : MK_WSTR("");
 
-		assert(rec->name && rec->label);
-		rec->unnamed = (rec->name[0] || rec->label[0]) ?
+		assert(rec->name.str && rec->label.str);
+		rec->unnamed = (rec->name.cnt || rec->label.cnt) ?
 			SQL_NAMED : SQL_UNNAMED;
 
 #ifndef NDEBUG
@@ -203,8 +206,7 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 #endif /* NDEBUG */
 
 		DBGH(stmt, "column #%d: name=`" LWPDL "`, type=%d (`" LWPDL "`).",
-			recno, LWSTR(&col_name), rec->concise_type,
-			LWSTR(&col_type));
+			recno, LWSTR(&rec->name), rec->concise_type, LWSTR(&col_type));
 		recno ++;
 	}
 
@@ -673,17 +675,19 @@ static void *deferred_address(SQLSMALLINT field_id, size_t pos,
 /*
  * Handles the lengths of the data to copy out to the application:
  * (1) returns the max amount of bytes to copy (in the data_ptr), taking into
- *     account:
- *     - the bytes of the data 'avail',
- *     - buffer size 'room',
- *     - statement attribute SQL_ATTR_MAX_LENGTH 'attr_max' and
- *     - required byte alignment (potentially to wchar_t size);
+ *     account size of data and of buffer, relevant statement attribute and
+ *     buffer type;
  * (2) indicates if truncation occured into 'state'.
- * Only to be used with ARD.meta_type == STR || BIN (as it can truncate).
+ * WARN: only to be used with ARD.meta_type == STR || BIN (as it can indicate
+ * a size to copy smaller than the original -- truncating).
  */
 static size_t buff_octet_size(
-	size_t avail, size_t room, size_t attr_max, size_t unit_size,
-	esodbc_metatype_et ird_mt, esodbc_state_et *state)
+	size_t avail, /* how many bytes are there to copy out */
+	size_t room, /* how large (bytes) is the buffer to copy into*/
+	size_t attr_max, /* statement attribute SQL_ATTR_MAX_LENGTH value */
+	size_t unit_size, /* the unit size of the buffer (i.e. sizeof(wchar_t)) */
+	esodbc_metatype_et ird_mt, /* meta type of IRD */
+	esodbc_state_et *state /* out param: only written when truncating */)
 {
 	size_t max_copy, max;
 
@@ -721,12 +725,17 @@ static size_t buff_octet_size(
 }
 
 /*
- * Indicate the amount of data copied to the application, taking into account:
- * the type of data, should truncation - due to max length attr setting - need
- * to be indicated.
+ * Indicate the amount of data copied (or that would have been, if buffer too
+ * small) to the application, taking into account: the type of data,
+ * should truncation - due to max length attr setting - need to be indicated,
+ * since original length is indicated, w/o possible buffer truncation, but
+ * with possible 'network' truncation.
  */
-static inline void write_copied_octets(SQLLEN *octet_len_ptr, size_t copied,
-	size_t attr_max, esodbc_metatype_et ird_mt)
+static inline void write_out_octets(
+	SQLLEN *octet_len_ptr, /* buffer to write the copied octets into */
+	size_t copied, /* amount of bytes copied */
+	size_t attr_max, /* statement attribute SQL_ATTR_MAX_LENGTH value */
+	esodbc_metatype_et ird_mt /* meta type of IRD */)
 {
 	size_t max;
 
@@ -802,7 +811,7 @@ static SQLRETURN copy_longlong(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			tocopy = buff_octet_size(blen, arec->octet_length,
 					stmt->max_length, sizeof(*buff), irec->meta_type, &state);
 			memcpy(data_ptr, buff, tocopy);
-			write_copied_octets(octet_len_ptr, blen, stmt->max_length,
+			write_out_octets(octet_len_ptr, blen, stmt->max_length,
 				irec->meta_type);
 			break;
 		case SQL_C_WCHAR:
@@ -812,34 +821,34 @@ static SQLRETURN copy_longlong(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			tocopy = buff_octet_size(blen, arec->octet_length,
 					stmt->max_length, sizeof(*wbuff), irec->meta_type, &state);
 			memcpy(data_ptr, wbuff, tocopy);
-			write_copied_octets(octet_len_ptr, blen, stmt->max_length,
+			write_out_octets(octet_len_ptr, blen, stmt->max_length,
 				irec->meta_type);
 			break;
 
 		case SQL_C_TINYINT:
 		case SQL_C_STINYINT:
 			*(SQLSCHAR *)data_ptr = (SQLSCHAR)ll;
-			write_copied_octets(octet_len_ptr, sizeof(SQLSCHAR),
+			write_out_octets(octet_len_ptr, sizeof(SQLSCHAR),
 				stmt->max_length, irec->meta_type);
 			break;
 
 		case SQL_C_SHORT:
 		case SQL_C_SSHORT:
 			*(SQLSMALLINT *)data_ptr = (SQLSMALLINT)ll;
-			write_copied_octets(octet_len_ptr, sizeof(SQLSMALLINT),
+			write_out_octets(octet_len_ptr, sizeof(SQLSMALLINT),
 				stmt->max_length, irec->meta_type);
 			break;
 
 		case SQL_C_LONG:
 		case SQL_C_SLONG:
 			*(SQLINTEGER *)data_ptr = (SQLINTEGER)ll;
-			write_copied_octets(octet_len_ptr, sizeof(SQLINTEGER),
+			write_out_octets(octet_len_ptr, sizeof(SQLINTEGER),
 				stmt->max_length, irec->meta_type);
 			break;
 
 		case SQL_C_SBIGINT:
 			*(SQLBIGINT *)data_ptr = (SQLBIGINT)ll;
-			write_copied_octets(octet_len_ptr, sizeof(SQLBIGINT),
+			write_out_octets(octet_len_ptr, sizeof(SQLBIGINT),
 				stmt->max_length, irec->meta_type);
 			break;
 
@@ -860,56 +869,231 @@ static SQLRETURN copy_double(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	return SQL_ERROR;
 }
 
+static SQLRETURN transfer_wstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
+	wstr_st *src, void *w_dst, SQLLEN *len_dst)
+{
+	size_t in_bytes;
+	esodbc_state_et state = SQL_STATE_00000;
+	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
+
+	/* the source string must be 0-term'd */
+	assert(src->str[src->cnt] == 0);
+
+	in_bytes = buff_octet_size((src->cnt + 1) * sizeof(*src->str),
+			(size_t)arec->octet_length, stmt->max_length,
+			sizeof(*src->str), irec->meta_type, &state);
+	if (w_dst) {
+		memcpy(w_dst, src->str, in_bytes);
+		if (state != SQL_STATE_00000) {
+			/* 0-term the buffer */
+			((SQLWCHAR *)w_dst)[(in_bytes/sizeof(SQLWCHAR)) - 1] = 0;
+		} else {
+			assert(((SQLWCHAR *)w_dst)[(in_bytes/sizeof(SQLWCHAR)) - 1] == 0);
+		}
+	}
+	/* always return the app the untruncated number of bytes */
+	write_out_octets(len_dst, src->cnt * sizeof(*src->str),
+		stmt->max_length, irec->meta_type);
+
+	DBGH(stmt, "trasferred into REC@0x%p, data_ptr@0x%p wstring `" LWPDL "`"
+		" [%zd], state: %d.", arec, w_dst, LWSTR(src), src->cnt, state);
+
+	if (state != SQL_STATE_00000) {
+		RET_HDIAGS(stmt, state);
+	}
+	return SQL_SUCCESS;
+}
+
+static SQLRETURN transfer_cstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
+	cstr_st *src, void *c_dst, SQLLEN *len_dst)
+{
+	size_t in_bytes;
+	esodbc_state_et state = SQL_STATE_00000;
+	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
+
+	/* the source string must be 0-term'd */
+	assert(src->str[src->cnt] == 0);
+
+	in_bytes = buff_octet_size((src->cnt + 1) * sizeof(*src->str),
+			(size_t)arec->octet_length, stmt->max_length,
+			sizeof(*src->str), irec->meta_type, &state);
+	if (c_dst) {
+		memcpy(c_dst, src->str, in_bytes);
+		if (state != SQL_STATE_00000) {
+			/* 0-term the buffer */
+			((SQLCHAR *)c_dst)[(in_bytes/sizeof(SQLCHAR)) - 1] = 0;
+		} else {
+			assert(((SQLCHAR *)c_dst)[(in_bytes/sizeof(SQLCHAR)) - 1] == 0);
+		}
+	}
+	/* always return the app the untruncated number of bytes */
+	write_out_octets(len_dst, src->cnt * sizeof(*src->str),
+		stmt->max_length, irec->meta_type);
+
+	DBGH(stmt, "trasferred into REC@0x%p, data_ptr@0x%p string `" LCPDL "`"
+		" [%zd], state: %d.", arec, c_dst, LCSTR(src), src->cnt, state);
+
+	if (state != SQL_STATE_00000) {
+		RET_HDIAGS(stmt, state);
+	}
+	return SQL_SUCCESS;
+}
+
+/* 10^n */
+static inline long pow10(int n)
+{
+	long pow = 1;
+	pow <<= n;
+	while (n--) {
+		pow += pow << 2;
+	}
+	return pow;
+}
+
+static SQLRETURN double_to_numeric(esodbc_rec_st *arec, esodbc_rec_st *irec,
+	double src, void *dst)
+{
+	SQL_NUMERIC_STRUCT *numeric;
+	esodbc_stmt_st *stmt;
+	SQLSMALLINT prec/*..ision*/, adj_scale /*..usted*/;
+	unsigned long ulng;
+	long lng;
+
+	stmt = arec->desc->hdr.stmt;
+	numeric = (SQL_NUMERIC_STRUCT *)dst;
+	assert(numeric);
+
+	numeric->sign = 0 <= src;
+
+	ulng = numeric->sign ? (unsigned long)src : (unsigned long)-src;
+	/* =~ log10(abs(src)) */
+	for (prec = 0 ; ulng; prec ++) {
+		ulng /= 10;
+	}
+	if (arec->scale < 0) {
+		adj_scale = - arec->scale;
+		lng = (long)(src / pow10(arec->scale));
+	} else {
+		adj_scale = 0;
+		lng = (long)(src * pow10(arec->scale));
+	}
+	ulng = numeric->sign ? (unsigned long)lng : (unsigned long)-lng;
+
+	if (0 < arec->precision && arec->precision < prec - adj_scale) {
+		/* precision of source is higher than requested => overflow */
+		ERRH(stmt, "conversion overflow. source: %lf; requested: "
+			"precisions: %d, scale: %d.", src, arec->precision, arec->scale);
+		RET_HDIAGS(stmt, SQL_STATE_22003);
+	} else {
+		numeric->precision = (SQLCHAR)arec->precision;
+	}
+	numeric->scale = (SQLCHAR)arec->scale;
+	numeric->sign = 0 <= src;
+
+
+#if REG_DWORD != REG_DWORD_LITTLE_ENDIAN
+	ulng = _byteswap_ulong(ulng);
+#endif /* LE */
+	assert(sizeof(ulng) <= sizeof(numeric->val));
+	memcpy(numeric->val, (char *)&ulng, sizeof(ulng));
+	memset(numeric->val+sizeof(ulng), 0, sizeof(numeric->val)-sizeof(ulng));
+
+	DBGH(stmt, "double %lf converted to numeric: .sign=%d, precision=%d "
+		"(req: %d), .scale=%d (req: %d), .val:`" LCPDL "`.", src,
+		numeric->sign, numeric->precision, arec->precision,
+		numeric->scale, arec->scale, (int)sizeof(numeric->val), numeric->val);
+	return SQL_SUCCESS;
+}
+
 static SQLRETURN copy_boolean(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	SQLULEN pos, BOOL boolval)
 {
 	esodbc_stmt_st *stmt;
 	void *data_ptr;
 	SQLLEN *octet_len_ptr;
+	wstr_st wbool;
+	cstr_st cbool;
+	SQLRETURN ret;
 
 	stmt = arec->desc->hdr.stmt;
 
-	/* pointer where to write how many characters we will/would use */
+	/* the check is in place just to return the right error code (according to
+	 * conversion rules); a value of 0 is safe for the driver. */
+	if (arec->octet_length < 1) {
+		ERRH(stmt, "output buffer less than one byte, can't convert");
+		RET_HDIAGS(stmt, SQL_STATE_22003);
+	}
+
+	/* pointer where to write how many bytes we will/would use */
 	octet_len_ptr = deferred_address(SQL_DESC_OCTET_LENGTH_PTR, pos, arec);
 	/* pointer to app's buffer */
 	data_ptr = deferred_address(SQL_DESC_DATA_PTR, pos, arec);
-	if (! data_ptr) {
+	if ((! data_ptr) && (arec->meta_type == METATYPE_EXACT_NUMERIC ||
+			arec->meta_type == METATYPE_FLOAT_NUMERIC)) {
 		ERRH(stmt, "received boolean type, but NULL data ptr.");
 		RET_HDIAGS(stmt, SQL_STATE_HY009);
 	}
 
 	switch (get_c_target_type(arec, irec)) {
+		case SQL_C_BINARY:
+		case SQL_C_BIT:
 		case SQL_C_STINYINT:
 		case SQL_C_UTINYINT:
 			*(SQLSCHAR *)data_ptr = (SQLSCHAR)boolval;
-			write_copied_octets(octet_len_ptr, sizeof(SQLSCHAR),
+			write_out_octets(octet_len_ptr, sizeof(SQLSCHAR),
 				stmt->max_length, irec->meta_type);
 			break;
 
 		case SQL_C_SSHORT:
 		case SQL_C_USHORT:
 			*(SQLSMALLINT *)data_ptr = (SQLSMALLINT)boolval;
-			write_copied_octets(octet_len_ptr, sizeof(SQLSMALLINT),
+			write_out_octets(octet_len_ptr, sizeof(SQLSMALLINT),
 				stmt->max_length, irec->meta_type);
 			break;
 
 		case SQL_C_SLONG:
 		case SQL_C_ULONG:
 			*(SQLINTEGER *)data_ptr = (SQLINTEGER)boolval;
-			write_copied_octets(octet_len_ptr, sizeof(SQLINTEGER),
+			write_out_octets(octet_len_ptr, sizeof(SQLINTEGER),
 				stmt->max_length, irec->meta_type);
 			break;
 
 		case SQL_C_SBIGINT:
 		case SQL_C_UBIGINT:
 			*(SQLBIGINT *)data_ptr = (SQLBIGINT)boolval;
-			write_copied_octets(octet_len_ptr, sizeof(SQLBIGINT),
+			write_out_octets(octet_len_ptr, sizeof(SQLBIGINT),
 				stmt->max_length, irec->meta_type);
 			break;
 
-		case SQL_C_CHAR:
+		case SQL_C_FLOAT:
+			*(SQLREAL *)data_ptr = boolval ? 1.0f : 0.0f;
+			write_out_octets(octet_len_ptr, sizeof(SQLREAL),
+				stmt->max_length, irec->meta_type);
+			break;
+		case SQL_C_DOUBLE:
+			*(SQLDOUBLE *)data_ptr = boolval ? 1.0 : 0.0;
+			write_out_octets(octet_len_ptr, sizeof(SQLDOUBLE),
+				stmt->max_length, irec->meta_type);
+			break;
+
+		case SQL_C_NUMERIC:
+			if (data_ptr) {
+				ret = double_to_numeric(arec, irec, boolval ? 1.0 : 0.0,
+						data_ptr);
+				if (! SQL_SUCCEEDED(ret)) {
+					return ret;
+				}
+			}
+			write_out_octets(octet_len_ptr, sizeof(SQL_NUMERIC_STRUCT),
+				stmt->max_length, irec->meta_type);
+			break;
+
 		case SQL_C_WCHAR:
-		// TODO
+			wbool = boolval ? MK_WSTR("true") : MK_WSTR("false");
+			return transfer_wstr(arec, irec, &wbool, data_ptr, octet_len_ptr);
+		case SQL_C_CHAR:
+			cbool = boolval ? MK_CSTR("true") : MK_CSTR("false");
+			return transfer_cstr(arec, irec, &cbool, data_ptr, octet_len_ptr);
 
 		default:
 			FIXME; // FIXME
@@ -985,7 +1169,7 @@ static SQLRETURN wstr_to_cstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			 * indicating the length to the application */
 			out_bytes --;
 		}
-		write_copied_octets(octet_len_ptr, out_bytes, stmt->max_length,
+		write_out_octets(octet_len_ptr, out_bytes, stmt->max_length,
 			irec->meta_type);
 	} else {
 		DBGH(stmt, "REC@0x%p, NULL octet_len_ptr.", arec);
@@ -1006,43 +1190,8 @@ static SQLRETURN wstr_to_wstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	void *data_ptr, SQLLEN *octet_len_ptr,
 	const wchar_t *wstr, size_t chars_0)
 {
-	esodbc_state_et state = SQL_STATE_00000;
-	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
-	size_t in_bytes, out_chars;
-	wchar_t *widep;
-
-
-	if (data_ptr) {
-		widep = (wchar_t *)data_ptr;
-
-		assert(0 <= arec->octet_length);
-		in_bytes = buff_octet_size(chars_0 * sizeof(*wstr),
-				(size_t)arec->octet_length, stmt->max_length, sizeof(*wstr),
-				irec->meta_type, &state);
-
-		memcpy(widep, wstr, in_bytes);
-		out_chars = in_bytes / sizeof(*widep);
-		/* if buffer too small to accomodate original, 0-term it */
-		if (widep[out_chars - 1]) {
-			widep[out_chars - 1] = 0;
-			state = SQL_STATE_01004; /* indicate truncation */
-		}
-
-		DBGH(stmt, "REC@0x%p, data_ptr@0x%p, copied %zd chars (and 0-term): `"
-			LWPD "`.", arec, data_ptr, out_chars, widep);
-	} else {
-		DBGH(stmt, "REC@0x%p, NULL data_ptr", arec);
-	}
-
-	/* original length is indicated, w/o possible buffer truncation (but with
-	 * possible 'network' truncation) */
-	write_copied_octets(octet_len_ptr, (chars_0 - /*0-term*/1) * sizeof(*wstr),
-		stmt->max_length, irec->meta_type);
-
-	if (state != SQL_STATE_00000) {
-		RET_HDIAGS(stmt, state);
-	}
-	return SQL_SUCCESS;
+	wstr_st wsrc = {(SQLWCHAR *)wstr, chars_0 - 1};
+	return transfer_wstr(arec, irec, &wsrc, data_ptr, octet_len_ptr);
 }
 
 /* function expects chars not to count the 0-term */
@@ -2084,7 +2233,7 @@ SQLRETURN EsSQLDescribeColW(
 	esodbc_stmt_st *stmt = STMH(hstmt);
 	esodbc_rec_st *rec;
 	SQLRETURN ret;
-	SQLSMALLINT col_blen = -1;
+	SQLSMALLINT col_blen;
 
 	DBGH(stmt, "IRD@0x%p, column #%d.", stmt->ird, icol);
 
@@ -2108,14 +2257,16 @@ SQLRETURN EsSQLDescribeColW(
 #endif /* NDEBUG */
 
 	if (szColName) {
-		ret = write_wptr(&stmt->hdr.diag, szColName, rec->name,
+		ret = write_wstr(stmt, szColName, &rec->name,
 				cchColNameMax * sizeof(*szColName), &col_blen);
 		if (! SQL_SUCCEEDED(ret)) {
-			ERRH(stmt, "failed to copy column name `" LWPD "`.", rec->name);
+			ERRH(stmt, "failed to copy column name `" LWPDL "`.",
+				LWSTR(&rec->name));
 			return ret;
 		}
 	} else {
 		DBGH(stmt, "NULL column name buffer provided.");
+		col_blen = -1;
 	}
 
 	if (! pcchColName) {
@@ -2124,7 +2275,7 @@ SQLRETURN EsSQLDescribeColW(
 			"no column name length buffer provided", 0);
 	}
 	*pcchColName = 0 <= col_blen ? (col_blen / sizeof(*szColName)) :
-		(SQLSMALLINT)wcslen(rec->name);
+		(SQLSMALLINT)rec->name.cnt;
 	DBGH(stmt, "col #%d name has %d chars.", icol, *pcchColName);
 
 	if (! pfSqlType) {
@@ -2187,7 +2338,7 @@ SQLRETURN EsSQLColAttributeW(
 	esodbc_desc_st *ird = stmt->ird;
 	esodbc_rec_st *rec;
 	SQLSMALLINT sint;
-	SQLWCHAR *wptr;
+	wstr_st *wstrp;
 	SQLLEN len;
 	SQLINTEGER iint;
 
@@ -2243,37 +2394,27 @@ SQLRETURN EsSQLColAttributeW(
 
 		/* SQLWCHAR* */
 		do {
-		case SQL_DESC_BASE_COLUMN_NAME: wptr = rec->base_column_name; break;
-		case SQL_DESC_LABEL: wptr = rec->label; break;
-		case SQL_DESC_BASE_TABLE_NAME: wptr = rec->base_table_name; break;
-		case SQL_DESC_CATALOG_NAME: wptr = rec->catalog_name; break;
-		case SQL_DESC_NAME: wptr = rec->name; break;
-		case SQL_DESC_SCHEMA_NAME: wptr = rec->schema_name; break;
-		case SQL_DESC_TABLE_NAME: wptr = rec->table_name; break;
+		case SQL_DESC_BASE_COLUMN_NAME: wstrp = &rec->base_column_name; break;
+		case SQL_DESC_LABEL: wstrp = &rec->label; break;
+		case SQL_DESC_BASE_TABLE_NAME: wstrp = &rec->base_table_name; break;
+		case SQL_DESC_CATALOG_NAME: wstrp = &rec->catalog_name; break;
+		case SQL_DESC_NAME: wstrp = &rec->name; break;
+		case SQL_DESC_SCHEMA_NAME: wstrp = &rec->schema_name; break;
+		case SQL_DESC_TABLE_NAME: wstrp = &rec->table_name; break;
 		case SQL_DESC_LITERAL_PREFIX:
-			wptr = rec->es_type->literal_prefix.str;
+			wstrp = &rec->es_type->literal_prefix;
 			break;
 		case SQL_DESC_LITERAL_SUFFIX:
-			wptr = rec->es_type->literal_suffix.str;
+			wstrp = &rec->es_type->literal_suffix;
 			break;
 		case SQL_DESC_LOCAL_TYPE_NAME:
-			wptr = rec->es_type->type_name.str;
+			wstrp = &rec->es_type->type_name;
 			break;
 		case SQL_DESC_TYPE_NAME:
-			wptr = rec->es_type->type_name.str;
+			wstrp = &rec->es_type->type_name;
 			break;
 		} while (0);
-			if (! wptr) {
-				//FIXME: re-eval, once type handling is decided.
-				BUGH(stmt, "IRD@0x%p record field type %d not initialized.",
-						ird, iField);
-				*(SQLWCHAR **)pCharAttr = MK_WPTR("");
-				*pcbCharAttr = 0;
-			} else {
-				return write_wptr(&stmt->hdr.diag, pCharAttr, wptr, cbDescMax,
-						pcbCharAttr);
-			}
-			break;
+			return write_wstr(stmt, pCharAttr, wstrp, cbDescMax, pcbCharAttr);
 
 		/* SQLLEN */
 		do {

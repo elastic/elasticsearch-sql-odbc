@@ -20,30 +20,38 @@
  * Descriptors to be used with logging for SQLWCHAR pointer type.
  * "Log Wchar Pointer Descriptor [with Length]"
  */
-#ifdef UNICODE
 #define LWPD	PFWP_DESC
 #define LWPDL	PFWP_LDESC
-#else /* UNICODE */
-#define LWPD	PFCP_DESC
-#define LWPDL	PFCP_LDESC
-#endif /* UNICODE */
+
+/*
+ * Descriptors to be used with logging for SQLCHAR pointer type.
+ * "Log Char Pointer Descriptor [with Length]"
+ */
+#define LCPD	PFCP_DESC
+#define LCPDL	PFCP_LDESC
 
 /*
  * Descriptors to be used with logging for SQLTCHAR pointer type.
  * "Log Tchar Pointer Descriptor [with Length]"
  */
 #ifdef UNICODE
-#define LTPD	PFWP_DESC
-#define LTPDL	PFWP_LDESC
+#	define LTPD		LWPD
+#	define LTPDL	LWPDL
 #else /* UNICODE */
-#define LTPD	PFCP_DESC
-#define LTPDL	PFCP_LDESC
+#	define LTPD		LCPD
+#	define LTPDL	LCPDL
 #endif /* UNICODE */
 
-/* macro for logging of wstr_st objects */
-#define LWSTR(_wptr)	(int)(_wptr)->cnt, (_wptr)->str
-#define LTSTR(_wptr)	(int)(_wptr)->cnt, (_wptr)->str
 
+/* macro for logging of Xstr_st objects */
+#define LWSTR(_wptr)	(int)(_wptr)->cnt, (_wptr)->str
+#define LCSTR(_wptr)	(int)(_wptr)->cnt, (_wptr)->str
+
+#ifdef UNICODE
+#	define LTSTR	LWSTR
+#else /* UNICODE */
+#	define LTSTR	LCSTR
+#endif /* UNICODE */
 
 
 /* Note: keep in sync with __ESODBC_LVL2STR */
@@ -94,7 +102,7 @@ extern int _esodbc_log_level;
  */
 
 /* get handle type prefix  */
-static inline char *_hhtype2str(void *handle)
+static inline char *_hhtype2str(SQLHANDLE handle)
 {
 	if (! handle) {
 		return "";
