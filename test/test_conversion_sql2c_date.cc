@@ -18,29 +18,10 @@ namespace test {
 class ConvertSQL2C_Date : public ::testing::Test, public ConnectedDBC {
 
   protected:
-    SQLRETURN ret;
     DATE_STRUCT ds;
-    SQLLEN ind_len = SQL_NULL_DATA;
 
-  ConvertSQL2C_Date() {
-  }
-
-  virtual ~ConvertSQL2C_Date() {
-  }
-
-  virtual void SetUp() {
-  }
-
-  virtual void TearDown() {
-  }
-
-  void prepareStatement(const SQLWCHAR *sql, const char *json_answer) {
-    char *answer = STRDUP(json_answer);
-    ASSERT_TRUE(answer != NULL);
-    ret =  ATTACH_ANSWER(stmt, answer, strlen(answer));
-    ASSERT_TRUE(SQL_SUCCEEDED(ret));
-    ret = ATTACH_SQL(stmt, sql, wcslen(sql));
-    ASSERT_TRUE(SQL_SUCCEEDED(ret));
+  void prepareAndBind(const char *json_answer) {
+    prepareStatement(json_answer);
 
     ret = SQLBindCol(stmt, /*col#*/1, SQL_C_TYPE_DATE, &ds, sizeof(ds),
         &ind_len);
@@ -67,7 +48,7 @@ TEST_F(ConvertSQL2C_Date, Timestamp2Date) {
   ]\
 }\
 ";
-  prepareStatement(MK_WPTR(SQL), json_answer);
+  prepareAndBind(json_answer);
 
   ret = SQLFetch(stmt);
   ASSERT_TRUE(SQL_SUCCEEDED(ret));
@@ -95,7 +76,7 @@ TEST_F(ConvertSQL2C_Date, Timestamp2Date_truncate) {
   ]\
 }\
 ";
-  prepareStatement(MK_WPTR(SQL), json_answer);
+  prepareAndBind(json_answer);
 
   ret = SQLFetch(stmt);
   ASSERT_TRUE(SQL_SUCCEEDED(ret));
@@ -125,7 +106,7 @@ TEST_F(ConvertSQL2C_Date, Date2Date) {
   ]\
 }\
 ";
-  prepareStatement(MK_WPTR(SQL), json_answer);
+  prepareAndBind(json_answer);
 
   ret = SQLFetch(stmt);
   ASSERT_TRUE(SQL_SUCCEEDED(ret));
@@ -154,7 +135,7 @@ TEST_F(ConvertSQL2C_Date, Time2Date_22018) {
   ]\
 }\
 ";
-  prepareStatement(MK_WPTR(SQL), json_answer);
+  prepareAndBind(json_answer);
 
   ret = SQLFetch(stmt);
   ASSERT_FALSE(SQL_SUCCEEDED(ret));
@@ -179,7 +160,7 @@ TEST_F(ConvertSQL2C_Date, Integer2Date_violation_07006) {
   ]\
 }\
 ";
-  prepareStatement(MK_WPTR(SQL_VAL), json_answer);
+  prepareAndBind(json_answer);
 
   ret = SQLFetch(stmt);
   ASSERT_FALSE(SQL_SUCCEEDED(ret));
