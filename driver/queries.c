@@ -877,9 +877,9 @@ static SQLRETURN transfer_cstr0(esodbc_rec_st *arec, esodbc_rec_st *irec,
 }
 
 /* 10^n */
-static inline long pow10(int n)
+static inline long long pow10(int n)
 {
-	long pow = 1;
+	long long pow = 1;
 	pow <<= n;
 	while (n--) {
 		pow += pow << 2;
@@ -892,7 +892,7 @@ static SQLRETURN double_to_numeric(esodbc_rec_st *arec, esodbc_rec_st *irec,
 {
 	SQL_NUMERIC_STRUCT *numeric;
 	esodbc_stmt_st *stmt;
-	SQLSMALLINT prec/*..ision*/, adj_scale /*..usted*/;
+	SQLSMALLINT prec/*..ision*/;
 	unsigned long long ullng;
 	long long llng;
 
@@ -900,6 +900,7 @@ static SQLRETURN double_to_numeric(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	numeric = (SQL_NUMERIC_STRUCT *)dst;
 	assert(numeric);
 
+	numeric->scale = (SQLCHAR)arec->scale;
 	numeric->sign = 0 <= src;
 
 	ullng = numeric->sign ? (unsigned long long)src : (unsigned long long)-src;
@@ -908,25 +909,28 @@ static SQLRETURN double_to_numeric(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		ullng /= 10;
 	}
 	if (arec->scale < 0) {
-		adj_scale = - arec->scale;
 		llng = (long long)(src / pow10(arec->scale));
-	} else {
-		adj_scale = 0;
+		prec -= arec->scale;
+	} else if (0 < arec->scale) {
 		llng = (long long)(src * pow10(arec->scale));
+		prec += arec->scale;
+	} else {
+		llng = (long long)src;
 	}
 	ullng = numeric->sign ? (unsigned long long)llng :
 		(unsigned long long)-llng;
 
-	if (0 < arec->precision && arec->precision < prec - adj_scale) {
+	if ((0 < arec->precision && arec->precision < prec)
+		|| (UCHAR_MAX < prec))  {
 		/* precision of source is higher than requested => overflow */
 		ERRH(stmt, "conversion overflow. source: %lf; requested: "
 			"precisions: %d, scale: %d.", src, arec->precision, arec->scale);
 		RET_HDIAGS(stmt, SQL_STATE_22003);
-	} else {
-		numeric->precision = (SQLCHAR)arec->precision;
+	} else if (prec < 0) {
+		prec = 0;
+		assert(ullng == 0);
 	}
-	numeric->scale = (SQLCHAR)arec->scale;
-	numeric->sign = 0 <= src;
+	numeric->precision = (SQLCHAR)prec;
 
 
 #if REG_DWORD != REG_DWORD_LITTLE_ENDIAN
@@ -941,6 +945,46 @@ static SQLRETURN double_to_numeric(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		numeric->sign, numeric->precision, arec->precision,
 		numeric->scale, arec->scale, (int)sizeof(numeric->val), numeric->val,
 		ullng);
+	return SQL_SUCCESS;
+}
+
+/*
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/transferring-data-in-its-binary-form
+ */
+static SQLRETURN llong_to_binary(esodbc_rec_st *arec, esodbc_rec_st *irec,
+	long long src, void *dst, SQLLEN *src_len)
+{
+	size_t cnt;
+	char *s = (char *)&src;
+	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
+	unsigned long long ull = src < 0 ? -src : src;
+
+	/* UJ4C uses long long for any integer type -> find out the
+	 * smallest type that would accomodate the value */
+	if (ull < CHAR_MAX) {
+		cnt = sizeof(char);
+	} else if (ull < SHRT_MAX) {
+		cnt = sizeof(short);
+	} else if (ull < INT_MAX) {
+		cnt = sizeof(int);
+	} else if (ull < LONG_MAX) {
+		cnt = sizeof(long);
+	} else { /* definetely ull < LLONG_MAX */
+		cnt = sizeof(long long);
+	}
+	if (arec->octet_length < (SQLLEN)cnt) {
+		ERRH(stmt, "can't convert value %lld on %zd octets: out of range",
+			src, cnt);
+		RET_HDIAGS(stmt, SQL_STATE_22003);
+	}
+
+	/* copy bytes as-are: the reverse conversion need to take place on same
+	 * "DBMS and hardare platform". */
+	memcpy(dst, s, cnt);
+	memset((char *)dst + cnt, 0, arec->octet_length - cnt);
+	write_out_octets(src_len, cnt, stmt->max_length, irec->meta_type);
+	DBGH(stmt, "long long value %lld, converted on %zd octets.", src, cnt);
+
 	return SQL_SUCCESS;
 }
 
@@ -1126,8 +1170,12 @@ static SQLRETURN copy_longlong(esodbc_rec_st *arec, esodbc_rec_st *irec,
 				stmt->max_length, irec->meta_type);
 			break;
 
+		case SQL_C_BINARY:
+			return llong_to_binary(arec, irec, ll, data_ptr, octet_len_ptr);
+
 		default:
-			FIXME; // FIXME
+			BUGH(stmt, "unexpected unhanlded data type: %d.",
+				get_c_target_type(arec, irec));
 			return SQL_ERROR;
 	}
 	DBGH(stmt, "REC@0x%p, data_ptr@0x%p, copied long long: `%d`.", arec,
@@ -1154,7 +1202,6 @@ static SQLRETURN copy_boolean(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	SQLLEN *octet_len_ptr;
 	wstr_st wbool;
 	cstr_st cbool;
-	SQLRETURN ret;
 
 	stmt = arec->desc->hdr.stmt;
 
@@ -1171,73 +1218,14 @@ static SQLRETURN copy_boolean(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	data_ptr = deferred_address(SQL_DESC_DATA_PTR, pos, arec);
 
 	switch (get_c_target_type(arec, irec)) {
-		case SQL_C_BINARY:
-		case SQL_C_BIT:
-		case SQL_C_STINYINT:
-		case SQL_C_UTINYINT:
-			REJECT_IF_NULL_DEST_BUFF(stmt, data_ptr);
-			*(SQLSCHAR *)data_ptr = (SQLSCHAR)boolval;
-			write_out_octets(octet_len_ptr, sizeof(SQLSCHAR),
-				stmt->max_length, irec->meta_type);
-			break;
-
-		case SQL_C_SSHORT:
-		case SQL_C_USHORT:
-			REJECT_IF_NULL_DEST_BUFF(stmt, data_ptr);
-			*(SQLSMALLINT *)data_ptr = (SQLSMALLINT)boolval;
-			write_out_octets(octet_len_ptr, sizeof(SQLSMALLINT),
-				stmt->max_length, irec->meta_type);
-			break;
-
-		case SQL_C_SLONG:
-		case SQL_C_ULONG:
-			REJECT_IF_NULL_DEST_BUFF(stmt, data_ptr);
-			*(SQLINTEGER *)data_ptr = (SQLINTEGER)boolval;
-			write_out_octets(octet_len_ptr, sizeof(SQLINTEGER),
-				stmt->max_length, irec->meta_type);
-			break;
-
-		case SQL_C_SBIGINT:
-		case SQL_C_UBIGINT:
-			REJECT_IF_NULL_DEST_BUFF(stmt, data_ptr);
-			*(SQLBIGINT *)data_ptr = (SQLBIGINT)boolval;
-			write_out_octets(octet_len_ptr, sizeof(SQLBIGINT),
-				stmt->max_length, irec->meta_type);
-			break;
-
-		case SQL_C_FLOAT:
-			REJECT_IF_NULL_DEST_BUFF(stmt, data_ptr);
-			*(SQLREAL *)data_ptr = boolval ? 1.0f : 0.0f;
-			write_out_octets(octet_len_ptr, sizeof(SQLREAL),
-				stmt->max_length, irec->meta_type);
-			break;
-		case SQL_C_DOUBLE:
-			REJECT_IF_NULL_DEST_BUFF(stmt, data_ptr);
-			*(SQLDOUBLE *)data_ptr = boolval ? 1.0 : 0.0;
-			write_out_octets(octet_len_ptr, sizeof(SQLDOUBLE),
-				stmt->max_length, irec->meta_type);
-			break;
-
-		case SQL_C_NUMERIC:
-			REJECT_IF_NULL_DEST_BUFF(stmt, data_ptr);
-			ret = double_to_numeric(arec, irec, boolval ? 1.0 : 0.0, data_ptr);
-			if (! SQL_SUCCEEDED(ret)) {
-				return ret;
-			}
-			write_out_octets(octet_len_ptr, sizeof(SQL_NUMERIC_STRUCT),
-				stmt->max_length, irec->meta_type);
-			break;
-
 		case SQL_C_WCHAR:
 			wbool = boolval ? MK_WSTR("true") : MK_WSTR("false");
 			return transfer_wstr0(arec, irec, &wbool, data_ptr, octet_len_ptr);
 		case SQL_C_CHAR:
 			cbool = boolval ? MK_CSTR("true") : MK_CSTR("false");
 			return transfer_cstr0(arec, irec, &cbool, data_ptr, octet_len_ptr);
-
 		default:
-			FIXME; // FIXME
-			return SQL_ERROR;
+			return copy_longlong(arec, irec, pos, boolval ? 1L : 0L);
 	}
 
 	DBGH(stmt, "REC@0x%p, data_ptr@0x%p, copied boolean: `%d`.", arec,

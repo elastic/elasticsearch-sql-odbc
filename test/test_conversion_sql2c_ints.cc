@@ -347,7 +347,7 @@ TEST_F(ConvertSQL2C_Ints, Long2BigInt_signed_min) {
 #define SQL_RAW LLONG_MIN
 //#define SQL_VAL STR(SQL_RAW)
 #ifdef _WIN64
-#define SQL_VAL "-9223372036854775808"
+#define SQL_VAL "-9223372036854775808" // 0x8000000000000000
 #else /* _WIN64 */
 #define SQL_VAL "-2147483648"
 #endif /* _WIN64 */
@@ -385,7 +385,7 @@ TEST_F(ConvertSQL2C_Ints, Long2UBigInt_signed_max) {
 #define SQL_RAW LLONG_MAX
 //#define SQL_VAL STR(SQL_RAW)
 #ifdef _WIN64
-#define SQL_VAL "9223372036854775807"
+#define SQL_VAL "9223372036854775807" // 0x7fffffffffffffff
 #else /* _WIN64 */
 #define SQL_VAL "2147483647"
 #endif /* _WIN64 */
@@ -421,7 +421,7 @@ TEST_F(ConvertSQL2C_Ints, Long2Numeric) {
 #undef SQL_VAL
 #undef SQL
 #define SQL_RAW 0xDeadBeef
-#define SQL_VAL "3735928559"
+#define SQL_VAL "3735928559" // 0xdeadbeef
 #define SQL "CAST(" SQL_VAL " AS SQLNUMERIC)"
 
   const char json_answer[] = "\
@@ -446,6 +446,7 @@ TEST_F(ConvertSQL2C_Ints, Long2Numeric) {
   EXPECT_EQ(ind_len, sizeof(ns));
   EXPECT_EQ(ns.sign, 1);
   EXPECT_EQ(ns.scale, 0);
+  EXPECT_EQ(ns.precision, sizeof(SQL_VAL) - 1);
   assert(sizeof(ns.val) == 16);
   long long expected = SQL_RAW;
 #if REG_DWORD != REG_DWORD_LITTLE_ENDIAN
@@ -529,7 +530,7 @@ TEST_F(ConvertSQL2C_Ints, Long2Double) {
 #undef SQL_RAW
 #undef SQL_VAL
 #undef SQL
-#define SQL_RAW -9223372036854775807
+#define SQL_RAW -9223372036854775807 // 0x7fffffffffffffff
 #define SQL_VAL STR(SQL_RAW)
 #define SQL "CAST(" SQL_VAL " AS INTEGER)"
 
@@ -546,8 +547,7 @@ TEST_F(ConvertSQL2C_Ints, Long2Double) {
   prepareStatement(json_answer);
 
   SQLDOUBLE dbl;
-  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_DOUBLE, &dbl, sizeof(dbl),
-      &ind_len);
+  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_DOUBLE, &dbl, sizeof(dbl), &ind_len);
   ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
   ret = SQLFetch(stmt);
@@ -555,6 +555,39 @@ TEST_F(ConvertSQL2C_Ints, Long2Double) {
 
   EXPECT_EQ(ind_len, sizeof(dbl));
   EXPECT_EQ(dbl, SQL_RAW); /* float equality should hold for casts */
+}
+
+
+TEST_F(ConvertSQL2C_Ints, Long2Binary) {
+
+#undef SQL_RAW
+#undef SQL_VAL
+#undef SQL
+#define SQL_RAW 0xBeefed
+#define SQL_VAL "12513261" // 0xbeefed
+#define SQL "CAST(" SQL_VAL " AS INTEGER)"
+
+  const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"long\"}\
+  ],\
+  \"rows\": [\
+    [" SQL_VAL "]\
+  ]\
+}\
+";
+  prepareStatement(json_answer);
+
+  SQLBIGINT bin = LLONG_MAX;
+  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_BINARY, &bin, sizeof(bin), &ind_len);
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+  ret = SQLFetch(stmt);
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+  EXPECT_EQ(ind_len, /*min aligned size for the value*/4);
+  EXPECT_EQ(bin, SQL_RAW);
 }
 
 
