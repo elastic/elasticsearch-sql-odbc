@@ -1995,7 +1995,12 @@ esodbc_metatype_et concise_to_meta(SQLSMALLINT concise_type,
  *
  * "If the application changes the data type or attributes after setting the
  * SQL_DESC_DATA_PTR field, the driver sets SQL_DESC_DATA_PTR to a null
- * pointer, unbinding the record."
+ * pointer, unbinding the record." &&
+ * "If TargetValuePtr is a null pointer, the driver unbinds the data buffer
+ * for the column. [...] An application can unbind the data buffer for a
+ * column but still have a length/indicator buffer bound for the column, if
+ * the TargetValuePtr argument in the call to SQLBindCol is a null pointer but
+ * the StrLen_or_IndPtr argument is a valid value."
  *
  * "The only way to unbind a bookmark column is to set the SQL_DESC_DATA_PTR
  * field to a null pointer."
@@ -2183,12 +2188,12 @@ SQLRETURN EsSQLSetDescFieldW(
 							rec->data_ptr, rec);
 				}
 			} else {
-				// TODO: should this actually use REC_IS_BOUND()?
 				/* "If the highest-numbered column or parameter is unbound,
 				 * then SQL_DESC_COUNT is changed to the number of the next
 				 * highest-numbered column or parameter. " */
-				if ((desc->type == DESC_TYPE_ARD) || 
-						(desc->type == DESC_TYPE_ARD)) {
+				if (DESC_TYPE_IS_APPLICATION(desc->type) &&
+						/* see function-top comments on when to unbind */
+						(! REC_IS_BOUND(rec))) {
 					DBGH(desc, "rec 0x%p of desc type %d unbound.", rec,
 							desc->type);
 					if (RecNumber == desc->count) {
