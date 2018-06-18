@@ -132,6 +132,11 @@ typedef struct wstr {
 BOOL wstr2bool(wstr_st *val);
 BOOL wstr2long(wstr_st *val, long *out);
 
+/* converts the int types to a C or wide string, returning the string length */
+size_t i64tot(int64_t i64, void *buff, BOOL wide);
+size_t ui64tot(uint64_t ui64, void *buff, BOOL wide);
+
+
 #ifdef _WIN32
 /*
  * "[D]oes not null-terminate an output string if the input string length is

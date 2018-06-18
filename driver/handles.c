@@ -1723,6 +1723,8 @@ void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type,
  */
 static void set_defaults_from_type(esodbc_rec_st *rec)
 {
+	DBGH(rec->desc, "(re)setting record@0x%p lenght/precision/scale to "
+		"defaults.", rec);
 	switch (rec->meta_type) {
 		case METATYPE_STRING:
 			rec->length = 1;
@@ -2138,6 +2140,8 @@ SQLRETURN EsSQLSetDescFieldW(
 	 * buffer(s), so the above "binding" definition is incomplete.
 	 */
 	if (FieldIdentifier != SQL_DESC_DATA_PTR) {
+		DBGH(desc, "attribute to set is different than %d => unbinding data "
+			"buffer (was 0x%p).", rec->data_ptr);
 		rec->data_ptr = NULL;
 	}
 

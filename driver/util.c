@@ -64,6 +64,29 @@ BOOL wstr2long(wstr_st *val, long *out)
 	return TRUE;
 }
 
+size_t i64tot(int64_t i64, void *buff, BOOL wide)
+{
+	if (wide) {
+		_i64tow((int64_t)i64, buff, /*radix*/10);
+		/* TODO: find/write a function that returns len of conversion? */
+		return wcslen(buff);
+	} else {
+		_i64toa((int64_t)i64, buff, /*radix*/10);
+		return strlen(buff);
+	}
+}
+
+size_t ui64tot(uint64_t ui64, void *buff, BOOL wide)
+{
+	if (wide) {
+		_ui64tow((uint64_t)ui64, buff, /*radix*/10);
+		return wcslen(buff);
+	} else {
+		_ui64toa((uint64_t)ui64, buff, /*radix*/10);
+		return strlen(buff);
+	}
+}
+
 /*
  * Trims leading and trailing WS of a wide string of 'chars' lenght.
  * 0-terminator should not be counted (as it's a non-WS).

@@ -139,6 +139,36 @@ TEST_F(ConvertSQL2C_Ints, Long2Char_truncate_22003) {
 }
 
 
+TEST_F(ConvertSQL2C_Ints, Long2Char_zero_copy) {
+
+#undef SQL_VAL
+#undef SQL
+#define SQL_VAL "12345678"
+#define SQL "CAST(" SQL_VAL " AS TEXT)"
+
+  const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"integer\"}\
+  ],\
+  \"rows\": [\
+    [" SQL_VAL "]\
+  ]\
+}\
+";
+  prepareStatement(json_answer);
+
+  SQLCHAR buff[sizeof(SQL_VAL)] = {0};
+  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_CHAR, &buff, 0, &ind_len);
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+  ret = SQLFetch(stmt);
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+  EXPECT_EQ(ind_len, sizeof(SQL_VAL) - 1);
+  EXPECT_EQ(buff[0], 0); /* nothing copied, since 0 buff size indicated */
+}
+
+
 TEST_F(ConvertSQL2C_Ints, Short2Byte) {
 
 #undef SQL_VAL
@@ -587,7 +617,41 @@ TEST_F(ConvertSQL2C_Ints, Long2Binary) {
   ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
   EXPECT_EQ(ind_len, /*min aligned size for the value*/4);
+  if (4 < sizeof(bin)) {
+    bin &= 0x00000000ffffffff; /* the driver has only writtten 4 bytes */
+  }
   EXPECT_EQ(bin, SQL_RAW);
+}
+
+
+TEST_F(ConvertSQL2C_Ints, Long2Binary_fail_22003) {
+
+#undef SQL_RAW
+#undef SQL_VAL
+#undef SQL
+#define SQL_RAW 0xBeefed
+#define SQL_VAL "12513261" // 0xbeefed
+#define SQL "CAST(" SQL_VAL " AS INTEGER)"
+
+  const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"long\"}\
+  ],\
+  \"rows\": [\
+    [" SQL_VAL "]\
+  ]\
+}\
+";
+  prepareStatement(json_answer);
+
+  SQLSMALLINT bin;
+  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_BINARY, &bin, sizeof(bin), &ind_len);
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+  ret = SQLFetch(stmt);
+  ASSERT_FALSE(SQL_SUCCEEDED(ret));
+  assertState(L"22003");
 }
 
 

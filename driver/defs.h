@@ -56,6 +56,11 @@
 /* match 'keyword' ES type lenght */
 #define ESODBC_MAX_IDENTIFIER_LEN			256
 
+/* 20 = len("18446744073709551616"), 1 << (sizeof(uint64_t) * 8bits) */
+#define ESODBC_PRECISION_UINT64			20
+/* 19 = len("9223372036854775808"), 1 << 63 */
+#define ESODBC_PRECISION_INT64			19
+
 
 /*
  * Not authoriative (there's actually no formal limit), but pretty informed:

@@ -138,9 +138,13 @@ void ConnectedDBC::assertState(const SQLWCHAR *state) {
 
   ret = SQLGetDiagField(SQL_HANDLE_STMT, stmt, 1, SQL_DIAG_SQLSTATE, buff,
       (SQL_SQLSTATE_SIZE + 1) * sizeof(buff[0]), &len);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-  ASSERT_EQ(len, SQL_SQLSTATE_SIZE * sizeof(buff[0]));
-  ASSERT_STREQ(buff, state);
+  if (state) {
+    ASSERT_TRUE(SQL_SUCCEEDED(ret));
+    ASSERT_EQ(len, SQL_SQLSTATE_SIZE * sizeof(buff[0]));
+    ASSERT_STREQ(buff, state);
+  } else {
+    ASSERT_EQ(ret, SQL_NO_DATA);
+  }
 
 }
 
