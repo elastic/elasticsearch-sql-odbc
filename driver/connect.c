@@ -1918,15 +1918,6 @@ static BOOL prompt_user(config_attrs_st *attrs, BOOL disable_conn)
 	// TODO: display settings dialog box;
 	// An error message (if popping it more than once) might be needed.
 	//
-#if 1 // FIXME
-	static int i = 0;
-	attrs->server = MK_WSTR("10.0.2.2");
-	i ++;
-	if (2 < i) {
-		return FALSE;
-	}
-	return TRUE;
-#endif
 	return FALSE;
 }
 
