@@ -788,14 +788,14 @@ static inline void write_out_octets(
 		 * occupies after conversion: "the driver has no way of
 		 * figuring out what the actual length is" */
 		*octet_len_ptr = max;
-		DBG("max lenght (%zd) attribute enforced.", max);
+		DBG("max length (%zd) attribute enforced.", max);
 	} else {
 		/* if no "network" truncation done, indicate data's length, no
 		 * matter if truncated to buffer's size or not */
 		*octet_len_ptr = avail;
 	}
 
-	DBG("lenght of data available for transfer: %ld", *octet_len_ptr);
+	DBG("length of data available for transfer: %ld", *octet_len_ptr);
 }
 
 /* if an application doesn't specify the conversion, use column's type */

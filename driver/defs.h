@@ -53,7 +53,7 @@
 #define ESODBC_MAX_CONCURRENT_ACTIVITIES	16
 /* maximum identifer length */
 /* TODO: review@alpha */
-/* match 'keyword' ES type lenght */
+/* match 'keyword' ES type length */
 #define ESODBC_MAX_IDENTIFIER_LEN			256
 
 /* 20 = len("18446744073709551616"), 1 << (sizeof(uint64_t) * 8bits) */

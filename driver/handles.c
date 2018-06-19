@@ -1723,7 +1723,7 @@ void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type,
  */
 static void set_defaults_from_type(esodbc_rec_st *rec)
 {
-	DBGH(rec->desc, "(re)setting record@0x%p lenght/precision/scale to "
+	DBGH(rec->desc, "(re)setting record@0x%p lengt/precision/scale to "
 		"defaults.", rec);
 	switch (rec->meta_type) {
 		case METATYPE_STRING:
@@ -2275,7 +2275,7 @@ SQLRETURN EsSQLSetDescFieldW(
 					(SQLLEN)(intptr_t)ValuePtr);
 			/* rec field's type is signed :/; a negative is dangerous l8r  */
 			if ((SQLLEN)(intptr_t)ValuePtr < 0) {
-				ERRH(desc, "octet lenght attribute can't be negative (%lu)",
+				ERRH(desc, "octet length attribute can't be negative (%lu)",
 						(SQLLEN)(intptr_t)ValuePtr);
 				RET_HDIAGS(desc, SQL_STATE_HY000);
 			}

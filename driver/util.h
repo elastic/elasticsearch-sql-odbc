@@ -72,7 +72,7 @@ typedef struct cstr {
 } cstr_st;
 
 /*
- * Trims leading and trailing WS of a wide string of 'chars' lenght.
+ * Trims leading and trailing WS of a wide string of 'chars' length.
  * 0-terminator should not be counted (as it's a non-WS).
  */
 const SQLWCHAR *trim_ws(const SQLWCHAR *wstr, size_t *chars);
