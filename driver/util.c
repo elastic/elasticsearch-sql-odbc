@@ -323,7 +323,7 @@ SQLRETURN write_wstr(SQLHANDLE hnd, SQLWCHAR *dest, wstr_st *src,
 			dest[wide_avail - 1] = 0;
 
 			INFOH(hnd, "not enough buffer size to write required string (plus "
-				"terminator): `" LWPD "` [%zd]; available: %zd.",
+				"terminator): `" LWPD "` [%zu]; available: %zu.",
 				LWSTR(src), src->cnt, wide_avail);
 			RET_DIAG(&HDRH(hnd)->diag, SQL_STATE_01004, NULL, 0);
 		} else {
