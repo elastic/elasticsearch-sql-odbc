@@ -291,7 +291,7 @@ size_t json_escape(const char *jin, size_t inlen, char *jout, size_t outlen)
 SQLRETURN write_wstr(SQLHANDLE hnd, SQLWCHAR *dest, wstr_st *src,
 	SQLSMALLINT /*B*/avail, SQLSMALLINT /*B*/*usedp)
 {
-	size_t awail;
+	size_t wide_avail;
 
 	/* cnt must not count the 0-term (XXX: ever need to copy 0s?) */
 	assert(src->cnt <= 0 || src->str[src->cnt - 1]);
@@ -314,16 +314,17 @@ SQLRETURN write_wstr(SQLHANDLE hnd, SQLWCHAR *dest, wstr_st *src,
 			ERRH(hnd, "invalid buffer length provided: %d.", avail);
 			RET_DIAG(&HDRH(hnd)->diag, SQL_STATE_HY090, NULL, 0);
 		} else {
-			awail = avail/sizeof(SQLWCHAR);
+			wide_avail = avail/sizeof(SQLWCHAR);
 		}
 
-		if (awail <= src->cnt) { /* =, since src->cnt doesn't count the \0 */
-			wcsncpy(dest, src->str, awail - /* 0-term */1);
-			dest[awail - 1] = 0;
+		/* '=' (in <=), since src->cnt doesn't count the \0 */
+		if (wide_avail <= src->cnt) {
+			wcsncpy(dest, src->str, wide_avail - /* 0-term */1);
+			dest[wide_avail - 1] = 0;
 
 			INFOH(hnd, "not enough buffer size to write required string (plus "
-				"terminator): `" LWPD "` [%zd]; available: %d.",
-				LWSTR(src), src->cnt, awail);
+				"terminator): `" LWPD "` [%zd]; available: %zd.",
+				LWSTR(src), src->cnt, wide_avail);
 			RET_DIAG(&HDRH(hnd)->diag, SQL_STATE_01004, NULL, 0);
 		} else {
 			wcsncpy(dest, src->str, src->cnt + /* 0-term */1);
