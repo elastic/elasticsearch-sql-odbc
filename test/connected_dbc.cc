@@ -138,8 +138,37 @@ void ConnectedDBC::assertState(const SQLWCHAR *state) {
 
   ret = SQLGetDiagField(SQL_HANDLE_STMT, stmt, 1, SQL_DIAG_SQLSTATE, buff,
       (SQL_SQLSTATE_SIZE + 1) * sizeof(buff[0]), &len);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-  ASSERT_EQ(len, SQL_SQLSTATE_SIZE * sizeof(buff[0]));
-  ASSERT_STREQ(buff, state);
+  if (state) {
+    ASSERT_TRUE(SQL_SUCCEEDED(ret));
+    ASSERT_EQ(len, SQL_SQLSTATE_SIZE * sizeof(buff[0]));
+    ASSERT_STREQ(buff, state);
+  } else {
+    ASSERT_EQ(ret, SQL_NO_DATA);
+  }
 
+}
+
+void ConnectedDBC::prepareStatement(const SQLWCHAR *sql,
+    const char *json_answer) {
+  char *answer = STRDUP(json_answer);
+  ASSERT_TRUE(answer != NULL);
+  ret =  ATTACH_ANSWER(stmt, answer, strlen(answer));
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+  ret = ATTACH_SQL(stmt, sql, wcslen(sql));
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+}
+
+void ConnectedDBC::prepareStatement(const char *json_answer) {
+  char *answer = STRDUP(json_answer);
+  ASSERT_TRUE(answer != NULL);
+  ret =  ATTACH_ANSWER(stmt, answer, strlen(answer));
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+  const char *testName =
+    ::testing::UnitTest::GetInstance()->current_test_info()->name();
+  size_t nameLen = strlen(testName);
+  std::wstring wstr(nameLen, L' ');
+  ASSERT_TRUE(mbstowcs(&wstr[0], testName, nameLen + 1) != (size_t)-1);
+  ret = ATTACH_SQL(stmt, &wstr[0], nameLen);
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
 }

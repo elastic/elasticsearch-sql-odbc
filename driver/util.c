@@ -7,6 +7,8 @@
 #include <string.h>
 
 #include "util.h"
+#include "log.h"
+#include "error.h"
 
 
 
@@ -62,8 +64,31 @@ BOOL wstr2long(wstr_st *val, long *out)
 	return TRUE;
 }
 
+size_t i64tot(int64_t i64, void *buff, BOOL wide)
+{
+	if (wide) {
+		_i64tow((int64_t)i64, buff, /*radix*/10);
+		/* TODO: find/write a function that returns len of conversion? */
+		return wcslen(buff);
+	} else {
+		_i64toa((int64_t)i64, buff, /*radix*/10);
+		return strlen(buff);
+	}
+}
+
+size_t ui64tot(uint64_t ui64, void *buff, BOOL wide)
+{
+	if (wide) {
+		_ui64tow((uint64_t)ui64, buff, /*radix*/10);
+		return wcslen(buff);
+	} else {
+		_ui64toa((uint64_t)ui64, buff, /*radix*/10);
+		return strlen(buff);
+	}
+}
+
 /*
- * Trims leading and trailing WS of a wide string of 'chars' lenght.
+ * Trims leading and trailing WS of a wide string of 'chars' length.
  * 0-terminator should not be counted (as it's a non-WS).
  */
 const SQLWCHAR *trim_ws(const SQLWCHAR *wstr, size_t *chars)
@@ -252,5 +277,64 @@ size_t json_escape(const char *jin, size_t inlen, char *jout, size_t outlen)
 #undef I16TOA
 }
 
+/* Note: for input/output size indication (avail/usedp), some functions
+ * require character count (eg. SQLGetDiagRec, SQLDescribeCol), some others
+ * bytes length (eg.  SQLGetInfo, SQLGetDiagField, SQLGetConnectAttr,
+ * EsSQLColAttributeW). */
+/*
+ * Copy a WSTR back to application; typically with non-SQLFetch() calls.
+ * The WSTR must not count the 0-tem.
+ * The function checks against the correct size of available bytes, copies the
+ * wstr according to avaialble space and indicates the available bytes to copy
+ * back into provided buffer (if not NULL).
+ */
+SQLRETURN write_wstr(SQLHANDLE hnd, SQLWCHAR *dest, wstr_st *src,
+	SQLSMALLINT /*B*/avail, SQLSMALLINT /*B*/*usedp)
+{
+	size_t wide_avail;
+
+	/* cnt must not count the 0-term (XXX: ever need to copy 0s?) */
+	assert(src->cnt <= 0 || src->str[src->cnt - 1]);
+
+	DBGH(hnd, "copying %zd wchars (`" LWPDL "`) into buffer @0x%p, of %dB "
+		"len; out-len @0x%p.", src->cnt, LWSTR(src), dest, avail, usedp);
+
+	if (usedp) {
+		/* how many bytes are available to return (not how many would be
+		 * written into the buffer (which could be less));
+		 * it excludes the 0-term .*/
+		*usedp = (SQLSMALLINT)(src->cnt * sizeof(src->str[0]));
+	} else {
+		INFOH(hnd, "NULL required-space-buffer provided.");
+	}
+
+	if (dest) {
+		/* needs to be multiple of SQLWCHAR units (2 on Win) */
+		if (avail % sizeof(SQLWCHAR)) {
+			ERRH(hnd, "invalid buffer length provided: %d.", avail);
+			RET_DIAG(&HDRH(hnd)->diag, SQL_STATE_HY090, NULL, 0);
+		} else {
+			wide_avail = avail/sizeof(SQLWCHAR);
+		}
+
+		/* '=' (in <=), since src->cnt doesn't count the \0 */
+		if (wide_avail <= src->cnt) {
+			wcsncpy(dest, src->str, wide_avail - /* 0-term */1);
+			dest[wide_avail - 1] = 0;
+
+			INFOH(hnd, "not enough buffer size to write required string (plus "
+				"terminator): `" LWPD "` [%zu]; available: %zu.",
+				LWSTR(src), src->cnt, wide_avail);
+			RET_DIAG(&HDRH(hnd)->diag, SQL_STATE_01004, NULL, 0);
+		} else {
+			wcsncpy(dest, src->str, src->cnt + /* 0-term */1);
+		}
+	} else {
+		/* only return how large of a buffer we need */
+		INFOH(hnd, "NULL out buff.");
+	}
+
+	return SQL_SUCCESS;
+}
 
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */

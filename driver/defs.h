@@ -53,8 +53,13 @@
 #define ESODBC_MAX_CONCURRENT_ACTIVITIES	16
 /* maximum identifer length */
 /* TODO: review@alpha */
-/* match 'keyword' ES type lenght */
+/* match 'keyword' ES type length */
 #define ESODBC_MAX_IDENTIFIER_LEN			256
+
+/* 20 = len("18446744073709551616"), 1 << (sizeof(uint64_t) * 8bits) */
+#define ESODBC_PRECISION_UINT64			20
+/* 19 = len("9223372036854775808"), 1 << 63 */
+#define ESODBC_PRECISION_INT64			19
 
 
 /*
@@ -324,7 +329,7 @@
 #define ESODBC_ES_TO_CSQL_DOUBLE		SQL_C_DOUBLE
 #define ESODBC_ES_TO_SQL_DOUBLE			SQL_DOUBLE
 /* 16: ??? -> SQL_C_TINYINT */
-#define ESODBC_ES_TO_CSQL_BOOLEAN		SQL_C_STINYINT
+#define ESODBC_ES_TO_CSQL_BOOLEAN		SQL_C_STINYINT /* TODO: _C_BIT? */
 #define ESODBC_ES_TO_SQL_BOOLEAN		ESODBC_SQL_BOOLEAN
 /* 12: SQL_VARCHAR -> SQL_C_WCHAR */
 #define ESODBC_ES_TO_CSQL_KEYWORD		SQL_C_WCHAR /* XXX: CBOR needs _CHAR */

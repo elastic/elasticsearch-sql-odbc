@@ -104,6 +104,8 @@ if (${WIN32})
 	# (this will allow RelWithDebInfo buliding and still be able to test it)
 	set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /DTEST_API=")
 	set(CMAKE_C_FLAGS_MINSIZEREL "${CMAKE_C_FLAGS_RELEASE} /DTEST_API=")
+
+	# set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DNDEBUG")
 else (${WIN32})
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
 endif (${WIN32})

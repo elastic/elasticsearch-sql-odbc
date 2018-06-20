@@ -96,6 +96,8 @@ if /i not [%ARG:type=%] == [%ARG%] (
 	call:BUILDTYPE
 ) else (
 	echo Invoked without 'type', default applied (see usage^).
+	set MSBUILD_ARGS=/p:Configuration=Debug
+	set CFG_INTDIR=Debug
 )
 
 REM absence of nobuild: invoke BUILD "function";
@@ -106,9 +108,9 @@ if /i [%ARG:nobuild=%] == [%ARG%] (
 	echo Invoked with 'nobuild', building skipped.
 )
 
-REM presence of 'test': invoke TEST "function"
-if /i not [%ARG:test=%] == [%ARG%] (
-	call:TEST
+REM presence of 'test': invoke TESTS "function"
+if /i not [%ARG:tests=%] == [%ARG%] (
+	call:TESTS
 ) else (
 	REM Invoked without 'test': tests running skipped.
 )
@@ -237,11 +239,12 @@ REM USAGE function: output a usage message
 	echo    exports   : dump the exported symbols in the DLL after - and
 	echo                only if - building the driver.
 	echo    all       : build all artifacts (driver and tests^).
-	echo    test      : run all the defined tests: invoke the 'all' build,
+	echo    tests     : run all the defined tests: invoke the 'all' build,
 	echo                then the 'tests' build.
 	echo    suites    : compile and run each test individually, stopping at the
 	echo                first failure; the 'all' or 'test' targets must be
 	echo                built beforehand.
+	echo    suite=S   : compile and run one test, S, individually.
 	echo    copy      : copy the driver into the test dir (%INSTALL_DIR%^).
 	echo    regadd    : register the driver into the registry;
 	echo                (needs Administrator privileges^).
@@ -387,7 +390,7 @@ REM BUILD function: build various targets
 		%CMAKE% !CMAKE_ARGS! ..
 	)
 
-	if /i not [%ARG:test=%] == [%ARG%] (
+	if /i not [%ARG:tests=%] == [%ARG%] (
 		echo Building all the project (including tests^).
 		MSBuild ALL_BUILD.vcxproj %MSBUILD_ARGS%
 	) else if /i not [%ARG:all=%] == [%ARG%] (
@@ -408,6 +411,24 @@ REM BUILD function: build various targets
 				goto:eof
 			)
 		)
+	) else if /i not [%ARG:suite==%] == [%ARG%] (
+		REM cycle through the args, look for 'suite' token and use the
+		REM follow-up item
+		set prev=
+		for %%a in (%ARG:"=%) do (
+			if /i [!prev!] == [suite] (
+				set SUITE=%%a
+				echo Building and running one suite: !SUITE!
+				echo MSBuild test\%%a.vcxproj %MSBUILD_ARGS%
+				MSBuild test\%%a.vcxproj %MSBUILD_ARGS%
+				if not ERRORLEVEL 1 (
+					test\%CFG_INTDIR%\%%a.exe
+				)
+				goto:eof
+			) else (
+				set prev=%%a
+			)
+		)
 	) else (
 		echo Building the driver only.
 		REM file name expansion, cmd style...
@@ -420,8 +441,8 @@ REM BUILD function: build various targets
 
 	goto:eof
 
-REM TEST function: run the compiled tests
-:TEST
+REM TESTS function: run the compiled tests
+:TESTS
 	REM if called with nobuild, but test, this will trigger the build
 	if not exist RUN_TESTS.vcxproj (
 		call:BUILD

@@ -105,60 +105,6 @@ static SQLUSMALLINT esodbc_functions[] = {
 	*(((UWORD*) (pfExists)) + ((uwAPI) >> 4)) |= (1 << ((uwAPI) & 0x000F))
 #define SQL_API_ODBC2_ALL_FUNCTIONS_SIZE	100
 
-/* Note: for input/output size indication (avail/usedp), some functions
- * require character count (eg. SQLGetDiagRec, SQLDescribeCol), some others
- * bytes length (eg.  SQLGetInfo, SQLGetDiagField, SQLGetConnectAttr,
- * EsSQLColAttributeW). */
-SQLRETURN write_wptr(esodbc_diag_st *diag,
-	SQLWCHAR *dest, const SQLWCHAR *src,
-	SQLSMALLINT /*B*/avail, SQLSMALLINT /*B*/*usedp)
-{
-	size_t src_cnt, awail;
-	SQLSMALLINT used;
-
-	if (! dest) {
-		avail = 0;
-	}
-	/* needs to be multiple of SQLWCHAR units (2 on Win) */
-	if (avail % sizeof(SQLWCHAR)) {
-		ERR("invalid buffer length provided: %d.", avail);
-		RET_CDIAG(diag, SQL_STATE_HY090, "invalid buffer length provided", 0);
-	}
-	awail = avail/sizeof(SQLWCHAR);
-	src_cnt = wcslen(src);
-
-	/* return value always set to what it needs to be written (excluding \0).*/
-	used = (SQLSMALLINT)src_cnt * sizeof(SQLWCHAR);
-	if (! usedp) {
-		WARN("invalid output buffer provided (NULL) to collect used "
-			"space.");
-		//RET_cDIAG(diag, SQL_STATE_HY013, "invalid used provided (NULL)", 0);
-	} else {
-		/* how many bytes are available to return (not how many would be
-		 * written into the buffer (which could be less)) */
-		*usedp = used;
-	}
-
-	if (! dest) {
-		/* only return how large of a buffer we need */
-		INFO("NULL out buff: returning needed buffer size only (%d).",
-			used);
-	} else {
-		if (awail <= src_cnt) { /* =, since src_cnt doesn't count the \0 */
-			wcsncpy(dest, src, awail - /* 0-term */1);
-			dest[awail - 1] = 0;
-
-			INFO("not enough buffer size to write required string (plus "
-				"terminator): `" LWPD "` [%zd]; available: %d.", src,
-				src_cnt, awail);
-			RET_DIAG(diag, SQL_STATE_01004, NULL, 0);
-		} else {
-			wcsncpy(dest, src, src_cnt + /* 0-term */1);
-		}
-	}
-
-	return SQL_SUCCESS;
-}
 
 // [0] x-p-es/sql/jdbc/src/main/java/org/elasticsearch/xpack/sql/jdbc/jdbc/JdbcDatabaseMetaData.java : DatabaseMetaData
 /*
@@ -181,9 +127,8 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		/* Driver Information */
 		/* "what version of odbc a driver complies with" */
 		case SQL_DRIVER_ODBC_VER:
-			return write_wptr(&dbc->hdr.diag, InfoValue,
-					MK_WPTR(ESODBC_SQL_SPEC_STRING), BufferLength,
-					StringLengthPtr);
+			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_SQL_SPEC_STRING),
+					BufferLength, StringLengthPtr);
 
 		/* "if the driver can execute functions asynchronously on the
 		 * connection handle" */
@@ -228,28 +173,27 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 
 		case SQL_DATA_SOURCE_NAME:
 			DBGH(dbc, "requested: data source name: `"LWPD"`.", dbc->dsn.str);
-			return write_wptr(&dbc->hdr.diag, InfoValue, dbc->dsn.str,
-					BufferLength, StringLengthPtr);
+			return write_wstr(dbc, InfoValue, &dbc->dsn, BufferLength,
+					StringLengthPtr);
 
 		case SQL_DRIVER_NAME:
 			DBGH(dbc, "requested: driver (file) name: %s.", DRIVER_NAME);
-			return write_wptr(&dbc->hdr.diag, InfoValue,
-					MK_WPTR(DRIVER_NAME), BufferLength, StringLengthPtr);
+			return write_wstr(dbc, InfoValue, &MK_WSTR(DRIVER_NAME),
+					BufferLength, StringLengthPtr);
 			break;
 
 		case SQL_DATA_SOURCE_READ_ONLY:
 			DBGH(dbc, "requested: if data source is read only (`%s`).",
 				ESODBC_DATA_SOURCE_READ_ONLY);
-			return write_wptr(&dbc->hdr.diag, InfoValue,
-					MK_WPTR(ESODBC_DATA_SOURCE_READ_ONLY), BufferLength,
+			return write_wstr(dbc, InfoValue,
+					&MK_WSTR(ESODBC_DATA_SOURCE_READ_ONLY), BufferLength,
 					StringLengthPtr);
 
 		case SQL_SEARCH_PATTERN_ESCAPE:
 			DBGH(dbc, "requested: escape character (`%s`).",
 				ESODBC_PATTERN_ESCAPE);
-			return write_wptr(&dbc->hdr.diag, InfoValue,
-					MK_WPTR(ESODBC_PATTERN_ESCAPE), BufferLength,
-					StringLengthPtr);
+			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_PATTERN_ESCAPE),
+					BufferLength, StringLengthPtr);
 
 		case SQL_CORRELATION_NAME:
 			// JDBC[0]: supportsDifferentTableCorrelationNames()
@@ -274,8 +218,8 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			/* JDBC[0]: getCatalogSeparator() */
 			DBGH(dbc, "requested: catalogue separator (`%s`).",
 				ESODBC_CATALOG_SEPARATOR);
-			return write_wptr(&dbc->hdr.diag, InfoValue,
-					MK_WPTR(ESODBC_CATALOG_SEPARATOR), BufferLength,
+			return write_wstr(dbc, InfoValue,
+					&MK_WSTR(ESODBC_CATALOG_SEPARATOR), BufferLength,
 					StringLengthPtr);
 
 		case SQL_FILE_USAGE:
@@ -290,9 +234,8 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		case SQL_CATALOG_TERM: /* SQL_QUALIFIER_TERM */
 			/* JDBC[0]: getCatalogSeparator() */
 			DBGH(dbc, "requested: catalogue term (`%s`).", ESODBC_CATALOG_TERM);
-			return write_wptr(&dbc->hdr.diag, InfoValue,
-					MK_WPTR(ESODBC_CATALOG_TERM), BufferLength,
-					StringLengthPtr);
+			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_CATALOG_TERM),
+					BufferLength, StringLengthPtr);
 
 		case SQL_MAX_SCHEMA_NAME_LEN: /* SQL_MAX_OWNER_NAME_LEN */
 			/* JDBC[0]: getMaxSchemaNameLength() */
@@ -303,9 +246,8 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		case SQL_IDENTIFIER_QUOTE_CHAR:
 			/* JDBC[0]: getIdentifierQuoteString() */
 			DBGH(dbc, "requested: quoting char (`%s`).", ESODBC_QUOTE_CHAR);
-			return write_wptr(&dbc->hdr.diag, InfoValue,
-					MK_WPTR(ESODBC_QUOTE_CHAR), BufferLength,
-					StringLengthPtr);
+			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_QUOTE_CHAR),
+					BufferLength, StringLengthPtr);
 
 		/* what Operations are supported by SQLSetPos  */
 		// FIXME: review@alpha
@@ -343,32 +285,29 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 
 		case SQL_SCHEMA_TERM:
 			DBGH(dbc, "requested schema term (`%s`).", ESODBC_SCHEMA_TERM);
-			return write_wptr(&dbc->hdr.diag, InfoValue,
-					MK_WPTR(ESODBC_SCHEMA_TERM), BufferLength,
-					StringLengthPtr);
+			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_SCHEMA_TERM),
+					BufferLength, StringLengthPtr);
 
 		case SQL_TABLE_TERM:
 			DBGH(dbc, "requested table term (`%s`).", ESODBC_TABLE_TERM);
-			return write_wptr(&dbc->hdr.diag, InfoValue,
-					MK_WPTR(ESODBC_TABLE_TERM), BufferLength,
-					StringLengthPtr);
+			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_TABLE_TERM),
+					BufferLength, StringLengthPtr);
 
 		/* no procedures support */
 		case SQL_PROCEDURES:
 		case SQL_ACCESSIBLE_PROCEDURES:
 			DBGH(dbc, "requested: procedures support (`%s`).",
 				ESODBC_PROCEDURES);
-			return write_wptr(&dbc->hdr.diag, InfoValue,
-					MK_WPTR(ESODBC_PROCEDURES), BufferLength,
-					StringLengthPtr);
+			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_PROCEDURES),
+					BufferLength, StringLengthPtr);
 		case SQL_MAX_PROCEDURE_NAME_LEN:
 			DBGH(dbc, "requested max procedure name len (0).");
 			*(SQLUSMALLINT *)InfoValue = 0; /* no support */
 			break;
 		case SQL_PROCEDURE_TERM:
 			DBGH(dbc, "requested: procedure term (``).");
-			return write_wptr(&dbc->hdr.diag, InfoValue, MK_WPTR(""),
-					BufferLength, StringLengthPtr);
+			return write_wstr(dbc, InfoValue, &MK_WSTR(""), BufferLength,
+					StringLengthPtr);
 
 		case SQL_TXN_ISOLATION_OPTION:
 			DBGH(dbc, "requested: transaction isolation options (SQL_TXN_*).");
@@ -492,8 +431,8 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		case SQL_SPECIAL_CHARACTERS:
 			DBGH(dbc, "requested: special characters (`%s`).",
 				ESODBC_SPECIAL_CHARACTERS);
-			return write_wptr(&dbc->hdr.diag, InfoValue,
-					MK_WPTR(ESODBC_SPECIAL_CHARACTERS), BufferLength,
+			return write_wstr(dbc, InfoValue,
+					&MK_WSTR(ESODBC_SPECIAL_CHARACTERS), BufferLength,
 					StringLengthPtr);
 			break;
 
@@ -505,9 +444,8 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 
 		case SQL_COLUMN_ALIAS:
 			DBGH(dbc, "requested: column alias (`%s`).", ESODBC_COLUMN_ALIAS);
-			return write_wptr(&dbc->hdr.diag, InfoValue,
-					MK_WPTR(ESODBC_COLUMN_ALIAS), BufferLength,
-					StringLengthPtr);
+			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_COLUMN_ALIAS),
+					BufferLength, StringLengthPtr);
 
 		case SQL_SQL_CONFORMANCE:
 			DBGH(dbc, "requested: SQL conformance (%lu).",
@@ -523,22 +461,21 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 
 		case SQL_DRIVER_VER:
 			DBGH(dbc, "requested: driver version (`%s`).", ESODBC_DRIVER_VER);
-			return write_wptr(&dbc->hdr.diag, InfoValue,
-					MK_WPTR(ESODBC_DRIVER_VER), BufferLength,
-					StringLengthPtr);
+			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_DRIVER_VER),
+					BufferLength, StringLengthPtr);
 
 		case SQL_DBMS_VER:
 			DBGH(dbc, "requested: DBMS version (`%s`).",
 				ESODBC_ELASTICSEARCH_VER);
-			return write_wptr(&dbc->hdr.diag, InfoValue,
-					MK_WPTR(ESODBC_ELASTICSEARCH_VER), BufferLength,
+			return write_wstr(dbc, InfoValue,
+					&MK_WSTR(ESODBC_ELASTICSEARCH_VER), BufferLength,
 					StringLengthPtr);
 
 		case SQL_DBMS_NAME:
 			DBGH(dbc, "requested: DBMS name (`%s`).",
 				ESODBC_ELASTICSEARCH_NAME);
-			return write_wptr(&dbc->hdr.diag, InfoValue,
-					MK_WPTR(ESODBC_ELASTICSEARCH_NAME), BufferLength,
+			return write_wstr(dbc, InfoValue,
+					&MK_WSTR(ESODBC_ELASTICSEARCH_NAME), BufferLength,
 					StringLengthPtr);
 
 		case SQL_TXN_CAPABLE: /* SQL_TRANSACTION_CAPABLE */
@@ -592,10 +529,11 @@ SQLRETURN EsSQLGetDiagFieldW(
 	SQLSMALLINT BufferLength,
 	_Out_opt_ SQLSMALLINT *StringLengthPtr)
 {
-	esodbc_diag_st *diag, dummy;
+	esodbc_diag_st *diag;
+	esodbc_env_st dummy;
 	SQLSMALLINT used;
 	size_t len;
-	SQLWCHAR *wptr;
+	wstr_st *wstrp, wstr;
 	SQLRETURN ret;
 
 	if (RecNumber <= 0) {
@@ -654,9 +592,9 @@ SQLRETURN EsSQLGetDiagFieldW(
 			assert(len <= sizeof(esodbc_errors[diag->state].code));
 			if (memcmp(esodbc_errors[diag->state].code, MK_WPTR(ORIG_DISCRIM),
 						len) == 0) {
-				wptr = MK_WPTR(ORIG_CLASS_ODBC);
+				wstrp = &MK_WSTR(ORIG_CLASS_ODBC);
 			} else {
-				wptr = MK_WPTR(ORIG_CLASS_ISO);
+				wstrp = &MK_WSTR(ORIG_CLASS_ISO);
 			}
 			break;
 		case SQL_DIAG_SUBCLASS_ORIGIN:
@@ -703,16 +641,18 @@ SQLRETURN EsSQLGetDiagFieldW(
 				case SQL_STATE_IM010:
 				case SQL_STATE_IM011:
 				case SQL_STATE_IM012:
-					wptr = MK_WPTR(ORIG_CLASS_ODBC);
+					wstrp = &MK_WSTR(ORIG_CLASS_ODBC);
 					break;
 				default:
-					wptr = MK_WPTR(ORIG_CLASS_ISO);
+					wstrp = &MK_WSTR(ORIG_CLASS_ISO);
 			}
 			break;
 		} while (0);
-			DBGH(Handle, "diagnostic code '"LWPD"' is of class '"LWPD"'.",
-					esodbc_errors[diag->state].code, wptr);
-			return write_wptr(&dummy, DiagInfoPtr, wptr, BufferLength,
+			DBGH(Handle, "diagnostic code '"LWPD"' is of class '" LWPDL "'.",
+					esodbc_errors[diag->state].code, LWSTR(wstrp));
+			/* GetDiagField can't set diagnostics itself, so use a dummy */
+			*HDRH(&dummy) = *HDRH(Handle); /* need a valid hhdr struct */
+			return write_wstr(&dummy, DiagInfoPtr, wstrp, BufferLength,
 					StringLengthPtr);
 
 		case SQL_DIAG_CONNECTION_NAME:
@@ -720,19 +660,20 @@ SQLRETURN EsSQLGetDiagFieldW(
 		case SQL_DIAG_SERVER_NAME: /* TODO: keep same as _CONNECTION_NAME? */
 			switch (HandleType) {
 				case SQL_HANDLE_DBC:
-					wptr = DBCH(Handle)->dsn.str;
+					wstrp = &DBCH(Handle)->dsn;
 					break;
 				case SQL_HANDLE_STMT:
-					wptr = STMH(Handle)->hdr.dbc->dsn.str;
+					wstrp = &STMH(Handle)->hdr.dbc->dsn;
 					break;
 				case SQL_HANDLE_DESC:
-					wptr = DSCH(Handle)->hdr.stmt->hdr.dbc->dsn.str;
+					wstrp = &DSCH(Handle)->hdr.stmt->hdr.dbc->dsn;
 					break;
 				default:
-					wptr = MK_WPTR("");
+					wstrp = &MK_WSTR("");
 			}
-			DBGH(Handle, "inquired connection name (`"LWPD"`)", wptr);
-			return write_wptr(&dummy, DiagInfoPtr, wptr, BufferLength,
+			DBGH(Handle, "inquired connection name (`" LWPDL "`)",
+				LWSTR(wstrp));
+			return write_wstr(&dummy, DiagInfoPtr, wstrp, BufferLength,
 					StringLengthPtr);
 
 
@@ -748,16 +689,19 @@ SQLRETURN EsSQLGetDiagFieldW(
 						HandleType);
 				return SQL_NO_DATA;
 			}
+			wstr.str = esodbc_errors[diag->state].code;
+			wstr.cnt = wcslen(wstr.str);
 			/* GetDiagField can't set diagnostics itself, so use a dummy */
-			ret = write_wptr(&dummy, DiagInfoPtr,
-					esodbc_errors[diag->state].code, BufferLength, &used);
-			if (StringLengthPtr)
+			*HDRH(&dummy) = *HDRH(Handle); /* need a valid hhdr struct */
+			ret = write_wstr(&dummy, DiagInfoPtr, &wstr, BufferLength, &used);
+			if (StringLengthPtr) {
 				*StringLengthPtr = used;
-			else
+			} else {
 				/* SQLSTATE is always on 5 chars, but this Identifier sticks
 				 * out, by not being given a buffer to write this into */
 				WARNH(Handle, "SQLSTATE writen on %uB, but no output buffer "
 						"provided.", used);
+			}
 			return ret;
 
 		default:
@@ -792,9 +736,11 @@ SQLRETURN EsSQLGetDiagRecW
 	_Out_opt_ SQLSMALLINT *TextLength
 )
 {
-	esodbc_diag_st *diag, dummy;
+	esodbc_diag_st *diag;
+	esodbc_env_st dummy;
 	SQLRETURN ret;
 	SQLSMALLINT used;
+	wstr_st wstr;
 
 	if (RecNumber <= 0) {
 		ERRH(Handle, "record number must be >=1; received: %d.", RecNumber);
@@ -840,7 +786,10 @@ SQLRETURN EsSQLGetDiagRecW
 		*NativeError = diag->native_code;
 	}
 
-	ret = write_wptr(&dummy, MessageText, diag->text,
+	wstr.str = diag->text;
+	wstr.cnt = wcslen(wstr.str);
+	*HDRH(&dummy) = *HDRH(Handle); /* need a valid hhdr struct */
+	ret = write_wstr(&dummy, MessageText, &wstr,
 			BufferLength * sizeof(*MessageText), &used);
 	if (TextLength) {
 		*TextLength = used / sizeof(*MessageText);

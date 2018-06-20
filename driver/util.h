@@ -72,7 +72,7 @@ typedef struct cstr {
 } cstr_st;
 
 /*
- * Trims leading and trailing WS of a wide string of 'chars' lenght.
+ * Trims leading and trailing WS of a wide string of 'chars' length.
  * 0-terminator should not be counted (as it's a non-WS).
  */
 const SQLWCHAR *trim_ws(const SQLWCHAR *wstr, size_t *chars);
@@ -111,10 +111,11 @@ typedef struct wstr {
  * Turns a static C string into a wstr_st.
  */
 #ifndef __cplusplus /* no MSVC support for compound literals with /TP */
-#define MK_WSTR(_s)		\
-	((wstr_st){.str = MK_WPTR(_s), .cnt = sizeof(_s) - 1})
+#	define MK_WSTR(_s)	((wstr_st){.str = MK_WPTR(_s), .cnt = sizeof(_s) - 1})
+#	define MK_CSTR(_s)	((cstr_st){.str = _s, .cnt = sizeof(_s) - 1})
 #else /* !__cplusplus */
-#define WSTR_INIT(_s)	{MK_WPTR(_s), sizeof(_s) - 1}
+#	define WSTR_INIT(_s)	{MK_WPTR(_s), sizeof(_s) - 1}
+#	define CSTR_INIT(_s)	{_s, sizeof(_s) - 1}
 #endif /* !__cplusplus */
 /*
  * Test equality of two wstr_st objects.
@@ -130,6 +131,11 @@ typedef struct wstr {
 
 BOOL wstr2bool(wstr_st *val);
 BOOL wstr2long(wstr_st *val, long *out);
+
+/* converts the int types to a C or wide string, returning the string length */
+size_t i64tot(int64_t i64, void *buff, BOOL wide);
+size_t ui64tot(uint64_t ui64, void *buff, BOOL wide);
+
 
 #ifdef _WIN32
 /*
@@ -178,6 +184,15 @@ typedef cstr_st tstr_st;
  */
 size_t json_escape(const char *jin, size_t inlen, char *jout, size_t outlen);
 
+/*
+ * Copy a WSTR back to application.
+ * The WSTR must not count the 0-tem.
+ * The function checks against the correct size of available bytes, copies the
+ * wstr according to avaialble space and indicates the available bytes to copy
+ * back into provided buffer (if not NULL).
+ */
+SQLRETURN write_wstr(SQLHANDLE hnd, SQLWCHAR *dest, wstr_st *src,
+	SQLSMALLINT /*B*/avail, SQLSMALLINT /*B*/*usedp);
 
 /*
  * Printing aids.
@@ -190,31 +205,30 @@ size_t json_escape(const char *jin, size_t inlen, char *jout, size_t outlen);
 #ifdef _WIN32
 /* funny M$ 'inverted' logic */
 /* wprintf wide_t pointer descriptor */
-#define WPFWP_DESC		L"%s"
-#define WPFWP_LDESC		L"%.*s"
+#	define WPFWP_DESC		L"%s"
+#	define WPFWP_LDESC		L"%.*s"
 /* printf wide_t pointer descriptor */
-#define PFWP_DESC		"%S"
-#define PFWP_LDESC		"%.*S"
+#	define PFWP_DESC		"%S"
+#	define PFWP_LDESC		"%.*S"
 /* wprintf char pointer descriptor */
-#define WPFCP_DESC		L"%S"
-#define WPFCP_LDESC		L"%.*S"
+#	define WPFCP_DESC		L"%S"
+#	define WPFCP_LDESC		L"%.*S"
 /* printf char pointer descriptor */
-#define PFCP_DESC		"%s"
-#define PFCP_LDESC		"%.*s"
+#	define PFCP_DESC		"%s"
+#	define PFCP_LDESC		"%.*s"
 #else /* _WIN32 */
 /* wprintf wide_t pointer descriptor */
-#define WPFWP_DESC		L"%S"
-#define WPFWP_LDESC		L"%.*S"
+#	define WPFWP_DESC		L"%S"
+#	define WPFWP_LDESC		L"%.*S"
 /* printf wide_t pointer descriptor */
-#define PFWP_DESC		"%S"
-#define PFWP_LDESC		"%.*S"
-/* silly M$ */
+#	define PFWP_DESC		"%S"
+#	define PFWP_LDESC		"%.*S"
 /* wprintf char pointer descriptor */
-#define WPFCP_DESC		L"%s"
-#define WPFCP_LDESC		L"%.*s"
+#	define WPFCP_DESC		L"%s"
+#	define WPFCP_LDESC		L"%.*s"
 /* printf char pointer descriptor */
-#define PFCP_DESC		"%s"
-#define PFCP_LDESC		"%.*s"
+#	define PFCP_DESC		"%s"
+#	define PFCP_LDESC		"%.*s"
 #endif /* _WIN32 */
 
 

@@ -178,14 +178,13 @@ typedef struct desc_rec {
 
 	SQLPOINTER		data_ptr; /* array, if .array_size > 1 */
 
-	/* TODO: move all SQLWCHARs to wstr_st */
-	SQLWCHAR		*base_column_name; /* read-only */
-	SQLWCHAR		*base_table_name; /* r/o */
-	SQLWCHAR		*catalog_name; /* r/o */
-	SQLWCHAR		*label; /* r/o */ //alias?
-	SQLWCHAR		*name;
-	SQLWCHAR		*schema_name; /* r/o */
-	SQLWCHAR		*table_name; /* r/o */
+	wstr_st			base_column_name; /* read-only */
+	wstr_st			base_table_name; /* r/o */
+	wstr_st			catalog_name; /* r/o */
+	wstr_st			label; /* r/o */ //alias?
+	wstr_st			name;
+	wstr_st			schema_name; /* r/o */
+	wstr_st			table_name; /* r/o */
 
 	SQLLEN			*indicator_ptr; /* array, if .array_size > 1 */
 	SQLLEN			*octet_length_ptr; /* array, if .array_size > 1 */

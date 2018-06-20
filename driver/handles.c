@@ -17,13 +17,13 @@ static void free_rec_fields(esodbc_rec_st *rec)
 {
 	int i;
 	SQLWCHAR **wptr[] = {
-		&rec->base_column_name,
-		&rec->base_table_name,
-		&rec->catalog_name,
-		&rec->label,
-		&rec->name,
-		&rec->schema_name,
-		&rec->table_name,
+		&rec->base_column_name.str,
+		&rec->base_table_name.str,
+		&rec->catalog_name.str,
+		&rec->label.str,
+		&rec->name.str,
+		&rec->schema_name.str,
+		&rec->table_name.str,
 	};
 	for (i = 0; i < sizeof(wptr)/sizeof(wptr[0]); i ++) {
 		DBGH(rec->desc, "freeing field #%d = 0x%p.", i, *wptr[i]);
@@ -54,8 +54,8 @@ static void init_hheader(esodbc_hhdr_st *hdr, SQLSMALLINT type, void *parent)
 	hdr->parent = parent;
 }
 
-void init_desc(esodbc_desc_st *desc, esodbc_stmt_st *stmt, desc_type_et type,
-	SQLSMALLINT alloc_type)
+static void init_desc(esodbc_desc_st *desc, esodbc_stmt_st *stmt,
+	desc_type_et type, SQLSMALLINT alloc_type)
 {
 	memset(desc, 0, sizeof(esodbc_desc_st));
 
@@ -1331,7 +1331,7 @@ SQLRETURN EsSQLGetDescFieldW(
 {
 	esodbc_desc_st *desc = DSCH(DescriptorHandle);
 	esodbc_state_et state;
-	SQLWCHAR *wptr;
+	wstr_st wstr;
 	SQLSMALLINT word;
 	SQLINTEGER intgr;
 	esodbc_rec_st *rec;
@@ -1451,37 +1451,36 @@ SQLRETURN EsSQLGetDescFieldW(
 
 		/* <SQLWCHAR *> */
 		do {
-		case SQL_DESC_BASE_COLUMN_NAME: wptr = rec->base_column_name; break;
-		case SQL_DESC_BASE_TABLE_NAME: wptr = rec->base_table_name; break;
-		case SQL_DESC_CATALOG_NAME: wptr = rec->catalog_name; break;
-		case SQL_DESC_LABEL: wptr = rec->label; break;
-		case SQL_DESC_NAME: wptr = rec->name; break;
-		case SQL_DESC_SCHEMA_NAME: wptr = rec->schema_name; break;
-		case SQL_DESC_TABLE_NAME: wptr = rec->table_name; break;
+		case SQL_DESC_BASE_COLUMN_NAME: wstr = rec->base_column_name; break;
+		case SQL_DESC_BASE_TABLE_NAME: wstr = rec->base_table_name; break;
+		case SQL_DESC_CATALOG_NAME: wstr = rec->catalog_name; break;
+		case SQL_DESC_LABEL: wstr = rec->label; break;
+		case SQL_DESC_NAME: wstr = rec->name; break;
+		case SQL_DESC_SCHEMA_NAME: wstr = rec->schema_name; break;
+		case SQL_DESC_TABLE_NAME: wstr = rec->table_name; break;
 		case SQL_DESC_LITERAL_PREFIX:
-			wptr = rec->es_type->literal_prefix.str;
+			wstr = rec->es_type->literal_prefix;
 			break;
 		case SQL_DESC_LITERAL_SUFFIX: 
-			wptr = rec->es_type->literal_suffix.str;
+			wstr = rec->es_type->literal_suffix;
 			break;
 		case SQL_DESC_LOCAL_TYPE_NAME:
-			wptr = rec->es_type->local_type_name.str;
+			wstr = rec->es_type->local_type_name;
 			break;
 		case SQL_DESC_TYPE_NAME:
-			wptr = rec->es_type->type_name.str;
+			wstr = rec->es_type->type_name;
 			break;
 		} while (0);
-			if (! wptr) {
-				*StringLengthPtr = 0;
+			if (! StringLengthPtr) {
+				RET_HDIAGS(desc, SQL_STATE_HY009);
 			} else {
-				*StringLengthPtr = (SQLINTEGER)wcslen(wptr) * sizeof(SQLWCHAR);
+				*StringLengthPtr = (SQLINTEGER)wstr.cnt;
 			}
 			if (ValuePtr) {
-				memcpy(ValuePtr, wptr, *StringLengthPtr);
-				/* TODO: 0-term setting? */
+				memcpy(ValuePtr, wstr.str, *StringLengthPtr);
 			}
-			DBGH(desc, "returning record field %d as SQLWCHAR 0x%p (`"LWPD"`).",
-					FieldIdentifier, wptr, wptr ? wptr : TS_NULL);
+			DBGH(desc, "returning SQLWCHAR record field %d: `" LWPDL "`.",
+					FieldIdentifier, LWSTR(&wstr));
 			break;
 
 		/* <SQLLEN *> */
@@ -1724,6 +1723,8 @@ void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type,
  */
 static void set_defaults_from_type(esodbc_rec_st *rec)
 {
+	DBGH(rec->desc, "(re)setting record@0x%p lengt/precision/scale to "
+		"defaults.", rec);
 	switch (rec->meta_type) {
 		case METATYPE_STRING:
 			rec->length = 1;
@@ -1996,7 +1997,12 @@ esodbc_metatype_et concise_to_meta(SQLSMALLINT concise_type,
  *
  * "If the application changes the data type or attributes after setting the
  * SQL_DESC_DATA_PTR field, the driver sets SQL_DESC_DATA_PTR to a null
- * pointer, unbinding the record."
+ * pointer, unbinding the record." &&
+ * "If TargetValuePtr is a null pointer, the driver unbinds the data buffer
+ * for the column. [...] An application can unbind the data buffer for a
+ * column but still have a length/indicator buffer bound for the column, if
+ * the TargetValuePtr argument in the call to SQLBindCol is a null pointer but
+ * the StrLen_or_IndPtr argument is a valid value."
  *
  * "The only way to unbind a bookmark column is to set the SQL_DESC_DATA_PTR
  * field to a null pointer."
@@ -2011,7 +2017,7 @@ SQLRETURN EsSQLSetDescFieldW(
 	esodbc_desc_st *desc = DSCH(DescriptorHandle);
 	esodbc_state_et state;
 	esodbc_rec_st *rec;
-	SQLWCHAR **wptrp, *wptr;
+	wstr_st *wstrp;
 	SQLSMALLINT *wordp;
 	SQLINTEGER *intp;
 	SQLSMALLINT count, type;
@@ -2042,8 +2048,8 @@ SQLRETURN EsSQLSetDescFieldW(
 			ulen = (SQLULEN)(uintptr_t)ValuePtr;
 			DBGH(desc, "setting desc array size to: %u.", ulen);
 			if (ESODBC_MAX_ROW_ARRAY_SIZE < ulen) {
-				WARNH(desc, "provided desc array size (%u) larger than allowed "
-					"max (%u) -- set value adjusted to max.", ulen,
+				WARNH(desc, "provided desc array size (%u) larger than "
+					"allowed max (%u) -- set value adjusted to max.", ulen,
 					ESODBC_MAX_ROW_ARRAY_SIZE);
 				desc->array_size = ESODBC_MAX_ROW_ARRAY_SIZE;
 				RET_HDIAGS(desc, SQL_STATE_01S02);
@@ -2134,6 +2140,8 @@ SQLRETURN EsSQLSetDescFieldW(
 	 * buffer(s), so the above "binding" definition is incomplete.
 	 */
 	if (FieldIdentifier != SQL_DESC_DATA_PTR) {
+		DBGH(desc, "attribute to set is different than %d => unbinding data "
+			"buffer (was 0x%p).", rec->data_ptr);
 		rec->data_ptr = NULL;
 	}
 
@@ -2184,12 +2192,12 @@ SQLRETURN EsSQLSetDescFieldW(
 							rec->data_ptr, rec);
 				}
 			} else {
-				// TODO: should this actually use REC_IS_BOUND()?
 				/* "If the highest-numbered column or parameter is unbound,
 				 * then SQL_DESC_COUNT is changed to the number of the next
 				 * highest-numbered column or parameter. " */
-				if ((desc->type == DESC_TYPE_ARD) || 
-						(desc->type == DESC_TYPE_ARD)) {
+				if (DESC_TYPE_IS_APPLICATION(desc->type) &&
+						/* see function-top comments on when to unbind */
+						(! REC_IS_BOUND(rec))) {
 					DBGH(desc, "rec 0x%p of desc type %d unbound.", rec,
 							desc->type);
 					if (RecNumber == desc->count) {
@@ -2213,40 +2221,41 @@ SQLRETURN EsSQLSetDescFieldW(
 
 		/* <SQLWCHAR *> */
 		do {
-		case SQL_DESC_BASE_COLUMN_NAME: wptrp = &rec->base_column_name; break;
-		case SQL_DESC_BASE_TABLE_NAME: wptrp = &rec->base_table_name; break;
-		case SQL_DESC_CATALOG_NAME: wptrp = &rec->catalog_name; break;
-		case SQL_DESC_LABEL: wptrp = &rec->label; break;
+		case SQL_DESC_BASE_COLUMN_NAME: wstrp = &rec->base_column_name; break;
+		case SQL_DESC_BASE_TABLE_NAME: wstrp = &rec->base_table_name; break;
+		case SQL_DESC_CATALOG_NAME: wstrp = &rec->catalog_name; break;
+		case SQL_DESC_LABEL: wstrp = &rec->label; break;
 		/* R/O fields: literal_prefix/_suffix, local_type_name, type_name */
-		case SQL_DESC_SCHEMA_NAME: wptrp = &rec->schema_name; break;
-		case SQL_DESC_TABLE_NAME: wptrp = &rec->table_name; break;
+		case SQL_DESC_SCHEMA_NAME: wstrp = &rec->schema_name; break;
+		case SQL_DESC_TABLE_NAME: wstrp = &rec->table_name; break;
 		} while (0);
-			DBGH(desc, "setting SQLWCHAR field %d to 0x%p(`"LWPD"`).",
-					FieldIdentifier, ValuePtr, 
-					ValuePtr ? (SQLWCHAR *)ValuePtr : TS_NULL);
-			if (*wptrp) {
+			if (BufferLength == SQL_NTS) {
+				wlen = ValuePtr ? wcslen((SQLWCHAR *)ValuePtr) : 0;
+			} else {
+				wlen = BufferLength;
+			}
+			DBGH(desc, "setting SQLWCHAR field %d to `" LWPDL "`(@0x%p).",
+				FieldIdentifier, wlen, ValuePtr, wlen, ValuePtr);
+			if (wstrp->str) {
 				DBGH(desc, "freeing previously allocated value for field %d "
-						"(`"LWPD"`).", *wptrp);
-				free(*wptrp);
+					"(`" LWPDL "`).", FieldIdentifier, LWSTR(wstrp));
+				free(wstrp->str);
+				wstrp->str = NULL;
+				wstrp->cnt = 0;
 			}
 			if (! ValuePtr) {
-				*wptrp = NULL;
 				DBGH(desc, "field %d reset to NULL.", FieldIdentifier);
 				break;
 			}
-			if (BufferLength == SQL_NTS)
-				wlen = wcslen((SQLWCHAR *)ValuePtr);
-			else
-				wlen = BufferLength;
-			wptr = (SQLWCHAR *)malloc((wlen + /*0-term*/1) * sizeof(SQLWCHAR));
-			if (! wptr) {
-				ERRH(desc, "failed to alloc string buffer of len %d.",
-						wlen + 1);
+			if (! (wstrp->str = (SQLWCHAR *)malloc((wlen + /*0-term*/1)
+					* sizeof(SQLWCHAR)))) {
+				ERRH(desc, "failed to alloc w-string buffer of len %zd.",
+					wlen + 1);
 				RET_HDIAGS(desc, SQL_STATE_HY001);
 			}
-			memcpy(wptr, ValuePtr, wlen * sizeof(SQLWCHAR));
-			wptr[wlen] = 0;
-			*wptrp = wptr;
+			memcpy(wstrp->str, ValuePtr, wlen * sizeof(SQLWCHAR));
+			wstrp->str[wlen] = 0;
+			wstrp->cnt = wlen;
 			break;
 
 		/* <SQLLEN *>, deferred */
@@ -2262,8 +2271,14 @@ SQLRETURN EsSQLSetDescFieldW(
 		/* <SQLLEN> */
 		/* R/O fields: display_size */
 		case SQL_DESC_OCTET_LENGTH:
-			DBGH(desc, "setting octet length: %d.",
+			DBGH(desc, "setting octet length: %ld.",
 					(SQLLEN)(intptr_t)ValuePtr);
+			/* rec field's type is signed :/; a negative is dangerous l8r  */
+			if ((SQLLEN)(intptr_t)ValuePtr < 0) {
+				ERRH(desc, "octet length attribute can't be negative (%lld)",
+						(SQLLEN)(intptr_t)ValuePtr);
+				RET_HDIAGS(desc, SQL_STATE_HY000);
+			}
 			rec->octet_length = (SQLLEN)(intptr_t)ValuePtr;
 			break;
 
