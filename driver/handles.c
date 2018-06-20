@@ -2275,7 +2275,7 @@ SQLRETURN EsSQLSetDescFieldW(
 					(SQLLEN)(intptr_t)ValuePtr);
 			/* rec field's type is signed :/; a negative is dangerous l8r  */
 			if ((SQLLEN)(intptr_t)ValuePtr < 0) {
-				ERRH(desc, "octet length attribute can't be negative (%ld)",
+				ERRH(desc, "octet length attribute can't be negative (%lld)",
 						(SQLLEN)(intptr_t)ValuePtr);
 				RET_HDIAGS(desc, SQL_STATE_HY000);
 			}
