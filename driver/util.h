@@ -130,7 +130,8 @@ typedef struct wstr {
 		wmemncasecmp((s1)->str, (s2)->str, (s1)->cnt) == 0)
 
 BOOL wstr2bool(wstr_st *val);
-BOOL wstr2long(wstr_st *val, long *out);
+BOOL wstr2ullong(wstr_st *val, unsigned long long *out);
+BOOL wstr2llong(wstr_st *val, long long *out);
 
 /* converts the int types to a C or wide string, returning the string length */
 size_t i64tot(int64_t i64, void *buff, BOOL wide);

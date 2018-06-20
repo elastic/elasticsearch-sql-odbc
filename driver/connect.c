@@ -957,7 +957,7 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 	int n, cnt;
 	SQLWCHAR urlw[ESODBC_MAX_URL_LEN];
 	BOOL secure;
-	long timeout, max_body_size, max_fetch_size;
+	long long timeout, max_body_size, max_fetch_size;
 
 	/*
 	 * build connection URL
@@ -1002,7 +1002,7 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 	/*
 	 * request timeout for liburl: negative reset to 0
 	 */
-	if (! wstr2long(&attrs->timeout, &timeout)) {
+	if (! wstr2llong(&attrs->timeout, &timeout)) {
 		ERRH(dbc, "failed to convert '" LWPDL "' to long.",
 			LWSTR(&attrs->timeout));
 		goto err;
@@ -1017,7 +1017,7 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 	/*
 	 * set max body size
 	 */
-	if (! wstr2long(&attrs->max_body_size, &max_body_size)) {
+	if (! wstr2llong(&attrs->max_body_size, &max_body_size)) {
 		ERRH(dbc, "failed to convert '" LWPDL "' to long.",
 			LWSTR(&attrs->max_body_size));
 		goto err;
@@ -1034,7 +1034,7 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 	/*
 	 * set max fetch size
 	 */
-	if (! wstr2long(&attrs->max_fetch_size, &max_fetch_size)) {
+	if (! wstr2llong(&attrs->max_fetch_size, &max_fetch_size)) {
 		ERRH(dbc, "failed to convert '" LWPDL "' to long.",
 			LWSTR(&attrs->max_fetch_size));
 		goto err;

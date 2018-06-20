@@ -5,6 +5,7 @@
  */
 
 #include <string.h>
+#include <errno.h>
 
 #include "util.h"
 #include "log.h"
@@ -24,45 +25,97 @@ BOOL wstr2bool(wstr_st *val)
 	return TRUE;
 }
 
-BOOL wstr2long(wstr_st *val, long *out)
+BOOL wstr2ullong(wstr_st *val, unsigned long long *out)
 {
-	long res = 0, digit;
+	unsigned long long res, digit;
+	static const unsigned long long max_div_10 = ULLONG_MAX / 10ULL;
+	int i = 0;
+
+	if (val->cnt < 1) {
+		return FALSE;
+	} else if (val->str[0] == L'+') {
+		i ++;
+	}
+
+	for (res = 0; i < val->cnt; i ++) {
+		/* is it a number? */
+		if (val->str[i] < L'0' || L'9' < val->str[i]) {
+			return FALSE;
+		} else {
+			digit = val->str[i] - L'0';
+		}
+		assert(sizeof(unsigned long long) == sizeof(uint64_t));
+		if (i < ESODBC_PRECISION_UINT64 - 1) {
+			res *= 10;
+			res += digit;
+		} else {
+			/* would it overflow? */
+			if (max_div_10 < res) {
+				errno = ERANGE;
+				return FALSE;
+			} else {
+				res *= 10;
+			}
+			if (ULLONG_MAX - res < digit) {
+				errno = ERANGE;
+				return FALSE;
+			} else {
+				res += digit;
+			}
+		}
+	}
+	*out = res;
+	return TRUE;
+}
+
+BOOL wstr2llong(wstr_st *val, long long *out)
+{
+	unsigned long long ull;
+	wstr_st uval;
 	int i = 0;
 	BOOL negative;
 
 	if (val->cnt < 1) {
 		return FALSE;
+	} else {
+		switch (val->str[0]) {
+			case L'-':
+				negative = TRUE;
+				i ++;
+				break;
+			case '+':
+				negative = FALSE;
+				i ++;
+				break;
+			default:
+				negative = FALSE;
+		}
 	}
 
-	switch (val->str[0]) {
-		case L'-':
-			negative = TRUE;
-			i ++;
-			break;
-		case '+':
-			negative = FALSE;
-			i ++;
-			break;
-		default:
-			negative = FALSE;
+	uval = (wstr_st) {
+		.str = val->str + i, .cnt = val->cnt - i
+	};
+	if (! wstr2ullong(&uval, &ull)) {
+		return FALSE;
 	}
-
-	for ( ; i < val->cnt; i ++) {
-		/* is it a number? */
-		if (val->str[i] < L'0' || L'9' < val->str[i]) {
-			return FALSE;
+	if (negative) {
+		if ((unsigned long long)LLONG_MIN < ull) {
+			errno = ERANGE;
+			return FALSE; /* underflow */
+		} else {
+			*out = -(long long)ull;
 		}
-		digit = val->str[i] - L'0';
-		/* would it overflow?*/
-		if (LONG_MAX - res < digit) {
-			return FALSE;
+	} else {
+		if ((unsigned long long)LLONG_MAX < ull) {
+			errno = ERANGE;
+			return FALSE; /* overflow */
+		} else {
+			*out = (long long)ull;
 		}
-		res *= 10;
-		res += digit;
 	}
-	*out = negative ? - res : res;
 	return TRUE;
 }
+
 
 size_t i64tot(int64_t i64, void *buff, BOOL wide)
 {
