@@ -210,8 +210,10 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			break;
 
 		case SQL_CATALOG_NAME:
-			// TODO: can the catalog varry? `SYS CATALOGS` here?
-			FIXME; // FIXME
+			DBGH(dbc, "requested: catalog name support (`"
+				ESODBC_CATALOG_NAME "`).");
+			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_CATALOG_NAME),
+					BufferLength, StringLengthPtr);
 			break;
 
 		case SQL_CATALOG_NAME_SEPARATOR: /* SQL_QUALIFIER_NAME_SEPARATOR */

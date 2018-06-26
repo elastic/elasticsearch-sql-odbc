@@ -141,6 +141,8 @@
 
 /* no schema support, but accepted (=currently ignored) by driver */
 #define ESODBC_SCHEMA_USAGE						SQL_SU_PROCEDURE_INVOCATION
+/* the server supports catalog names */
+#define ESODBC_CATALOG_NAME						"Y"
 /*
  * Catalog support:
  * - supported in: DML STATEMENTS, ODBC PROCEDURE INVOCATION.
@@ -179,8 +181,8 @@
 /*
  * No JOIN support.
  */
-#define ESODBC_SQL92_RELATIONAL_JOIN_OPERATORS	0
-#define ESODBC_OJ_CAPABILITIES					0
+#define ESODBC_SQL92_RELATIONAL_JOIN_OPERATORS	0LU
+#define ESODBC_OJ_CAPABILITIES					0LU
 
 /*
  * String functions support:
@@ -190,7 +192,7 @@
  *   OCTET_LENGTH, POSITION, REPEAT, REPLACE, RIGHT, RTRIM, SOUNDEX, SPACE,
  *   SUBSTRING, UCASE.
  */
-#define ESODBC_STRING_FUNCTIONS					0
+#define ESODBC_STRING_FUNCTIONS					0LU
 /*
  * Numeric functions support:
  * - supported: ABS, ACOS, ASIN, ATAN, CEIL, COS, DEGREES, EXP, FLOOR, LOG,
@@ -221,20 +223,20 @@
  * - not supported: FRAC_SECOND, SECOND, MINUTE, HOUR, DAY, WEEK, MONTH,
  *   QUARTER, YEAR.
  */
-#define ESODBC_TIMEDATE_DIFF_INTERVALS			0
+#define ESODBC_TIMEDATE_DIFF_INTERVALS			0LU
 /*
  * TIMESTAMPADD timestamp intervals:
  * - supported: none
  * - not supported: FRAC_SECOND, SECOND, MINUTE, HOUR, DAY, WEEK, MONTH,
  *   QUARTER, YEAR.
  */
-#define ESODBC_TIMEDATE_ADD_INTERVALS			0
+#define ESODBC_TIMEDATE_ADD_INTERVALS			0LU
 /*
  * System functions:
  * - supported: none.
  * - not supported: DATABASE, IFNULL, USER
  */
-#define ESODBC_SYSTEM_FUNCTIONS					0
+#define ESODBC_SYSTEM_FUNCTIONS					0LU
 /*
  * Convert functions support:
  * - supported: CAST.
@@ -259,20 +261,20 @@
  * - not supported: CONVERT, LOWER, UPPER, SUBSTRING, TRANSLATE, TRIM, trim
  *   leading, trim trailing
  */
-#define ESODBC_SQL92_STRING_FUNCTIONS			0
+#define ESODBC_SQL92_STRING_FUNCTIONS			0LU
 /*
  * SQL92 numeric value functions:
  * - supported: none.
  * - not supported: BIT_LENGTH, CHAR_LENGTH, CHARACTER_LENGTH, EXTRACT,
  *   OCTET_LENGTH, POSITION
  */
-#define ESODBC_SQL92_NUMERIC_VALUE_FUNCTIONS	0
+#define ESODBC_SQL92_NUMERIC_VALUE_FUNCTIONS	0LU
 /*
  * SQL92 datetime functions:
  * - supported: none.
  * - not supported: CURRENT_DATE, CURRENT_TIME, CURRENT_DATETIME
  */
-#define ESODBC_SQL92_DATETIME_FUNCTIONS			0
+#define ESODBC_SQL92_DATETIME_FUNCTIONS			0LU
 /*
  * SQL92 datetime literals support:
  * - supported: TIMESTAMP;
@@ -286,7 +288,7 @@
  * - supported: none.
  * - not supported: CASE, CAST, COALESCE, NULLIF
  */
-#define ODBC_SQL92_VALUE_EXPRESSIONS			0
+#define ODBC_SQL92_VALUE_EXPRESSIONS			0LU
 
 /*
  * ES specific data types
