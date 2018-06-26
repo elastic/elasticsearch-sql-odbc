@@ -1155,7 +1155,7 @@ static BOOL check_access(desc_type_et desc_type, SQLSMALLINT field_id,
 		case SQL_DESC_NAME:
 		case SQL_DESC_UNNAMED:
 			ret = desc_type == DESC_TYPE_IPD ||
-				(desc_type == DESC_TYPE_IPD && mode == O_RDONLY);
+				(desc_type == DESC_TYPE_IRD && mode == O_RDONLY);
 			break;
 
 		case SQL_DESC_COUNT:
