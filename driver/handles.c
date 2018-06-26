@@ -2046,19 +2046,26 @@ SQLRETURN EsSQLSetDescFieldW(
 	switch (FieldIdentifier) {
 		case SQL_DESC_ARRAY_SIZE:
 			ulen = (SQLULEN)(uintptr_t)ValuePtr;
-			DBGH(desc, "setting desc array size to: %u.", ulen);
-			if (ESODBC_MAX_ROW_ARRAY_SIZE < ulen) {
-				WARNH(desc, "provided desc array size (%u) larger than "
-					"allowed max (%u) -- set value adjusted to max.", ulen,
-					ESODBC_MAX_ROW_ARRAY_SIZE);
-				desc->array_size = ESODBC_MAX_ROW_ARRAY_SIZE;
-				RET_HDIAGS(desc, SQL_STATE_01S02);
-			} else if (ulen < 1) {
-				ERRH(desc, "can't set the array size to less than 1.");
-				RET_HDIAGS(desc, SQL_STATE_HY092);
-			} else {
-				desc->array_size = ulen;
+			DBGH(desc, "setting desc array size to: %llu.", ulen);
+			if (DESC_TYPE_IS_RECORD(desc->type)) {
+				if (ESODBC_MAX_ROW_ARRAY_SIZE < ulen) {
+					WARNH(desc, "provided desc array size (%u) larger than "
+						"allowed max (%u) -- set value adjusted to max.", ulen,
+						ESODBC_MAX_ROW_ARRAY_SIZE);
+					desc->array_size = ESODBC_MAX_ROW_ARRAY_SIZE;
+					RET_HDIAGS(desc, SQL_STATE_01S02);
+				} else if (ulen < 1) {
+					ERRH(desc, "can't set the array size to less than 1.");
+					RET_HDIAGS(desc, SQL_STATE_HY092);
+				}
+			} else { /* IS_PARAMETER */
+				/* no support for param arrays (yet) TODO */
+				if (1 < ulen) {
+					ERRH(desc, "no support for arrays of parameters.");
+					RET_HDIAGS(desc, SQL_STATE_HYC00);
+				}
 			}
+			desc->array_size = ulen;
 			return SQL_SUCCESS;
 
 		case SQL_DESC_ARRAY_STATUS_PTR:

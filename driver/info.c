@@ -510,7 +510,26 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			*(SQLUINTEGER *)InfoValue = 0;
 			break;
 
+		case SQL_MULT_RESULT_SETS:
+			DBGH(dbc, "requested: multiple result set support (`"
+				ESODBC_MULT_RESULT_SETS "`).");
+			return write_wstr(dbc, InfoValue,
+					&MK_WSTR(ESODBC_MULT_RESULT_SETS), BufferLength,
+					StringLengthPtr);
+
+		case SQL_BATCH_SUPPORT:
+			DBGH(dbc, "requested: batch support (%d).", ESODBC_BATCH_SUPPORT);
+			*(SQLUINTEGER *)InfoValue = ESODBC_BATCH_SUPPORT;
+			break;
+
+		case SQL_PARAM_ARRAY_SELECTS:
+			DBGH(dbc, "requested: reselt set availability with parameterized "
+				"execution (%d).", ESODBC_PARAM_ARRAY_SELECTS);
+			*(SQLUINTEGER *)InfoValue = ESODBC_PARAM_ARRAY_SELECTS;
+			break;
+
 		default:
+			BUGH(dbc, "unimplemented InfoType: %u.", InfoType); //FIXME
 			ERRH(dbc, "unknown InfoType: %u.", InfoType);
 			RET_HDIAGS(dbc, SQL_STATE_HYC00/*096?*/);
 	}

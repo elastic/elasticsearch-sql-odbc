@@ -159,6 +159,12 @@
 #define ESODBC_COLUMN_ALIAS						"Y"
 /* no procedures support */
 #define ESODBC_PROCEDURES						"N"
+/* no driver support for multiple result sets */
+#define ESODBC_MULT_RESULT_SETS					"N"
+/* no driver support for batching */
+#define ESODBC_BATCH_SUPPORT					0UL
+/* no driver support array of parameters */
+#define ESODBC_PARAM_ARRAY_SELECTS				SQL_PAS_NO_SELECT
 
 
 /*
