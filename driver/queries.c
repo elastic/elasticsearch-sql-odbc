@@ -1858,7 +1858,8 @@ static SQLRETURN copy_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			errno = 0;
 			if (! wstr2llong(&wval, &ll)) { /* string is 0-term -> wcstoll? */
 				ERRH(stmt, "can't convert `" LWPD "` to long long.", wstr);
-				RET_HDIAGS(stmt, errno ? SQL_STATE_22003 : SQL_STATE_22018);
+				RET_HDIAGS(stmt, errno == ERANGE ? SQL_STATE_22003 :
+					SQL_STATE_22018);
 			}
 			DBGH(stmt, "string `" LWPD "` converted to LL=%lld.", wstr, ll);
 			/* delegate to existing functionality */
@@ -1876,7 +1877,8 @@ static SQLRETURN copy_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			if (! wstr2ullong(&wval, &ull)) { /* string is 0-term: wcstoull? */
 				ERRH(stmt, "can't convert `" LWPD "` to unsigned long long.",
 					wstr);
-				RET_HDIAGS(stmt, errno ? SQL_STATE_22003 : SQL_STATE_22018);
+				RET_HDIAGS(stmt, errno == ERANGE ? SQL_STATE_22003 :
+					SQL_STATE_22018);
 			}
 			DBGH(stmt, "string `" LWPD "` converted to ULL=%llu.", wstr, ull);
 			if (ull <= LLONG_MAX) {
@@ -1894,7 +1896,7 @@ static SQLRETURN copy_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 				*(SQLUBIGINT *)data_ptr = (SQLUBIGINT)ull;
 				write_out_octets(octet_len_ptr, sizeof(SQLUBIGINT), irec);
 				DBGH(stmt, "converted string `" LWPD "` to "
-						"unsigned long long %llu.", wstr, ull);
+					"unsigned long long %llu.", wstr, ull);
 			} else {
 				REJECT_AS_OOR(stmt, ull, /*fixed?*/TRUE, "non-ULL");
 			}
@@ -1914,14 +1916,15 @@ static SQLRETURN copy_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			/* if empty string, non-numeric or under/over-flow, bail out */
 			if ((! wval.cnt) || (wval.str + wval.cnt != endp) || errno) {
 				ERRH(stmt, "can't convert `" LWPD "` to double.", wstr);
-				RET_HDIAGS(stmt, errno ? SQL_STATE_22003 : SQL_STATE_22018);
+				RET_HDIAGS(stmt, errno == ERANGE ? SQL_STATE_22003 :
+					SQL_STATE_22018);
 			}
 			/* delegate to existing functionality */
 			return copy_double(arec, irec, pos, dbl);
 
 
 		default:
-			BUGH(stmt, "unexpected unhanlded data type: %d.",
+			BUGH(stmt, "unexpected unhandled data type: %d.",
 				get_c_target_type(arec, irec));
 			return SQL_ERROR;
 	}
