@@ -32,6 +32,7 @@ BOOL wstr2ullong(wstr_st *val, unsigned long long *out)
 	int i = 0;
 
 	if (val->cnt < 1) {
+		errno = EINVAL;
 		return FALSE;
 	} else if (val->str[0] == L'+') {
 		i ++;
@@ -40,6 +41,7 @@ BOOL wstr2ullong(wstr_st *val, unsigned long long *out)
 	for (res = 0; i < val->cnt; i ++) {
 		/* is it a number? */
 		if (val->str[i] < L'0' || L'9' < val->str[i]) {
+			errno = EINVAL;
 			return FALSE;
 		} else {
 			digit = val->str[i] - L'0';
@@ -76,6 +78,7 @@ BOOL wstr2llong(wstr_st *val, long long *out)
 	BOOL negative;
 
 	if (val->cnt < 1) {
+		errno = EINVAL;
 		return FALSE;
 	} else {
 		switch (val->str[0]) {

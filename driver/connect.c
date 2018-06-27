@@ -1003,7 +1003,7 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 	 * request timeout for liburl: negative reset to 0
 	 */
 	if (! wstr2llong(&attrs->timeout, &timeout)) {
-		ERRH(dbc, "failed to convert '" LWPDL "' to long.",
+		ERRH(dbc, "failed to convert '" LWPDL "' to long long.",
 			LWSTR(&attrs->timeout));
 		goto err;
 	}
@@ -1018,7 +1018,7 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 	 * set max body size
 	 */
 	if (! wstr2llong(&attrs->max_body_size, &max_body_size)) {
-		ERRH(dbc, "failed to convert '" LWPDL "' to long.",
+		ERRH(dbc, "failed to convert '" LWPDL "' to long long.",
 			LWSTR(&attrs->max_body_size));
 		goto err;
 	}
@@ -1035,7 +1035,7 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 	 * set max fetch size
 	 */
 	if (! wstr2llong(&attrs->max_fetch_size, &max_fetch_size)) {
-		ERRH(dbc, "failed to convert '" LWPDL "' to long.",
+		ERRH(dbc, "failed to convert '" LWPDL "' to long long.",
 			LWSTR(&attrs->max_fetch_size));
 		goto err;
 	}
