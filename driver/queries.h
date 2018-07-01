@@ -9,6 +9,7 @@
 #include "error.h"
 #include "handles.h"
 
+void queries_init();
 void clear_resultset(esodbc_stmt_st *stmt);
 SQLRETURN TEST_API attach_answer(esodbc_stmt_st *stmt, char *buff,
 	size_t blen);
@@ -16,6 +17,7 @@ SQLRETURN TEST_API attach_error(esodbc_stmt_st *stmt, char *buff, size_t blen);
 SQLRETURN TEST_API attach_sql(esodbc_stmt_st *stmt, const SQLWCHAR *sql,
 	size_t tlen);
 void detach_sql(esodbc_stmt_st *stmt);
+SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff);
 
 
 SQLRETURN EsSQLBindCol(
@@ -43,6 +45,17 @@ SQLRETURN EsSQLPrepareW(
 	SQLHSTMT    hstmt,
 	_In_reads_(cchSqlStr) SQLWCHAR *szSqlStr,
 	SQLINTEGER  cchSqlStr);
+SQLRETURN EsSQLBindParameter(
+	SQLHSTMT        StatementHandle,
+	SQLUSMALLINT    ParameterNumber,
+	SQLSMALLINT     InputOutputType,
+	SQLSMALLINT     ValueType,
+	SQLSMALLINT     ParameterType,
+	SQLULEN         ColumnSize,
+	SQLSMALLINT     DecimalDigits,
+	SQLPOINTER      ParameterValuePtr,
+	SQLLEN          BufferLength,
+	SQLLEN         *StrLen_or_IndPtr);
 SQLRETURN EsSQLExecute(SQLHSTMT hstmt);
 SQLRETURN EsSQLExecDirectW(
 	SQLHSTMT    hstmt,

@@ -267,11 +267,11 @@ static inline size_t json_escaped_len(const char *json, size_t len)
 
 /*
  * JSON-escapes a string.
- * If string len is 0, it assumes a NTS.
+ * If string [in]len is 0, it assumes a NTS.
  * If output buffer (jout) is NULL, it returns the buffer size needed for
  * escaping.
- * Returns number of used bytes in buffer (which might be less than buffer
- * size, if some char needs an escaping longer than remaining space).
+ * Returns number of used bytes in buffer (which might be less than out buffer
+ * size (outlen), if some char needs an escaping longer than remaining space).
  */
 size_t json_escape(const char *jin, size_t inlen, char *jout, size_t outlen)
 {

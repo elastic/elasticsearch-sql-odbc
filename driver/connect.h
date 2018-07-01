@@ -12,9 +12,9 @@
 
 BOOL connect_init();
 void connect_cleanup();
-
-SQLRETURN post_statement(esodbc_stmt_st *stmt);
+SQLRETURN post_json(esodbc_stmt_st *stmt, const cstr_st *u8body);
 void cleanup_dbc(esodbc_dbc_st *dbc);
+
 
 SQLRETURN EsSQLDriverConnectW
 (

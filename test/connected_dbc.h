@@ -40,10 +40,13 @@ class ConnectedDBC {
   virtual ~ConnectedDBC();
 
   void assertState(const SQLWCHAR *state);
+
+  // use the test name as SQL (for faster logs lookup)
+  void prepareStatement();
   // use an actual SQL statement (if it might be processed)
-  void prepareStatement(const SQLWCHAR *sql, const char *json_answer);
-  // use the test name as SQL (for faster working with the logs)
-  void prepareStatement(const char *json_answer);
+  void prepareStatement(const SQLWCHAR *sql, const char *jsonAnswer);
+  // use test name as SQL and attach given answer
+  void prepareStatement(const char *jsonAnswer);
 };
 
 #endif /* __CONNECTED_DBC_H__ */

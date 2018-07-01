@@ -13,7 +13,6 @@
 #include "queries.h"
 #include "connect.h"
 
-
 #if ODBCVER == 0x0380
 /* String constant for supported ODBC version */
 #define ESODBC_SQL_SPEC_STRING	"03.80"
@@ -573,6 +572,8 @@ SQLRETURN EsSQLGetDiagFieldW(
 	}
 
 	diag = &HDRH(Handle)->diag;
+	/* GetDiagField can't set diagnostics itself, so use a dummy */
+	*HDRH(&dummy) = *HDRH(Handle); /* need a valid hhdr struct */
 
 	/*INDENT-OFF*/
 	switch(DiagIdentifier) {
@@ -671,8 +672,6 @@ SQLRETURN EsSQLGetDiagFieldW(
 		} while (0);
 			DBGH(Handle, "diagnostic code '"LWPD"' is of class '" LWPDL "'.",
 					esodbc_errors[diag->state].code, LWSTR(wstrp));
-			/* GetDiagField can't set diagnostics itself, so use a dummy */
-			*HDRH(&dummy) = *HDRH(Handle); /* need a valid hhdr struct */
 			return write_wstr(&dummy, DiagInfoPtr, wstrp, BufferLength,
 					StringLengthPtr);
 
@@ -712,8 +711,6 @@ SQLRETURN EsSQLGetDiagFieldW(
 			}
 			wstr.str = esodbc_errors[diag->state].code;
 			wstr.cnt = wcslen(wstr.str);
-			/* GetDiagField can't set diagnostics itself, so use a dummy */
-			*HDRH(&dummy) = *HDRH(Handle); /* need a valid hhdr struct */
 			ret = write_wstr(&dummy, DiagInfoPtr, &wstr, BufferLength, &used);
 			if (StringLengthPtr) {
 				*StringLengthPtr = used;
@@ -888,7 +885,7 @@ SQLRETURN EsSQLGetTypeInfoW(SQLHSTMT StatementHandle, SQLSMALLINT DataType)
 	ret = attach_sql(stmt, MK_WPTR(SQL_TYPES_STATEMENT),
 			sizeof(SQL_TYPES_STATEMENT) - 1);
 	if (SQL_SUCCEEDED(ret)) {
-		ret = post_statement(stmt);
+		ret = EsSQLExecute(stmt);
 	}
 	return ret;
 }

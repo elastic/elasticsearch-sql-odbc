@@ -13,7 +13,6 @@
 #include "catalogue.h"
 #include "log.h"
 #include "handles.h"
-#include "connect.h"
 #include "info.h"
 #include "queries.h"
 
@@ -64,7 +63,7 @@ SQLSMALLINT copy_current_catalog(esodbc_dbc_st *dbc, SQLWCHAR *dest,
 		ERRH(dbc, "failed to attach query to statement.");
 		goto end;
 	}
-	if (! SQL_SUCCEEDED(post_statement(stmt))) {
+	if (! SQL_SUCCEEDED(EsSQLExecute(stmt))) {
 		ERRH(dbc, "failed to post query.");
 		goto end;
 	}
@@ -306,7 +305,7 @@ SQLRETURN EsSQLTablesW(
 	assert(SQL_SUCCEEDED(ret)); /* can't return error */
 	ret = attach_sql(stmt, wbuf, pos);
 	if (SQL_SUCCEEDED(ret)) {
-		ret = post_statement(stmt);
+		ret = EsSQLExecute(stmt);
 	}
 	return ret;
 }
@@ -435,7 +434,7 @@ SQLRETURN EsSQLColumnsW
 	assert(SQL_SUCCEEDED(ret)); /* can't return error */
 	ret = attach_sql(stmt, wbuf, pos);
 	if (SQL_SUCCEEDED(ret)) {
-		ret = post_statement(stmt);
+		ret = EsSQLExecute(stmt);
 	}
 	return ret;
 }

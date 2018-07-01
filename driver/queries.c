@@ -19,6 +19,10 @@
 #include "connect.h"
 #include "info.h"
 
+#define JSON_VAL_NULL			"null"
+#define JSON_VAL_TRUE			"true"
+#define JSON_VAL_FALSE			"false"
+
 /* key names used in Elastic/SQL REST/JSON answers */
 #define JSON_ANSWER_COLUMNS		"columns"
 #define JSON_ANSWER_ROWS		"rows"
@@ -76,6 +80,153 @@ static size_t UJArraySize(UJObject obj)
 		}
 	}
 	return size;
+}
+
+#if (0x0300 <= ODBCVER)
+#	define ESSQL_TYPE_MIN		SQL_GUID
+#	define ESSQL_TYPE_MAX		SQL_INTERVAL_MINUTE_TO_SECOND
+#	define ESSQL_C_TYPE_MIN		SQL_C_UTINYINT
+#	define ESSQL_C_TYPE_MAX		SQL_C_INTERVAL_MINUTE_TO_SECOND
+#else /* ODBCVER < 0x0300 */
+/* would need to adjust the limits  */
+#	error "ODBC version not supported; must be 3.0 (0x0300) or higher"
+#endif /* 0x0300 <= ODBCVER  */
+
+#define ESSQL_NORM_RANGE		(ESSQL_TYPE_MAX - ESSQL_TYPE_MIN + 1)
+#define ESSQL_C_NORM_RANGE		(ESSQL_C_TYPE_MAX - ESSQL_C_TYPE_MIN + 1)
+
+/* conversion matrix SQL indexer */
+#define	ESSQL_TYPE_IDX(_t)		(_t - ESSQL_TYPE_MIN)
+/* conversion matrix C SQL indexer */
+#define	ESSQL_C_TYPE_IDX(_t)	(_t - ESSQL_C_TYPE_MIN)
+
+/* sparse SQL-C_SQL types conversion matrix, used for quick compatiblity check
+ * on columns and parameters binding */
+static BOOL compat_matrix[ESSQL_NORM_RANGE][ESSQL_C_NORM_RANGE] = {FALSE};
+
+/* Note: check is array-access unsafe: types IDs must be validated prior to
+ * checking compatibility (ex. meta type setting)  */
+#define ESODBC_TYPES_COMPATIBLE(_sql, _csql) \
+	/* if not within the ODBC range, it can only by a binary conversion;.. */ \
+	((ESSQL_TYPE_MAX < _sql && _csql == SQL_C_BINARY) || \
+		/* ..otheriwse use the conversion matrix */ \
+		compat_matrix[ESSQL_TYPE_IDX(_sql)][ESSQL_C_TYPE_IDX(_csql)])
+
+/* populates the compat_matrix as required in:
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/converting-data-from-c-to-sql-data-types */
+void queries_init()
+{
+	SQLSMALLINT i, j, sql, csql;
+	/*INDENT-OFF*/
+	SQLSMALLINT block_idx_sql[] = {SQL_CHAR, SQL_VARCHAR, SQL_LONGVARCHAR,
+			SQL_WCHAR, SQL_WVARCHAR, SQL_WLONGVARCHAR, SQL_DECIMAL,
+			SQL_NUMERIC, SQL_BIT, ESODBC_SQL_BOOLEAN, SQL_TINYINT,
+			SQL_SMALLINT, SQL_INTEGER, SQL_BIGINT, SQL_REAL, SQL_FLOAT,
+			SQL_DOUBLE
+		};
+	/*INDENT-ON*/
+	SQLSMALLINT block_idx_csql[] = {SQL_C_CHAR, SQL_C_WCHAR,
+			SQL_C_BIT, SQL_C_NUMERIC, SQL_C_STINYINT, SQL_C_UTINYINT,
+			SQL_C_TINYINT, SQL_C_SBIGINT, SQL_C_UBIGINT, SQL_C_SSHORT,
+			SQL_C_USHORT, SQL_C_SHORT, SQL_C_SLONG, SQL_C_ULONG,
+			SQL_C_LONG, SQL_C_FLOAT, SQL_C_DOUBLE, SQL_C_BINARY
+		};
+	SQLSMALLINT to_csql_interval[] = {SQL_CHAR, SQL_VARCHAR, SQL_LONGVARCHAR,
+			SQL_WCHAR, SQL_WVARCHAR, SQL_WLONGVARCHAR, SQL_DECIMAL,
+			SQL_NUMERIC, SQL_TINYINT, SQL_SMALLINT, SQL_INTEGER, SQL_BIGINT
+		};
+	SQLSMALLINT from_sql_interval[] = {SQL_C_CHAR, SQL_C_WCHAR,
+			SQL_C_BIT,SQL_C_NUMERIC, SQL_C_STINYINT, SQL_C_UTINYINT,
+			SQL_C_TINYINT, SQL_C_SBIGINT, SQL_C_UBIGINT, SQL_C_SSHORT,
+			SQL_C_USHORT, SQL_C_SHORT, SQL_C_SLONG, SQL_C_ULONG,
+			SQL_C_LONG
+		};
+	SQLSMALLINT sql_interval[] = {SQL_INTERVAL_MONTH, SQL_INTERVAL_YEAR,
+			SQL_INTERVAL_YEAR_TO_MONTH, SQL_INTERVAL_DAY,
+			SQL_INTERVAL_HOUR, SQL_INTERVAL_MINUTE, SQL_INTERVAL_SECOND,
+			SQL_INTERVAL_DAY_TO_HOUR, SQL_INTERVAL_DAY_TO_MINUTE,
+			SQL_INTERVAL_DAY_TO_SECOND, SQL_INTERVAL_HOUR_TO_MINUTE,
+			SQL_INTERVAL_HOUR_TO_SECOND, SQL_INTERVAL_MINUTE_TO_SECOND
+		};
+	SQLSMALLINT csql_interval[] = {SQL_C_INTERVAL_DAY, SQL_C_INTERVAL_HOUR,
+			SQL_C_INTERVAL_MINUTE, SQL_C_INTERVAL_SECOND,
+			SQL_C_INTERVAL_DAY_TO_HOUR, SQL_C_INTERVAL_DAY_TO_MINUTE,
+			SQL_C_INTERVAL_DAY_TO_SECOND, SQL_C_INTERVAL_HOUR_TO_MINUTE,
+			SQL_C_INTERVAL_HOUR_TO_SECOND,
+			SQL_C_INTERVAL_MINUTE_TO_SECOND, SQL_C_INTERVAL_MONTH,
+			SQL_C_INTERVAL_YEAR, SQL_C_INTERVAL_YEAR_TO_MONTH
+		};
+	SQLSMALLINT to_csql_datetime[] = {SQL_CHAR, SQL_VARCHAR, SQL_LONGVARCHAR,
+			SQL_WCHAR, SQL_WVARCHAR, SQL_WLONGVARCHAR, SQL_TYPE_DATE,
+			SQL_TYPE_TIME, SQL_TYPE_TIMESTAMP
+		};
+	SQLSMALLINT csql_datetime[] = {SQL_C_DATE, SQL_C_TYPE_DATE, SQL_C_TIME,
+			SQL_C_TYPE_TIME, SQL_C_TIMESTAMP, SQL_C_TYPE_TIMESTAMP
+		};
+
+	/* fill the compact block of TRUEs (growing from the upper left corner) */
+	for (i = 0; i < sizeof(block_idx_sql)/sizeof(*block_idx_sql) ; i ++) {
+		for (j = 0; j < sizeof(block_idx_csql)/sizeof(*block_idx_csql) ; j ++) {
+			sql = block_idx_sql[i];
+			csql = block_idx_csql[j];
+			compat_matrix[ESSQL_TYPE_IDX(sql)][ESSQL_C_TYPE_IDX(csql)] = TRUE;
+		}
+	}
+
+	/* SQL_C_ BINARY, CHAR, WCHAR and DEFAULT are comatible with all SQL types;
+	 * this will set also non-ODBC intersections (but it's convenient) */
+	for (sql = 0; sql < ESSQL_NORM_RANGE; sql ++) {
+		compat_matrix[sql][ESSQL_C_TYPE_IDX(SQL_C_CHAR)] = TRUE;
+		compat_matrix[sql][ESSQL_C_TYPE_IDX(SQL_C_WCHAR)] = TRUE;
+		compat_matrix[sql][ESSQL_C_TYPE_IDX(SQL_C_BINARY)] = TRUE;
+		compat_matrix[sql][ESSQL_C_TYPE_IDX(SQL_C_DEFAULT)] = TRUE;
+	}
+
+	/* ESODBC_SQL_NULL (NULL) is compabitle with all SQL_C types */
+	for (csql = 0; csql < ESSQL_C_NORM_RANGE; csql ++) {
+		compat_matrix[ESSQL_TYPE_IDX(ESODBC_SQL_NULL)][csql] = TRUE;
+	}
+
+	/* set conversions to INTERVAL_C */
+	for (i = 0; i < sizeof(to_csql_interval)/sizeof(*to_csql_interval); i ++) {
+		for (j = 0; j < sizeof(csql_interval)/sizeof(*csql_interval); j ++ ) {
+			sql = to_csql_interval[i];
+			csql = csql_interval[j];
+			compat_matrix[ESSQL_TYPE_IDX(sql)][ESSQL_C_TYPE_IDX(csql)] = TRUE;
+		}
+	}
+
+	/* set conversions from INTERVAL_SQL */
+	for (i = 0; i < sizeof(sql_interval)/sizeof(*sql_interval); i ++) {
+		for (j = 0; j < sizeof(from_sql_interval)/sizeof(*from_sql_interval);
+			j ++ ) {
+			sql = sql_interval[i];
+			csql = from_sql_interval[j];
+			compat_matrix[ESSQL_TYPE_IDX(sql)][ESSQL_C_TYPE_IDX(csql)] = TRUE;
+		}
+	}
+
+	/* set conversions between date-time types */
+	for (i = 0; i < sizeof(to_csql_datetime)/sizeof(*to_csql_datetime); i ++) {
+		for (j = 0; j < sizeof(csql_datetime)/sizeof(*csql_datetime); j ++ ) {
+			sql = to_csql_datetime[i];
+			csql = csql_datetime[j];
+			if (sql == SQL_TYPE_DATE &&
+				(csql == SQL_C_TIME || csql == SQL_C_TYPE_TIME)) {
+				continue;
+			}
+			if (sql == SQL_TYPE_TIME &&
+				(csql == SQL_C_DATE || csql == SQL_C_TYPE_DATE)) {
+				continue;
+			}
+			compat_matrix[ESSQL_TYPE_IDX(sql)][ESSQL_C_TYPE_IDX(csql)] = TRUE;
+		}
+	}
+
+	/* GUID conversion */
+	sql = SQL_GUID;
+	csql = SQL_C_GUID;
+	compat_matrix[ESSQL_TYPE_IDX(sql)][ESSQL_C_TYPE_IDX(csql)] = TRUE;
 }
 
 
@@ -447,7 +598,7 @@ end:
 /*
  * Attach an SQL query to the statment: malloc, convert, copy.
  */
-SQLRETURN attach_sql(esodbc_stmt_st *stmt,
+SQLRETURN TEST_API attach_sql(esodbc_stmt_st *stmt,
 	const SQLWCHAR *sql, /* SQL text statement */
 	size_t sqlcnt /* count of chars of 'sql' */)
 {
@@ -455,18 +606,6 @@ SQLRETURN attach_sql(esodbc_stmt_st *stmt,
 	int len;
 
 	DBGH(stmt, "attaching SQL `" LWPDL "` (%zd).", sqlcnt, sql, sqlcnt);
-#if 0 // FIXME
-	if (wcslen(sql) < 1256) {
-		if (wcsstr(sql, L"FROM test_emp")) {
-			sql = L"SELECT emp_no, first_name, last_name, birth_date, 2+3 AS foo FROM test_emp";
-			sqlcnt = wcslen(sql);
-			DBGH(stmt, "RE-attaching SQL `" LWPDL "` (%zd).", sqlcnt,
-				sql, sqlcnt);
-		}
-	}
-#endif
-
-	assert(! stmt->u8sql);
 
 	len = WCS2U8(sql, (int)sqlcnt, NULL, 0);
 	if (len <= 0) {
@@ -491,8 +630,9 @@ SQLRETURN attach_sql(esodbc_stmt_st *stmt,
 		RET_HDIAG(stmt, SQL_STATE_HY000, "UCS2/UTF8 conversion failure(2)", 0);
 	}
 
-	stmt->u8sql = u8;
-	stmt->sqllen = (size_t)len;
+	assert(! stmt->u8sql.str);
+	stmt->u8sql.str = u8;
+	stmt->u8sql.cnt = (size_t)len;
 
 	DBGH(stmt, "attached SQL `%.*s` (%zd).", len, u8, len);
 
@@ -504,12 +644,12 @@ SQLRETURN attach_sql(esodbc_stmt_st *stmt,
  */
 void detach_sql(esodbc_stmt_st *stmt)
 {
-	if (! stmt->u8sql) {
+	if (! stmt->u8sql.str) {
 		return;
 	}
-	free(stmt->u8sql);
-	stmt->u8sql = NULL;
-	stmt->sqllen = 0;
+	free(stmt->u8sql.str);
+	stmt->u8sql.str = NULL;
+	stmt->u8sql.cnt = 0;
 }
 
 
@@ -555,6 +695,7 @@ SQLRETURN EsSQLBindCol(
 	SQLRETURN ret;
 	esodbc_stmt_st *stmt = STMH(StatementHandle);
 	esodbc_desc_st *ard = stmt->ard;
+	SQLSMALLINT ard_prev_count;
 
 	if (BufferLength < 0) {
 		ERRH(stmt, "invalid negative BufferLength: %d.", BufferLength);
@@ -570,28 +711,29 @@ SQLRETURN EsSQLBindCol(
 		FIXME;
 	}
 
+	ard_prev_count = ard->count;
 	/* "if the value in the ColumnNumber argument exceeds the value of
 	 * SQL_DESC_COUNT, calls SQLSetDescField to increase the value of
 	 * SQL_DESC_COUNT to ColumnNumber." */
-	if (ard->count < ColumnNumber) {
+	if (ard_prev_count < ColumnNumber) {
 		ret = EsSQLSetDescFieldW(ard, NO_REC_NR, SQL_DESC_COUNT,
 				(SQLPOINTER)(uintptr_t)ColumnNumber, SQL_IS_SMALLINT);
-		if (ret != SQL_SUCCESS) {
+		if (SQL_SUCCEEDED(ret)) {
+			/* value set to negative if count needs to be restored to it */
+			ard_prev_count = -ard_prev_count;
+		} else {
 			goto copy_ret;
 		}
 	}
 
-	/* set concise type (or verbose for datetime/interval types) */
+	/* set types (or verbose for datetime/interval types) */
 	ret = EsSQLSetDescFieldW(ard, ColumnNumber, SQL_DESC_CONCISE_TYPE,
 			(SQLPOINTER)(intptr_t)TargetType, SQL_IS_SMALLINT);
 	if (ret != SQL_SUCCESS) {
 		goto copy_ret;
 	}
 
-	// TODO: "Sets one or more of SQL_DESC_LENGTH, SQL_DESC_PRECISION,
-	// SQL_DESC_SCALE, and SQL_DESC_DATETIME_INTERVAL_PRECISION, as
-	// appropriate for TargetType."
-	// TODO: Cautions Regarding SQL_DEFAULT
+	// TODO: § "Cautions Regarding SQL_DEFAULT"
 
 	/* "Sets the SQL_DESC_OCTET_LENGTH field to the value of BufferLength." */
 	ret = EsSQLSetDescFieldW(ard, ColumnNumber, SQL_DESC_OCTET_LENGTH,
@@ -618,7 +760,7 @@ SQLRETURN EsSQLBindCol(
 	}
 
 	/* "Sets the SQL_DESC_DATA_PTR field to the value of TargetValue."
-	 * Note: needs to be last set field, as setting other fields unbind. */
+	 * Note: needs to be last set field, as setting other fields unbinds. */
 	ret = EsSQLSetDescFieldW(ard, ColumnNumber, SQL_DESC_DATA_PTR,
 			TargetValue, SQL_IS_POINTER);
 	if (ret != SQL_SUCCESS) {
@@ -628,12 +770,26 @@ SQLRETURN EsSQLBindCol(
 	/* every binding resets conversion flag */
 	stmt->sql2c_conversion = CONVERSION_UNCHECKED;
 
+	DBGH(stmt, "succesfully bound column #%hu of type %hd, "
+		"buffer@0x%p of length: %lld, LenInd@0x%p", ColumnNumber, TargetType,
+		TargetValue, BufferLength, StrLen_or_Ind);
+
 	return SQL_SUCCESS;
 
 copy_ret:
 	/* copy error at top handle level, where it's going to be inquired from */
 	HDIAG_COPY(ard, stmt);
-	return ret;
+
+	ERRH(stmt, "binding parameter failed -- resetting ARD count");
+	if (ard_prev_count < 0) {
+		ret = EsSQLSetDescFieldW(ard, NO_REC_NR, SQL_DESC_COUNT,
+				(SQLPOINTER)(uintptr_t)-ard_prev_count, SQL_IS_SMALLINT);
+		if (! SQL_SUCCEEDED(ret)) {
+			ERRH(stmt, "failed to reset ARD count back to %hd - descriptor "
+				"might be left in inconsistent state!", -ard_prev_count);
+		}
+	}
+	RET_STATE(stmt->hdr.diag.state);
 }
 
 /*
@@ -811,7 +967,7 @@ static inline SQLSMALLINT get_c_target_type(esodbc_rec_st *arec,
 	} else {
 		ctype = irec->es_type->c_concise_type;
 	}
-	DBGH(arec->desc, "target data type: %d.", ctype);
+	DBGH(arec->desc, "target data C type: %hd.", ctype);
 	return ctype;
 }
 
@@ -2078,7 +2234,8 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 #undef SET_ROW_DIAG
 }
 
-static BOOL conv_supported(SQLSMALLINT sqltype, SQLSMALLINT ctype)
+/* TODO: implementation for the below */
+static BOOL conv_implemented(SQLSMALLINT sqltype, SQLSMALLINT ctype)
 {
 	switch (ctype) {
 		case SQL_C_GUID:
@@ -2096,115 +2253,14 @@ static BOOL conv_supported(SQLSMALLINT sqltype, SQLSMALLINT ctype)
 		case SQL_C_INTERVAL_MONTH:
 		case SQL_C_INTERVAL_YEAR:
 		case SQL_C_INTERVAL_YEAR_TO_MONTH:
-
 			// case SQL_C_TYPE_TIMESTAMP_WITH_TIMEZONE:
 			// case SQL_C_TYPE_TIME_WITH_TIMEZONE:
 			return FALSE;
 	}
-	return TRUE;
-}
-
-/* implements the rotation of the matrix in:
- * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/converting-data-from-c-to-sql-data-types */
-static BOOL conv_allowed(SQLSMALLINT sqltype, SQLSMALLINT ctype)
-{
-	switch (ctype) {
-		/* application will use implementation's type (irec's) */
-		case SQL_C_DEFAULT:
-		/* anything's convertible to [w]char & binary */
-		case SQL_C_CHAR:
-		case SQL_C_WCHAR:
-		case SQL_C_BINARY:
-			return TRUE;
-
-		/* GUID (outlier) is only convertible to same time in both sets */
-		case SQL_C_GUID:
-			return sqltype == SQL_GUID;
-	}
 
 	switch (sqltype) {
-		case SQL_CHAR:
-		case SQL_VARCHAR:
-		case SQL_LONGVARCHAR:
-		case SQL_WCHAR:
-		case SQL_WVARCHAR:
-		case SQL_WLONGVARCHAR:
-			break; /* it's not SQL_C_GUID, checked for above */
+		case SQL_C_GUID:
 
-		case SQL_DECIMAL:
-		case SQL_NUMERIC:
-		case SQL_SMALLINT:
-		case SQL_INTEGER:
-		case SQL_TINYINT:
-		case SQL_BIGINT:
-			switch (ctype) {
-				case SQL_C_TYPE_DATE:
-				case SQL_C_TYPE_TIME:
-				case SQL_C_TYPE_TIMESTAMP:
-				case SQL_C_GUID:
-					return FALSE;
-			}
-			break;
-
-		case SQL_BIT:
-		case SQL_REAL:
-		case SQL_FLOAT:
-		case SQL_DOUBLE:
-			switch (ctype) {
-				case SQL_C_TYPE_DATE:
-				case SQL_C_TYPE_TIME:
-				case SQL_C_TYPE_TIMESTAMP:
-				case SQL_C_GUID:
-
-				case SQL_C_INTERVAL_MONTH:
-				case SQL_C_INTERVAL_YEAR:
-				case SQL_C_INTERVAL_YEAR_TO_MONTH:
-				case SQL_C_INTERVAL_DAY:
-				case SQL_C_INTERVAL_HOUR:
-				case SQL_C_INTERVAL_MINUTE:
-				case SQL_C_INTERVAL_SECOND:
-				case SQL_C_INTERVAL_DAY_TO_HOUR:
-				case SQL_C_INTERVAL_DAY_TO_MINUTE:
-				case SQL_C_INTERVAL_DAY_TO_SECOND:
-				case SQL_C_INTERVAL_HOUR_TO_MINUTE:
-				case SQL_C_INTERVAL_HOUR_TO_SECOND:
-				case SQL_C_INTERVAL_MINUTE_TO_SECOND:
-					return FALSE;
-			}
-			break;
-
-		case SQL_BINARY:
-		case SQL_VARBINARY:
-		case SQL_LONGVARBINARY:
-			return FALSE; /* it's not SQL_C_BINARY, checked for above */
-
-
-		case SQL_TYPE_DATE:
-			switch (ctype) {
-				case SQL_C_TYPE_DATE:
-				case SQL_C_TYPE_TIMESTAMP:
-					return TRUE;
-			}
-			return FALSE;
-		case SQL_TYPE_TIME:
-			switch (ctype) {
-				case SQL_C_TYPE_TIME:
-				case SQL_C_TYPE_TIMESTAMP:
-					return TRUE;
-			}
-			return FALSE;
-		case SQL_TYPE_TIMESTAMP:
-			switch (ctype) {
-				case SQL_C_TYPE_DATE:
-				case SQL_C_TYPE_TIME:
-				case SQL_C_TYPE_TIMESTAMP:
-					return TRUE;
-			}
-			return FALSE;
-
-		case SQL_INTERVAL_MONTH:
-		case SQL_INTERVAL_YEAR:
-		case SQL_INTERVAL_YEAR_TO_MONTH:
 		case SQL_INTERVAL_DAY:
 		case SQL_INTERVAL_HOUR:
 		case SQL_INTERVAL_MINUTE:
@@ -2215,26 +2271,17 @@ static BOOL conv_allowed(SQLSMALLINT sqltype, SQLSMALLINT ctype)
 		case SQL_INTERVAL_HOUR_TO_MINUTE:
 		case SQL_INTERVAL_HOUR_TO_SECOND:
 		case SQL_INTERVAL_MINUTE_TO_SECOND:
-			switch (ctype) {
-				case SQL_C_BIT:
-				case SQL_C_TINYINT:
-				case SQL_C_STINYINT:
-				case SQL_C_UTINYINT:
-				case SQL_C_SBIGINT:
-				case SQL_C_UBIGINT:
-				case SQL_C_SHORT:
-				case SQL_C_SSHORT:
-				case SQL_C_USHORT:
-				case SQL_C_LONG:
-				case SQL_C_SLONG:
-				case SQL_C_ULONG:
-					return TRUE;
-			}
+		case SQL_INTERVAL_MONTH:
+		case SQL_INTERVAL_YEAR:
+		case SQL_INTERVAL_YEAR_TO_MONTH:
+			// case SQL_TYPE_TIMESTAMP_WITH_TIMEZONE:
+			// case SQL_TYPE_TIME_WITH_TIMEZONE:
 			return FALSE;
-
 	}
+
 	return TRUE;
 }
+
 
 /* check if data types in returned columns are compabile with buffer types
  * bound for those columns */
@@ -2259,14 +2306,15 @@ static int sql2c_convertible(esodbc_stmt_st *stmt)
 		}
 		irec = &ird->recs[i];
 
-		if (! conv_allowed(irec->concise_type, arec->type)) {
-			ERRH(stmt, "conversion not allowed on column %d types: IRD: %d, "
-				"ARD: %d.", i, irec->es_type->c_concise_type, arec->type);
+		if (! ESODBC_TYPES_COMPATIBLE(irec->concise_type,
+				arec->concise_type)) {
+			ERRH(stmt, "type conversion not possible on column %d: IRD: %hd, "
+				"ARD: %hd.", i, irec->concise_type, arec->concise_type);
 			return CONVERSION_VIOLATION;
 		}
-		if (! conv_supported(irec->concise_type, arec->type)) {
-			ERRH(stmt, "conversion not supported on column %d types: IRD: %d, "
-				"ARD: %d.", i, irec->es_type->c_concise_type, arec->type);
+		if (! conv_implemented(irec->concise_type, arec->concise_type)) {
+			ERRH(stmt, "conversion not supported on column %d types: IRD: %hd,"
+				" ARD: %hd.", i, irec->concise_type, arec->concise_type);
 			return CONVERSION_UNSUPPORTED;
 		}
 	}
@@ -2390,8 +2438,8 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 			DBGH(stmt, "ES/app data/buffer types found compatible.");
 	}
 
-	DBGH(stmt, "(`%.*s`); cursor @ %zd / %zd.", stmt->sqllen,
-		stmt->u8sql, stmt->rset.vrows, stmt->rset.nrows);
+	DBGH(stmt, "(`" LCPDL "`); cursor @ %zd / %zd.", LCSTR(&stmt->u8sql),
+		stmt->rset.vrows, stmt->rset.nrows);
 
 	DBGH(stmt, "rowset max size: %d.", ard->array_size);
 	errors = 0;
@@ -2402,7 +2450,7 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 				"vrows=%zd.", stmt->rset.nrows, stmt->rset.vrows);
 			if (stmt->rset.eccnt) { /*do I have an Elastic cursor? */
 				stmt->rset.array_pos = i;
-				ret = post_statement(stmt);
+				ret = EsSQLExecute(stmt);
 				if (! SQL_SUCCEEDED(ret)) {
 					ERRH(stmt, "failed to fetch next results.");
 					return ret;
@@ -2567,6 +2615,693 @@ SQLRETURN EsSQLPrepareW
 }
 
 
+static SQLRETURN set_param_decdigits(esodbc_rec_st *irec,
+	SQLUSMALLINT param_no, SQLSMALLINT decdigits)
+{
+	switch (irec->meta_type) {
+		/* for "SQL_TYPE_TIME, SQL_TYPE_TIMESTAMP, SQL_INTERVAL_SECOND,
+		 * SQL_INTERVAL_DAY_TO_SECOND, SQL_INTERVAL_HOUR_TO_SECOND, or
+		 * SQL_INTERVAL_MINUTE_TO_SECOND, the SQL_DESC_PRECISION field of the
+		 * IPD is set to DecimalDigits." */
+		case METATYPE_DATETIME:
+			if (irec->concise_type == SQL_TYPE_DATE) {
+				break;
+			}
+		case METATYPE_INTERVAL_WSEC:
+			return EsSQLSetDescFieldW(irec->desc, param_no, SQL_DESC_PRECISION,
+					(SQLPOINTER)(intptr_t)decdigits, SQL_IS_SMALLINT);
+
+		/* for " SQL_NUMERIC or SQL_DECIMAL, the SQL_DESC_SCALE field of the
+		 * IPD is set to DecimalDigits." */
+		case METATYPE_EXACT_NUMERIC:
+			if (irec->concise_type == SQL_DECIMAL ||
+				irec->concise_type == SQL_NUMERIC) {
+				return EsSQLSetDescFieldW(irec->desc, param_no, SQL_DESC_SCALE,
+						(SQLPOINTER)(intptr_t)decdigits, SQL_IS_SMALLINT);
+			}
+			break; // formal
+
+		/* "For all other data types, the DecimalDigits argument is ignored."
+		 * */
+		default:
+			;
+	}
+
+	return SQL_SUCCESS;
+}
+
+static SQLRETURN set_param_size(esodbc_rec_st *irec,
+	SQLUSMALLINT param_no, SQLULEN size)
+{
+	switch (irec->meta_type) {
+		/* for "SQL_CHAR, SQL_VARCHAR, SQL_LONGVARCHAR, SQL_BINARY,
+		 * SQL_VARBINARY, SQL_LONGVARBINARY, or one of the concise SQL
+		 * datetime or interval data types, the SQL_DESC_LENGTH field of the
+		 * IPD is set to the value of [s]ize." */
+		case METATYPE_STRING:
+		case METATYPE_BIN:
+		case METATYPE_DATETIME:
+		case METATYPE_INTERVAL_WSEC:
+		case METATYPE_INTERVAL_WOSEC:
+			return EsSQLSetDescFieldW(irec->desc, param_no, SQL_DESC_LENGTH,
+					(SQLPOINTER)(uintptr_t)size, SQL_IS_UINTEGER);
+
+		/* for "SQL_DECIMAL, SQL_NUMERIC, SQL_FLOAT, SQL_REAL, or SQL_DOUBLE,
+		 * the SQL_DESC_PRECISION field of the IPD is set to the value of
+		 * [s]ize." */
+		case METATYPE_EXACT_NUMERIC:
+			if (irec->concise_type != SQL_DECIMAL &&
+				irec->concise_type != SQL_NUMERIC) {
+				break;
+			}
+		case METATYPE_FLOAT_NUMERIC:
+			return EsSQLSetDescFieldW(irec->desc, param_no, SQL_DESC_PRECISION,
+					/* cast: ULEN -> SMALLINT; XXX: range check? */
+					(SQLPOINTER)(uintptr_t)size, SQL_IS_SMALLINT);
+
+		default:
+			;/* "For other data types, the [s]ize argument is ignored." */
+	}
+	return SQL_SUCCESS;
+}
+
+/* Find the ES/SQL type given in es_type; for ID matching multiple types
+ * (scaled/half_float and keyword/text) use the best matching precision, which
+ * is the smallest, that's still matching (<=) the given one. This assumes the
+ * types are ordered by it (as per the spec). */
+static esodbc_estype_st *lookup_es_type(esodbc_dbc_st *dbc,
+	SQLSMALLINT es_type, SQLSMALLINT precision)
+{
+	SQLULEN i;
+
+	for (i = 0; i < dbc->no_types; i ++) {
+		if (dbc->es_types[i].data_type == es_type) {
+			if (precision <= 0) {
+				return &dbc->es_types[i];
+			} else {
+				if (precision <= dbc->es_types[i].column_size) {
+					return &dbc->es_types[i];
+				}
+				if (es_type == SQL_VARCHAR &&
+					dbc->es_types[i].column_size == dbc->max_varchar_size) {
+					return &dbc->es_types[i];
+				}
+				if (es_type == SQL_FLOAT &&
+					dbc->es_types[i].column_size == dbc->max_float_size) {
+					return &dbc->es_types[i];
+				}
+			}
+		}
+	}
+	WARNH(dbc, "no ES/SQL type found for ID %hd and precisionision %hd.",
+		es_type, precision);
+	return NULL;
+}
+
+/* find the matching ES/SQL type for app's SQL type, which can be an exact
+ * math against ES/SQL types, but also some other valid SQL type. */
+static esodbc_estype_st *match_es_type(esodbc_rec_st *arec,
+	esodbc_rec_st *irec)
+{
+	SQLULEN i;
+	esodbc_dbc_st *dbc = irec->desc->hdr.stmt->hdr.dbc;
+
+	for (i = 0; i < dbc->no_types; i ++) {
+		if (dbc->es_types[i].data_type == irec->concise_type) {
+			switch (irec->concise_type) {
+				/* For SQL types mappign to more than one ES/SQL type, choose
+				 * the ES/SQL type with smallest "size" that covers user given
+				 * precision OR that has maximum precision (in case user's is
+				 * larger than max ES/SQL offers. */
+				case SQL_FLOAT: /* HALF_FLOAT, SCALED_FLOAT */
+					if (irec->precision <= dbc->es_types[i].column_size ||
+						dbc->es_types[i].column_size == dbc->max_float_size) {
+						return &dbc->es_types[i];
+					}
+				case SQL_VARCHAR: /* KEYWORD, TEXT */
+					if (irec->precision <= dbc->es_types[i].column_size ||
+						dbc->es_types[i].column_size == dbc->max_varchar_size) {
+						return &dbc->es_types[i];
+					}
+				case ESODBC_SQL_UNSUPPORTED:
+					/* Fail early: type is used by ES/SQL to indicate presence
+					 * of objects that it can't SQL'ize: it can't be a param */
+					ERRH(irec->desc, "can't convert type 'UNSUPPORTED'");
+					SET_HDIAG(irec->desc, SQL_STATE_HY004, "'UNSUPPORTED'"
+						"can't be used as parameter type", 0);
+					return NULL;
+
+				case ESODBC_SQL_OBJECT: /* + ESODBC_SQL_NESTED */
+				/* the two types are indistinguishable: match first */
+				/* ESODBC_SQL_NULL mapps over SQL_UNKNOWN_TYPE */
+				default:
+					/* unequivocal match */
+					return &dbc->es_types[i];
+			}
+		}
+	}
+
+	/* app specified an SQL type with no direct mapping to an ES/SQL type */
+	switch (irec->meta_type) {
+		case METATYPE_EXACT_NUMERIC:
+			assert(irec->concise_type == SQL_DECIMAL ||
+				irec->concise_type == SQL_NUMERIC);
+			return lookup_es_type(dbc, SQL_FLOAT, irec->precision);
+
+		case METATYPE_STRING:
+			return lookup_es_type(dbc, SQL_VARCHAR, irec->precision);
+		case METATYPE_BIN:
+			return lookup_es_type(dbc, SQL_VARBINARY, /*no prec*/0);
+		case METATYPE_DATETIME:
+			assert(irec->concise_type == SQL_TYPE_DATE ||
+				irec->concise_type == SQL_TYPE_TIME);
+			return lookup_es_type(dbc, SQL_TYPE_TIMESTAMP, /*no prec*/0);
+		case METATYPE_BIT:
+			return lookup_es_type(dbc, ESODBC_SQL_BOOLEAN, /*no prec*/0);
+		case METATYPE_UID:
+			return lookup_es_type(dbc, SQL_VARCHAR, /*no prec: TEXT*/0);
+
+		case METATYPE_INTERVAL_WSEC:
+		case METATYPE_INTERVAL_WOSEC:
+		/* TODO: implement them once avail in ES */
+
+		case METATYPE_FLOAT_NUMERIC: /* should have matched already */
+		case METATYPE_MAX: /* -> ESODBC_SQL_NULL, should've matched already */
+		case METATYPE_UNKNOWN:
+		default:
+			BUGH(irec->desc, "unexpected meta type: %d.", irec->meta_type);
+			SET_HDIAG(irec->desc, SQL_STATE_HY000,
+				"bug converting parameters", 0);
+	}
+
+	return NULL;
+}
+
+/*
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/sending-long-data
+ * Note: must use EsSQLSetDescFieldW() for param data-type setting, to call
+ * set_defaults_from_type(), to meet the "Other fields implicitly set"
+ * requirements from the page linked in set_defaults_from_type() comments.
+ *
+ * "Bindings remain in effect until the application calls SQLBindParameter
+ * again, calls SQLFreeStmt with the SQL_RESET_PARAMS option, or calls
+ * SQLSetDescField to set the SQL_DESC_COUNT header field of the APD to 0."
+ */
+SQLRETURN EsSQLBindParameter(
+	SQLHSTMT        StatementHandle,
+	SQLUSMALLINT    ParameterNumber,
+	SQLSMALLINT     InputOutputType,
+	SQLSMALLINT     ValueType,
+	SQLSMALLINT     ParameterType,
+	SQLULEN         ColumnSize,
+	SQLSMALLINT     DecimalDigits,
+	SQLPOINTER      ParameterValuePtr,
+	SQLLEN          BufferLength,
+	SQLLEN         *StrLen_or_IndPtr)
+{
+	SQLRETURN ret;
+	esodbc_stmt_st *stmt = STMH(StatementHandle);
+	esodbc_desc_st *desc;
+	SQLSMALLINT apd_prev_count, ipd_prev_count;
+	esodbc_rec_st *irec, *arec;
+
+	if (InputOutputType != SQL_PARAM_INPUT) {
+		ERRH(stmt, "parameter IO-type (%hd) not supported.", InputOutputType);
+		RET_HDIAG(stmt, SQL_STATE_HYC00, "parameter IO-type not supported", 0);
+	}
+	/* Note: "If StrLen_or_IndPtr is a null pointer, the driver assumes that
+	 * all input parameter values are non-NULL and that character and binary
+	 * data is null-terminated." */
+	if (StrLen_or_IndPtr && *StrLen_or_IndPtr < SQL_NULL_DATA) {
+		ERRH(stmt, "data-at-exec not supported (LenInd=%lld).",
+			*StrLen_or_IndPtr);
+		RET_HDIAG(stmt, SQL_STATE_HYC00, "data-at-exec not supported", 0);
+	}
+
+	apd_prev_count = stmt->apd->count;
+	ipd_prev_count = stmt->ipd->count;
+
+	/*
+	 * APD descriptor setting.
+	 */
+	desc = stmt->apd;
+
+	if (apd_prev_count < ParameterNumber) {
+		ret = EsSQLSetDescFieldW(desc, NO_REC_NR, SQL_DESC_COUNT,
+				/* ParameterNumber is unsigned, but SQL_DESC_COUNT is signed */
+				(SQLPOINTER)(uintptr_t)ParameterNumber, SQL_IS_SMALLINT);
+		if (! SQL_SUCCEEDED(ret)) {
+			goto copy_diag;
+		}
+	}
+
+	/* set types (or verbose for datetime/interval types) */
+	ret = EsSQLSetDescFieldW(desc, ParameterNumber, SQL_DESC_CONCISE_TYPE,
+			(SQLPOINTER)(intptr_t)ValueType, SQL_IS_SMALLINT);
+	if (! SQL_SUCCEEDED(ret)) {
+		goto copy_diag;
+	}
+
+	/* "Sets the SQL_DESC_OCTET_LENGTH field to the value of BufferLength." */
+	ret = EsSQLSetDescFieldW(desc, ParameterNumber, SQL_DESC_OCTET_LENGTH,
+			(SQLPOINTER)(intptr_t)BufferLength, SQL_IS_INTEGER);
+	if (! SQL_SUCCEEDED(ret)) {
+		goto copy_diag;
+	}
+
+	/* "Sets the SQL_DESC_OCTET_LENGTH_PTR field to the value of
+	 * StrLen_or_Ind." */
+	ret = EsSQLSetDescFieldW(desc, ParameterNumber, SQL_DESC_OCTET_LENGTH_PTR,
+			StrLen_or_IndPtr,
+			SQL_LEN_BINARY_ATTR((SQLINTEGER)sizeof(StrLen_or_IndPtr)));
+	if (! SQL_SUCCEEDED(ret)) {
+		goto copy_diag;
+	}
+
+	/* "Sets the SQL_DESC_INDICATOR_PTR field to the value of
+	 * StrLen_or_Ind."
+	 * "The SQL_DESC_ARRAY_STATUS_PTR header field in the APD is used to
+	 * ignore parameters." (IPD's indicate execution error status.) */
+	ret = EsSQLSetDescFieldW(desc, ParameterNumber, SQL_DESC_INDICATOR_PTR,
+			StrLen_or_IndPtr,
+			SQL_LEN_BINARY_ATTR((SQLINTEGER)sizeof(StrLen_or_IndPtr)));
+	if (! SQL_SUCCEEDED(ret)) {
+		goto copy_diag;
+	}
+
+	/* "Sets the SQL_DESC_DATA_PTR field to the value of ParameterValue."
+	 * Note: needs to be last set field, as setting other fields unbinds. */
+	ret = EsSQLSetDescFieldW(desc, ParameterNumber, SQL_DESC_DATA_PTR,
+			ParameterValuePtr, SQL_IS_POINTER);
+	if (! SQL_SUCCEEDED(ret)) {
+		goto copy_diag;
+	}
+
+	/*
+	 * IPD descriptor setting.
+	 */
+	desc = stmt->ipd;
+
+	if (ipd_prev_count < ParameterNumber) {
+		ret = EsSQLSetDescFieldW(desc, NO_REC_NR, SQL_DESC_COUNT,
+				/* ParameterNumber is unsigned, but SQL_DESC_COUNT is signed */
+				(SQLPOINTER)(uintptr_t)ParameterNumber, SQL_IS_SMALLINT);
+		if (! SQL_SUCCEEDED(ret)) {
+			goto copy_diag;
+		}
+	}
+
+	/* set types (or verbose for datetime/interval types) */
+	ret = EsSQLSetDescFieldW(desc, ParameterNumber, SQL_DESC_CONCISE_TYPE,
+			(SQLPOINTER)(intptr_t)ParameterType, SQL_IS_SMALLINT);
+	if (! SQL_SUCCEEDED(ret)) {
+		goto copy_diag;
+	}
+
+	/* "sets the SQL_DESC_PARAMETER_TYPE field of the IPD." */
+	ret = EsSQLSetDescFieldW(desc, ParameterNumber, SQL_DESC_PARAMETER_TYPE,
+			(SQLPOINTER)(intptr_t)InputOutputType, SQL_IS_SMALLINT);
+	if (! SQL_SUCCEEDED(ret)) {
+		goto copy_diag;
+	}
+
+	irec = get_record(desc, ParameterNumber, /*grow?*/FALSE);
+	assert(irec);
+
+	ret = set_param_decdigits(irec, ParameterNumber, DecimalDigits);
+	if (! SQL_SUCCEEDED(ret)) {
+		goto copy_diag;
+	}
+
+	ret = set_param_size(irec, ParameterNumber, ColumnSize);
+	if (! SQL_SUCCEEDED(ret)) {
+		goto copy_diag;
+	}
+
+	/*
+	 * data conversion settings
+	 */
+
+	arec = get_record(stmt->apd, ParameterNumber, /*grow?*/FALSE);
+	assert(arec);
+
+	if (! conv_implemented(irec->concise_type, arec->concise_type)) {
+		ERRH(stmt, "type conversion not supported on parameter #%hd:"
+			" IPD: %hd, APD: %hd.", ParameterNumber,
+			irec->concise_type, arec->concise_type);
+		SET_HDIAG(desc, SQL_STATE_HYC00,
+			"Optional feature not implemented", 0);
+		goto copy_diag;
+	}
+
+	irec->es_type = match_es_type(arec, irec);
+	if (! irec->es_type) {
+		/* validation shoudl have been done earlier on meta type setting
+		 * (SQL_DESC_CONCISE_TYPE) */
+		BUGH(stmt, "failed to match valid SQL type %hd.", irec->concise_type);
+		SET_HDIAG(desc, SQL_STATE_HY000, "parameter binding bug", 0);
+		goto copy_diag;
+	}
+	DBGH(stmt, "SQL type %hd matched to `" LCPDL "` ES/SQL type.",
+		ParameterType, LCSTR(&irec->es_type->type_name_c));
+
+	/* check types compatibility once types have been set and validated */
+	if (! ESODBC_TYPES_COMPATIBLE(irec->concise_type, arec->concise_type)) {
+		ERRH(desc, "type conversion not possible on parameter #%hd: "
+			"IPD: %hd, APD: %hd.", ParameterNumber,
+			irec->concise_type, arec->concise_type);
+		SET_HDIAG(desc, SQL_STATE_07006, "Restricted data type "
+			"attribute violation", 0);
+		goto copy_diag;
+	}
+
+	DBGH(stmt, "succesfully bound parameter #%hu, IO-type: %hd, "
+		"SQL C type: %hd, SQL type: %hd, size: %llu, decdigits: %hd, "
+		"buffer@0x%p, length: %lld, LenInd@0x%p.", ParameterNumber,
+		InputOutputType, ValueType, ParameterType, ColumnSize, DecimalDigits,
+		ParameterValuePtr, BufferLength, StrLen_or_IndPtr);
+
+	return SQL_SUCCESS;
+
+copy_diag:
+	/* copy initial error at top handle level, where it's going to be "
+	 * "inquired from (more might occur below) */
+	HDIAG_COPY(desc, stmt);
+
+	ERRH(stmt, "binding parameter failed -- resetting xPD counts.");
+	/* "If the call to SQLBindParameter fails, [...] the SQL_DESC_COUNT field
+	 * of the APD" [...] "and the SQL_DESC_COUNT field of the IPD is
+	 * unchanged." */
+	if (apd_prev_count != stmt->apd->count) {
+		ret = EsSQLSetDescFieldW(stmt->apd, NO_REC_NR, SQL_DESC_COUNT,
+				(SQLPOINTER)(uintptr_t)-apd_prev_count, SQL_IS_SMALLINT);
+		if (! SQL_SUCCEEDED(ret)) {
+			ERRH(stmt, "failed to reset APD count back to %hd - descriptor "
+				"might be left in inconsistent state!", -apd_prev_count);
+		}
+	}
+	if (ipd_prev_count != stmt->ipd->count) {
+		ret = EsSQLSetDescFieldW(stmt->ipd, NO_REC_NR, SQL_DESC_COUNT,
+				(SQLPOINTER)(uintptr_t)-ipd_prev_count, SQL_IS_SMALLINT);
+		if (! SQL_SUCCEEDED(ret)) {
+			ERRH(stmt, "failed to reset IPD count back to %hd - descriptor "
+				"might be left in inconsistent state!", -ipd_prev_count);
+		}
+	}
+	/* return original failure code */
+	RET_STATE(stmt->hdr.diag.state);
+}
+
+
+static inline SQLRETURN convert_null(esodbc_rec_st *arec, esodbc_rec_st *irec,
+	char *dest, size_t *len)
+{
+	assert(irec->concise_type == ESODBC_SQL_NULL);
+	if (dest) {
+		memcpy(dest, JSON_VAL_NULL, sizeof(JSON_VAL_NULL) - /*\0*/1);
+	}
+	*len = sizeof(JSON_VAL_NULL) - /*\0*/1;
+	return SQL_SUCCESS;
+}
+
+static SQLRETURN convert_boolean(esodbc_rec_st *arec, esodbc_rec_st *irec,
+	char *dest, size_t *len)
+{
+	switch (arec->concise_type) {
+	}
+
+	if (dest) {
+		memcpy(dest, JSON_VAL_FALSE, sizeof(JSON_VAL_FALSE) - /*\0*/1);
+	}
+	*len = sizeof(JSON_VAL_FALSE) - 1;
+	return SQL_SUCCESS;
+}
+
+static SQLRETURN convert_param(esodbc_rec_st *arec, esodbc_rec_st *irec,
+	char *dest, size_t *len)
+{
+	switch (irec->es_type->data_type) {
+		/* JSON null */
+		case SQL_UNKNOWN_TYPE: /* NULL */
+			return convert_null(arec, irec, dest, len);
+
+		case ESODBC_SQL_BOOLEAN: /* BOOLEAN */
+			return convert_boolean(arec, irec, dest, len);
+
+		/* JSON long */
+		case SQL_TINYINT: /* BYTE */
+		case SQL_BIGINT: /* LONG */
+		case SQL_INTEGER: /* INTEGER */
+		case SQL_SMALLINT: /* SHORT */
+
+		/* JSON double */
+		case SQL_FLOAT: /* HALF_FLOAT, SCALED_FLOAT */
+		case SQL_REAL: /* FLOAT */
+		case SQL_DOUBLE: /* DOUBLE */
+
+		/* JSON (Base64 encoded) string */
+		case ESODBC_SQL_OBJECT: /* OBJECT, NESTED */
+		case SQL_VARBINARY: /* BINARY */
+		/* JSON string */
+		case SQL_VARCHAR: /* KEYWORD, TEXT */
+		case SQL_TYPE_TIMESTAMP: /* DATE */
+			break;
+
+		/* ESODBC_SQL_UNSUPPORTED: bug, should have been cought earlier */
+		default:
+			BUGH(arec->desc->hdr.stmt, "unexpected ES/SQL type %hd.",
+				irec->es_type->data_type);
+			RET_HDIAG(arec->desc->hdr.stmt, SQL_STATE_HY000,
+				"parameter conversion bug", 0);
+	}
+	// TODO: json_escape
+	if (dest) {
+		memcpy(dest, "123", 3);
+	}
+	*len = 3;
+	return SQL_SUCCESS;
+}
+
+/* Forms the JSON array with params:
+ * [{"type": "<ES/SQL type name>", "value": <param value>}(,etc)*] */
+static SQLRETURN serialize_params(esodbc_stmt_st *stmt, char *dest,
+	size_t *len)
+{
+	/* JSON keys for building one parameter object */
+#	define JSON_KEY_TYPE	"{\"type\": \""
+#	define JSON_KEY_VALUE	"\", \"value\": "
+
+	esodbc_rec_st *arec, *irec;
+	SQLRETURN ret;
+	SQLSMALLINT i;
+	size_t l, pos;
+
+	pos = 0;
+	if (dest) {
+		dest[pos] = '[';
+	}
+	pos ++;
+
+
+	for (i = 0; i < stmt->apd->count; i ++) {
+		arec = get_record(stmt->apd, i + 1, /*grow?*/FALSE);
+		irec = get_record(stmt->ipd, i + 1, /*grow?*/FALSE);
+		assert(arec && irec && irec->es_type);
+
+		if (dest) {
+			if (i) {
+				memcpy(dest + pos, ", ", 2);
+			}
+			/* copy 'type' JSON key name */
+			memcpy(dest + pos + 2 * !!i, JSON_KEY_TYPE,
+				sizeof(JSON_KEY_TYPE) - 1);
+		}
+		pos += 2 * !!i + sizeof(JSON_KEY_TYPE) - 1;
+
+		/* copy/eval ES/SQL type name */
+		pos += json_escape(irec->es_type->type_name_c.str,
+				irec->es_type->type_name_c.cnt, dest ? dest + pos : NULL,
+				/*"unlimited" output buffer*/(size_t)-1);
+
+		if (dest) {
+			/* copy 'value' JSON key name */
+			memcpy(dest + pos, JSON_KEY_VALUE, sizeof(JSON_KEY_VALUE) - 1);
+		}
+		pos += sizeof(JSON_KEY_VALUE) - 1;
+
+		/* copy converted parameter value */
+		ret = convert_param(arec, irec, dest ? dest + pos : NULL, &l);
+		if (SQL_SUCCEEDED(ret)) {
+			pos += l;
+		} else {
+			ERRH(stmt, "converting parameter #%hd failed.", i + 1);
+			return ret;
+		}
+
+		if (dest) {
+			dest[pos] = '}';
+		}
+		pos ++;
+	}
+
+	if (dest) {
+		dest[pos] = ']';
+	}
+	pos ++;
+
+	*len = pos;
+	return SQL_SUCCESS;
+
+#	undef JSON_KEY_TYPE
+#	undef JSON_KEY_VALUE
+}
+
+/*
+ * Build a serialized JSON object out of the statement.
+ * If resulting string fits into the given buff, the result is copied in it;
+ * othewise a new one will be allocated and returned.
+ */
+SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
+{
+	/* JSON body build elements */
+#	define JSON_KEY_QUERY		"\"query\": " /* will always be the 1st key */
+#	define JSON_KEY_CURSOR		"\"cursor\": " /* 1st key */
+#	define JSON_KEY_PARAMS		", \"params\": " /* n-th key */
+#	define JSON_KEY_FETCH		", \"fetch_size\": " /* n-th key */
+#	define JSON_KEY_REQ_TOUT	", \"request_timeout\": " /* n-th key */
+#	define JSON_KEY_PAGE_TOUT	", \"page_timeout\": " /* n-th key */
+#	define JSON_KEY_TIME_ZONE	", \"time_zone\": " /* n-th key */
+
+	SQLRETURN ret = SQL_SUCCESS;
+	size_t bodylen, pos, u8len, len;
+	char *body;
+	char u8curs[ESODBC_BODY_BUF_START_SIZE];
+	esodbc_dbc_st *dbc = stmt->hdr.dbc;
+	esodbc_desc_st *apd = stmt->apd;
+
+	/* TODO: move escaping/x-coding (to JSON or CBOR) in attach_sql() and/or
+	 * attach_answer() to avoid these operations for each execution of the
+	 * statement (especially for the SQL statement; the cursor might not
+	 * always be used - if app decides to no longer fetch - but would then
+	 * clean this function). */
+
+	bodylen = 1; /* { */
+	/* evaluate how long the stringified REST object will be */
+	if (stmt->rset.eccnt) { /* eval CURSOR object length */
+		/* convert cursor to C [mb]string. */
+		/* TODO: ansi_w2c() fits better for Base64 encoded cursors. */
+		u8len = WCS2U8(stmt->rset.ecurs, (int)stmt->rset.eccnt, u8curs,
+				sizeof(u8curs));
+		if (u8len <= 0) {
+			ERRH(stmt, "failed to convert cursor `" LWPDL "` to UTF8: %d.",
+				stmt->rset.eccnt, stmt->rset.ecurs, WCS2U8_ERRNO());
+			RET_HDIAGS(stmt, SQL_STATE_24000);
+		}
+
+		bodylen += sizeof(JSON_KEY_CURSOR) - 1; /* "cursor":  */
+		bodylen += json_escape(u8curs, u8len, NULL, 0);
+		bodylen += 2; /* 2x `"` for cursor value */
+		/* TODO: page_timeout */
+	} else { /* eval QUERY object length */
+		bodylen += sizeof(JSON_KEY_QUERY) - 1;
+		bodylen += json_escape(stmt->u8sql.str, stmt->u8sql.cnt, NULL, 0);
+		bodylen += 2; /* 2x `"` for query value */
+
+		/* does the statement have any parameters? */
+		if (apd->count) {
+			bodylen += sizeof(JSON_KEY_PARAMS) - 1;
+			/* serialize_params will count/copy array delimiters (`[`, `]`) */
+			ret = serialize_params(stmt, /* don't copy, just eval len */NULL,
+					&len);
+			if (SQL_SUCCEEDED(ret)) {
+				bodylen += len;
+			} else {
+				ERRH(stmt, "failed to eval parameters length");
+				/* TODO: RET_HDIAG for all HY000 */
+				RET_HDIAG(stmt, SQL_STATE_HY000, "failed to serialize "
+					"parameters", 0);
+			}
+		}
+		/* does the statement have any fetch_size? */
+		if (dbc->fetch.slen) {
+			bodylen += sizeof(JSON_KEY_FETCH) - /*\0*/1;
+			bodylen += dbc->fetch.slen;
+		}
+	}
+	bodylen += 1; /* } */
+
+	/* allocate memory for the stringified buffer, if needed */
+	if (buff->cnt < bodylen) {
+		WARNH(dbc, "local buffer too small (%zd), need %zdB; will alloc.",
+			buff->cnt, bodylen);
+		WARNH(dbc, "local buffer too small, SQL: `" LCPDL "`.",
+			LCSTR(&stmt->u8sql));
+		body = malloc(bodylen);
+		if (! body) {
+			ERRNH(stmt, "failed to alloc %zdB.", bodylen);
+			RET_HDIAGS(stmt, SQL_STATE_HY001);
+		}
+		buff->str = body;
+	} else {
+		body = buff->str;
+	}
+
+	pos = 0;
+	body[pos ++] = '{';
+	/* build the actual stringified JSON object */
+	if (stmt->rset.eccnt) { /* copy CURSOR object */
+		memcpy(body + pos, JSON_KEY_CURSOR, sizeof(JSON_KEY_CURSOR) - 1);
+		pos += sizeof(JSON_KEY_CURSOR) - 1;
+		body[pos ++] = '"';
+		pos += json_escape(u8curs, u8len, body + pos, bodylen - pos);
+		body[pos ++] = '"';
+	} else { /* copy QUERY object */
+		memcpy(body + pos, JSON_KEY_QUERY, sizeof(JSON_KEY_QUERY) - 1);
+		pos += sizeof(JSON_KEY_QUERY) - 1;
+		body[pos ++] = '"';
+		pos += json_escape(stmt->u8sql.str, stmt->u8sql.cnt, body + pos,
+				bodylen - pos);
+		body[pos ++] = '"';
+
+		/* does the statement have any parameters? */
+		if (apd->count) {
+			memcpy(body + pos, JSON_KEY_PARAMS, sizeof(JSON_KEY_PARAMS) - 1);
+			pos += sizeof(JSON_KEY_PARAMS) - 1;
+			/* serialize_params will count/copy array delimiters (`[`, `]`) */
+			ret = serialize_params(stmt, body + pos, &len);
+			if (SQL_SUCCEEDED(ret)) {
+				pos += len;
+			} else {
+				ERRH(stmt, "failed to serialize parameters");
+				RET_HDIAG(stmt, SQL_STATE_HY000, "failed to serialize "
+					"parameters", 0);
+			}
+		}
+		/* does the statement have any fetch_size? */
+		if (dbc->fetch.slen) {
+			memcpy(body + pos, JSON_KEY_FETCH, sizeof(JSON_KEY_FETCH) - 1);
+			pos += sizeof(JSON_KEY_FETCH) - 1;
+			memcpy(body + pos, dbc->fetch.str, dbc->fetch.slen);
+			pos += dbc->fetch.slen;
+		}
+	}
+	body[pos ++] = '}';
+
+	buff->cnt = pos;
+
+	DBGH(stmt, "JSON serialized to: [%zd] `" LCPDL "`.", pos, LCSTR(buff));
+	return ret;
+
+#	undef JSON_KEY_QUERY
+#	undef JSON_KEY_CURSOR
+#	undef JSON_KEY_PARAMS
+#	undef JSON_KEY_FETCH
+#	undef JSON_KEY_REQ_TOUT
+#	undef JSON_KEY_PAGE_TOUT
+#	undef JSON_KEY_TIME_ZONE
+}
+
+
 /*
  * "In the IPD, this header field points to a parameter status array
  * containing status information for each set of parameter values after a call
@@ -2578,15 +3313,45 @@ SQLRETURN EsSQLPrepareW
  * = .array_status_ptr
  * "If no elements of the array are set, all sets of parameters in the array
  * are used in the SQLExecute or SQLExecDirect calls."
+ *
+ * "When the statement is executed, [...] the *ParameterValuePtr buffer must
+ * contain a valid input value, or the *StrLen_or_IndPtr buffer must contain
+ * SQL_NULL_DATA, SQL_DATA_AT_EXEC, or the result of the SQL_LEN_DATA_AT_EXEC
+ * macro."
+ *
+ * APD.SQL_DESC_BIND_OFFSET_PTR: "[i]f the field is non-null, the driver
+ * dereferences the pointer and, if none of the values in the
+ * SQL_DESC_DATA_PTR, SQL_DESC_INDICATOR_PTR, and SQL_DESC_OCTET_LENGTH_PTR
+ * fields is a null pointer, adds the dereferenced value to those fields in
+ * the descriptor records at execution time."
+ *
+ * APD.SQL_DESC_ARRAY_STATUS_PTR: "SQL_PARAM_IGNORE, to indicate that the row
+ * is excluded from statement execution" and, "[i]n addition [...] the
+ * following codes cause a parameter in an SQL statement to be ignored:
+ * SQL_ROW_DELETED, SQL_ROW_UPDATED, and SQL_ROW_ERROR."; the opposite is:
+ * SQL_ROW_PROCEED, SQL_ROW_SUCCESS, SQL_ROW_SUCCESS_WITH_INFO, and
+ * SQL_ROW_ADDED.
  */
 SQLRETURN EsSQLExecute(SQLHSTMT hstmt)
 {
+	SQLRETURN ret;
 	esodbc_stmt_st *stmt = STMH(hstmt);
+	char buff[ESODBC_BODY_BUF_START_SIZE];
+	cstr_st body = {buff, sizeof(buff)};
 
-	DBGH(stmt, "executing `%.*s` (%zd)", stmt->sqllen, stmt->u8sql,
-		stmt->sqllen);
+	DBGH(stmt, "executing SQL: [%zd] `" LCPDL "`.", stmt->u8sql.cnt,
+		LCSTR(&stmt->u8sql));
 
-	return post_statement(stmt);
+	ret = serialize_statement(stmt, &body);
+	if (SQL_SUCCEEDED(ret)) {
+		ret = post_json(stmt, &body);
+	}
+
+	if (buff != body.str) {
+		free(body.str);
+	}
+
+	return ret;
 }
 
 /*
@@ -2623,13 +3388,13 @@ SQLRETURN EsSQLExecDirectW
 	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
 	assert(SQL_SUCCEEDED(ret)); /* can't return error */
 
-	if (1 < stmt->apd->array_size) { // & param marker is set!
-		FIXME;    //FIXME: multiple executions?
-	}
+	/* no support for parameter arrays (yet) */
+	// & param marker is set!
+	assert(stmt->apd->array_size <= 1);
 
 	ret = attach_sql(stmt, szSqlStr, cchSqlStr);
 	if (SQL_SUCCEEDED(ret)) {
-		ret = post_statement(stmt);
+		ret = EsSQLExecute(stmt);
 	}
 #ifndef NDEBUG
 	/* no reason to keep it (it can't be re-executed), except for debugging */

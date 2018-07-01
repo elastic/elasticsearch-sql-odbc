@@ -23,7 +23,7 @@
 /* TODO: should there be a max? */
 #define ESODBC_MAX_ROW_ARRAY_SIZE	128
 #define ESODBC_DEF_ARRAY_SIZE		1
-/* max cols or args to bind */
+/* max cols or args to bind; needs to stay <= SHRT_MAX */
 #define ESODBC_MAX_DESC_COUNT		128
 /* values for SQL_ATTR_MAX_LENGTH statement attribute */
 #define ESODBC_UP_MAX_LENGTH		0 // USHORT_MAX
@@ -47,6 +47,7 @@
 #define ESODBC_TABLE_TERM			"type" // TODO: or table?
 #define ESODBC_SCHEMA_TERM			"schema"
 #define ESODBC_MAX_SCHEMA_LEN		0
+#define ESODBC_PARAM_MARKER			"?"
 
 /* max # of active statements for a connection */
 /* TODO: review@alpha */
@@ -60,6 +61,12 @@
 #define ESODBC_PRECISION_UINT64			20
 /* 19 = len("9223372036854775808"), 1 << 63 */
 #define ESODBC_PRECISION_INT64			19
+
+/* TODO: validate "implementation-defined precision" choices */
+/* default precision for DECIMAL and NUMERIC */
+#define ESODBC_DEF_DECNUM_PRECISION		19
+/* default precision for float */
+#define ESODBC_DEF_FLOAT_PRECISION		8
 
 
 /*
