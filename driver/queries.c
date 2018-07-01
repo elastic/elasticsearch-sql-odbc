@@ -9,6 +9,7 @@
 #include <windows.h> /* WideCharToMultiByte() */
 #include <float.h>
 #include <math.h>
+#include <errno.h>
 
 #include "ujdecode.h"
 #include "timestamp.h"
@@ -53,7 +54,7 @@
 #define REJECT_AS_OOR(_stmt, _val, _fix_val, _target) /* Out Of Range */ \
 	do { \
 		if (_fix_val) { \
-			ERRH(_stmt, "can't convert value %lld to %s: out of range", \
+			ERRH(_stmt, "can't convert value %llx to %s: out of range", \
 				_val, STR(_target)); \
 		} else { \
 			ERRH(_stmt, "can't convert value %f to %s: out of range", \
@@ -972,7 +973,7 @@ static SQLRETURN double_to_numeric(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	memcpy(numeric->val, (char *)&ullng, sizeof(ullng));
 	memset(numeric->val+sizeof(ullng), 0, sizeof(numeric->val)-sizeof(ullng));
 
-	DBGH(stmt, "double %.15f converted to numeric: .sign=%d, precision=%d "
+	DBGH(stmt, "double %.6e converted to numeric: .sign=%d, precision=%d "
 		"(req: %d), .scale=%d (req: %d), .val:`" LCPDL "` (0x%lx).", src,
 		numeric->sign, numeric->precision, arec->precision,
 		numeric->scale, arec->scale, (int)sizeof(numeric->val), numeric->val,
@@ -1318,11 +1319,11 @@ static SQLRETURN double_to_str(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		}
 	}
 
-	if (wide) { /* 15-16 decimals precision for x64 double (TODO: 32b)  */
-		DBGH(stmt, "double %.16f converted to w-string `" LWPD "` on %zd "
+	if (wide) {
+		DBGH(stmt, "double %.6e converted to w-string `" LWPD "` on %zd "
 			"octets (state: %d; scale: %d).", dbl, buff, octets, state, scale);
 	} else {
-		DBGH(stmt, "double %.16f converted to string `" LCPD "` on %zd "
+		DBGH(stmt, "double %.6e converted to string `" LCPD "` on %zd "
 			"octets (state: %d; scale: %d).", dbl, buff, octets, state, scale);
 	}
 
@@ -1440,7 +1441,7 @@ static SQLRETURN copy_double(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			return SQL_ERROR;
 	}
 
-	DBGH(stmt, "REC@0x%p, data_ptr@0x%p, copied double: %f.", arec,
+	DBGH(stmt, "REC@0x%p, data_ptr@0x%p, copied double: %.6e.", arec,
 		data_ptr, dbl);
 
 	return SQL_SUCCESS;
@@ -1808,6 +1809,12 @@ static SQLRETURN copy_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	void *data_ptr;
 	SQLLEN *octet_len_ptr;
 	esodbc_desc_st *ard, *ird;
+	SQLSMALLINT ctarget;
+	long long ll;
+	unsigned long long ull;
+	wstr_st wval;
+	double dbl;
+	SQLWCHAR *endp;
 
 	stmt = arec->desc->hdr.stmt;
 	ird = stmt->ird;
@@ -1818,10 +1825,11 @@ static SQLRETURN copy_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	/* pointer to app's buffer */
 	data_ptr = deferred_address(SQL_DESC_DATA_PTR, pos, arec);
 
-	switch (get_c_target_type(arec, irec)) {
+	switch ((ctarget = get_c_target_type(arec, irec))) {
 		case SQL_C_CHAR:
 			return wstr_to_cstr(arec, irec, data_ptr, octet_len_ptr,
 					wstr, chars_0);
+		case SQL_C_BINARY: /* treat binary as WCHAR */
 		case SQL_C_WCHAR:
 			return wstr_to_wstr(arec, irec, data_ptr, octet_len_ptr,
 					wstr, chars_0);
@@ -1836,9 +1844,89 @@ static SQLRETURN copy_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			return wstr_to_time(arec, irec, data_ptr, octet_len_ptr,
 					wstr, chars_0);
 
+		case SQL_C_TINYINT:
+		case SQL_C_STINYINT:
+		case SQL_C_SHORT:
+		case SQL_C_SSHORT:
+		case SQL_C_LONG:
+		case SQL_C_SLONG:
+		case SQL_C_SBIGINT:
+			/* trim any white spaces */
+			wval.cnt = chars_0 - 1;
+			wval.str = (SQLWCHAR *)trim_ws(wstr, &wval.cnt);
+			/* convert to integer type */
+			errno = 0;
+			if (! wstr2llong(&wval, &ll)) { /* string is 0-term -> wcstoll? */
+				ERRH(stmt, "can't convert `" LWPD "` to long long.", wstr);
+				RET_HDIAGS(stmt, errno == ERANGE ? SQL_STATE_22003 :
+					SQL_STATE_22018);
+			}
+			DBGH(stmt, "string `" LWPD "` converted to LL=%lld.", wstr, ll);
+			/* delegate to existing functionality */
+			return copy_longlong(arec, irec, pos, ll);
+
+		case SQL_C_UTINYINT:
+		case SQL_C_USHORT:
+		case SQL_C_ULONG:
+		case SQL_C_UBIGINT:
+			/* trim any white spaces */
+			wval.cnt = chars_0 - 1;
+			wval.str = (SQLWCHAR *)trim_ws(wstr, &wval.cnt);
+			/* convert to integer type */
+			errno = 0;
+			if (! wstr2ullong(&wval, &ull)) { /* string is 0-term: wcstoull? */
+				ERRH(stmt, "can't convert `" LWPD "` to unsigned long long.",
+					wstr);
+				RET_HDIAGS(stmt, errno == ERANGE ? SQL_STATE_22003 :
+					SQL_STATE_22018);
+			}
+			DBGH(stmt, "string `" LWPD "` converted to ULL=%llu.", wstr, ull);
+			if (ull <= LLONG_MAX) {
+				/* the cast is safe, delegate to existing functionality */
+				return copy_longlong(arec, irec, pos, (long long)ull);
+			}
+			/* value is larger than what long long can hold: can only convert
+			 * to SQLUBIGINT (and SQLULONG, if it has the same size), or fail
+			 * as out-of-range */
+			assert(sizeof(SQLUBIGINT) == sizeof(unsigned long long));
+			if ((ctarget == SQL_C_UBIGINT) || (ctarget == SQL_C_ULONG &&
+					sizeof(SQLUINTEGER) == sizeof(SQLUBIGINT))) {
+				/* write out the converted value */
+				REJECT_IF_NULL_DEST_BUFF(stmt, data_ptr);
+				*(SQLUBIGINT *)data_ptr = (SQLUBIGINT)ull;
+				write_out_octets(octet_len_ptr, sizeof(SQLUBIGINT), irec);
+				DBGH(stmt, "converted string `" LWPD "` to "
+					"unsigned long long %llu.", wstr, ull);
+			} else {
+				REJECT_AS_OOR(stmt, ull, /*fixed?*/TRUE, "non-ULL");
+			}
+			break;
+
+		case SQL_C_FLOAT:
+		case SQL_C_DOUBLE:
+		case SQL_C_NUMERIC:
+		case SQL_C_BIT:
+			/* trim any white spaces */
+			wval.cnt = chars_0 - 1;
+			wval.str = (SQLWCHAR *)trim_ws(wstr, &wval.cnt);
+			/* convert to double */
+			errno = 0;
+			dbl = wcstod((wchar_t *)wval.str, (wchar_t **)&endp);
+			DBGH(stmt, "string `" LWPD "` converted to dbl=%.6e.", wstr, dbl);
+			/* if empty string, non-numeric or under/over-flow, bail out */
+			if ((! wval.cnt) || (wval.str + wval.cnt != endp) || errno) {
+				ERRH(stmt, "can't convert `" LWPD "` to double.", wstr);
+				RET_HDIAGS(stmt, errno == ERANGE ? SQL_STATE_22003 :
+					SQL_STATE_22018);
+			}
+			/* delegate to existing functionality */
+			return copy_double(arec, irec, pos, dbl);
+
+
 		default:
-			// FIXME: convert data
-			FIXME;
+			BUGH(stmt, "unexpected unhandled data type: %d.",
+				get_c_target_type(arec, irec));
+			return SQL_ERROR;
 	}
 
 	return SQL_SUCCESS;
