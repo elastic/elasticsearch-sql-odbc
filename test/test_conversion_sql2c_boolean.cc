@@ -200,8 +200,8 @@ TEST_F(ConvertSQL2C_Boolean, Boolean2WString) {
   ret = SQLFetch(stmt);
   ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  EXPECT_EQ(ind_len, sizeof(SQLWCHAR) * (sizeof(SQL_VAL) - /*\0*/1));
-  EXPECT_STREQ(wbuff, MK_WPTR(SQL_VAL));
+  EXPECT_EQ(ind_len, sizeof(SQLWCHAR) * (sizeof("1") - /*\0*/1));
+  EXPECT_STREQ(wbuff, MK_WPTR("1"));
 }
 
 } // test namespace

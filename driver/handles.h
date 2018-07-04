@@ -63,7 +63,7 @@ typedef enum {
 	METATYPE_INTERVAL_WOSEC,
 	METATYPE_BIT,
 	METATYPE_UID,
-	METATYPE_MAX // SQL_C_DEFAULT
+	METATYPE_MAX // SQL_C_DEFAULT, ESODBC_SQL_NULL
 } esodbc_metatype_et;
 
 /* Structure mapping one ES/SQL data type. */

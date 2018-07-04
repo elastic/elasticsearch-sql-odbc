@@ -67,6 +67,10 @@
 #define ESODBC_DEF_DECNUM_PRECISION		19
 /* default precision for float */
 #define ESODBC_DEF_FLOAT_PRECISION		8
+/* maximum numeric precision */
+#define ESODBC_MAX_NUM_PRECISION		ESODBC_PRECISION_UINT64
+/* maximum seconds precision */
+#define ESODBC_MAX_SEC_PRECISION		ESODBC_PRECISION_UINT64
 
 
 /*

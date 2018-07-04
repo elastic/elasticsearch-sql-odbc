@@ -78,9 +78,6 @@ static BOOL conv_supported(SQLSMALLINT sqltype, SQLSMALLINT ctype)
 		case SQL_TINYINT:
 		case SQL_BIGINT:
 			switch (ctype) {
-				case SQL_C_DATE:
-				case SQL_C_TIME:
-				case SQL_C_TIMESTAMP:
 				case SQL_C_TYPE_DATE:
 				case SQL_C_TYPE_TIME:
 				case SQL_C_TYPE_TIMESTAMP:
@@ -95,9 +92,6 @@ static BOOL conv_supported(SQLSMALLINT sqltype, SQLSMALLINT ctype)
 		case SQL_FLOAT:
 		case SQL_DOUBLE:
 			switch (ctype) {
-				case SQL_C_DATE:
-				case SQL_C_TIME:
-				case SQL_C_TIMESTAMP:
 				case SQL_C_TYPE_DATE:
 				case SQL_C_TYPE_TIME:
 				case SQL_C_TYPE_TIMESTAMP:
@@ -129,26 +123,19 @@ static BOOL conv_supported(SQLSMALLINT sqltype, SQLSMALLINT ctype)
 		case SQL_TYPE_DATE:
 			switch (ctype) {
 				case SQL_C_TYPE_DATE:
-				case SQL_C_DATE:
 				case SQL_C_TYPE_TIMESTAMP:
-				case SQL_C_TIMESTAMP:
 					return TRUE;
 			}
 			return FALSE;
 		case SQL_TYPE_TIME:
 			switch (ctype) {
-				case SQL_C_TIME:
 				case SQL_C_TYPE_TIME:
 				case SQL_C_TYPE_TIMESTAMP:
-				case SQL_C_TIMESTAMP:
 					return TRUE;
 			}
 			return FALSE;
 		case SQL_TYPE_TIMESTAMP:
 			switch (ctype) {
-				case SQL_C_DATE:
-				case SQL_C_TIME:
-				case SQL_C_TIMESTAMP:
 				case SQL_C_TYPE_DATE:
 				case SQL_C_TYPE_TIME:
 				case SQL_C_TYPE_TIMESTAMP:
@@ -220,9 +207,8 @@ TEST_F(ConversionCompatibility, ConvCompat)
 			SQL_C_SHORT, SQL_C_SSHORT, SQL_C_USHORT, SQL_C_LONG, SQL_C_SLONG,
 			SQL_C_ULONG, SQL_C_FLOAT, SQL_C_DOUBLE, SQL_C_BIT, SQL_C_TINYINT,
 			SQL_C_STINYINT, SQL_C_UTINYINT, SQL_C_SBIGINT, SQL_C_UBIGINT,
-			SQL_C_BINARY, SQL_C_BOOKMARK, SQL_C_VARBOOKMARK, SQL_C_DATE,
-			SQL_C_TYPE_DATE, SQL_C_TIME, SQL_C_TYPE_TIME, SQL_C_TIMESTAMP,
-			SQL_C_TYPE_TIMESTAMP, SQL_C_NUMERIC, SQL_C_GUID,
+			SQL_C_BINARY, SQL_C_BOOKMARK, SQL_C_VARBOOKMARK, SQL_C_TYPE_DATE,
+			SQL_C_TYPE_TIME, SQL_C_TYPE_TIMESTAMP, SQL_C_NUMERIC, SQL_C_GUID,
 			SQL_C_INTERVAL_DAY, SQL_C_INTERVAL_HOUR, SQL_C_INTERVAL_MINUTE,
 			SQL_C_INTERVAL_SECOND, SQL_C_INTERVAL_DAY_TO_HOUR,
 			SQL_C_INTERVAL_DAY_TO_MINUTE, SQL_C_INTERVAL_DAY_TO_SECOND,
@@ -233,13 +219,14 @@ TEST_F(ConversionCompatibility, ConvCompat)
 
 	prepareStatement();
 
+	SQLLEN indlen = SQL_NULL_DATA;
 	for (SQLSMALLINT i = 0; i < sizeof(sql_types)/sizeof(*sql_types); i ++) {
 		for (SQLSMALLINT j = 0; j < sizeof(csql_types)/sizeof(*csql_types); j ++) {
 			SQLSMALLINT sql = sql_types[i];
 			SQLSMALLINT csql = csql_types[j];
 
 			ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, csql, sql,
-				/*size*/0, /*decdigits*/0, NULL, sizeof(NULL), /*IndLen*/NULL);
+				/*size*/0, /*decdigits*/0, NULL, sizeof(NULL), &indlen);
 			BOOL conv = conv_supported(sql, csql);
 			ASSERT_TRUE((!SQL_SUCCEEDED(ret) && !conv) || 
 					(SQL_SUCCEEDED(ret) && conv));

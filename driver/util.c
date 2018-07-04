@@ -147,7 +147,7 @@ size_t ui64tot(uint64_t ui64, void *buff, BOOL wide)
  * Trims leading and trailing WS of a wide string of 'chars' length.
  * 0-terminator should not be counted (as it's a non-WS).
  */
-const SQLWCHAR *trim_ws(const SQLWCHAR *wstr, size_t *chars)
+const SQLWCHAR *wtrim_ws(const SQLWCHAR *wstr, size_t *chars)
 {
 	const SQLWCHAR *wend;
 	size_t cnt = *chars;
@@ -163,6 +163,27 @@ const SQLWCHAR *trim_ws(const SQLWCHAR *wstr, size_t *chars)
 
 	*chars = cnt;
 	return wstr;
+}
+/*
+ * Trims leading and trailing WS of a C string of 'chars' length.
+ * 0-terminator should not be counted (as it's a non-WS).
+ */
+const SQLCHAR *trim_ws(const SQLCHAR *cstr, size_t *chars)
+{
+	const SQLCHAR *end;
+	size_t cnt = *chars;
+
+	/* right trim */
+	for (end = cstr + cnt; cstr < end && isspace(*cstr); cstr ++) {
+		cnt --;
+	}
+
+	while ((0 < cnt) && isspace(cstr[cnt - 1])) {
+		cnt --;
+	}
+
+	*chars = cnt;
+	return cstr;
 }
 
 /*

@@ -75,7 +75,8 @@ typedef struct cstr {
  * Trims leading and trailing WS of a wide string of 'chars' length.
  * 0-terminator should not be counted (as it's a non-WS).
  */
-const SQLWCHAR *trim_ws(const SQLWCHAR *wstr, size_t *chars);
+const SQLWCHAR *wtrim_ws(const SQLWCHAR *wstr, size_t *chars);
+const SQLCHAR *trim_ws(const SQLCHAR *cstr, size_t *chars);
 /*
  * Copy converted strings from SQLWCHAR to char, for ANSI strings.
  */
@@ -115,7 +116,7 @@ typedef struct wstr {
 #	define MK_CSTR(_s)	((cstr_st){.str = _s, .cnt = sizeof(_s) - 1})
 #else /* !__cplusplus */
 #	define WSTR_INIT(_s)	{MK_WPTR(_s), sizeof(_s) - 1}
-#	define CSTR_INIT(_s)	{_s, sizeof(_s) - 1}
+#	define CSTR_INIT(_s)	{(SQLCHAR *)_s, sizeof(_s) - 1}
 #endif /* !__cplusplus */
 /*
  * Test equality of two wstr_st objects.

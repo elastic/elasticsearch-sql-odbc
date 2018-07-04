@@ -94,6 +94,10 @@ SQLRETURN EsSQLColAttributeW(
 	SQLPOINTER      pNumAttr
 #endif /* _WIN64 */
 );
+SQLRETURN EsSQLNumParams(
+	SQLHSTMT           StatementHandle,
+	_Out_opt_
+	SQLSMALLINT       *ParameterCountPtr);
 SQLRETURN EsSQLRowCount(_In_ SQLHSTMT StatementHandle, _Out_ SQLLEN *RowCount);
 
 

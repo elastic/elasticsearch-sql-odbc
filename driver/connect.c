@@ -1291,7 +1291,7 @@ static void set_display_size(esodbc_estype_st *es_type)
 
 		case SQL_TYPE_DATE:
 		case SQL_TYPE_TIME:
-		case SQL_TYPE_TIMESTAMP: /* DATE */
+		case SQL_TYPE_TIMESTAMP: /* SQL/ES DATE */
 			es_type->display_size = sizeof(ESODBC_ISO8601_TEMPLATE) - /*0*/1;
 			break;
 

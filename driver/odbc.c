@@ -642,15 +642,21 @@ SQLRETURN SQL_API SQLDescribeParam(
 {
 	RET_NOT_IMPLEMENTED;
 }
+#endif /* WITH_EMPTY */
 
 SQLRETURN SQL_API SQLNumParams(
 	SQLHSTMT           hstmt,
 	_Out_opt_
 	SQLSMALLINT       *pcpar)
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE2(_IN, "pp", hstmt, pcpar);
+	ret = EsSQLNumParams(hstmt, pcpar);
+	TRACE3(_OUT, "dpt", ret, hstmt, pcpar);
+	return ret;
 }
 
+#if WITH_EMPTY
 SQLRETURN  SQL_API SQLParamData(SQLHSTMT StatementHandle,
 	_Out_opt_ SQLPOINTER *Value)
 {

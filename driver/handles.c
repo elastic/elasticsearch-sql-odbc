@@ -58,6 +58,8 @@ static void init_desc(esodbc_desc_st *desc, esodbc_stmt_st *stmt,
 	desc_type_et type, SQLSMALLINT alloc_type)
 {
 	memset(desc, 0, sizeof(esodbc_desc_st));
+	/* mandatory defaulting to NULL/0: array_status_ptr, bind_offset_ptr,
+	 * rows_processed_ptr, count */
 
 	init_hheader(&desc->hdr, SQL_HANDLE_DESC, stmt);
 
@@ -68,13 +70,9 @@ static void init_desc(esodbc_desc_st *desc, esodbc_stmt_st *stmt,
 		(alloc_type == SQL_DESC_ALLOC_AUTO));
 
 	desc->array_size = ESODBC_DEF_ARRAY_SIZE;
-	// desc->array_status_ptr = NULL; /* formal, 0'd above */
-	// desc->bind_offset_ptr = NULL; /* formal, 0'd above */
-	if (type == DESC_TYPE_ARD || type == DESC_TYPE_APD) {
+	if (DESC_TYPE_IS_APPLICATION(type)) {
 		desc->bind_type = SQL_BIND_BY_COLUMN;
 	}
-	// desc->count = 0; /* formal, 0'd above */
-	// desc->rows_processed_ptr = NULL; /* formal, 0'd above */
 }
 
 static void clear_desc(esodbc_stmt_st *stmt, desc_type_et dtype, BOOL reinit)
@@ -1666,18 +1664,15 @@ void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type,
 	SQLSMALLINT *code)
 {
 	switch (concise) {
-		case SQL_DATE:
 		case SQL_TYPE_DATE:
 			*type = SQL_DATETIME;
 			*code = SQL_CODE_DATE;
 			break;
-		case SQL_TIME:
 		case SQL_TYPE_TIME:
 			//case SQL_TYPE_TIME_WITH_TIMEZONE: //4.0
 			*type = SQL_DATETIME;
 			*code = SQL_CODE_TIME;
 			break;
-		case SQL_TIMESTAMP:
 		case SQL_TYPE_TIMESTAMP:
 			//case SQL_TYPE_TIMESTAMP_WITH_TIMEZONE: // 4.0
 			*type = SQL_DATETIME;
@@ -1782,6 +1777,14 @@ static void set_defaults_from_meta_type(esodbc_rec_st *rec)
 				rec->precision = ESODBC_DEF_FLOAT_PRECISION;
 			}
 			break;
+
+		case METATYPE_MAX: /* SQL_C_DEFAULT, ESODBC_SQL_NULL */
+			assert((DESC_TYPE_IS_APPLICATION(rec->desc->type) &&
+					rec->concise_type == SQL_C_DEFAULT) ||
+				(DESC_TYPE_IS_IMPLEMENTATION(rec->desc->type) &&
+					rec->concise_type == ESODBC_SQL_NULL));
+			WARNH(rec->desc, "max meta type: can't set defaults");
+			break;
 	}
 }
 
@@ -1819,6 +1822,14 @@ static esodbc_metatype_et sqltype_to_meta(SQLSMALLINT concise)
 			return METATYPE_FLOAT_NUMERIC;
 
 		/* datetime (note: SQL_DATETIME is verbose, not concise) */
+		/* SQL_DATE, SQL_TIME, SQL_TIMESTAMP:
+		 * "In ODBC 3.x, the identifiers for date, time, and timestamp SQL
+		 * data types have changed from SQL_DATE, SQL_TIME, and SQL_TIMESTAMP
+		 * to SQL_TYPE_DATE, SQL_TYPE_TIME, and SQL_TYPE_TIMESTAMP".
+		 * "Because of how the ODBC 3.x Driver Manager performs mapping of the
+		 * date, time, and timestamp data types, ODBC 3.x drivers need only
+		 * recognize" the new defines.
+		 * */
 		case SQL_TYPE_DATE:
 		case SQL_TYPE_TIME:
 		case SQL_TYPE_TIMESTAMP:
@@ -1903,13 +1914,11 @@ static esodbc_metatype_et sqlctype_to_meta(SQLSMALLINT concise)
 			return METATYPE_FLOAT_NUMERIC;
 
 		/* datetime */
-		case SQL_C_DATE:
+		/* SQL_C_DATE, SQL_C_TIME, SQL_C_TIMESTAMP: see sqltype_to_meta() */
 		case SQL_C_TYPE_DATE:
-		case SQL_C_TIME:
 		case SQL_C_TYPE_TIME:
-		// case SQL_C_TYPE_TIME_WITH_TIMEZONE:
-		case SQL_C_TIMESTAMP:
 		case SQL_C_TYPE_TIMESTAMP:
+			// case SQL_C_TYPE_TIME_WITH_TIMEZONE:
 			// case SQL_C_TYPE_TIMESTAMP_WITH_TIMEZONE:
 			return METATYPE_DATETIME;
 
@@ -1947,59 +1956,66 @@ static esodbc_metatype_et sqlctype_to_meta(SQLSMALLINT concise)
 
 /*
  * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetdescrec-function#consistency-checks
- * FIXME: re-eval this function along with IPD implementation!
  */
-static BOOL consistency_check(esodbc_desc_st *desc, esodbc_rec_st *rec)
+static BOOL consistency_check(esodbc_rec_st *rec)
 {
 	SQLSMALLINT type, code;
+	esodbc_desc_st *desc = rec->desc;
 
 	/* validity of C / SQL datatypes is checked when setting the meta_type */
+	assert(METATYPE_UNKNOWN <= rec->meta_type &&
+		rec->meta_type <= METATYPE_MAX);
+	if (! rec->meta_type) {
+		ERRH(desc, "no meta type set.", rec);
+		return FALSE;
+	} /* else: concise_type had been set */
 
 	concise_to_type_code(rec->concise_type, &type, &code);
 	if (rec->type != type || rec->datetime_interval_code != code) {
-		ERRH(desc, "inconsistent types for rec 0x%p: concise: %d, verbose: %d, "
-			"code: %d.", rec, rec->concise_type, rec->type,
+		ERRH(desc, "inconsistent types found: concise: %d, verbose: %d, "
+			"code: %d.", rec->concise_type, rec->type,
 			rec->datetime_interval_code);
 		return FALSE;
 	}
 
-	//if (rec->meta_type == METATYPE_NUMERIC) {
-	if (0) { // FIXME
-		/* TODO: actually check validity of precision/scale for data type */
-		if ((! rec->precision) || (! rec->scale)) {
-			ERRH(desc, "invalid numeric precision/scale: %d/%d for data type "
-				"%d.", rec->precision, rec->scale, rec->type);
-			return FALSE;
-		}
-	}
+	switch (rec->meta_type) {
+		case METATYPE_EXACT_NUMERIC:
+			if (rec->concise_type != SQL_NUMERIC && /* == _C_ type */
+				rec->concise_type != SQL_DECIMAL) { /* == _C_ type */
+				if (rec->scale) {
+					ERRH(desc, "fixed numeric type %hd having non-zero scale.",
+						rec->concise_type, rec->scale);
+					return FALSE;
+				}
+			}
+		/* no break */
+		case METATYPE_FLOAT_NUMERIC:
+			if (rec->precision < 0 ||
+				ESODBC_MAX_NUM_PRECISION < rec->precision) {
+				ERRH(desc, "precision (%hd) out of bounds [0, %d].",
+					rec->precision, ESODBC_MAX_NUM_PRECISION);
+				return FALSE;
+			}
+			break;
 
-	if (rec->meta_type == METATYPE_DATETIME || 0) { // FIXME
-//			rec->meta_type == METATYPE_INTERVAL) {
-		/* TODO: actually check validity of precision for data type */
-		/*
-		 * TODO: this should be rec->length, acc to:
-		 * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/column-size
-		 * but rec->precision, acc to:
-		 * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetdescrec-function#consistency-checks
-		 * ???
-		 */
-		if (! rec->precision) {
-			ERRH(desc, "invalid time/timestamp/interval with seconds/time "
-				"precision %d for concise type %d.",
-				rec->precision, rec->concise_type);
-			return FALSE;
-		}
-	}
-
-	// if (rec->meta_type == METATYPE_INTERVAL) {
-	if (0) { // FIXME
-		/* TODO: actually check the validity of dt_i_precision for data type */
-		if (! rec->datetime_interval_precision) {
-			ERRH(desc, "invalid datetime_interval_precision %d for interval "
-				"concise type %d.", rec->datetime_interval_precision,
-				rec->concise_type);
-			return FALSE;
-		}
+		case METATYPE_DATETIME:
+			if (rec->concise_type == SQL_TYPE_DATE) {
+				break;
+			}
+		case METATYPE_INTERVAL_WSEC:
+		// TODO: "or one of the interval data types with a time component"
+		case METATYPE_INTERVAL_WOSEC:
+			if (rec->precision < 0 ||
+				ESODBC_MAX_SEC_PRECISION < rec->precision) {
+				ERRH(desc, "precision (%hd) out of bounds [0, %d].",
+					rec->precision, ESODBC_MAX_SEC_PRECISION);
+				return FALSE;
+			}
+			if (rec->meta_type == METATYPE_DATETIME) {
+				break;
+			}
+			// TODO: check rec->datetime_interval_precision
+			break;
 	}
 
 	return TRUE;
@@ -2107,7 +2123,8 @@ SQLRETURN EsSQLSetDescFieldW(
 				/* no support for param arrays (yet) TODO */
 				if (1 < ulen) {
 					ERRH(desc, "no support for arrays of parameters.");
-					RET_HDIAGS(desc, SQL_STATE_HYC00);
+					RET_HDIAG(desc, SQL_STATE_HYC00,
+						"Parameter arrays not implemented", 0);
 				}
 			}
 			desc->array_size = ulen;
@@ -2266,17 +2283,20 @@ SQLRETURN EsSQLSetDescFieldW(
 			/* deferred */
 			rec->data_ptr = ValuePtr;
 			if (rec->data_ptr) {
-				if (
-#if 1
-						0 /* FIXME when adding data defs! */ && 
-#endif //1
-						(desc->type != DESC_TYPE_IRD) && 
-						(! consistency_check(desc, rec))) {
-					ERRH(desc, "consistency check failed on record 0x%p.", rec);
+				/* "A consistency check is performed by the driver
+				 * automatically whenever an application sets the
+				 * SQL_DESC_DATA_PTR field of an APD, ARD, or IPD."
+				 * "The SQL_DESC_DATA_PTR field of an IPD is not normally set;
+				 * however, an application can do so to force a consistency
+				 * check of IPD fields. A consistency check cannot be
+				 * performed on an IRD." */
+				if ((desc->type != DESC_TYPE_IRD) &&
+						(! consistency_check(rec))) {
+					ERRH(desc, "consistency check failed on rec@0x%p.", rec);
 					RET_HDIAGS(desc, SQL_STATE_HY021);
 				} else {
-					DBGH(desc, "data ptr 0x%p bound to rec@0x%p.",
-							rec->data_ptr, rec);
+					DBGH(desc, "rec@0x%p: bound data ptr@0x%p.", rec,
+							rec->data_ptr);
 				}
 			} else {
 				/* "If the highest-numbered column or parameter is unbound,
