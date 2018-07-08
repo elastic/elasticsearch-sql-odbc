@@ -1067,7 +1067,7 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
  * SQL_DESC_ARRAY_SIZE		rw	rw		
  * SQL_DESC_BIND_OFFSET_PTR		rw	rw		
  * SQL_DESC_BIND_TYPE		rw	rw		
- * SQL_DESC_DATA_PTR		rw	rw		
+ * SQL_DESC_DATA_PTR		rw	rw		[rw]
  * SQL_DESC_INDICATOR_PTR		rw	rw		
  * SQL_DESC_OCTET_LENGTH_PTR		rw	rw		
  * SQL_DESC_AUTO_UNIQUE_VALUE				r	
@@ -1137,10 +1137,15 @@ static BOOL check_access(desc_type_et desc_type, SQLSMALLINT field_id,
 		case SQL_DESC_ARRAY_SIZE:
 		case SQL_DESC_BIND_OFFSET_PTR:
 		case SQL_DESC_BIND_TYPE:
-		case SQL_DESC_DATA_PTR:
 		case SQL_DESC_INDICATOR_PTR:
 		case SQL_DESC_OCTET_LENGTH_PTR:
 			ret = DESC_TYPE_IS_APPLICATION(desc_type);
+			break;
+
+		case SQL_DESC_DATA_PTR:
+			/* "The SQL_DESC_DATA_PTR field in the IPD can be set to force a
+			 * consistency check." */
+			ret = desc_type != DESC_TYPE_IRD;
 			break;
 
 		case SQL_DESC_AUTO_UNIQUE_VALUE:
@@ -1774,6 +1779,7 @@ static void set_defaults_from_meta_type(esodbc_rec_st *rec)
 			break;
 		case METATYPE_FLOAT_NUMERIC:
 			if (rec->concise_type == SQL_FLOAT) { /* == SQL_C_FLOAT */
+				/* "implementation-defined default precision" */
 				rec->precision = ESODBC_DEF_FLOAT_PRECISION;
 			}
 			break;
@@ -1870,7 +1876,8 @@ static esodbc_metatype_et sqltype_to_meta(SQLSMALLINT concise)
 		/* TODO: how to handle these?? */
 		case ESODBC_SQL_UNSUPPORTED:
 		case ESODBC_SQL_OBJECT: /* == ESODBC_SQL_NESTED */
-			return METATYPE_BIN;
+			ERR("ES/SQL types 'UNSUPPORTED'/'OBJECT'/'NESTED' "
+				"not allowed in DML (used: %hd).", concise);
 	}
 
 	ERR("unknown meta type for concise SQL type %d.", concise);
@@ -1991,9 +1998,9 @@ static BOOL consistency_check(esodbc_rec_st *rec)
 		/* no break */
 		case METATYPE_FLOAT_NUMERIC:
 			if (rec->precision < 0 ||
-				ESODBC_MAX_NUM_PRECISION < rec->precision) {
+				ESODBC_MAX_FLT_PRECISION < rec->precision) {
 				ERRH(desc, "precision (%hd) out of bounds [0, %d].",
-					rec->precision, ESODBC_MAX_NUM_PRECISION);
+					rec->precision, ESODBC_MAX_FLT_PRECISION);
 				return FALSE;
 			}
 			break;

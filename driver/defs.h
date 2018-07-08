@@ -61,14 +61,18 @@
 #define ESODBC_PRECISION_UINT64			20
 /* 19 = len("9223372036854775808"), 1 << 63 */
 #define ESODBC_PRECISION_INT64			19
+#define ESODBC_PRECISION_DOUBLE			308
+
 
 /* TODO: validate "implementation-defined precision" choices */
 /* default precision for DECIMAL and NUMERIC */
 #define ESODBC_DEF_DECNUM_PRECISION		19
 /* default precision for float */
 #define ESODBC_DEF_FLOAT_PRECISION		8
-/* maximum numeric precision */
-#define ESODBC_MAX_NUM_PRECISION		ESODBC_PRECISION_UINT64
+/* maximum fixed numeric precision */
+#define ESODBC_MAX_FIX_PRECISION		ESODBC_PRECISION_UINT64
+/* maximum floating numeric precision */
+#define ESODBC_MAX_FLT_PRECISION		ESODBC_PRECISION_DOUBLE
 /* maximum seconds precision */
 #define ESODBC_MAX_SEC_PRECISION		ESODBC_PRECISION_UINT64
 

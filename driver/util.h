@@ -72,12 +72,6 @@ typedef struct cstr {
 } cstr_st;
 
 /*
- * Trims leading and trailing WS of a wide string of 'chars' length.
- * 0-terminator should not be counted (as it's a non-WS).
- */
-const SQLWCHAR *wtrim_ws(const SQLWCHAR *wstr, size_t *chars);
-const SQLCHAR *trim_ws(const SQLCHAR *cstr, size_t *chars);
-/*
  * Copy converted strings from SQLWCHAR to char, for ANSI strings.
  */
 int ansi_w2c(const SQLWCHAR *src, char *dst, size_t chars);
@@ -130,9 +124,26 @@ typedef struct wstr {
 	((s1)->cnt == (s2)->cnt && \
 		wmemncasecmp((s1)->str, (s2)->str, (s1)->cnt) == 0)
 
+
+typedef struct {
+	BOOL wide;
+	union {
+		wstr_st w;
+		cstr_st c;
+	};
+} xstr_st;
+
+/*
+ * Trims leading and trailing WS of a wide string of 'chars' length.
+ * 0-terminator should not be counted (as it's a non-WS).
+ */
+void trim_ws(cstr_st *str);
+void wtrim_ws(wstr_st *wstr);
+
 BOOL wstr2bool(wstr_st *val);
-BOOL wstr2ullong(wstr_st *val, unsigned long long *out);
-BOOL wstr2llong(wstr_st *val, long long *out);
+BOOL str2ubigint(void *val, const BOOL wide, SQLUBIGINT *out);
+BOOL str2bigint(void *val, const BOOL wide, SQLBIGINT *out);
+BOOL str2double(void *val, BOOL wide, SQLDOUBLE *dbl);
 
 /* converts the int types to a C or wide string, returning the string length */
 size_t i64tot(int64_t i64, void *buff, BOOL wide);
