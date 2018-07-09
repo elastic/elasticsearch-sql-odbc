@@ -256,7 +256,7 @@ void trim_ws(cstr_st *cstr)
  * 0-terminated, OR one character longer otherwise (for the 0-term).
  * 'dst' will always be 0-term'd.
  * Returns negative if conversion fails, OR number of converted wchars,
- * including the 0-term.
+ * including/plus the 0-term.
  *
  */
 int ansi_w2c(const SQLWCHAR *src, char *dst, size_t chars)

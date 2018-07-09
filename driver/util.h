@@ -133,6 +133,10 @@ typedef struct {
 	};
 } xstr_st;
 
+/* For as long as wptr_st & cptr_st are only differing in string pointer type,
+ * it's safe to save the check if wide or not. */
+#define XSTR_LEN(_xptr)	(_xptr)->w.cnt
+
 /*
  * Trims leading and trailing WS of a wide string of 'chars' length.
  * 0-terminator should not be counted (as it's a non-WS).
