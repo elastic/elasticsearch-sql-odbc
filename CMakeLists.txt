@@ -74,6 +74,7 @@ endif (${CMD_RETURN})
 
 # Set compiler flags and options.
 if (${WIN32})
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /utf-8")
 	# set the Visual Studio warning level to 4
 	#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /W4")
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /W3")

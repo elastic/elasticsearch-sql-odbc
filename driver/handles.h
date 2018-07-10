@@ -168,7 +168,6 @@ typedef struct desc_rec {
 	/* pointer to the ES/SQL type in DBC array
 	 * need to be set for records in IxD descriptors */
 	esodbc_estype_st	*es_type;
-	char				dbl_descr[sizeof("%.000e")];
 
 	/*
 	 * record fields

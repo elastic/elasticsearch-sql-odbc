@@ -287,7 +287,7 @@ TEST_F(ConvertC2SQL_Numeric, Float2Long)
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"Float2Long\", "
 		"\"params\": [{\"type\": \"LONG\", "
-		"\"value\": 9.2233720368547758080e+18}]}");
+		"\"value\": 9.2233720368548e+18}]}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -320,7 +320,7 @@ TEST_F(ConvertC2SQL_Numeric, Double2HFloat)
 
 	SQLDOUBLE val = -12345678901234567890.123456789;
 	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_DOUBLE,
-			SQL_FLOAT, /*size*/8, /*decdigits*/0, &val, sizeof(val),
+			SQL_FLOAT, /*size*/15, /*decdigits*/0, &val, sizeof(val),
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
@@ -342,7 +342,7 @@ TEST_F(ConvertC2SQL_Numeric, Double2SFloat)
 
 	SQLDOUBLE val = -12345678901234567890.123456789;
 	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_DOUBLE,
-			SQL_FLOAT, /*size*/18, /*decdigits*/0, &val, sizeof(val),
+			SQL_FLOAT, /*size*/25, /*decdigits*/0, &val, sizeof(val),
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
@@ -421,7 +421,7 @@ TEST_F(ConvertC2SQL_Numeric, Bin_Double2SFloat)
 	SQLDOUBLE val = -12345678901234567890.123456789;
 	SQLLEN osize = sizeof(val);
 	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_DOUBLE,
-			SQL_FLOAT, /*size*/18, /*decdigits*/0, &val, sizeof(val),
+			SQL_FLOAT, /*size*/25, /*decdigits*/0, &val, sizeof(val),
 			&osize);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
@@ -448,7 +448,7 @@ TEST_F(ConvertC2SQL_Numeric, Numeric2HFloat)
 	memset(val.val, 0, sizeof(val.val));
 	memcpy(val.val, "|b", 2);
 	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_NUMERIC,
-			SQL_FLOAT, /*size*/4, /*decdigits*/0, &val, sizeof(val),
+			SQL_FLOAT, /*size*/11, /*decdigits*/0, &val, sizeof(val),
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 

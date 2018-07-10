@@ -6,6 +6,7 @@
 
 #include <string.h>
 #include <errno.h>
+#include <stdio.h>
 
 #include "util.h"
 #include "log.h"
@@ -159,22 +160,27 @@ BOOL str2double(void *val, BOOL wide, SQLDOUBLE *dbl)
 	if (wide) {
 		wstr = *(wstr_st *)val;
 		if (wstr.str[wstr.cnt]) {
-			/* TODO */
-			return FALSE;
-		}
-		*dbl = wcstod((wchar_t *)wstr.str, &endwptr);
-		if (errno || wstr.str + wstr.cnt != endwptr) {
-			return FALSE;
+			// TODO: simple quick parser instead of scanf
+			if(_snwscanf(wstr.str, wstr.cnt, L"%le", (double *)dbl) != 1) {
+				return FALSE;
+			}
+		} else {
+			*dbl = wcstod((wchar_t *)wstr.str, &endwptr);
+			if (errno || wstr.str + wstr.cnt != endwptr) {
+				return FALSE;
+			}
 		}
 	} else {
 		cstr = *(cstr_st *)val;
 		if (cstr.str[cstr.cnt]) {
-			/* TODO */
-			return FALSE;
-		}
-		*dbl = strtod((char *)cstr.str, &endptr);
-		if (errno || cstr.str + cstr.cnt != endptr) {
-			return FALSE;
+			if(_snscanf(cstr.str, cstr.cnt, "%le", (double *)dbl) != 1) {
+				return FALSE;
+			}
+		} else {
+			*dbl = strtod((char *)cstr.str, &endptr);
+			if (errno || cstr.str + cstr.cnt != endptr) {
+				return FALSE;
+			}
 		}
 	}
 	return TRUE;
@@ -405,8 +411,9 @@ size_t json_escape(const char *jin, size_t inlen, char *jout, size_t outlen)
 						i = inlen;
 						continue;
 					}
-					memcpy(jout + pos, "\\u00", sizeof("\\u00") - 1);
-					pos += sizeof("\\u00") - 1;
+					memcpy(jout + pos, JSON_ESC_GEN_PREF,
+							sizeof(JSON_ESC_GEN_PREF) - 1);
+					pos += sizeof(JSON_ESC_GEN_PREF) - 1;
 					jout[pos ++] = I16TOA(uchar >> 4);
 					jout[pos ++] = I16TOA(uchar & 0xF);
 				}
@@ -416,6 +423,24 @@ size_t json_escape(const char *jin, size_t inlen, char *jout, size_t outlen)
 	}
 	return pos;
 #undef I16TOA
+}
+
+/*
+ * JSON-escapes a string (str), outputting the result in the same buffer.
+ * The buffer needs to be long enough (outlen) for this operation (at
+ * least json_escaped_len() long).
+ * If string [in]len is 0, it assumes a NTS.
+ * Returns number of used bytes in buffer (which might be less than out buffer
+ * size (outlen), if some char needs an escaping longer than remaining space).
+ */
+size_t json_escape_overlapping(char *str, size_t inlen, size_t outlen)
+{
+	char *jin;
+
+	/* move the string to the end of the buffer */
+	jin = str + (outlen - inlen);
+	memcpy(jin, str, inlen);
+	return json_escape(jin, inlen, str, outlen);
 }
 
 /* Note: for input/output size indication (avail/usedp), some functions

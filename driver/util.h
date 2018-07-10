@@ -191,6 +191,10 @@ typedef cstr_st tstr_st;
 #endif /* UNICODE */
 
 
+/* generic char JSON escaping prefix */
+#define JSON_ESC_GEN_PREF	"\\u00"
+/* octet lenght of one generic JSON escaped character */
+#define JSON_ESC_SEQ_SZ		(sizeof(JSON_ESC_GEN_PREF) - 1 + /*0xAB*/2)
 /*
  * JSON-escapes a string.
  * If string len is 0, it assumes a NTS.
@@ -200,6 +204,15 @@ typedef cstr_st tstr_st;
  * size, if some char needs an escaping longer than remaining space).
  */
 size_t json_escape(const char *jin, size_t inlen, char *jout, size_t outlen);
+/*
+ * JSON-escapes a string (str), outputting the result in the same buffer.
+ * The buffer needs to be long enough (outlen) for this operation (at
+ * least json_escaped_len() long).
+ * If string [in]len is 0, it assumes a NTS.
+ * Returns number of used bytes in buffer (which might be less than out buffer
+ * size (outlen), if some char needs an escaping longer than remaining space).
+ */
+size_t json_escape_overlapping(char *str, size_t inlen, size_t outlen);
 
 /*
  * Copy a WSTR back to application.

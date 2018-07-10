@@ -2816,6 +2816,33 @@ static SQLRETURN set_param_decdigits(esodbc_rec_st *irec,
 	return SQL_SUCCESS;
 }
 
+static SQLSMALLINT get_param_decdigits(esodbc_rec_st *irec)
+{
+	assert(irec->desc->type == DESC_TYPE_IPD);
+
+	switch(irec->meta_type) {
+		case METATYPE_DATETIME:
+			if (irec->concise_type == SQL_TYPE_DATE) {
+				break;
+			}
+		case METATYPE_INTERVAL_WSEC:
+			return irec->precision;
+
+		case METATYPE_EXACT_NUMERIC:
+			if (irec->concise_type == SQL_DECIMAL ||
+				irec->concise_type == SQL_NUMERIC) {
+				return irec->scale;
+			}
+			break;
+
+		default:
+			WARNH(irec->desc, "retriving decdigits for IPD metatype: %d.",
+				irec->meta_type);
+	}
+
+	return 0;
+}
+
 static SQLRETURN set_param_size(esodbc_rec_st *irec,
 	SQLUSMALLINT param_no, SQLULEN size)
 {
@@ -2855,33 +2882,6 @@ static SQLRETURN set_param_size(esodbc_rec_st *irec,
 			;/* "For other data types, the [s]ize argument is ignored." */
 	}
 	return SQL_SUCCESS;
-}
-
-static SQLSMALLINT get_param_decdigits(esodbc_rec_st *irec)
-{
-	assert(irec->desc->type == DESC_TYPE_IPD);
-
-	switch(irec->meta_type) {
-		case METATYPE_DATETIME:
-			if (irec->concise_type == SQL_TYPE_DATE) {
-				break;
-			}
-		case METATYPE_INTERVAL_WSEC:
-			return irec->precision;
-
-		case METATYPE_EXACT_NUMERIC:
-			if (irec->concise_type == SQL_DECIMAL ||
-				irec->concise_type == SQL_NUMERIC) {
-				return irec->scale;
-			}
-			break;
-
-		default:
-			WARNH(irec->desc, "retriving decdigits for IPD metatype: %d.",
-				irec->meta_type);
-	}
-
-	return 0;
 }
 
 static SQLULEN get_param_size(esodbc_rec_st *irec)
@@ -2971,7 +2971,7 @@ static esodbc_estype_st *match_es_type(esodbc_rec_st *arec,
 				case SQL_VARCHAR: /* KEYWORD, TEXT */
 					length = irec->length ? irec->length : arec->octet_length;
 					if (length <= dbc->es_types[i].column_size ||
-						dbc->es_types[i].column_size == dbc->max_varchar_size) {
+						dbc->es_types[i].column_size==dbc->max_varchar_size) {
 						return &dbc->es_types[i];
 					}
 					break;
@@ -3048,7 +3048,6 @@ SQLRETURN EsSQLBindParameter(
 	esodbc_desc_st *desc;
 	SQLSMALLINT apd_prev_count, ipd_prev_count;
 	esodbc_rec_st *irec, *arec;
-	int res;
 
 	if (InputOutputType != SQL_PARAM_INPUT) {
 		ERRH(stmt, "parameter IO-type (%hd) not supported.", InputOutputType);
@@ -3212,23 +3211,6 @@ SQLRETURN EsSQLBindParameter(
 		goto copy_diag;
 	}
 
-	/* If source is floating value, it'll need to be printed: prepare now, at
-	 * bind time the descriptor used to print the doubles. */
-	if (arec->meta_type == METATYPE_FLOAT_NUMERIC ||
-		// TODO: move SQL[_C]_NUMERIC, SQL_DECIMAL to meta floating???
-		arec->concise_type == SQL_C_NUMERIC) {
-		res = snprintf(irec->dbl_descr, sizeof(irec->dbl_descr),
-				"%%.%llue", get_param_size(irec));
-		if (res < 0) {
-			ERRH(desc, "failed preparing float descriptor: %s.",
-				strerror(errno));
-			SET_HDIAG(desc, SQL_STATE_HY000, "C runtime error", 0);
-			goto copy_diag;
-		} else {
-			assert(irec->dbl_descr[res - 1] == 'e');
-		}
-	}
-
 	DBGH(stmt, "succesfully bound parameter #%hu, IO-type: %hd, "
 		"SQL C type: %hd, SQL type: %hd, size: %llu, decdigits: %hd, "
 		"buffer@0x%p, length: %lld, LenInd@0x%p.", ParameterNumber,
@@ -3347,7 +3329,7 @@ static BOOL xstr_to_number(void *data_ptr, SQLLEN *octet_len_ptr,
 }
 
 
-static inline SQLRETURN convert_to_null(esodbc_rec_st *arec,
+static inline SQLRETURN c2sql_null(esodbc_rec_st *arec,
 	esodbc_rec_st *irec, char *dest, size_t *len)
 {
 	assert(irec->concise_type == ESODBC_SQL_NULL);
@@ -3377,7 +3359,7 @@ static SQLRETURN double_to_bool(esodbc_stmt_st *stmt, double dbl, BOOL *val)
 	return SQL_SUCCESS;
 }
 
-static SQLRETURN convert_to_boolean(esodbc_rec_st *arec, esodbc_rec_st *irec,
+static SQLRETURN c2sql_boolean(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	SQLULEN pos, char *dest, size_t *len)
 {
 	BOOL val;
@@ -3488,7 +3470,7 @@ static SQLRETURN convert_to_boolean(esodbc_rec_st *arec, esodbc_rec_st *irec,
  * len: how much of the buffer is needed or has been used.
  */
 static SQLRETURN string_to_number(esodbc_rec_st *arec, esodbc_rec_st *irec,
-	SQLULEN pos, BOOL wide, double min, double max, BOOL fixed,
+	SQLULEN pos, BOOL wide, double *min, double *max, BOOL fixed,
 	char *dest, size_t *len)
 {
 	void *data_ptr;
@@ -3526,16 +3508,16 @@ static SQLRETURN string_to_number(esodbc_rec_st *arec, esodbc_rec_st *irec,
 				" truncate fractional digits", dbl);
 			RET_HDIAGS(stmt, SQL_STATE_22001);
 		}
-		if (dbl < min || max < dbl) {
+		if ((min && dbl < *min) || (max && *max < dbl)) {
 			ERRH(stmt, "converted double %.6e out of bounds "
-				"[%.6e, %.6e]", dbl, min, max);
+				"[%.6e, %.6e]", dbl, min, *max);
 			/* spec requires 22001 here, but that is wrong? */
 			RET_HDIAGS(stmt, SQL_STATE_22003);
 		}
 	} else {
-		if (abs_dbl < min || max < abs_dbl) {
+		if ((min && abs_dbl < *min) || (max && *max < abs_dbl)) {
 			ERRH(stmt, "converted abs double %.6e out of bounds "
-				"[%.6e, %.6e]", abs_dbl, min, max);
+				"[%.6e, %.6e]", abs_dbl, min, *max);
 			RET_HDIAGS(stmt, SQL_STATE_22003);
 		}
 	}
@@ -3556,7 +3538,7 @@ static SQLRETURN string_to_number(esodbc_rec_st *arec, esodbc_rec_st *irec,
 }
 
 static SQLRETURN sfixed_to_number(esodbc_stmt_st *stmt, SQLBIGINT src,
-	double min, double max, char *dest, size_t *len)
+	double *min, double *max, char *dest, size_t *len)
 {
 	if (! dest) {
 		/* largest space it could occupy */
@@ -3566,9 +3548,9 @@ static SQLRETURN sfixed_to_number(esodbc_stmt_st *stmt, SQLBIGINT src,
 
 	DBGH(stmt, "converting paramter value %lld as number.", src);
 
-	if (src < min || max < src) {
+	if ((min && src < *min) || (max && *max < src)) {
 		ERRH(stmt, "source value %lld out of range [%e, %e] for dest type",
-			src, min, max);
+			src, *min, *max);
 		RET_HDIAGS(stmt, SQL_STATE_22003);
 	}
 
@@ -3580,7 +3562,7 @@ static SQLRETURN sfixed_to_number(esodbc_stmt_st *stmt, SQLBIGINT src,
 }
 
 static SQLRETURN ufixed_to_number(esodbc_stmt_st *stmt, SQLUBIGINT src,
-	double min, double max, char *dest, size_t *len)
+	double *max, char *dest, size_t *len)
 {
 	if (! dest) {
 		/* largest space it could occupy */
@@ -3590,9 +3572,9 @@ static SQLRETURN ufixed_to_number(esodbc_stmt_st *stmt, SQLUBIGINT src,
 
 	DBGH(stmt, "converting paramter value %llu as number.", src);
 
-	if (src < 0 || max < src) {
-		ERRH(stmt, "source value %llu out of range [%e, %e] for dest type",
-			src, min, max);
+	if (src < 0 || (max && *max < src)) {
+		ERRH(stmt, "source value %llu out of range [0, %e] for dest type",
+			src, *max);
 		RET_HDIAGS(stmt, SQL_STATE_22003);
 	}
 
@@ -3604,37 +3586,48 @@ static SQLRETURN ufixed_to_number(esodbc_stmt_st *stmt, SQLUBIGINT src,
 }
 
 static SQLRETURN floating_to_number(esodbc_rec_st *irec, SQLDOUBLE src,
-	double min, double max, char *dest, size_t *len)
+	double *min, double *max, char *dest, size_t *len)
 {
-	const static size_t format_fixed_len = /*-1.*/3 + /*prec*/0 + /*E-*/ 2 +
-		sizeof(STR(ESODBC_PRECISION_DOUBLE)) - 1;
+	/* format fixed length in scientific notation, -1.23E-45 */
+	//const static size_t ff_len = /*-1.*/3 + /*prec*/0 + /*E-*/ 2 +
+	//	sizeof(STR(ESODBC_PRECISION_DOUBLE)) - 1;
+	size_t maxlen, width;
 	int cnt;
 	SQLDOUBLE abs_src;
 	esodbc_stmt_st *stmt = irec->desc->hdr.stmt;
 
+	//maxlen = get_param_size(irec) + ff_len;
+	maxlen = get_param_size(irec);
 	if (! dest) {
 		/* largest space it could occupy */
-		*len = get_param_size(irec) + format_fixed_len;
+		*len = maxlen + /*0-term, for printf*/1;
 		return SQL_SUCCESS;
 	}
 
-	DBGH(stmt, "converting paramter value %.6e as number.", src);
-
 	abs_src = src < 0 ? -src : src;
-	if (abs_src < min || max < abs_src) {
+	if ((min && abs_src < *min) || (max && *max < abs_src)) {
 		ERRH(stmt, "source value %e out of range [%e, %e] for dest type",
-			src, min, max);
+			src, *min, *max);
 		RET_HDIAGS(stmt, SQL_STATE_22003);
 	}
 
-	cnt = sprintf(dest, irec->dbl_descr, src);
+	width = maxlen;
+	width -= /*sign*/(src < 0);
+	width -= /*1.*/2;
+	width -= /*e+00*/4 + /*3rd digit*/(abs_src < 1e-100 || 1e100 < src);
+	if (width < 0) {
+		ERRH(stmt, "parameter size (%zu) to low for floating point.", maxlen);
+		RET_HDIAGS(stmt, SQL_STATE_HY104);
+	}
+	DBGH(stmt, "converting double param %.6e with precision/width: %zu/%d.",
+		src, maxlen, width);
+	cnt = snprintf(dest, maxlen + /*\0*/1, "%.*e", (int)width, src);
 	if (cnt < 0) {
-		ERRH(stmt, "failed to print double %e (descr: %s).", src,
-			irec->dbl_descr);
+		ERRH(stmt, "failed to print double %e.", src);
 		RET_HDIAGS(stmt, SQL_STATE_HY000);
 	} else {
-		assert(cnt <= get_param_size(irec) + format_fixed_len);
 		*len = cnt;
+		DBGH(stmt, "value %.6e printed as `" LCPDL "`.", src, *len, dest);
 	}
 
 	return SQL_SUCCESS;
@@ -3651,10 +3644,10 @@ static SQLRETURN binary_to_number(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 	if (! dest) {
 		if (irec->meta_type == METATYPE_EXACT_NUMERIC) {
-			return sfixed_to_number(stmt, 0LL, 0., 0., NULL, len);
+			return sfixed_to_number(stmt, 0LL, NULL, NULL, NULL, len);
 		} else {
 			assert(irec->meta_type == METATYPE_FLOAT_NUMERIC);
-			return floating_to_number(irec, 0., 0., 0., NULL, len);
+			return floating_to_number(irec, 0., NULL, NULL, NULL, len);
 		}
 	}
 
@@ -3702,8 +3695,7 @@ static SQLRETURN binary_to_number(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		case SQL_SMALLINT: BIN_TO_LLNG(SQLSMALLINT); break; /* SHORT */
 		case SQL_TINYINT: BIN_TO_LLNG(SQLSCHAR); break; /* BYTE */
 		} while (0);
-			return sfixed_to_number(stmt, llng,
-					(double)LLONG_MIN, (double)LLONG_MAX, dest, len);
+			return sfixed_to_number(stmt, llng, NULL, NULL, dest, len);
 
 		/* JSON double */
 		do {
@@ -3712,7 +3704,7 @@ static SQLRETURN binary_to_number(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		case SQL_REAL: BIN_TO_DBL(SQLREAL); break; /* FLOAT */
 		case SQL_DOUBLE: BIN_TO_DBL(SQLDOUBLE); break; /* DOUBLE */
 		} while (0);
-			return floating_to_number(irec, dbl, DBL_MIN, DBL_MAX, dest, len);
+			return floating_to_number(irec, dbl, NULL, NULL, dest, len);
 	}
 	/*INDENT-ON*/
 
@@ -3733,18 +3725,18 @@ static SQLRETURN numeric_to_number(esodbc_rec_st *irec, void *data_ptr,
 	SQLRETURN ret;
 
 	if (! dest) {
-		return floating_to_number(irec, 0., 0., 0., NULL, len);
+		return floating_to_number(irec, 0., NULL, NULL, NULL, len);
 	}
 
 	ret = numeric_to_double(irec, data_ptr, &dbl);
 	if (! SQL_SUCCEEDED(ret)) {
 		return ret;
 	}
-	return floating_to_number(irec, dbl, DBL_MIN, DBL_MAX, dest, len);
+	return floating_to_number(irec, dbl, NULL, NULL, dest, len);
 }
 
-static SQLRETURN convert_to_number(esodbc_rec_st *arec, esodbc_rec_st *irec,
-	SQLULEN pos, double min, double max, BOOL fixed, char *dest, size_t *len)
+static SQLRETURN c2sql_number(esodbc_rec_st *arec, esodbc_rec_st *irec,
+	SQLULEN pos, double *min, double *max, BOOL fixed, char *dest, size_t *len)
 {
 	void *data_ptr;
 	SQLSMALLINT ctype;
@@ -3778,13 +3770,13 @@ static SQLRETURN convert_to_number(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			return sfixed_to_number(stmt, llng, min, max, dest, len);
 
 		do {
-		case SQL_C_BIT:
+		case SQL_C_BIT: // XXX: check if 0/1?
 		case SQL_C_UTINYINT: ullng = (SQLUBIGINT)*(SQLCHAR *)data_ptr; break;
 		case SQL_C_USHORT: ullng = (SQLUBIGINT)*(SQLUSMALLINT *)data_ptr;break;
 		case SQL_C_ULONG: ullng = (SQLUBIGINT)*(SQLUINTEGER *)data_ptr; break;
 		case SQL_C_UBIGINT: ullng = *(SQLUBIGINT *)data_ptr; break;
 		} while (0);
-			return ufixed_to_number(stmt, ullng, min, max, dest, len);
+			return ufixed_to_number(stmt, ullng, max, dest, len);
 
 		do {
 		case SQL_C_FLOAT: dbl = (SQLDOUBLE)*(SQLREAL *)data_ptr; break;
@@ -3907,7 +3899,7 @@ static SQLRETURN convert_ts_to_timestamp(esodbc_stmt_st *stmt,
 	return SQL_SUCCESS;
 }
 
-static SQLRETURN convert_to_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
+static SQLRETURN c2sql_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	SQLULEN pos, char *dest, size_t *len)
 {
 	void *data_ptr;
@@ -4016,6 +4008,176 @@ static SQLRETURN convert_to_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	return SQL_SUCCESS;
 }
 
+
+static SQLRETURN c2sql_cstr2qstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
+	SQLULEN pos, char *dest, size_t *len)
+{
+	void *data_ptr;
+	SQLLEN *octet_len_ptr, cnt;
+	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
+
+	/* pointer to read from how many bytes we have */
+	octet_len_ptr = deferred_address(SQL_DESC_OCTET_LENGTH_PTR, pos, arec);
+	/* pointer to app's buffer */
+	data_ptr = deferred_address(SQL_DESC_DATA_PTR, pos, arec);
+
+	cnt = octet_len_ptr ? *octet_len_ptr : strlen((char *)data_ptr);
+
+	if (dest) {
+		*dest = '"';
+	} else if ((SQLLEN)get_param_size(irec) < cnt) {
+		ERRH(stmt, "string's length (%lld) longer than parameter size (%llu).",
+			cnt, get_param_size(irec));
+		RET_HDIAGS(stmt, SQL_STATE_22001);
+	}
+
+	*len = json_escape((char *)data_ptr, cnt, dest + !!dest, SIZE_MAX);
+
+	if (dest) {
+		dest[*len + /*1st `"`*/1] = '"';
+	}
+
+	*len += /*`"`*/2;
+
+	return SQL_SUCCESS;
+}
+
+static SQLRETURN c2sql_wstr2qstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
+	SQLULEN pos, char *dest, size_t *len)
+{
+	void *data_ptr;
+	SQLLEN *octet_len_ptr, cnt, octets;
+	int err;
+	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
+
+	/* pointer to read from how many bytes we have */
+	octet_len_ptr = deferred_address(SQL_DESC_OCTET_LENGTH_PTR, pos, arec);
+	/* pointer to app's buffer */
+	data_ptr = deferred_address(SQL_DESC_DATA_PTR, pos, arec);
+
+	cnt = octet_len_ptr ? *octet_len_ptr : wcslen((wchar_t *)data_ptr);
+
+	if (dest) {
+		*dest = '"';
+	} else {
+		if ((SQLLEN)get_param_size(irec) < cnt) {
+			ERRH(stmt, "string's length (%lld) longer than parameter "
+				"size (%llu).", cnt, get_param_size(irec));
+			RET_HDIAGS(stmt, SQL_STATE_22001);
+		}
+	}
+
+	DBGH(stmt, "converting w-string [%lld] `" LWPDL "`; target@0x%p.",
+		cnt, cnt, (wchar_t *)data_ptr, dest);
+	if (cnt) { /* WCS2U8 will fail with empty string */
+		SetLastError(0);
+		octets = WCS2U8((wchar_t *)data_ptr, (int)cnt, dest + !!dest,
+				dest ? INT_MAX : 0);
+		if ((err = GetLastError())) {
+			ERRH(stmt, "converting to multibyte string failed: %d", err);
+			RET_HDIAGS(stmt, SQL_STATE_HY000);
+		}
+	} else {
+		octets = 0;
+	}
+	assert(0 <= octets); /* buffer might be empty, so 0 is valid */
+	*len = (size_t)octets;
+
+	if (dest) {
+		/* last param - buffer len - is calculated as if !dest */
+		*len = json_escape_overlapping(dest + /*1st `"`*/1, octets,
+				JSON_ESC_SEQ_SZ * octets);
+		dest[*len + /*1st `"`*/1] = '"';
+	} else {
+		/* UCS*-to-UTF8 converted buffer is not yet available, so an accurate
+		 * estimation of how long the JSON-escaping would take is not possible
+		 * => estimate a worst case: 6x */
+		*len *= JSON_ESC_SEQ_SZ;
+	}
+
+	*len += /*2x `"`*/2;
+
+	return SQL_SUCCESS;
+}
+
+static SQLRETURN c2sql_number2qstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
+	SQLULEN pos, char *dest, size_t *len)
+{
+	SQLRETURN ret;
+	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
+
+	if (dest) {
+		*dest = '"';
+	}
+
+	ret = c2sql_number(arec, irec, pos, NULL,NULL, 0, dest + !!dest, len);
+
+	if (dest) {
+		/* compare lengths only once number has actually been converted */
+		if (get_param_size(irec) < *len) {
+			ERRH(stmt, "converted number length (%zu) larger than parameter "
+				"size (%llu)", *len, get_param_size(irec));
+			RET_HDIAGS(stmt, SQL_STATE_22003);
+		}
+		dest[*len + /*1st `"`*/1] = '"';
+	}
+	*len += /*2x `"`*/2;
+
+	return ret;
+}
+
+static SQLRETURN c2sql_varchar(esodbc_rec_st *arec, esodbc_rec_st *irec,
+	SQLULEN pos, char *dest, size_t *len)
+{
+	SQLSMALLINT ctype;
+	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
+
+	switch ((ctype = get_rec_c_type(arec, irec))) {
+		case SQL_C_CHAR:
+			return c2sql_cstr2qstr(arec, irec, pos, dest, len);
+		case SQL_C_WCHAR:
+			return c2sql_wstr2qstr(arec, irec, pos, dest, len);
+
+		case SQL_C_BINARY:
+			// XXX: json_escape
+			ERRH(stmt, "conversion from SQL C BINARY not implemented.");
+			RET_HDIAG(stmt, SQL_STATE_HYC00, "conversion from SQL C BINARY "
+				"not yet supported", 0);
+			break;
+
+		case SQL_C_TINYINT:
+		case SQL_C_STINYINT:
+		case SQL_C_SHORT:
+		case SQL_C_SSHORT:
+		case SQL_C_LONG:
+		case SQL_C_SLONG:
+		case SQL_C_SBIGINT:
+
+		case SQL_C_BIT:
+		case SQL_C_UTINYINT:
+		case SQL_C_USHORT:
+		case SQL_C_ULONG:
+		case SQL_C_UBIGINT:
+
+		case SQL_C_FLOAT:
+		case SQL_C_DOUBLE:
+		case SQL_C_NUMERIC:
+			return c2sql_number2qstr(arec, irec, pos, dest, len);
+
+		case SQL_C_TYPE_DATE:
+		case SQL_C_TYPE_TIME:
+		case SQL_C_TYPE_TIMESTAMP:
+			// TODO: leave it a timestamp, or actual DATE/TIME/TS?
+			return c2sql_timestamp(arec, irec, pos, dest, len);
+
+		// case SQL_C_GUID:
+		default:
+			BUGH(stmt, "can't convert SQL C type %hd to timestamp.",
+				get_rec_c_type(arec, irec));
+			RET_HDIAG(stmt, SQL_STATE_HY000, "bug converting parameter", 0);
+	}
+}
+
 /* Converts parameter values to string, JSON-escaping where necessary
  * The conversion is actually left to the server: the driver will use the
  * C source data type as value (at least for numbers) and specify what ES/SQL
@@ -4026,10 +4188,11 @@ static SQLRETURN convert_param_val(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	SQLLEN *ind_ptr;
 	double min, max;
 	BOOL fixed;
+	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
 
 	ind_ptr = deferred_address(SQL_DESC_INDICATOR_PTR, pos, arec);
 	if (ind_ptr && *ind_ptr == SQL_NULL_DATA) {
-		return convert_to_null(arec, irec, dest, len);
+		return c2sql_null(arec, irec, dest, len);
 	}
 	/* from here on, "input parameter value[ is] non-NULL" */
 	assert(deferred_address(SQL_DESC_DATA_PTR, pos, arec));
@@ -4038,10 +4201,10 @@ static SQLRETURN convert_param_val(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	switch (irec->es_type->data_type) {
 		/* JSON null */
 		case SQL_UNKNOWN_TYPE: /* NULL */
-			return convert_to_null(arec, irec, dest, len);
+			return c2sql_null(arec, irec, dest, len);
 
 		case ESODBC_SQL_BOOLEAN: /* BOOLEAN */
-			return convert_to_boolean(arec, irec, pos, dest, len);
+			return c2sql_boolean(arec, irec, pos, dest, len);
 
 		do {
 		/* JSON long */
@@ -4079,19 +4242,21 @@ static SQLRETURN convert_param_val(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			fixed = FALSE;
 			break;
 		} while (0);
-			return convert_to_number(arec, irec, pos, min, max, fixed,
-					dest, len);
+			return c2sql_number(arec, irec, pos, &min, &max, fixed, dest, len);
 
 		/* JSON string */
 		case SQL_VARCHAR: /* KEYWORD, TEXT */
+			return c2sql_varchar(arec, irec, pos, dest, len);
+
 		case SQL_TYPE_TIMESTAMP: /* DATE */
-			// TODO: json_escape
-			return convert_to_timestamp(arec, irec, pos, dest, len);
-			break;
+			return c2sql_timestamp(arec, irec, pos, dest, len);
 
 		/* JSON (Base64 encoded) string */
 		case SQL_VARBINARY: /* BINARY */
-			// TODO: json_escape
+			// XXX: json_escape
+			ERRH(stmt, "conversion to SQL BINARY not implemented.");
+			RET_HDIAG(stmt, SQL_STATE_HYC00, "conversion to SQL BINARY "
+				"not yet supported", 0);
 			break;
 
 		default:
