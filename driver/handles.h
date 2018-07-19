@@ -63,7 +63,7 @@ typedef enum {
 	METATYPE_INTERVAL_WOSEC,
 	METATYPE_BIT,
 	METATYPE_UID,
-	METATYPE_MAX // SQL_C_DEFAULT
+	METATYPE_MAX // SQL_C_DEFAULT, ESODBC_SQL_NULL
 } esodbc_metatype_et;
 
 /* Structure mapping one ES/SQL data type. */
@@ -90,7 +90,7 @@ typedef struct elasticsearch_type {
 	SQLSMALLINT		interval_precision;
 
 	/* number of SYS TYPES result columns mapped over the above members */
-#define ESODBC_TYPES_MEMBERS	19
+#define ESODBC_TYPES_COLUMNS	19
 
 	/* SQL C type driver mapping of ES' data_type; this is derived from
 	 * .type_name, rathern than .(sql_)data_type (sice the name is the
@@ -104,6 +104,8 @@ typedef struct elasticsearch_type {
 	/* helper member, to characterize the type */
 	esodbc_metatype_et	meta_type;
 	SQLLEN				display_size;
+	/* convenience C-string conversion of type_name */
+	cstr_st				type_name_c;
 } esodbc_estype_st;
 
 
@@ -133,6 +135,9 @@ typedef struct struct_dbc {
 
 	esodbc_estype_st *es_types; /* array with ES types */
 	SQLULEN no_types; /* number of types in array */
+	/* maximum precision/length of types using same SQL data type ID */
+	SQLINTEGER max_float_size;
+	SQLINTEGER max_varchar_size;
 
 	CURL *curl; /* cURL handle */
 	char *abuff; /* buffer holding the answer */
@@ -283,9 +288,8 @@ typedef struct struct_resultset {
 typedef struct struct_stmt {
 	esodbc_hhdr_st hdr;
 
-	/* cache SQL, can be used with varying params */
-	char *u8sql; /* UTF8 JSON serialized buffer */
-	size_t sqllen; /* byte len of SQL statement */
+	/* cache UTF8 JSON serialized SQL: can be (re)used with varying params */
+	cstr_st u8sql;
 
 	/* pointers to the current descriptors */
 	esodbc_desc_st *ard;
@@ -305,6 +309,9 @@ typedef struct struct_stmt {
 	/* "the maximum amount of data that the driver returns from a character or
 	 * binary column" */
 	SQLULEN max_length;
+	/* "number of seconds to wait for an SQL statement to execute before
+	 * returning to the application." */
+	SQLULEN query_timeout;
 
 	/* result set */
 	resultset_st rset;
@@ -423,7 +430,7 @@ SQLRETURN EsSQLSetDescRec(
 #define RET_HDIAGS(_hp/*handle ptr*/, _s/*tate*/) \
 	RET_DIAG(&(_hp)->hdr.diag, _s, NULL, 0)
 /* copy the diagnostics from one handle to the other */
-#define HDIAG_COPY(_s, _d)	(_s)->hdr.diag = (_d)->hdr.diag
+#define HDIAG_COPY(_s, _d)	(_d)->hdr.diag = (_s)->hdr.diag
 /* set a diagnostic to a(ny) handle */
 #define SET_HDIAG(_hp/*handle ptr*/, _s/*tate*/, _t/*char text*/, _c/*ode*/) \
 	post_diagnostic(&(_hp)->hdr.diag, _s, MK_WPTR(_t), _c)

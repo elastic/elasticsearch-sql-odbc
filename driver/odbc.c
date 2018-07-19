@@ -29,6 +29,7 @@
 static BOOL driver_init()
 {
 	if (log_init()) {
+		queries_init();
 		INFO("initializing driver %s.", ESODBC_DRIVER_VER);
 		return connect_init();
 	}
@@ -490,7 +491,6 @@ SQLRETURN SQL_API SQLPrepareW
 	return ret;
 }
 
-#if WITH_EMPTY
 /*
  * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/sending-long-data
  * Note: must use EsSQLSetDescFieldW() for param data-type setting, to call
@@ -509,9 +509,17 @@ SQLRETURN SQL_API SQLBindParameter(
 	SQLLEN             cbValueMax,
 	SQLLEN             *pcbValue)
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE10(_IN, "pudddudpdp", hstmt, ipar, fParamType, fCType,
+		fSqlType, cbColDef, ibScale, rgbValue, cbValueMax, pcbValue);
+	ret = EsSQLBindParameter(hstmt, ipar, fParamType, fCType,
+			fSqlType, cbColDef, ibScale, rgbValue, cbValueMax, pcbValue);
+	TRACE11(_OUT, "dpudddudpdn", ret, hstmt, ipar, fParamType, fCType,
+		fSqlType, cbColDef, ibScale, rgbValue, cbValueMax, pcbValue);
+	return ret;
 }
 
+#if WITH_EMPTY
 SQLRETURN SQL_API SQLGetCursorNameW
 (
 	SQLHSTMT        hstmt,
@@ -634,15 +642,21 @@ SQLRETURN SQL_API SQLDescribeParam(
 {
 	RET_NOT_IMPLEMENTED;
 }
+#endif /* WITH_EMPTY */
 
 SQLRETURN SQL_API SQLNumParams(
 	SQLHSTMT           hstmt,
 	_Out_opt_
 	SQLSMALLINT       *pcpar)
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE2(_IN, "pp", hstmt, pcpar);
+	ret = EsSQLNumParams(hstmt, pcpar);
+	TRACE3(_OUT, "dpt", ret, hstmt, pcpar);
+	return ret;
 }
 
+#if WITH_EMPTY
 SQLRETURN  SQL_API SQLParamData(SQLHSTMT StatementHandle,
 	_Out_opt_ SQLPOINTER *Value)
 {

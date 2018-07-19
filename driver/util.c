@@ -6,6 +6,7 @@
 
 #include <string.h>
 #include <errno.h>
+#include <stdio.h>
 
 #include "util.h"
 #include "log.h"
@@ -17,6 +18,7 @@ BOOL wstr2bool(wstr_st *val)
 {
 	/*INDENT-OFF*/
 	switch (val->cnt) {
+		case /*""*/0: return FALSE;
 		case /*0*/1: return ! EQ_CASE_WSTR(val, &MK_WSTR("0"));
 		case /*no*/2: return ! EQ_CASE_WSTR(val, &MK_WSTR("no"));
 		case /*false*/5: return ! EQ_CASE_WSTR(val, &MK_WSTR("false"));
@@ -25,28 +27,38 @@ BOOL wstr2bool(wstr_st *val)
 	return TRUE;
 }
 
-BOOL wstr2ullong(wstr_st *val, unsigned long long *out)
+BOOL str2ubigint(void *val, const BOOL wide, SQLUBIGINT *out)
 {
-	unsigned long long res, digit;
-	static const unsigned long long max_div_10 = ULLONG_MAX / 10ULL;
-	int i = 0;
+	SQLUBIGINT res, digit;
+	size_t i, cnt;
+	SQLWCHAR *wstr;
+	SQLCHAR *cstr;
+	static const SQLUBIGINT max_div_10 = ULLONG_MAX / 10ULL;
+	assert(sizeof(SQLUBIGINT) == sizeof(unsigned long long));
 
-	if (val->cnt < 1) {
-		errno = EINVAL;
-		return FALSE;
-	} else if (val->str[0] == L'+') {
-		i ++;
+	if (wide) {
+		wstr = ((wstr_st *)val)->str;
+		cnt = ((wstr_st *)val)->cnt;
+	} else {
+		cstr = ((cstr_st *)val)->str;
+		cnt = ((cstr_st *)val)->cnt;
 	}
 
-	for (res = 0; i < val->cnt; i ++) {
+	if (cnt < 1) {
+		errno = EINVAL;
+		return FALSE;
+	}
+	digit = wide ? wstr[0] : cstr[0];
+	i = (digit == '+') ? 1 : 0; /* L'+' =(ubigint)= '+' */
+
+	for (res = 0; i < cnt; i ++) {
+		digit = wide ? wstr[i] - L'0' : cstr[i] - '0';
 		/* is it a number? */
-		if (val->str[i] < L'0' || L'9' < val->str[i]) {
+		if (digit < 0 || 9 < digit) {
 			errno = EINVAL;
 			return FALSE;
-		} else {
-			digit = val->str[i] - L'0';
 		}
-		assert(sizeof(unsigned long long) == sizeof(uint64_t));
+		assert(sizeof(SQLUBIGINT) == sizeof(uint64_t));
 		if (i < ESODBC_PRECISION_UINT64 - 1) {
 			res *= 10;
 			res += digit;
@@ -70,55 +82,109 @@ BOOL wstr2ullong(wstr_st *val, unsigned long long *out)
 	return TRUE;
 }
 
-BOOL wstr2llong(wstr_st *val, long long *out)
+BOOL str2bigint(void *val, const BOOL wide, SQLBIGINT *out)
 {
-	unsigned long long ull;
-	wstr_st uval;
-	int i = 0;
-	BOOL negative;
+	SQLUBIGINT ull; /* unsigned long long */
+	size_t i, at0;
+	BOOL negative, ret;
+	cstr_st cstr;
+	wstr_st wstr;
 
-	if (val->cnt < 1) {
+	if (wide) {
+		wstr = *(wstr_st *)val;
+		i = wstr.cnt;
+		at0 = wstr.str[0];
+	} else {
+		cstr = *(cstr_st *)val;
+		i = cstr.cnt;
+		at0 = cstr.str[0];
+	}
+
+	if (i < 1) {
 		errno = EINVAL;
 		return FALSE;
 	} else {
-		switch (val->str[0]) {
-			case L'-':
+		switch (at0) {
+			case '-': /* L'-' =(size_t)= '-' */
 				negative = TRUE;
-				i ++;
+				i = 1;
 				break;
-			case '+':
+			case '+': /* L'+' =(size_t)= '+' */
 				negative = FALSE;
-				i ++;
+				i  = 1;
 				break;
 			default:
 				negative = FALSE;
+				i = 0;
 		}
 	}
 
-	uval = (wstr_st) {
-		.str = val->str + i, .cnt = val->cnt - i
-	};
-	if (! wstr2ullong(&uval, &ull)) {
+	if (wide) {
+		wstr.str += i;
+		wstr.cnt -= i;
+		ret = str2ubigint(&wstr, wide, &ull);
+	} else {
+		cstr.str += i;
+		cstr.cnt -= i;
+		ret = str2ubigint(&cstr, wide, &ull);
+	}
+	if (! ret) {
 		return FALSE;
 	}
 	if (negative) {
-		if ((unsigned long long)LLONG_MIN < ull) {
+		if ((SQLUBIGINT)LLONG_MIN < ull) {
 			errno = ERANGE;
 			return FALSE; /* underflow */
 		} else {
-			*out = -(long long)ull;
+			*out = -(SQLBIGINT)ull;
 		}
 	} else {
-		if ((unsigned long long)LLONG_MAX < ull) {
+		if ((SQLUBIGINT)LLONG_MAX < ull) {
 			errno = ERANGE;
 			return FALSE; /* overflow */
 		} else {
-			*out = (long long)ull;
+			*out = (SQLBIGINT)ull;
 		}
 	}
 	return TRUE;
 }
 
+BOOL str2double(void *val, BOOL wide, SQLDOUBLE *dbl)
+{
+	wstr_st wstr;
+	cstr_st cstr;
+	wchar_t *endwptr;
+	char *endptr;
+
+	errno = 0;
+	if (wide) {
+		wstr = *(wstr_st *)val;
+		if (wstr.str[wstr.cnt]) {
+			// TODO: simple quick parser instead of scanf
+			if(_snwscanf(wstr.str, wstr.cnt, L"%le", (double *)dbl) != 1) {
+				return FALSE;
+			}
+		} else {
+			*dbl = wcstod((wchar_t *)wstr.str, &endwptr);
+			if (errno || wstr.str + wstr.cnt != endwptr) {
+				return FALSE;
+			}
+		}
+	} else {
+		cstr = *(cstr_st *)val;
+		if (cstr.str[cstr.cnt]) {
+			if(_snscanf(cstr.str, cstr.cnt, "%le", (double *)dbl) != 1) {
+				return FALSE;
+			}
+		} else {
+			*dbl = strtod((char *)cstr.str, &endptr);
+			if (errno || cstr.str + cstr.cnt != endptr) {
+				return FALSE;
+			}
+		}
+	}
+	return TRUE;
+}
 
 size_t i64tot(int64_t i64, void *buff, BOOL wide)
 {
@@ -147,22 +213,47 @@ size_t ui64tot(uint64_t ui64, void *buff, BOOL wide)
  * Trims leading and trailing WS of a wide string of 'chars' length.
  * 0-terminator should not be counted (as it's a non-WS).
  */
-const SQLWCHAR *trim_ws(const SQLWCHAR *wstr, size_t *chars)
+void wtrim_ws(wstr_st *wstr)
 {
-	const SQLWCHAR *wend;
-	size_t cnt = *chars;
+	size_t cnt = wstr->cnt;
+	SQLWCHAR *wcrr = wstr->str;
+	SQLWCHAR *wend = wcrr + cnt;
 
 	/* right trim */
-	for (wend = wstr + cnt; wstr < wend && iswspace(*wstr); wstr ++) {
+	while (wcrr < wend && iswspace(*wcrr)) {
+		wcrr ++;
 		cnt --;
 	}
 
-	while ((0 < cnt) && iswspace(wstr[cnt - 1])) {
+	/* left trim */
+	while (cnt && iswspace(wcrr[cnt - 1])) {
 		cnt --;
 	}
 
-	*chars = cnt;
-	return wstr;
+	*wstr = (wstr_st) {
+		wcrr, cnt
+	};
+}
+void trim_ws(cstr_st *cstr)
+{
+	size_t cnt = cstr->cnt;
+	SQLCHAR *crr = cstr->str;
+	SQLCHAR *end = crr + cnt;
+
+	/* right trim */
+	while (crr < end && isspace(*crr)) {
+		crr ++;
+		cnt --;
+	}
+
+	/* left trim */
+	while (cnt && isspace(crr[cnt - 1])) {
+		cnt --;
+	}
+
+	*cstr = (cstr_st) {
+		crr, cnt
+	};
 }
 
 /*
@@ -171,7 +262,7 @@ const SQLWCHAR *trim_ws(const SQLWCHAR *wstr, size_t *chars)
  * 0-terminated, OR one character longer otherwise (for the 0-term).
  * 'dst' will always be 0-term'd.
  * Returns negative if conversion fails, OR number of converted wchars,
- * including the 0-term.
+ * including/plus the 0-term.
  *
  */
 int ansi_w2c(const SQLWCHAR *src, char *dst, size_t chars)
@@ -267,11 +358,11 @@ static inline size_t json_escaped_len(const char *json, size_t len)
 
 /*
  * JSON-escapes a string.
- * If string len is 0, it assumes a NTS.
+ * If string [in]len is 0, it assumes a NTS.
  * If output buffer (jout) is NULL, it returns the buffer size needed for
  * escaping.
- * Returns number of used bytes in buffer (which might be less than buffer
- * size, if some char needs an escaping longer than remaining space).
+ * Returns number of used bytes in buffer (which might be less than out buffer
+ * size (outlen), if some char needs an escaping longer than remaining space).
  */
 size_t json_escape(const char *jin, size_t inlen, char *jout, size_t outlen)
 {
@@ -320,8 +411,9 @@ size_t json_escape(const char *jin, size_t inlen, char *jout, size_t outlen)
 						i = inlen;
 						continue;
 					}
-					memcpy(jout + pos, "\\u00", sizeof("\\u00") - 1);
-					pos += sizeof("\\u00") - 1;
+					memcpy(jout + pos, JSON_ESC_GEN_PREF,
+							sizeof(JSON_ESC_GEN_PREF) - 1);
+					pos += sizeof(JSON_ESC_GEN_PREF) - 1;
 					jout[pos ++] = I16TOA(uchar >> 4);
 					jout[pos ++] = I16TOA(uchar & 0xF);
 				}
@@ -331,6 +423,24 @@ size_t json_escape(const char *jin, size_t inlen, char *jout, size_t outlen)
 	}
 	return pos;
 #undef I16TOA
+}
+
+/*
+ * JSON-escapes a string (str), outputting the result in the same buffer.
+ * The buffer needs to be long enough (outlen) for this operation (at
+ * least json_escaped_len() long).
+ * If string [in]len is 0, it assumes a NTS.
+ * Returns number of used bytes in buffer (which might be less than out buffer
+ * size (outlen), if some char needs an escaping longer than remaining space).
+ */
+size_t json_escape_overlapping(char *str, size_t inlen, size_t outlen)
+{
+	char *jin;
+
+	/* move the string to the end of the buffer */
+	jin = str + (outlen - inlen);
+	memcpy(jin, str, inlen);
+	return json_escape(jin, inlen, str, outlen);
 }
 
 /* Note: for input/output size indication (avail/usedp), some functions

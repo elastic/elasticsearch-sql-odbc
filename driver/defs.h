@@ -23,7 +23,7 @@
 /* TODO: should there be a max? */
 #define ESODBC_MAX_ROW_ARRAY_SIZE	128
 #define ESODBC_DEF_ARRAY_SIZE		1
-/* max cols or args to bind */
+/* max cols or args to bind; needs to stay <= SHRT_MAX */
 #define ESODBC_MAX_DESC_COUNT		128
 /* values for SQL_ATTR_MAX_LENGTH statement attribute */
 #define ESODBC_UP_MAX_LENGTH		0 // USHORT_MAX
@@ -47,6 +47,7 @@
 #define ESODBC_TABLE_TERM			"type" // TODO: or table?
 #define ESODBC_SCHEMA_TERM			"schema"
 #define ESODBC_MAX_SCHEMA_LEN		0
+#define ESODBC_PARAM_MARKER			"?"
 
 /* max # of active statements for a connection */
 /* TODO: review@alpha */
@@ -60,6 +61,37 @@
 #define ESODBC_PRECISION_UINT64			20
 /* 19 = len("9223372036854775808"), 1 << 63 */
 #define ESODBC_PRECISION_INT64			19
+#define ESODBC_PRECISION_DOUBLE			308
+
+
+/* TODO: validate "implementation-defined precision" choices */
+/* default precision for DECIMAL and NUMERIC */
+#define ESODBC_DEF_DECNUM_PRECISION		19
+/* default precision for float */
+#define ESODBC_DEF_FLOAT_PRECISION		8
+/* maximum fixed numeric precision */
+#define ESODBC_MAX_FIX_PRECISION		ESODBC_PRECISION_UINT64
+/* maximum floating numeric precision */
+#define ESODBC_MAX_FLT_PRECISION		ESODBC_PRECISION_DOUBLE
+/* maximum seconds precision */
+#define ESODBC_MAX_SEC_PRECISION		ESODBC_PRECISION_UINT64
+/*
+ * standard specified defaults:
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetdescfield-function##record-fields
+ */
+/* string */
+#define ESODBC_DEF_STRING_LENGTH		1
+#define ESODBC_DEF_STRING_PRECISION		0
+/* time */
+#define ESODBC_DEF_DATETIME_PRECISION	0
+#define ESODBC_DEF_TIMESTAMP_PRECISION	6
+/* interval */
+#define ESODBC_DEF_INTVL_WS_PRECISION	6
+#define ESODBC_DEF_INTVL_WOS_DT_PREC	2
+/* decimal, numeric */
+#define ESODBC_DEF_DECNUM_SCALE			0
+
+
 
 
 /*
@@ -141,6 +173,8 @@
 
 /* no schema support, but accepted (=currently ignored) by driver */
 #define ESODBC_SCHEMA_USAGE						SQL_SU_PROCEDURE_INVOCATION
+/* the server supports catalog names */
+#define ESODBC_CATALOG_NAME						"Y"
 /*
  * Catalog support:
  * - supported in: DML STATEMENTS, ODBC PROCEDURE INVOCATION.
@@ -159,6 +193,12 @@
 #define ESODBC_COLUMN_ALIAS						"Y"
 /* no procedures support */
 #define ESODBC_PROCEDURES						"N"
+/* no driver support for multiple result sets */
+#define ESODBC_MULT_RESULT_SETS					"N"
+/* no driver support for batching */
+#define ESODBC_BATCH_SUPPORT					0UL
+/* no driver support array of parameters */
+#define ESODBC_PARAM_ARRAY_SELECTS				SQL_PAS_NO_SELECT
 
 
 /*
@@ -173,8 +213,8 @@
 /*
  * No JOIN support.
  */
-#define ESODBC_SQL92_RELATIONAL_JOIN_OPERATORS	0
-#define ESODBC_OJ_CAPABILITIES					0
+#define ESODBC_SQL92_RELATIONAL_JOIN_OPERATORS	0LU
+#define ESODBC_OJ_CAPABILITIES					0LU
 
 /*
  * String functions support:
@@ -184,7 +224,7 @@
  *   OCTET_LENGTH, POSITION, REPEAT, REPLACE, RIGHT, RTRIM, SOUNDEX, SPACE,
  *   SUBSTRING, UCASE.
  */
-#define ESODBC_STRING_FUNCTIONS					0
+#define ESODBC_STRING_FUNCTIONS					0LU
 /*
  * Numeric functions support:
  * - supported: ABS, ACOS, ASIN, ATAN, CEIL, COS, DEGREES, EXP, FLOOR, LOG,
@@ -215,20 +255,20 @@
  * - not supported: FRAC_SECOND, SECOND, MINUTE, HOUR, DAY, WEEK, MONTH,
  *   QUARTER, YEAR.
  */
-#define ESODBC_TIMEDATE_DIFF_INTERVALS			0
+#define ESODBC_TIMEDATE_DIFF_INTERVALS			0LU
 /*
  * TIMESTAMPADD timestamp intervals:
  * - supported: none
  * - not supported: FRAC_SECOND, SECOND, MINUTE, HOUR, DAY, WEEK, MONTH,
  *   QUARTER, YEAR.
  */
-#define ESODBC_TIMEDATE_ADD_INTERVALS			0
+#define ESODBC_TIMEDATE_ADD_INTERVALS			0LU
 /*
  * System functions:
  * - supported: none.
  * - not supported: DATABASE, IFNULL, USER
  */
-#define ESODBC_SYSTEM_FUNCTIONS					0
+#define ESODBC_SYSTEM_FUNCTIONS					0LU
 /*
  * Convert functions support:
  * - supported: CAST.
@@ -253,20 +293,20 @@
  * - not supported: CONVERT, LOWER, UPPER, SUBSTRING, TRANSLATE, TRIM, trim
  *   leading, trim trailing
  */
-#define ESODBC_SQL92_STRING_FUNCTIONS			0
+#define ESODBC_SQL92_STRING_FUNCTIONS			0LU
 /*
  * SQL92 numeric value functions:
  * - supported: none.
  * - not supported: BIT_LENGTH, CHAR_LENGTH, CHARACTER_LENGTH, EXTRACT,
  *   OCTET_LENGTH, POSITION
  */
-#define ESODBC_SQL92_NUMERIC_VALUE_FUNCTIONS	0
+#define ESODBC_SQL92_NUMERIC_VALUE_FUNCTIONS	0LU
 /*
  * SQL92 datetime functions:
  * - supported: none.
  * - not supported: CURRENT_DATE, CURRENT_TIME, CURRENT_DATETIME
  */
-#define ESODBC_SQL92_DATETIME_FUNCTIONS			0
+#define ESODBC_SQL92_DATETIME_FUNCTIONS			0LU
 /*
  * SQL92 datetime literals support:
  * - supported: TIMESTAMP;
@@ -280,7 +320,7 @@
  * - supported: none.
  * - not supported: CASE, CAST, COALESCE, NULLIF
  */
-#define ODBC_SQL92_VALUE_EXPRESSIONS			0
+#define ODBC_SQL92_VALUE_EXPRESSIONS			0LU
 
 /*
  * ES specific data types

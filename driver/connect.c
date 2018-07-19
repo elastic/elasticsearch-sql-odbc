@@ -20,14 +20,6 @@
 #define HTTP_ACCEPT_JSON		"Accept: application/json"
 #define HTTP_CONTENT_TYPE_JSON	"Content-Type: application/json; charset=utf-8"
 
-/* JSON body build elements */
-#define JSON_SQL_QUERY_START		"{\"query\":\""
-#define JSON_SQL_QUERY_MID			"\""
-#define JSON_SQL_QUERY_MID_FETCH	JSON_SQL_QUERY_MID ",\"fetch_size\":"
-#define JSON_SQL_QUERY_END			"}"
-#define JSON_SQL_CURSOR_START		"{\"cursor\":\""
-#define JSON_SQL_CURSOR_END			"\"}"
-
 /* Elasticsearch/SQL data types */
 /* 4 */
 #define JSON_COL_BYTE			"byte"
@@ -353,12 +345,9 @@ static void cleanup_curl(esodbc_dbc_st *dbc)
 }
 
 /*
- * Sends a POST request given the body
+ * Sends a POST request with the given JSON object body.
  */
-static SQLRETURN post_request(esodbc_stmt_st *stmt,
-	long timeout, /* req timeout; set to negative for default */
-	const char *u8body, /* stringified JSON object, UTF-8 encoded */
-	size_t blen /* size of the u8body buffer */)
+SQLRETURN post_json(esodbc_stmt_st *stmt, const cstr_st *u8body)
 {
 	// char *const answer, /* buffer to receive the answer in */
 	// long avail /*size of the answer buffer */)
@@ -366,54 +355,43 @@ static SQLRETURN post_request(esodbc_stmt_st *stmt,
 	esodbc_dbc_st *dbc = stmt->hdr.dbc;
 	char *abuff = NULL;
 	size_t apos;
-	long to, code;
+	SQLULEN tout;
+	long code;
 
-	DBGH(stmt, "posting request `%.*s` (%zd).", blen, u8body, blen);
+	DBGH(stmt, "POSTing JSON [%zd] `" LCPDL "`.", u8body->cnt, LCSTR(u8body));
 
 	if (! dbc->curl) {
 		init_curl(dbc);
 	}
 
-	/* set timeout as: statment, with highest prio, dbc next. */
-	if (0 <= timeout) {
-		to = timeout;
-	} else if (0 <= dbc->timeout) {
-		to = dbc->timeout;
-	} else {
-		to = -1;
-	}
-
-
-	/* set total timeout for request */
-	if (0 <= to) {
-		res = curl_easy_setopt(dbc->curl, CURLOPT_TIMEOUT, to);
+	/* set timeout as maximum between connection and statement value */
+	tout = dbc->timeout < stmt->query_timeout ? stmt->query_timeout :
+		dbc->timeout;
+	if (0 < tout) {
+		res = curl_easy_setopt(dbc->curl, CURLOPT_TIMEOUT, tout);
 		if (res != CURLE_OK) {
 			goto err;
 		} else {
-			DBGH(stmt, "libcurl: set curl 0x%p timeout to %ld.", dbc->curl, to);
+			DBGH(stmt, "libcurl: set curl 0x%p timeout to %ld.", dbc->curl,
+				tout);
 		}
 	}
 
-	/* set body to send */
-	if (u8body) {
-		/* len of the body */
-		res = curl_easy_setopt(dbc->curl, CURLOPT_POSTFIELDSIZE, blen);
-		if (res != CURLE_OK) {
-			goto err;
-		} else {
-			DBGH(stmt, "libcurl: set curl 0x%p post fieldsize to %ld.",
-				dbc->curl, blen);
-		}
-		/* body itself */
-		res = curl_easy_setopt(dbc->curl, CURLOPT_POSTFIELDS, u8body);
-		if (res != CURLE_OK) {
-			goto err;
-		} else {
-			DBGH(stmt, "libcurl: set curl 0x%p post fields to `%.*s`.",
-				dbc->curl, blen, u8body);
-		}
+	/* len of the body */
+	res = curl_easy_setopt(dbc->curl, CURLOPT_POSTFIELDSIZE, u8body->cnt);
+	if (res != CURLE_OK) {
+		goto err;
 	} else {
-		assert(blen == 0);
+		DBGH(stmt, "libcurl: set curl 0x%p post fieldsize to %ld.",
+			dbc->curl, u8body->cnt);
+	}
+	/* body itself */
+	res = curl_easy_setopt(dbc->curl, CURLOPT_POSTFIELDS, u8body->str);
+	if (res != CURLE_OK) {
+		goto err;
+	} else {
+		DBGH(stmt, "libcurl: set curl 0x%p post fields to `" LCPDL "`.",
+			dbc->curl, LCSTR(u8body));
 	}
 
 	assert(dbc->abuff == NULL);
@@ -451,8 +429,8 @@ static SQLRETURN post_request(esodbc_stmt_st *stmt,
 	return attach_answer(stmt, abuff, apos);
 
 err:
-	ERRH(stmt, "libcurl: request failed (timeout:%ld, body:`%.*s`) "
-		"failed: '%s' (%d).", timeout, blen, u8body,
+	ERRH(stmt, "libcurl: request failed (timeout:%llu, body:`" LCPDL "`) "
+		"failed: '%s' (%d).", tout, LCSTR(u8body),
 		res != CURLE_OK ? curl_easy_strerror(res) : "<unspecified>", res);
 err_net: /* the error occured after the request hit hit the network */
 	cleanup_curl(dbc);
@@ -464,108 +442,6 @@ err_net: /* the error occured after the request hit hit the network */
 	}
 	RET_HDIAG(stmt, SQL_STATE_HY000, "failed to init transport", res);
 }
-
-/*
- * Build a JSON query or cursor object (if statment having one) and send it as
- * the body of a REST POST requrest.
- */
-SQLRETURN post_statement(esodbc_stmt_st *stmt)
-{
-	SQLRETURN ret;
-	esodbc_dbc_st *dbc = stmt->hdr.dbc;
-	size_t bodylen, pos, u8len;
-	char *body, buff[ESODBC_BODY_BUF_START_SIZE];
-	char u8curs[ESODBC_BODY_BUF_START_SIZE];
-
-	// TODO: add params (if any)
-
-	/* TODO: move escaping/x-coding (to JSON or CBOR) in attach_sql() and/or
-	 * attach_answer() to avoid these operations for each execution of the
-	 * statement (especially for the SQL statement; the cursor might not
-	 * always be used - if app decides to no longer fetch - but would then
-	 * clean this function). */
-
-	/* evaluate how long the stringified REST object will be */
-	if (stmt->rset.eccnt) { /* eval CURSOR object length */
-		/* convert cursor to C [mb]string. */
-		/* TODO: ansi_w2c() fits better for Base64 encoded cursors. */
-		u8len = WCS2U8(stmt->rset.ecurs, (int)stmt->rset.eccnt, u8curs,
-				sizeof(u8curs));
-		if (u8len <= 0) {
-			ERRH(stmt, "failed to convert cursor `" LWPDL "` to UTF8: %d.",
-				stmt->rset.eccnt, stmt->rset.ecurs, WCS2U8_ERRNO());
-			RET_HDIAGS(stmt, SQL_STATE_24000);
-		}
-
-		bodylen = sizeof(JSON_SQL_CURSOR_START) - /*\0*/1;
-		bodylen += json_escape(u8curs, u8len, NULL, 0);
-		bodylen += sizeof(JSON_SQL_CURSOR_END) - /*\0*/1;
-	} else { /* eval QUERY object length */
-		bodylen = sizeof(JSON_SQL_QUERY_START) - /*\0*/1;
-		if (dbc->fetch.slen) {
-			bodylen += sizeof(JSON_SQL_QUERY_MID_FETCH) - /*\0*/1;
-			bodylen += dbc->fetch.slen;
-		} else {
-			bodylen += sizeof(JSON_SQL_QUERY_MID) - /*\0*/1;
-		}
-		bodylen += json_escape(stmt->u8sql, stmt->sqllen, NULL, 0);
-		bodylen += sizeof(JSON_SQL_QUERY_END) - /*\0*/1;
-	}
-
-	/* allocate memory for the stringified buffer, if needed */
-	if (sizeof(buff) < bodylen) {
-		WARNH(dbc, "local buffer too small (%zd), need %zdB; will alloc.",
-			sizeof(buff), bodylen);
-		WARNH(dbc, "local buffer too small, SQL: `%.*s`.", stmt->sqllen,
-			stmt->u8sql);
-		body = malloc(bodylen);
-		if (! body) {
-			ERRNH(stmt, "failed to alloc %zdB.", bodylen);
-			RET_HDIAGS(stmt, SQL_STATE_HY001);
-		}
-	} else {
-		body = buff;
-	}
-
-	/* build the actual stringified JSON object */
-	if (stmt->rset.eccnt) { /* copy CURSOR object */
-		pos = sizeof(JSON_SQL_CURSOR_START) - /*\0*/1;
-		memcpy(body, JSON_SQL_CURSOR_START, pos);
-		pos += json_escape(u8curs, u8len, body + pos, bodylen - pos);
-		memcpy(body + pos, JSON_SQL_CURSOR_END,
-			sizeof(JSON_SQL_CURSOR_END) - /*WITH \0*/0);
-		pos += sizeof(JSON_SQL_CURSOR_END) - /* but don't account for it */1;
-	} else { /* copy QUERY object */
-		pos = sizeof(JSON_SQL_QUERY_START) - 1;
-		memcpy(body, JSON_SQL_QUERY_START, pos);
-		pos += json_escape(stmt->u8sql, stmt->sqllen, body + pos, bodylen-pos);
-
-		if (dbc->fetch.slen) {
-			memcpy(body + pos, JSON_SQL_QUERY_MID_FETCH,
-				sizeof(JSON_SQL_QUERY_MID_FETCH) - 1);
-			pos += sizeof(JSON_SQL_QUERY_MID_FETCH) - 1;
-			memcpy(body + pos, dbc->fetch.str, dbc->fetch.slen);
-			pos += dbc->fetch.slen;
-		} else {
-			memcpy(body + pos, JSON_SQL_QUERY_MID,
-				sizeof(JSON_SQL_QUERY_MID) - 1);
-			pos += sizeof(JSON_SQL_QUERY_MID) - 1;
-		}
-
-		memcpy(body + pos, JSON_SQL_QUERY_END,
-			sizeof(JSON_SQL_QUERY_END) - /*WITH \0*/0);
-		pos += sizeof(JSON_SQL_QUERY_END) - /* but don't account for it */1;
-	}
-
-	ret = post_request(stmt, dbc->timeout, body, pos);
-
-	if (body != buff) {
-		free(body);    /* hehe */
-	}
-
-	return ret;
-}
-
 
 static SQLRETURN test_connect(CURL *curl)
 {
@@ -1002,8 +878,8 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 	/*
 	 * request timeout for liburl: negative reset to 0
 	 */
-	if (! wstr2llong(&attrs->timeout, &timeout)) {
-		ERRH(dbc, "failed to convert '" LWPDL "' to long long.",
+	if (! str2bigint(&attrs->timeout, /*wide?*/TRUE, (SQLBIGINT *)&timeout)) {
+		ERRH(dbc, "failed to convert '" LWPDL "' to big int.",
 			LWSTR(&attrs->timeout));
 		goto err;
 	}
@@ -1017,7 +893,8 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 	/*
 	 * set max body size
 	 */
-	if (! wstr2llong(&attrs->max_body_size, &max_body_size)) {
+	if (! str2bigint(&attrs->max_body_size, /*wide?*/TRUE,
+			(SQLBIGINT *)&max_body_size)) {
 		ERRH(dbc, "failed to convert '" LWPDL "' to long long.",
 			LWSTR(&attrs->max_body_size));
 		goto err;
@@ -1034,7 +911,8 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 	/*
 	 * set max fetch size
 	 */
-	if (! wstr2llong(&attrs->max_fetch_size, &max_fetch_size)) {
+	if (! str2bigint(&attrs->max_fetch_size, /*wide?*/TRUE,
+			(SQLBIGINT *)&max_fetch_size)) {
 		ERRH(dbc, "failed to convert '" LWPDL "' to long long.",
 			LWSTR(&attrs->max_fetch_size));
 		goto err;
@@ -1415,7 +1293,7 @@ static void set_display_size(esodbc_estype_st *es_type)
 
 		case SQL_TYPE_DATE:
 		case SQL_TYPE_TIME:
-		case SQL_TYPE_TIMESTAMP: /* DATE */
+		case SQL_TYPE_TIMESTAMP: /* SQL/ES DATE */
 			es_type->display_size = sizeof(ESODBC_ISO8601_TEMPLATE) - /*0*/1;
 			break;
 
@@ -1507,14 +1385,16 @@ static BOOL bind_types_cols(esodbc_stmt_st *stmt, estype_row_st *type_row)
 	return TRUE;
 }
 
+/* Copies the type info from the result-set to array to be associated with the
+ * connection. */
 static void *copy_types_rows(estype_row_st *type_row, SQLULEN rows_fetched,
 	esodbc_estype_st *types)
 {
 	SQLWCHAR *pos;
-	int i;
+	int i, c;
 	SQLSMALLINT sql_type;
 
-	/* start pointer where the strings will be copied in */
+	/* pointer to start position where the strings will be copied in */
 	pos = (SQLWCHAR *)&types[rows_fetched];
 
 	/* copy one integer member */
@@ -1546,7 +1426,7 @@ static void *copy_types_rows(estype_row_st *type_row, SQLULEN rows_fetched,
 	} while (0)
 
 	for (i = 0; i < rows_fetched; i ++) {
-		/* copy data */
+		/* copy row data */
 		ES_TYPES_COPY_WSTR(type_name);
 		ES_TYPES_COPY_INT(data_type);
 		ES_TYPES_COPY_INT(column_size);
@@ -1567,9 +1447,24 @@ static void *copy_types_rows(estype_row_st *type_row, SQLULEN rows_fetched,
 		ES_TYPES_COPY_INT(num_prec_radix);
 		ES_TYPES_COPY_INT(interval_precision);
 
-		/* apply any needed fixes */
+		/* convert type_name to C and copy it too */
+		types[i].type_name_c.str = (char *)pos; /**/
+		pos += types[i].type_name.cnt + /*\0*/1;
+		if ((c = ansi_w2c(types[i].type_name.str, types[i].type_name_c.str,
+						types[i].type_name.cnt)) < 0) {
+			ERR("failed to convert ES/SQL type `" LWPDL "` to C-str.",
+				LWSTR(&types[i].type_name));
+			return NULL;
+		} else {
+			assert(c == types[i].type_name.cnt + /*\0*/1);
+			types[i].type_name_c.cnt = types[i].type_name.cnt;
+		}
 
-		/* warn if scales extremes are different */
+		/*
+		 * apply any needed fixes
+		 */
+
+		/* notify if scales extremes are different */
 		if (types[i].maximum_scale != types[i].minimum_scale) {
 			INFO("type `" LWPDL "` returned with non-equal max/min "
 				"scale: %d/%d -- using the max.", LWSTR(&types[i].type_name),
@@ -1607,6 +1502,34 @@ static void *copy_types_rows(estype_row_st *type_row, SQLULEN rows_fetched,
 #undef ES_TYPES_COPY_WCHAR
 
 	return pos;
+}
+
+/* associate the types with the DBC: store the refs and store the max
+ * type size/length for SQL type ID-overlapping ES/SQL types */
+static void set_es_types(esodbc_dbc_st *dbc, SQLULEN rows_fetched,
+	esodbc_estype_st *types)
+{
+	SQLULEN i;
+
+	assert(!dbc->max_float_size && !dbc->max_varchar_size);
+
+	for (i = 0; i < rows_fetched; i ++) {
+		if (types[i].data_type == SQL_FLOAT) {
+			if (dbc->max_float_size < types[i].column_size) {
+				dbc->max_float_size = types[i].column_size;
+			}
+		} else if (types[i].data_type == SQL_VARCHAR) {
+			if (dbc->max_varchar_size < types[i].column_size) {
+				dbc->max_varchar_size = types[i].column_size;
+			}
+		}
+	}
+
+	DBGH(dbc, "%llu ES/SQL types available, maximum sizes supported for: "
+		"SQL_FLOAT: %ld, SQL_VARCHAR: %ld.", rows_fetched,
+		dbc->max_float_size, dbc->max_varchar_size);
+	dbc->es_types = types;
+	dbc->no_types = rows_fetched;
 }
 
 /*
@@ -1664,9 +1587,9 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 	if (! SQL_SUCCEEDED(EsSQLNumResultCols(stmt, &col_cnt))) {
 		ERRH(stmt, "failed to get result columns count.");
 		goto end;
-	} else if (col_cnt != ESODBC_TYPES_MEMBERS) {
+	} else if (col_cnt != ESODBC_TYPES_COLUMNS) {
 		ERRH(stmt, "Elasticsearch returned an unexpected number of columns "
-			"(%d vs expected %d).", col_cnt, ESODBC_TYPES_MEMBERS);
+			"(%d vs expected %d).", col_cnt, ESODBC_TYPES_COLUMNS);
 		goto end;
 	} else {
 		DBGH(stmt, "Elasticsearch types columns count: %d.", col_cnt);
@@ -1747,8 +1670,11 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 			goto end;
 		}
 		if (type_row[i].type_name_loi != SQL_NULL_DATA) {
-			strs_len += type_row[i].type_name_loi;
-			strs_len += sizeof(*type_row[i].type_name); /* 0-term */
+			/* 2x: also reserve room for type's C-string name: reserve as much
+			 * space as for the wide version (1x), to laster simplify pointer
+			 * indexing (despite the small waste). */
+			strs_len += 2* type_row[i].type_name_loi;
+			strs_len += 2* sizeof(*type_row[i].type_name); /* 0-term */
 		}
 		if (type_row[i].literal_prefix_loi != SQL_NULL_DATA) {
 			strs_len += type_row[i].literal_prefix_loi;
@@ -1796,8 +1722,7 @@ end:
 
 	if (ret) {
 		/* finally, associate the types to the dbc handle */
-		dbc->es_types = types;
-		dbc->no_types = rows_fetched;
+		set_es_types(dbc, rows_fetched, types);
 	} else if (types) {
 		/* freeing the statement went wrong */
 		free(types);

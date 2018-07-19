@@ -13,7 +13,6 @@
 #include "queries.h"
 #include "connect.h"
 
-
 #if ODBCVER == 0x0380
 /* String constant for supported ODBC version */
 #define ESODBC_SQL_SPEC_STRING	"03.80"
@@ -210,8 +209,10 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			break;
 
 		case SQL_CATALOG_NAME:
-			// TODO: can the catalog varry? `SYS CATALOGS` here?
-			FIXME; // FIXME
+			DBGH(dbc, "requested: catalog name support (`"
+				ESODBC_CATALOG_NAME "`).");
+			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_CATALOG_NAME),
+					BufferLength, StringLengthPtr);
 			break;
 
 		case SQL_CATALOG_NAME_SEPARATOR: /* SQL_QUALIFIER_NAME_SEPARATOR */
@@ -510,7 +511,26 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			*(SQLUINTEGER *)InfoValue = 0;
 			break;
 
+		case SQL_MULT_RESULT_SETS:
+			DBGH(dbc, "requested: multiple result set support (`"
+				ESODBC_MULT_RESULT_SETS "`).");
+			return write_wstr(dbc, InfoValue,
+					&MK_WSTR(ESODBC_MULT_RESULT_SETS), BufferLength,
+					StringLengthPtr);
+
+		case SQL_BATCH_SUPPORT:
+			DBGH(dbc, "requested: batch support (%d).", ESODBC_BATCH_SUPPORT);
+			*(SQLUINTEGER *)InfoValue = ESODBC_BATCH_SUPPORT;
+			break;
+
+		case SQL_PARAM_ARRAY_SELECTS:
+			DBGH(dbc, "requested: reselt set availability with parameterized "
+				"execution (%d).", ESODBC_PARAM_ARRAY_SELECTS);
+			*(SQLUINTEGER *)InfoValue = ESODBC_PARAM_ARRAY_SELECTS;
+			break;
+
 		default:
+			BUGH(dbc, "unimplemented InfoType: %u.", InfoType); //FIXME
 			ERRH(dbc, "unknown InfoType: %u.", InfoType);
 			RET_HDIAGS(dbc, SQL_STATE_HYC00/*096?*/);
 	}
@@ -552,6 +572,8 @@ SQLRETURN EsSQLGetDiagFieldW(
 	}
 
 	diag = &HDRH(Handle)->diag;
+	/* GetDiagField can't set diagnostics itself, so use a dummy */
+	*HDRH(&dummy) = *HDRH(Handle); /* need a valid hhdr struct */
 
 	/*INDENT-OFF*/
 	switch(DiagIdentifier) {
@@ -650,8 +672,6 @@ SQLRETURN EsSQLGetDiagFieldW(
 		} while (0);
 			DBGH(Handle, "diagnostic code '"LWPD"' is of class '" LWPDL "'.",
 					esodbc_errors[diag->state].code, LWSTR(wstrp));
-			/* GetDiagField can't set diagnostics itself, so use a dummy */
-			*HDRH(&dummy) = *HDRH(Handle); /* need a valid hhdr struct */
 			return write_wstr(&dummy, DiagInfoPtr, wstrp, BufferLength,
 					StringLengthPtr);
 
@@ -691,8 +711,6 @@ SQLRETURN EsSQLGetDiagFieldW(
 			}
 			wstr.str = esodbc_errors[diag->state].code;
 			wstr.cnt = wcslen(wstr.str);
-			/* GetDiagField can't set diagnostics itself, so use a dummy */
-			*HDRH(&dummy) = *HDRH(Handle); /* need a valid hhdr struct */
 			ret = write_wstr(&dummy, DiagInfoPtr, &wstr, BufferLength, &used);
 			if (StringLengthPtr) {
 				*StringLengthPtr = used;
@@ -867,7 +885,7 @@ SQLRETURN EsSQLGetTypeInfoW(SQLHSTMT StatementHandle, SQLSMALLINT DataType)
 	ret = attach_sql(stmt, MK_WPTR(SQL_TYPES_STATEMENT),
 			sizeof(SQL_TYPES_STATEMENT) - 1);
 	if (SQL_SUCCEEDED(ret)) {
-		ret = post_statement(stmt);
+		ret = EsSQLExecute(stmt);
 	}
 	return ret;
 }

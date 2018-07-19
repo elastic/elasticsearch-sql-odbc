@@ -72,11 +72,6 @@ typedef struct cstr {
 } cstr_st;
 
 /*
- * Trims leading and trailing WS of a wide string of 'chars' length.
- * 0-terminator should not be counted (as it's a non-WS).
- */
-const SQLWCHAR *trim_ws(const SQLWCHAR *wstr, size_t *chars);
-/*
  * Copy converted strings from SQLWCHAR to char, for ANSI strings.
  */
 int ansi_w2c(const SQLWCHAR *src, char *dst, size_t chars);
@@ -115,7 +110,7 @@ typedef struct wstr {
 #	define MK_CSTR(_s)	((cstr_st){.str = _s, .cnt = sizeof(_s) - 1})
 #else /* !__cplusplus */
 #	define WSTR_INIT(_s)	{MK_WPTR(_s), sizeof(_s) - 1}
-#	define CSTR_INIT(_s)	{_s, sizeof(_s) - 1}
+#	define CSTR_INIT(_s)	{(SQLCHAR *)_s, sizeof(_s) - 1}
 #endif /* !__cplusplus */
 /*
  * Test equality of two wstr_st objects.
@@ -129,9 +124,30 @@ typedef struct wstr {
 	((s1)->cnt == (s2)->cnt && \
 		wmemncasecmp((s1)->str, (s2)->str, (s1)->cnt) == 0)
 
+
+typedef struct {
+	BOOL wide;
+	union {
+		wstr_st w;
+		cstr_st c;
+	};
+} xstr_st;
+
+/* For as long as wptr_st & cptr_st are only differing in string pointer type,
+ * it's safe to save the check if wide or not. */
+#define XSTR_LEN(_xptr)	(_xptr)->w.cnt
+
+/*
+ * Trims leading and trailing WS of a wide string of 'chars' length.
+ * 0-terminator should not be counted (as it's a non-WS).
+ */
+void trim_ws(cstr_st *str);
+void wtrim_ws(wstr_st *wstr);
+
 BOOL wstr2bool(wstr_st *val);
-BOOL wstr2ullong(wstr_st *val, unsigned long long *out);
-BOOL wstr2llong(wstr_st *val, long long *out);
+BOOL str2ubigint(void *val, const BOOL wide, SQLUBIGINT *out);
+BOOL str2bigint(void *val, const BOOL wide, SQLBIGINT *out);
+BOOL str2double(void *val, BOOL wide, SQLDOUBLE *dbl);
 
 /* converts the int types to a C or wide string, returning the string length */
 size_t i64tot(int64_t i64, void *buff, BOOL wide);
@@ -175,6 +191,10 @@ typedef cstr_st tstr_st;
 #endif /* UNICODE */
 
 
+/* generic char JSON escaping prefix */
+#define JSON_ESC_GEN_PREF	"\\u00"
+/* octet length of one generic JSON escaped character */
+#define JSON_ESC_SEQ_SZ		(sizeof(JSON_ESC_GEN_PREF) - 1 + /*0xAB*/2)
 /*
  * JSON-escapes a string.
  * If string len is 0, it assumes a NTS.
@@ -184,6 +204,15 @@ typedef cstr_st tstr_st;
  * size, if some char needs an escaping longer than remaining space).
  */
 size_t json_escape(const char *jin, size_t inlen, char *jout, size_t outlen);
+/*
+ * JSON-escapes a string (str), outputting the result in the same buffer.
+ * The buffer needs to be long enough (outlen) for this operation (at
+ * least json_escaped_len() long).
+ * If string [in]len is 0, it assumes a NTS.
+ * Returns number of used bytes in buffer (which might be less than out buffer
+ * size (outlen), if some char needs an escaping longer than remaining space).
+ */
+size_t json_escape_overlapping(char *str, size_t inlen, size_t outlen);
 
 /*
  * Copy a WSTR back to application.

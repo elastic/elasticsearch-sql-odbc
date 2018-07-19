@@ -13,7 +13,6 @@
 #include "catalogue.h"
 #include "log.h"
 #include "handles.h"
-#include "connect.h"
 #include "info.h"
 #include "queries.h"
 
@@ -64,7 +63,7 @@ SQLSMALLINT copy_current_catalog(esodbc_dbc_st *dbc, SQLWCHAR *dest,
 		ERRH(dbc, "failed to attach query to statement.");
 		goto end;
 	}
-	if (! SQL_SUCCEEDED(post_statement(stmt))) {
+	if (! SQL_SUCCEEDED(EsSQLExecute(stmt))) {
 		ERRH(dbc, "failed to post query.");
 		goto end;
 	}
@@ -198,7 +197,7 @@ SQLRETURN EsSQLTablesW(
 	pos = sizeof(SQL_TABLES) - 1;
 	wmemcpy(wbuf, MK_WPTR(SQL_TABLES), pos);
 
-	if (CatalogName) {
+	if (CatalogName && NameLength1) {
 		catalog = CatalogName;
 		if (NameLength1 == SQL_NTS) {
 			cnt_cat = wcslen(catalog);
@@ -222,7 +221,7 @@ SQLRETURN EsSQLTablesW(
 		}
 	}
 
-	if (SchemaName) {
+	if (SchemaName && NameLength2) {
 		schema = SchemaName;
 		if (NameLength2 == SQL_NTS) {
 			cnt_sch = wcslen(schema);
@@ -245,7 +244,7 @@ SQLRETURN EsSQLTablesW(
 	}
 
 	// FIXME: string needs escaping of % \\ _
-	if (TableName) {
+	if (TableName && NameLength3) {
 		table = TableName;
 		if (NameLength3 == SQL_NTS) {
 			cnt_tab = wcslen(table);
@@ -269,7 +268,7 @@ SQLRETURN EsSQLTablesW(
 		}
 	}
 
-	if (TableType) {
+	if (TableType && NameLength4) {
 		type = TableType;
 		if (NameLength4 == SQL_NTS) {
 			cnt_typ = wcslen(type);
@@ -306,7 +305,7 @@ SQLRETURN EsSQLTablesW(
 	assert(SQL_SUCCEEDED(ret)); /* can't return error */
 	ret = attach_sql(stmt, wbuf, pos);
 	if (SQL_SUCCEEDED(ret)) {
-		ret = post_statement(stmt);
+		ret = EsSQLExecute(stmt);
 	}
 	return ret;
 }
@@ -435,7 +434,7 @@ SQLRETURN EsSQLColumnsW
 	assert(SQL_SUCCEEDED(ret)); /* can't return error */
 	ret = attach_sql(stmt, wbuf, pos);
 	if (SQL_SUCCEEDED(ret)) {
-		ret = post_statement(stmt);
+		ret = EsSQLExecute(stmt);
 	}
 	return ret;
 }
