@@ -135,7 +135,7 @@ typedef struct struct_dbc {
 
 	esodbc_estype_st *es_types; /* array with ES types */
 	SQLULEN no_types; /* number of types in array */
-	/* maximum precision/lenght of types using same SQL data type ID */
+	/* maximum precision/length of types using same SQL data type ID */
 	SQLINTEGER max_float_size;
 	SQLINTEGER max_varchar_size;
 

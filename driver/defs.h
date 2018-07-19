@@ -75,6 +75,23 @@
 #define ESODBC_MAX_FLT_PRECISION		ESODBC_PRECISION_DOUBLE
 /* maximum seconds precision */
 #define ESODBC_MAX_SEC_PRECISION		ESODBC_PRECISION_UINT64
+/*
+ * standard specified defaults:
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetdescfield-function##record-fields
+ */
+/* string */
+#define ESODBC_DEF_STRING_LENGTH		1
+#define ESODBC_DEF_STRING_PRECISION		0
+/* time */
+#define ESODBC_DEF_DATETIME_PRECISION	0
+#define ESODBC_DEF_TIMESTAMP_PRECISION	6
+/* interval */
+#define ESODBC_DEF_INTVL_WS_PRECISION	6
+#define ESODBC_DEF_INTVL_WOS_DT_PREC	2
+/* decimal, numeric */
+#define ESODBC_DEF_DECNUM_SCALE			0
+
+
 
 
 /*

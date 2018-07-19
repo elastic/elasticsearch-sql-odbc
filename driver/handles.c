@@ -1749,31 +1749,31 @@ void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type,
  */
 static void set_defaults_from_meta_type(esodbc_rec_st *rec)
 {
-	DBGH(rec->desc, "(re)setting record@0x%p lengt/precision/scale to "
+	DBGH(rec->desc, "(re)setting record@0x%p length/precision/scale to "
 		"defaults.", rec);
 	switch (rec->meta_type) {
 		case METATYPE_STRING:
-			rec->length = 1;
-			rec->precision = 0;
+			rec->length = ESODBC_DEF_STRING_LENGTH;
+			rec->precision = ESODBC_DEF_STRING_PRECISION;
 			break;
 		case METATYPE_DATETIME:
 			if (rec->datetime_interval_code == SQL_CODE_DATE ||
 				rec->datetime_interval_code == SQL_CODE_TIME) {
-				rec->precision = 0;
+				rec->precision = ESODBC_DEF_DATETIME_PRECISION;
 			} else if (rec->datetime_interval_code == SQL_CODE_TIMESTAMP) {
-				rec->precision = 6;
+				rec->precision = ESODBC_DEF_TIMESTAMP_PRECISION;
 			}
 			break;
 		case METATYPE_INTERVAL_WSEC:
-			rec->precision = 6;
+			rec->precision = ESODBC_DEF_INTVL_WS_PRECISION;
 		/* no break */
 		case METATYPE_INTERVAL_WOSEC:
-			rec->datetime_interval_precision = 2;
+			rec->datetime_interval_precision = ESODBC_DEF_INTVL_WOS_DT_PREC;
 			break;
 		case METATYPE_EXACT_NUMERIC:
 			if (rec->concise_type == SQL_DECIMAL ||
 				rec->concise_type == SQL_NUMERIC) { /* == SQL_C_NUMERIC */
-				rec->scale = 0;
+				rec->scale = ESODBC_DEF_DECNUM_SCALE;
 				rec->precision = ESODBC_DEF_DECNUM_PRECISION;
 			}
 			break;

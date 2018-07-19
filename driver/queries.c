@@ -3669,7 +3669,7 @@ static SQLRETURN binary_to_number(esodbc_rec_st *arec, esodbc_rec_st *irec,
 #	define CHK_SIZES(_sqlc_type) \
 	do { \
 		if (osize != sizeof(_sqlc_type)) { \
-			ERRH(stmt, "binary data lenght (%zu) misaligned with target" \
+			ERRH(stmt, "binary data length (%zu) misaligned with target" \
 				" data type (%hd) size (%lld)", sizeof(_sqlc_type), \
 				irec->es_type->data_type, osize); \
 			RET_HDIAGS(stmt, SQL_STATE_HY090); \
@@ -3828,6 +3828,7 @@ static SQLRETURN convert_str_to_timestamp(esodbc_stmt_st *stmt,
 		trim_ws(&xstr.c);
 	}
 
+	assert(dest);
 	ts_buff.str = dest;
 	ts_buff.cnt = sizeof(ESODBC_ISO8601_TEMPLATE) - 1;
 	if (! parse_timedate(&xstr, &tss, &format, &ts_buff)) {
@@ -3886,6 +3887,7 @@ static SQLRETURN convert_ts_to_timestamp(esodbc_stmt_st *stmt,
 			RET_HDIAG(stmt, SQL_STATE_HY000, "param conversion bug", 0);
 	}
 
+	assert(dest);
 	cnt = snprintf(dest, sizeof(ESODBC_ISO8601_TEMPLATE) - 1,
 			"%04d-%02d-%02dT%02d:%02d:%02d.%03uZ",
 			tss->year, tss->month, tss->day,

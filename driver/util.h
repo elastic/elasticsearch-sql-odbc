@@ -193,7 +193,7 @@ typedef cstr_st tstr_st;
 
 /* generic char JSON escaping prefix */
 #define JSON_ESC_GEN_PREF	"\\u00"
-/* octet lenght of one generic JSON escaped character */
+/* octet length of one generic JSON escaped character */
 #define JSON_ESC_SEQ_SZ		(sizeof(JSON_ESC_GEN_PREF) - 1 + /*0xAB*/2)
 /*
  * JSON-escapes a string.

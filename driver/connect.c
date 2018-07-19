@@ -879,7 +879,7 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 	 * request timeout for liburl: negative reset to 0
 	 */
 	if (! str2bigint(&attrs->timeout, /*wide?*/TRUE, (SQLBIGINT *)&timeout)) {
-		ERRH(dbc, "failed to convert '" LWPDL "' to long long.",
+		ERRH(dbc, "failed to convert '" LWPDL "' to big int.",
 			LWSTR(&attrs->timeout));
 		goto err;
 	}
