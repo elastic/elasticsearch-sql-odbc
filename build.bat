@@ -231,16 +231,15 @@ REM USAGE function: output a usage message
 	echo    setup     : invoke MSVC's build environment setup script before
 	echo                building (requires 2017 version or later^).
 	echo    clean     : remove all the files in the build dir.
-	echo    proper    : clean both the build and libs dir and exit.
-	echo    fetch     : fetch, patch and build the dependency libs.
+	echo    proper    : clean both the libs and builds dirs and exit.
 	echo    nobuild   : skip project building (the default is to build^).
 	echo    type=T    : selects the build type; T can be one of Debug/Release/
 	echo                RelWithDebInfo/MinSizeRel^); defaults to Debug.
 	echo    exports   : dump the exported symbols in the DLL after - and
 	echo                only if - building the driver.
 	echo    all       : build all artifacts (driver and tests^).
-	echo    tests     : run all the defined tests: invoke the 'all' build,
-	echo                then the 'tests' build.
+	echo    tests     : run all the defined tests: invoke the 'all' build
+	echo                before the 'tests' build!
 	echo    suites    : compile and run each test individually, stopping at the
 	echo                first failure; the 'all' or 'test' targets must be
 	echo                built beforehand.
@@ -254,7 +253,7 @@ REM USAGE function: output a usage message
 	echo.
 	echo Multiple arguments can be used concurrently.
 	echo Invoked with no arguments, the script will only initiate a build.
-	echo Example:^> %1 setup 32 fetch
+	echo Example:^> %1 setup 32 tests
 	echo.
 	echo List of read environment variables:
 	echo    BUILD_DIR          : folder path to build the driver into;
@@ -270,20 +269,20 @@ REM USAGE function: output a usage message
 	goto:eof
 
 
-REM PROPER function: clean up the build and libs dir before building
+REM PROPER function: clean up the build and libs dir.
 :PROPER
-	echo Cleaning all build and libs files.
-	del /s /q %BUILD_DIR%\* >nul 2>&1
-	for /d %%i in (%BUILD_DIR%\*) do rmdir /s /q %%i >nul 2>&1
-	del /s /q libs\* >nul 2>&1
-	for /d %%i in (libs\*) do rmdir /s /q %%i >nul 2>&1
+	echo Cleaning libs.
+	if exist %BUILD_DIR%\curlclean.vcxproj (
+		MSBuild %BUILD_DIR%\curlclean.vcxproj
+	)
+	call:CLEAN
 
 	goto:eof
 
 
-REM CLEAN function: clean up the build dir before building
+REM CLEAN function: clean up the build dir.
 :CLEAN
-	echo Cleaning all build files.
+	echo Cleaning builds.
 	del /s /q %BUILD_DIR%\* >nul 2>&1
 	for /d %%i in (%BUILD_DIR%\*) do rmdir /s /q %%i >nul 2>&1
 
@@ -313,54 +312,6 @@ REM SETUP function: set-up the build environment
 
 	goto:eof
 
-
-REM FETCH function: fetch, patch, build the external libs
-:FETCH
-	echo Fetching external dependencies, patching and building them.
-
-	rem pushd .
-	cd libs
-
-	if not exist ODBC-Specification (
-		git clone "https://github.com/Microsoft/ODBC-Specification.git"
-	) else (
-		echo ODBC-Specification dir present, skipping cloning repo.
-	)
-	if not exist c-timestamp (
-		git clone "https://github.com/chansen/c-timestamp.git"
-	) else (
-		echo c-timestamp dir present, skipping cloning repo.
-	)
-	if not exist ujson4c (
-		git clone "https://github.com/esnme/ujson4c.git"
-
-		REM %cd% is expanded before execution and patch command will need full
-		REM path, as it might be started in different working dir than current
-		patch -p1 -i %cd%\ujson4c.diff -d %cd%\libs\ujson4c
-	) else (
-		echo ujson4c dir present, skipping cloning repo.
-	)
-	if not exist curl (
-		git clone "https://github.com/curl/curl.git"
-	) else (
-		echo curl dir present, skipping cloning repo.
-	)
-	if not exist googletest (
-		git clone "https://github.com/google/googletest.git"
-	) else (
-		echo googletest dir present, skipping cloning repo.
-	)
-
-	REM build libcurl
-	cd curl
-	git checkout curl-7_58_0
-
-	call buildconf.bat
-	REM buildconf.bat will cd
-	cd winbuild
-	call nmake /f Makefile.vc mode=dll MACHINE=!TARCH!
-
-	goto:eof
 
 REM BUILDTYPE function: set the build config to feed MSBuild
 :BUILDTYPE
