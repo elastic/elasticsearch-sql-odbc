@@ -75,7 +75,8 @@ typedef struct __ArrayItem
 	Item item;
 	ArrayEntry *head;
 	ArrayEntry *tail;
-} ArrayItem; 
+	int length;
+} ArrayItem;
 
 typedef struct __LongValue
 {
@@ -229,6 +230,7 @@ static void arrayAddItem(void* context, JSOBJ obj, JSOBJ value)
 	}
 	ai->tail = ae;
 
+	ai->length ++;
 }
 
 static JSOBJ newTrue(void* context)
@@ -272,6 +274,7 @@ static JSOBJ newArray(void *context)
 	ArrayItem *ai = (ArrayItem *) alloc(ds, sizeof(ArrayItem));
 	ai->head = NULL;
 	ai->tail = NULL;
+	ai->length = 0;
 	ai->item.type = UJT_Array;
 	return (JSOBJ) ai;
 }
@@ -471,6 +474,15 @@ int UJIterArray(void **iter, UJObject *outObj)
 	*outObj = ae->item;
 
 	return 1;
+}
+
+int UJLengthArray(UJObject arrObj)
+{
+	switch ( ((Item *) arrObj)->type)
+	{
+	case UJT_Array: return ((ArrayItem *) arrObj)->length;
+	default: return -1;
+	}
 }
 
 void *UJBeginObject(UJObject objObj)
@@ -688,7 +700,6 @@ int UJObjectUnpack(UJObject objObj, int keys, const char *format, const wchar_t 
 	const wchar_t *keyNames[64];
 	UJObject *outValues[64];
 	va_list args;
-	UJObject *outValue;
 
 
   if (!UJIsObject(objObj))
@@ -707,8 +718,7 @@ int UJObjectUnpack(UJObject objObj, int keys, const char *format, const wchar_t 
 	for (ki = 0; ki < keys; ki ++)
 	{
 		keyNames[ki] = _keyNames[ki];
-		outValue = va_arg(args, UJObject *);
-		outValues[ki] = outValue;
+		outValues[ki] = va_arg(args, UJObject *);
 	}
 	va_end(args);
 	
