@@ -67,20 +67,6 @@
 		RET_HDIAGS(_stmt, SQL_STATE_22003); \
 	} while (0)
 
-/* TODO: this is inefficient: add directly into ujson4c lib (as .size of
- * ArrayItem struct, inc'd in arrayAddItem()) or local utils file. */
-static size_t UJArraySize(UJObject obj)
-{
-	UJObject _u;
-	size_t size = 0;
-	void *iter = UJBeginArray(obj);
-	if (iter) {
-		while (UJIterArray(&iter, &_u)) {
-			size ++;
-		}
-	}
-	return size;
-}
 
 #if (0x0300 <= ODBCVER)
 #	define ESSQL_TYPE_MIN		SQL_GUID
@@ -297,7 +283,7 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 	ird = stmt->ird;
 	dbc = stmt->hdr.dbc;
 
-	ncols = UJArraySize(columns);
+	ncols = UJLengthArray(columns);
 	DBGH(stmt, "columns received: %zd.", ncols);
 	ret = update_rec_count(ird, (SQLSMALLINT)ncols);
 	if (! SQL_SUCCEEDED(ret)) {
@@ -452,7 +438,7 @@ SQLRETURN TEST_API attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 		stmt->rset.nrows = 0;
 #endif /*0*/
 	} else {
-		stmt->rset.nrows = (size_t)UJArraySize(rows);
+		stmt->rset.nrows = (size_t)UJLengthArray(rows);
 	}
 	DBGH(stmt, "rows received in result set: %zd.", stmt->rset.nrows);
 
