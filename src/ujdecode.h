@@ -165,6 +165,14 @@ extern "C" {
 
 	/*
 	===============================================================================
+	Returns the count of elements in an array object,
+	or negative if not an array.
+	===============================================================================
+	*/
+	int UJLengthArray(UJObject arrObj);
+
+	/*
+	===============================================================================
 	Called to initiate the iterator of an Object (key-value structure)
 	May return NULL in case Object is empty
 
