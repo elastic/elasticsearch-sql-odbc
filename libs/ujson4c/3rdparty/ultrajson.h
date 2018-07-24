@@ -278,7 +278,7 @@ Life cycle of the provided buffer must still be handled by caller.
 If the return value doesn't equal the specified buffer caller must release the memory using
 JSONObjectEncoder.free or free() as specified when calling this function.
 */
-EXPORTFUNCTION char *JSON_EncodeObject(JSOBJ obj, JSONObjectEncoder *enc, char *buffer, size_t cbBuffer);
+char *JSON_EncodeObject(JSOBJ obj, JSONObjectEncoder *enc, char *buffer, size_t cbBuffer);
 
 
 
@@ -305,6 +305,6 @@ typedef struct __JSONObjectDecoder
   void *prv;
 } JSONObjectDecoder;
 
-EXPORTFUNCTION JSOBJ JSON_DecodeObject(JSONObjectDecoder *dec, const char *buffer, size_t cbBuffer);
+JSOBJ JSON_DecodeObject(JSONObjectDecoder *dec, const char *buffer, size_t cbBuffer);
 
 #endif
