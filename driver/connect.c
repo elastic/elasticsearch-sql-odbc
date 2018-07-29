@@ -15,6 +15,7 @@
 #include "log.h"
 #include "info.h"
 #include "util.h"
+#include "dsn.h"
 
 /* HTTP headers default for every request */
 #define HTTP_ACCEPT_JSON		"Accept: application/json"
@@ -46,54 +47,6 @@
 /* 12 */
 #define JSON_COL_SCALED_FLOAT	"scaled_float"
 
-
-/* attribute keywords used in connection strings */
-#define CONNSTR_KW_DRIVER			"Driver"
-#define CONNSTR_KW_DSN				"DSN"
-#define CONNSTR_KW_PWD				"PWD"
-#define CONNSTR_KW_UID				"UID"
-#define CONNSTR_KW_SAVEFILE			"SAVEFILE"
-#define CONNSTR_KW_FILEDSN			"FILEDSN"
-#define CONNSTR_KW_SERVER			"Server"
-#define CONNSTR_KW_PORT				"Port"
-#define CONNSTR_KW_SECURE			"Secure"
-#define CONNSTR_KW_TIMEOUT			"Timeout"
-#define CONNSTR_KW_FOLLOW			"Follow"
-#define CONNSTR_KW_CATALOG			"Catalog"
-#define CONNSTR_KW_PACKING			"Packing"
-#define CONNSTR_KW_MAX_FETCH_SIZE	"MaxFetchSize"
-#define CONNSTR_KW_MAX_BODY_SIZE_MB	"MaxBodySizeMB"
-
-#define ODBC_REG_SUBKEY_PATH	"SOFTWARE\\ODBC\\ODBC.INI"
-#define REG_HKLM				"HKEY_LOCAL_MACHINE"
-#define REG_HKCU				"HKEY_CURRENT_USER"
-
-/* max length of a registry key value name */
-#define MAX_REG_VAL_NAME		1024
-/* max size of a registry key data */
-#define MAX_REG_DATA_SIZE		4096
-
-
-/* stucture to collect all attributes in a connection string */
-typedef struct {
-	wstr_st driver;
-	wstr_st dsn;
-	wstr_st pwd;
-	wstr_st uid;
-	wstr_st savefile;
-	wstr_st filedsn;
-	wstr_st server;
-	wstr_st port;
-	wstr_st secure;
-	wstr_st timeout;
-	wstr_st follow;
-	wstr_st catalog;
-	wstr_st packing;
-	wstr_st max_fetch_size;
-	wstr_st max_body_size;
-	wstr_st trace_file;
-	wstr_st trace_level;
-} config_attrs_st;
 
 /* structure for one row returned by the ES.
  * This is a mirror of elasticsearch_type, with length-or-indicator fields
@@ -473,361 +426,10 @@ static SQLRETURN test_connect(CURL *curl)
 	return SQL_SUCCESS;
 }
 
-static BOOL assign_config_attr(config_attrs_st *attrs,
-	wstr_st *keyword, wstr_st *value, BOOL overwrite)
-{
-	struct {
-		wstr_st *kw;
-		wstr_st *val;
-	} *iter, map[] = {
-		{&MK_WSTR(CONNSTR_KW_DRIVER), &attrs->driver},
-		{&MK_WSTR(CONNSTR_KW_DSN), &attrs->dsn},
-		{&MK_WSTR(CONNSTR_KW_PWD), &attrs->pwd},
-		{&MK_WSTR(CONNSTR_KW_UID), &attrs->uid},
-		{&MK_WSTR(CONNSTR_KW_SAVEFILE), &attrs->savefile},
-		{&MK_WSTR(CONNSTR_KW_FILEDSN), &attrs->filedsn},
-		{&MK_WSTR(CONNSTR_KW_SERVER), &attrs->server},
-		{&MK_WSTR(CONNSTR_KW_PORT), &attrs->port},
-		{&MK_WSTR(CONNSTR_KW_SECURE), &attrs->secure},
-		{&MK_WSTR(CONNSTR_KW_TIMEOUT), &attrs->timeout},
-		{&MK_WSTR(CONNSTR_KW_FOLLOW), &attrs->follow},
-		{&MK_WSTR(CONNSTR_KW_CATALOG), &attrs->catalog},
-		{&MK_WSTR(CONNSTR_KW_PACKING), &attrs->packing},
-		{&MK_WSTR(CONNSTR_KW_MAX_FETCH_SIZE), &attrs->max_fetch_size},
-		{&MK_WSTR(CONNSTR_KW_MAX_BODY_SIZE_MB), &attrs->max_body_size},
-		{NULL, NULL}
-	};
-
-	for (iter = &map[0]; iter->kw; iter ++) {
-		if (! EQ_CASE_WSTR(iter->kw, keyword)) {
-			continue;
-		}
-		/* it's a match: has it been assigned already? */
-		if (iter->val->cnt) {
-			if (! overwrite) {
-				INFO("multiple occurances of keyword '" LWPDL "'; "
-					"ignoring new `" LWPDL "`, keeping `" LWPDL "`.",
-					LWSTR(iter->kw), LWSTR(value), LWSTR(iter->val));
-				continue;
-			}
-			INFO("multiple occurances of keyword '" LWPDL "'; "
-				"overwriting old `" LWPDL "` with new `" LWPDL "`.",
-				LWSTR(iter->kw), LWSTR(iter->val), LWSTR(value));
-		}
-		*iter->val = *value;
-		return TRUE;
-	}
-
-	return FALSE;
-}
-
-/*
- * Advance position in string, skipping white space.
- * if exended is true, `;` will be treated as white space too.
- */
-static SQLWCHAR *skip_ws(SQLWCHAR **pos, SQLWCHAR *end, BOOL extended)
-{
-	while (*pos < end) {
-		switch(**pos) {
-			case ' ':
-			case '\t':
-			case '\r':
-			case '\n':
-				(*pos)++;
-				break;
-
-			case '\0':
-				return NULL;
-
-			case ';':
-				if (extended) {
-					(*pos)++;
-					break;
-				}
-			// no break;
-
-			default:
-				return *pos;
-		}
-	}
-
-	/* end of string reached */
-	return NULL;
-}
-
-/*
- * Parse a keyword or a value.
- * Within braces, any character is allowed, safe for \0 (i.e. no "bla{bla\0"
- * is supported as keyword or value).
- * Braces within braces are allowed.
- */
-static BOOL parse_token(BOOL is_value, SQLWCHAR **pos, SQLWCHAR *end,
-	wstr_st *token)
-{
-	BOOL brace_escaped = FALSE;
-	int open_braces = 0;
-	SQLWCHAR *start = *pos;
-	BOOL stop = FALSE;
-
-	while (*pos < end && (! stop)) {
-		switch (**pos) {
-			case '\\':
-				if (! is_value) {
-					ERR("keywords and data source names cannot contain "
-						"the backslash.");
-					return FALSE;
-				}
-				(*pos)++;
-				break;
-
-			case ' ':
-			case '\t':
-			case '\r':
-			case '\n':
-				if (open_braces || is_value) {
-					(*pos)++;
-				} else {
-					stop = TRUE;
-				}
-				break;
-
-			case '=':
-				if (open_braces || is_value) {
-					(*pos)++;
-				} else {
-					stop = TRUE;
-				}
-				break;
-
-			case ';':
-				if (open_braces) {
-					(*pos)++;
-				} else if (is_value) {
-					stop  = TRUE;
-				} else {
-					ERR("';' found while parsing keyword");
-					return FALSE;
-				}
-				break;
-
-			case '\0':
-				if (open_braces) {
-					ERR("null terminator found while within braces");
-					return FALSE;
-				} else if (! is_value) {
-					ERR("null terminator found while parsing keyword.");
-					return FALSE;
-				} /* else: \0 used as delimiter of value string */
-				stop = TRUE;
-				break;
-
-			case '{':
-				if (*pos == start) {
-					open_braces ++;
-				} else if (open_braces) {
-					ERR("token started with opening brace, so can't use "
-						"inner braces");
-					/* b/c: `{foo{ = }}bar} = val`; `foo{bar}baz` is fine */
-					return FALSE;
-				}
-				(*pos)++;
-				break;
-
-			case '}':
-				if (open_braces) {
-					open_braces --;
-					brace_escaped = TRUE;
-					stop = TRUE;
-				}
-				(*pos)++;
-				break;
-
-			default:
-				(*pos)++;
-		}
-	}
-
-	if (open_braces) {
-		ERR("string finished with open braces.");
-		return FALSE;
-	}
-
-	token->str = start + (brace_escaped ? 1 : 0);
-	token->cnt = (*pos - start) - (brace_escaped ? 2 : 0);
-	return TRUE;
-}
-
-static SQLWCHAR *parse_separator(SQLWCHAR **pos, SQLWCHAR *end)
-{
-	if (*pos < end) {
-		if (**pos == '=') {
-			(*pos)++;
-			return *pos;
-		}
-	}
-	return NULL;
-}
-
-/*
- * - "keywords and attribute values that contain the characters []{}(),;?*=!@
- *   not enclosed with braces should be avoided"; => allowed.
- * - "value of the DSN keyword cannot consist only of blanks and should not
- *   contain leading blanks";
- * - "keywords and data source names cannot contain the backslash (\)
- *   character.";
- * - "value enclosed with braces ({}) containing any of the characters
- *   []{}(),;?*=!@ is passed intact to the driver.";
- *
- *  foo{bar}=baz=foo; => "foo{bar}" = "baz=foo"
- *
- *  * `=` is delimiter, unless within {}
- *  * `{` and `}` allowed within {}
- *  * brances need to be returned to out-str;
- */
-static BOOL parse_connection_string(config_attrs_st *attrs,
-	SQLWCHAR *szConnStrIn, SQLSMALLINT cchConnStrIn)
-{
-
-	SQLWCHAR *pos;
-	SQLWCHAR *end;
-	wstr_st keyword, value;
-
-	/* parse and assign attributes in connection string */
-	pos = szConnStrIn;
-	end = pos + (cchConnStrIn == SQL_NTS ? SHRT_MAX : cchConnStrIn);
-
-	while (skip_ws(&pos, end, TRUE)) {
-		if (! parse_token(FALSE, &pos, end, &keyword)) {
-			ERR("failed to parse keyword at position %zd",
-				pos - szConnStrIn);
-			return FALSE;
-		}
-
-		if (! skip_ws(&pos, end, FALSE)) {
-			return FALSE;
-		}
-
-		if (! parse_separator(&pos, end)) {
-			ERR("failed to parse separator (`=`) at position %zd",
-				pos - szConnStrIn);
-			return FALSE;
-		}
-
-		if (! skip_ws(&pos, end, FALSE)) {
-			return FALSE;
-		}
-
-		if (! parse_token(TRUE, &pos, end, &value)) {
-			ERR("failed to parse value at position %zd",
-				pos - szConnStrIn);
-			return FALSE;
-		}
-
-		DBG("read connection string attribute: `" LWPDL "` = `" LWPDL
-			"`.",  LWSTR(&keyword), LWSTR(&value));
-		if (! assign_config_attr(attrs, &keyword, &value, TRUE))
-			WARN("keyword '" LWPDL "' is unknown, ignoring it.",
-				LWSTR(&keyword));
-	}
-
-	return TRUE;
-}
-
-static inline BOOL needs_braces(wstr_st *token)
-{
-	int i;
-
-	for (i = 0; i < token->cnt; i ++) {
-		switch(token->str[i]) {
-			case ' ':
-			case '\t':
-			case '\r':
-			case '\n':
-			case '=':
-			case ';':
-				return TRUE;
-		}
-	}
-	return FALSE;
-}
-
-/* build a connection string to be written in the DSN files */
-static BOOL write_connection_string(config_attrs_st *attrs,
-	SQLWCHAR *szConnStrOut, SQLSMALLINT cchConnStrOutMax,
-	SQLSMALLINT *pcchConnStrOut)
-{
-	int n, braces;
-	size_t pos;
-	wchar_t *format;
-	struct {
-		wstr_st *val;
-		char *kw;
-	} *iter, map[] = {
-		{&attrs->driver, CONNSTR_KW_DRIVER},
-		{&attrs->dsn, CONNSTR_KW_DSN},
-		{&attrs->pwd, CONNSTR_KW_PWD},
-		{&attrs->uid, CONNSTR_KW_UID},
-		{&attrs->savefile, CONNSTR_KW_SAVEFILE},
-		{&attrs->filedsn, CONNSTR_KW_FILEDSN},
-		{&attrs->server, CONNSTR_KW_SERVER},
-		{&attrs->port, CONNSTR_KW_PORT},
-		{&attrs->secure, CONNSTR_KW_SECURE},
-		{&attrs->timeout, CONNSTR_KW_TIMEOUT},
-		{&attrs->follow, CONNSTR_KW_FOLLOW},
-		{&attrs->catalog, CONNSTR_KW_CATALOG},
-		{&attrs->packing, CONNSTR_KW_PACKING},
-		{&attrs->max_fetch_size, CONNSTR_KW_MAX_FETCH_SIZE},
-		{&attrs->max_body_size, CONNSTR_KW_MAX_BODY_SIZE_MB},
-		{NULL, NULL}
-	};
-
-	for (iter = &map[0], pos = 0; iter->val; iter ++) {
-		if (iter->val->cnt) {
-			braces = needs_braces(iter->val) ? 2 : 0;
-			if (cchConnStrOutMax && szConnStrOut) {
-				/* swprintf will fail if formated string would overrun the
-				 * buffer size */
-				if (cchConnStrOutMax - pos < iter->val->cnt + braces) {
-					/* indicate that we've reached buffer limits: only account
-					 * for how long the string would be */
-					cchConnStrOutMax = 0;
-					pos += iter->val->cnt + braces;
-					continue;
-				}
-				if (braces) {
-					format = WPFCP_DESC "={" WPFWP_LDESC "};";
-				} else {
-					format = WPFCP_DESC "=" WPFWP_LDESC ";";
-				}
-				n = swprintf(szConnStrOut + pos, cchConnStrOutMax - pos,
-						format, iter->kw, LWSTR(iter->val));
-				if (n < 0) {
-					ERRN("failed to outprint connection string (space "
-						"left: %d; needed: %d).", cchConnStrOutMax - pos,
-						iter->val->cnt);
-					return FALSE;
-				} else {
-					pos += n;
-				}
-			} else {
-				/* simply increment the counter, since the untruncated length
-				 * need to be returned to the app */
-				pos += iter->val->cnt + braces;
-			}
-		}
-	}
-
-	*pcchConnStrOut = (SQLSMALLINT)pos;
-
-	DBG("Output connection string: `" LWPD "`; out len: %d.",
-		szConnStrOut, pos);
-	return TRUE;
-}
-
 /*
  * init dbc from configured attributes
  */
-static SQLRETURN process_config(esodbc_dbc_st *dbc, config_attrs_st *attrs)
+static SQLRETURN process_config(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 {
 	esodbc_state_et state = SQL_STATE_HY000;
 	int n, cnt;
@@ -901,7 +503,7 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 	}
 	if (max_body_size < 0) {
 		ERRH(dbc, "'%s' setting can't be negative (%ld).",
-			CONNSTR_KW_MAX_BODY_SIZE_MB, max_body_size);
+			ESODBC_DSN_MAX_BODY_SIZE_MB, max_body_size);
 		goto err;
 	} else {
 		dbc->amax = max_body_size * 1024 * 1024;
@@ -919,7 +521,7 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, config_attrs_st *attrs)
 	}
 	if (max_fetch_size < 0) {
 		ERRH(dbc, "'%s' setting can't be negative (%ld).",
-			CONNSTR_KW_MAX_FETCH_SIZE, max_fetch_size);
+			ESODBC_DSN_MAX_FETCH_SIZE, max_fetch_size);
 		goto err;
 	} else {
 		dbc->fetch.max = max_fetch_size;
@@ -961,43 +563,6 @@ err:
 	RET_HDIAGS(dbc, state);
 }
 
-static inline void assign_defaults(config_attrs_st *attrs)
-{
-	/* assign defaults where not assigned and applicable */
-	if (! attrs->server.cnt) {
-		attrs->server = MK_WSTR(ESODBC_DEF_SERVER);
-	}
-	if (! attrs->port.cnt) {
-		attrs->port = MK_WSTR(ESODBC_DEF_PORT);
-	}
-	if (! attrs->secure.cnt) {
-		attrs->secure = MK_WSTR(ESODBC_DEF_SECURE);
-	}
-	if (! attrs->timeout.cnt) {
-		attrs->timeout = MK_WSTR(ESODBC_DEF_TIMEOUT);
-	}
-	if (! attrs->follow.cnt) {
-		attrs->follow = MK_WSTR(ESODBC_DEF_FOLLOW);
-	}
-
-	/* no default packing */
-
-	if (! attrs->packing.cnt) {
-		attrs->packing = MK_WSTR(ESODBC_DEF_PACKING);
-	}
-	if (! attrs->max_fetch_size.cnt) {
-		attrs->max_fetch_size = MK_WSTR(ESODBC_DEF_FETCH_SIZE);
-	}
-	if (! attrs->max_body_size.cnt) {
-		attrs->max_body_size = MK_WSTR(ESODBC_DEF_MAX_BODY_SIZE_MB);
-	}
-
-	/* default: no trace file */
-
-	if (! attrs->trace_level.cnt) {
-		attrs->trace_level = MK_WSTR(ESODBC_DEF_TRACE_LEVEL);
-	}
-}
 
 /* release all resources, except the handler itself */
 void cleanup_dbc(esodbc_dbc_st *dbc)
@@ -1032,7 +597,7 @@ void cleanup_dbc(esodbc_dbc_st *dbc)
 	cleanup_curl(dbc);
 }
 
-static SQLRETURN do_connect(esodbc_dbc_st *dbc, config_attrs_st *attrs)
+static SQLRETURN do_connect(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 {
 	SQLRETURN ret;
 	char *url = NULL;
@@ -1732,112 +1297,8 @@ end:
 	return ret;
 }
 
-#if defined(_WIN32) || defined (WIN32)
-/*
- * Reads system registry for ODBC DSN subkey named in attrs->dsn.
- */
-static BOOL read_system_info(config_attrs_st *attrs, TCHAR *buff)
-{
-	HKEY hkey;
-	BOOL ret = FALSE;
-	const char *ktree;
-	DWORD valsno, i, j; /* number of values in subkey */
-	DWORD maxvallen; /* len of longest value name */
-	DWORD maxdatalen; /* len of longest data (buffer) */
-	TCHAR val[MAX_REG_VAL_NAME];
-	DWORD vallen;
-	DWORD valtype;
-	BYTE *d;
-	DWORD datalen;
-	tstr_st tval, tdata;
-
-	if (swprintf(val, sizeof(val)/sizeof(val[0]), WPFCP_DESC "\\" WPFWP_LDESC,
-			ODBC_REG_SUBKEY_PATH, LWSTR(&attrs->dsn)) < 0) {
-		ERRN("failed to print registry key path.");
-		return FALSE;
-	}
-	/* try accessing local user's config first, if that fails, systems' */
-	if (RegOpenKeyEx(HKEY_CURRENT_USER, val, /*options*/0, KEY_READ,
-			&hkey) != ERROR_SUCCESS) {
-		INFO("failed to open registry key `" REG_HKCU "\\" LWPD "`.",
-			val);
-		if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, val, /*options*/0, KEY_READ,
-				&hkey) != ERROR_SUCCESS) {
-			INFO("failed to open registry key `" REG_HKLM "\\" LWPD "`.",
-				val);
-			goto end;
-		} else {
-			ktree = REG_HKLM;
-		}
-	} else {
-		ktree = REG_HKCU;
-	}
-
-	if (RegQueryInfoKey(hkey, /*key class*/NULL, /*len of key class*/NULL,
-			/*reserved*/NULL, /*no subkeys*/NULL, /*longest subkey*/NULL,
-			/*longest subkey class name*/NULL, &valsno, &maxvallen,
-			&maxdatalen, /*sec descr*/NULL,
-			/*update time */NULL) != ERROR_SUCCESS) {
-		ERRN("Failed to query registery key info for path `%s\\" LWPD
-			"`.", ktree, val);
-		goto end;
-	} else {
-		DBG("Subkey '%s\\" LWPD "': vals: %d, lengthiest name: %d, "
-			"lengthiest data: %d.", ktree, val, valsno, maxvallen,
-			maxdatalen);
-		// malloc buffers?
-		if (MAX_REG_VAL_NAME < maxvallen)
-			BUG("value name buffer too small (%d), needed: %dB.",
-				MAX_REG_VAL_NAME, maxvallen);
-		if (MAX_REG_DATA_SIZE < maxdatalen)
-			BUG("value data buffer too small (%d), needed: %dB.",
-				MAX_REG_DATA_SIZE, maxdatalen);
-		/* connection could still succeeded, so carry on */
-	}
-
-	for (i = 0, j = 0; i < valsno; i ++) {
-		vallen = sizeof(val) / sizeof(val[0]);
-		datalen = MAX_REG_DATA_SIZE;
-		d = (BYTE *)&buff[j * datalen];
-		if (RegEnumValue(hkey, i, val, &vallen, /*reserved*/NULL, &valtype,
-				d, &datalen) != ERROR_SUCCESS) {
-			ERR("failed to read register subkey value.");
-			goto end;
-		}
-		if (valtype != REG_SZ) {
-			INFO("unused register values of type %d -- skipping.",
-				valtype);
-			continue;
-		}
-		tval = (tstr_st) {
-			val, vallen
-		};
-		tdata = (tstr_st) {
-			(SQLTCHAR *)d, datalen
-		};
-		if (assign_config_attr(attrs, &tval, &tdata, FALSE)) {
-			j ++;
-			DBG("reg entry`" LTPDL "`: `" LTPDL "` assigned.",
-				LTSTR(&tval), LTSTR(&tdata));
-		} else {
-			INFO("ignoring reg entry `" LTPDL "`: `" LTPDL "`.",
-				LTSTR(&tval), LTSTR(&tdata));
-			/* entry not directly relevant to driver config */
-		}
-	}
-
-
-	ret = TRUE;
-end:
-	RegCloseKey(hkey);
-
-	return ret;
-}
-#else /* defined(_WIN32) || defined (WIN32) */
-#error "unsupported platform" /* TODO */
-#endif /* defined(_WIN32) || defined (WIN32) */
-
-static BOOL prompt_user(config_attrs_st *attrs, BOOL disable_conn)
+static BOOL prompt_user(SQLHDBC hdbc, esodbc_dsn_attrs_st *attrs,
+	BOOL disable_conn)
 {
 	//
 	// TODO: display settings dialog box;
@@ -1873,11 +1334,12 @@ SQLRETURN EsSQLDriverConnectW
 {
 	esodbc_dbc_st *dbc = DBCH(hdbc);
 	SQLRETURN ret;
-	config_attrs_st attrs;
+	esodbc_dsn_attrs_st attrs;
 	wstr_st orig_dsn;
 	BOOL disable_conn = FALSE;
 	BOOL user_canceled = FALSE;
-	TCHAR buff[(sizeof(config_attrs_st)/sizeof(wstr_st)) * MAX_REG_DATA_SIZE];
+	TCHAR buff[(sizeof(esodbc_dsn_attrs_st)/sizeof(wstr_st)) *
+													  MAX_REG_DATA_SIZE];
 
 
 	memset(&attrs, 0, sizeof(attrs));
@@ -1886,7 +1348,8 @@ SQLRETURN EsSQLDriverConnectW
 		DBGH(dbc, "Input connection string: '"LWPD"'[%d].", szConnStrIn,
 			cchConnStrIn);
 		/* parse conn str into attrs */
-		if (! parse_connection_string(&attrs, szConnStrIn, cchConnStrIn)) {
+		if (! parse_connection_string(&attrs, szConnStrIn, cchConnStrIn,
+				/*duplicate?*/FALSE)) {
 			ERRH(dbc, "failed to parse connection string `" LWPDL "`.",
 				cchConnStrIn < 0 ? wcslen(szConnStrIn) : cchConnStrIn,
 				szConnStrIn);
@@ -1940,7 +1403,7 @@ SQLRETURN EsSQLDriverConnectW
 	}
 
 	/* whatever attributes haven't yet been set, init them with defaults */
-	assign_defaults(&attrs);
+	assign_dsn_defaults(&attrs, /*duplicate?*/FALSE);
 
 	switch (fDriverCompletion) {
 		case SQL_DRIVER_NOPROMPT:
@@ -1956,9 +1419,8 @@ SQLRETURN EsSQLDriverConnectW
 		case SQL_DRIVER_COMPLETE:
 			/* try connect first, then, if that fails, prompt user */
 			while (! SQL_SUCCEEDED(do_connect(dbc, &attrs))) {
-				if (! prompt_user(&attrs, disable_conn))
+				if (! prompt_user(hdbc, &attrs, disable_conn)) {
 					/* user canceled */
-				{
 					return SQL_NO_DATA;
 				}
 			}
@@ -1967,9 +1429,8 @@ SQLRETURN EsSQLDriverConnectW
 		case SQL_DRIVER_PROMPT:
 			do {
 				/* prompt user first, then try connect */
-				if (! prompt_user(&attrs, FALSE))
+				if (! prompt_user(hdbc, &attrs, FALSE)) {
 					/* user canceled */
-				{
 					return SQL_NO_DATA;
 				}
 			} while (! SQL_SUCCEEDED(do_connect(dbc, &attrs)));

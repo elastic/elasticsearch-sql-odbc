@@ -3,7 +3,7 @@ REM Helper script to generate the definition file of symbols to export in DLL
 @echo off
 
 REM TODO: find out a smart way for this filtering
-set FILTER="Select-String -Pattern 'SQLRETURN\s+SQL_API\s+\w+'  *.c | %%{ [regex]::split($_, '\s+')[2]; } | %%{ [regex]::split($_, '\(')[0]; }"
+set FILTER="Select-String -Pattern '^\w+\s+SQL_API\s+\w+(\(|$)'  *.c | %%{ [regex]::split($_, '\s+')[2]; } | %%{ [regex]::split($_, '\(')[0]; }"
 
 set DRV_NAME=%1
 set OUTFILE=%2

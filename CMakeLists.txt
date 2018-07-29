@@ -208,7 +208,6 @@ add_custom_target(curlclean
 	WORKING_DIRECTORY "${LIBCURL_PATH_SRC}/winbuild"
 	)
 
-
 message("Driver source files: ${DRV_SRC} .")
 message("Driver include paths: " ${ODBC_INC} ${DRV_SRC_DIR}
 	${LIBCURL_INC_PATH} ${UJSON4C_INC} ${CTIMESTAMP_PATH_SRC})
@@ -223,7 +222,7 @@ target_compile_definitions(${DRV_NAME} PRIVATE "DRIVER_BUILD")
 include_directories(${ODBC_INC} ${DRV_SRC_DIR} ${LIBCURL_INC_PATH}
 	${UJSON4C_INC} ${CTIMESTAMP_PATH_SRC})
 
-target_link_libraries(${DRV_NAME} libcurl)
+target_link_libraries(${DRV_NAME} odbccp32 legacy_stdio_definitions libcurl)
 
 # add testing project/target
 enable_testing()

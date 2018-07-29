@@ -14,11 +14,14 @@
 
 #define _AVAIL	sizeof(_bf) - _ps
 
+/*INDENT-OFF*/
 /* TODO: the SQL[U]LEN for _WIN32 */
 #define _PRINT_PARAM_VAL(type, val) \
 	do { \
 		switch(type) { \
-				/* numeric pointers */ \
+				/*
+							 * numeric pointers
+							 */ \
 				/* SQLNUMERIC/SQLDATE/SQLCHAR/etc. = unsigned char */ \
 				/* SQLSCHAR = char */ \
 			case 'c': /* char signed */ \
@@ -56,18 +59,29 @@
 				_n = snprintf(_bf + _ps, _AVAIL, "%llu", \
 						val ? *(uint64_t *)(uintptr_t)val : 0); \
 				break; \
-				/* non-numeric pointers */ \
+				/*
+				 * non-numeric pointers
+				 */ \
 			case 'p': /* void* */ \
 				_n = snprintf(_bf + _ps, _AVAIL, "@0x%p", \
 						(void *)(uintptr_t)val); \
 				break; \
 			case 'W': /* wchar_t* */ \
-				/* TODO: problematic for untouched buffs: add len! */ \
+				/* TODO: scan for unsafe usages with uninit'ed buffers */ \
+				/* Note: problematic for untouched buffs: 'p' for unsure. */ \
 				_n = snprintf(_bf + _ps, _AVAIL, "`" LWPD "`[%zd]", \
-						val ? (wchar_t *)(uintptr_t)val : TS_NULL, \
+						val ? (wchar_t *)(uintptr_t)val : TWS_NULL, \
 						val ? wcslen((wchar_t *)(uintptr_t)val) : 0); \
 				break; \
-				/* imediat values */ \
+			case 's': /* char* */ \
+				/* Note: problematic for untouched buffs: 'p' for unsure. */ \
+				_n = snprintf(_bf + _ps, _AVAIL, "`" LCPD "`[%zd]", \
+						val ? (char *)(uintptr_t)val : TS_NULL, \
+						val ? strlen((char *)(uintptr_t)val) : 0); \
+				break; \
+				/*
+				 * imediat values
+				 */ \
 				/* longs */ \
 			case 'l': /* long signed */ \
 				_n = snprintf(_bf + _ps, _AVAIL, "%ld", \
@@ -86,6 +100,14 @@
 				_n = snprintf(_bf + _ps, _AVAIL, "%u", \
 						(unsigned)(uintptr_t)val); \
 				break;\
+			case 'h': /* short signed */ \
+				_n = snprintf(_bf + _ps, _AVAIL, "%hd", \
+						(short)(intptr_t)val); \
+				break;\
+			case 'H': /* short unsigned */ \
+				_n = snprintf(_bf + _ps, _AVAIL, "%hu", \
+						(unsigned short)(uintptr_t)val); \
+				break;\
 			default: \
 				_n = snprintf(_bf+_ps, _AVAIL, "BUG! unknown type: %d",type); \
 				break; \
@@ -93,6 +115,7 @@
 		if (0 < _n) \
 			_ps += _n; \
 	} while (0)
+/*INDENT-ON*/
 
 #define _IS_PTR(type, _is_ptr) \
 	do {\
@@ -101,6 +124,8 @@
 			case 'L': \
 			case 'd': \
 			case 'u': \
+			case 'h': \
+			case 'H': \
 				_is_ptr = FALSE; \
 				break; \
 			default: \

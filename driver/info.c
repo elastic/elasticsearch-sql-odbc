@@ -12,13 +12,7 @@
 #include "handles.h"
 #include "queries.h"
 #include "connect.h"
-
-#if ODBCVER == 0x0380
-/* String constant for supported ODBC version */
-#define ESODBC_SQL_SPEC_STRING	"03.80"
-#else /* ver==3.8 */
-#error "unsupported ODBC version"
-#endif /* ver==3.8 */
+#include "info.h"
 
 #define ORIG_DISCRIM	"IM"
 #define ORIG_CLASS_ISO	"ISO 9075"

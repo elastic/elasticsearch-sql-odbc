@@ -385,7 +385,7 @@ REM BUILD function: build various targets
 		REM file name expansion, cmd style...
 		for /f %%i in ("%DRIVER_BASE_NAME%*.vcxproj") do MSBuild %%~nxi %MSBUILD_ARGS%
 
-		if not ERRORLEVEL 1 if /i not [%ARG:symbols=%] == [%ARG%] (
+		if not ERRORLEVEL 1 if /i not [%ARG:exports=%] == [%ARG%] (
 			dumpbin /exports %CFG_INTDIR%\%DRIVER_BASE_NAME%*.dll
 		)
 	)

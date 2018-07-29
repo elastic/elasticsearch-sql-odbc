@@ -2329,7 +2329,7 @@ SQLRETURN EsSQLSetDescFieldW(
 
 		case SQL_DESC_NAME:
 			WARNH(desc, "stored procedure params (to set to `"LWPD"`) not "
-					"supported.", ValuePtr ? (SQLWCHAR *)ValuePtr : TS_NULL);
+					"supported.", ValuePtr ? (SQLWCHAR *)ValuePtr : TWS_NULL);
 			RET_HDIAG(desc, SQL_STATE_HYC00, 
 					"stored procedure params not supported", 0);
 

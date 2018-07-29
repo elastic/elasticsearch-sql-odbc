@@ -94,7 +94,9 @@ extern int _esodbc_log_level;
 #define FIXME	BUG("not yet implemented")
 #define TRACE	DBG("===== TR4C3 =====");
 
-#define TS_NULL	MK_WPTR("<null>")
+/* NULL as ("to Wide") string */
+#define TWS_NULL	MK_WPTR("<null>")
+#define TS_NULL		MK_CPTR("<null>")
 
 
 /*

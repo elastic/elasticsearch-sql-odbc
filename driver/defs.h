@@ -144,7 +144,6 @@
 /* default tracing level */
 #define ESODBC_DEF_TRACE_LEVEL		"WARN"
 
-
 /*
  *
  * Driver/Elasticsearch capabilities
@@ -395,5 +394,13 @@
 /* 2002: ??? -> SQL_C_BINARY */
 #define ESODBC_ES_TO_CSQL_NESTED		SQL_C_BINARY
 #define ESODBC_ES_TO_SQL_NESTED			ESODBC_SQL_NESTED
+
+/*
+ * Registry maxes.
+ */
+/* max length of a registry key value name */
+#define MAX_REG_VAL_NAME		1024
+/* max size of a registry key data */
+#define MAX_REG_DATA_SIZE		4096
 
 #endif /* __DEFS_H__ */
