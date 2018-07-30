@@ -20,7 +20,7 @@ fi
 # Ensure astyle is available and is of the right version to have all below
 # parameters supported.
 #
-if ! which -s astyle ; then
+if ! which astyle &>/dev/null ; then
     echo "ERROR: The astyle code formatter is not available. Exiting."
     exit 1
 fi
