@@ -231,7 +231,7 @@ REM USAGE function: output a usage message
 	echo    setup     : invoke MSVC's build environment setup script before
 	echo                building (requires 2017 version or later^).
 	echo    clean     : remove all the files in the build dir.
-	echo    proper    : clean both the libs and builds dirs and exit.
+	echo    proper    : clean libs, builds and project dirs and exit.
 	echo    nobuild   : skip project building (the default is to build^).
 	echo    type=T    : selects the build type; T can be one of Debug/Release/
 	echo                RelWithDebInfo/MinSizeRel^); defaults to Debug.
@@ -276,6 +276,8 @@ REM PROPER function: clean up the build and libs dir.
 		MSBuild %BUILD_DIR%\curlclean.vcxproj
 	)
 	call:CLEAN
+	REM delete VisualStudio files
+	rmdir /S /Q .vs
 
 	goto:eof
 
