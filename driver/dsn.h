@@ -59,8 +59,9 @@ BOOL assign_dsn_attr(esodbc_dsn_attrs_st *attrs,
 	wstr_st *keyword, wstr_st *value, BOOL overwrite, BOOL duplicate);
 
 BOOL read_system_info(esodbc_dsn_attrs_st *attrs, TCHAR *buff);
+int system_dsn_exists(wstr_st *dsn);
 esodbc_dsn_attrs_st *load_system_dsn(SQLWCHAR *list00);
-BOOL write_system_dsn(esodbc_dsn_attrs_st *attrs);
+BOOL write_system_dsn(esodbc_dsn_attrs_st *attrs, BOOL create_new);
 void free_dsn_attrs(esodbc_dsn_attrs_st *attrs);
 
 BOOL parse_connection_string(esodbc_dsn_attrs_st *attrs,
@@ -68,6 +69,10 @@ BOOL parse_connection_string(esodbc_dsn_attrs_st *attrs,
 BOOL write_connection_string(esodbc_dsn_attrs_st *attrs,
 	SQLWCHAR *szConnStrOut, SQLSMALLINT cchConnStrOutMax,
 	SQLSMALLINT *pcchConnStrOut);
+
+BOOL prompt_user_config(HWND hwndParent, esodbc_dsn_attrs_st *attrs,
+	BOOL disable_nonconn);
+int prompt_user_overwrite(HWND hwndParent, wstr_st *dsn);
 
 #endif /* __DSN_H__ */
 

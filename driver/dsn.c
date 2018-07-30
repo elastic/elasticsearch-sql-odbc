@@ -58,7 +58,7 @@ int assign_dsn_attr(esodbc_dsn_attrs_st *attrs,
 				INFO("keyword '" LWPDL "' already assigned; "
 					"ignoring new `" LWPDL "`, keeping previous `" LWPDL "`.",
 					LWSTR(iter->kw), LWSTR(value), LWSTR(iter->val));
-				continue;
+				return 1;
 			}
 			INFO("keyword '" LWPDL "' already assigned: "
 				"overwriting previous `" LWPDL "` with new `" LWPDL "`.",
@@ -81,8 +81,8 @@ int assign_dsn_attr(esodbc_dsn_attrs_st *attrs,
 	}
 
 	/* entry not directly relevant to driver config */
-	WARN("keyword `" LWPDL "` (with value `" LWPDL "`) not assigned.",
-		LWSTR(keyword), LWSTR(value));
+	WARN("keyword `" LWPDL "` (with value `" LWPDL "`) not DSN config "
+		"specific, so not assigned.", LWSTR(keyword), LWSTR(value));
 	return 0;
 }
 
@@ -371,6 +371,30 @@ void free_dsn_attrs(esodbc_dsn_attrs_st *attrs)
 }
 
 /*
+ * Checks if a DSN entry with the given name exists already.
+ * Returns:
+ * . negative on failure
+ * . 0 on false
+ * . positive on true.
+ */
+int system_dsn_exists(wstr_st *dsn)
+{
+	int res;
+	SQLWCHAR kbuff[MAX_REG_VAL_NAME];
+
+	/* '\' can't be a key name */
+	res = SQLGetPrivateProfileStringW(dsn->str, NULL, MK_WPTR("\\"),
+			kbuff, sizeof(kbuff)/sizeof(kbuff[0]), MK_WPTR(SUBKEY_ODBC));
+	if (res < 0) {
+		ERR("failed to query for DSN registry keys.");
+		log_installer_err();
+		return -1;
+	}
+	assert(0 < res);
+	return kbuff[0] != MK_WPTR('\\');
+
+}
+/*
  * Reads the system entries for a DSN given into a doubly null-terminated
  * attributes list.
  *
@@ -463,7 +487,7 @@ err:
 	return NULL;
 }
 
-BOOL write_system_dsn(esodbc_dsn_attrs_st *attrs)
+BOOL write_system_dsn(esodbc_dsn_attrs_st *attrs, BOOL create_new)
 {
 	struct {
 		wstr_st *kw;
@@ -490,16 +514,18 @@ BOOL write_system_dsn(esodbc_dsn_attrs_st *attrs)
 		{NULL, NULL}
 	};
 
-	if (! SQLValidDSNW(attrs->dsn.str)) {
-		ERR("invalid DSN value `" LWPDL "`.", LWSTR(&attrs->dsn));
-		return FALSE;
-	}
-	INFO("creating DSN `" LWPDL "` for driver ` " LWPDL " `.",
-		LWSTR(&attrs->dsn), LWSTR(&attrs->driver));
-	if (! SQLWriteDSNToIniW(attrs->dsn.str, attrs->driver.str)) {
-		ERR("failed to add DSN `" LWPDL "` for driver ` " LWPDL " ` to .INI.",
+	if (create_new) {
+		if (! SQLValidDSNW(attrs->dsn.str)) {
+			ERR("invalid DSN value `" LWPDL "`.", LWSTR(&attrs->dsn));
+			return FALSE;
+		}
+		INFO("creating new DSN `" LWPDL "` for driver ` " LWPDL " `.",
 			LWSTR(&attrs->dsn), LWSTR(&attrs->driver));
-		return FALSE;
+		if (! SQLWriteDSNToIniW(attrs->dsn.str, attrs->driver.str)) {
+			ERR("failed to add DSN `" LWPDL "` for driver ` " LWPDL " ` to "
+				".INI.", LWSTR(&attrs->dsn), LWSTR(&attrs->driver));
+			return FALSE;
+		}
 	}
 
 	for (iter = &map[0]; iter->kw; iter ++) {
@@ -550,6 +576,7 @@ BOOL write_connection_string(esodbc_dsn_attrs_st *attrs,
 		char *kw;
 	} *iter, map[] = {
 		{&attrs->driver, ESODBC_DSN_DRIVER},
+		/* Description */
 		{&attrs->dsn, ESODBC_DSN_DSN},
 		{&attrs->pwd, ESODBC_DSN_PWD},
 		{&attrs->uid, ESODBC_DSN_UID},
@@ -564,6 +591,8 @@ BOOL write_connection_string(esodbc_dsn_attrs_st *attrs,
 		{&attrs->packing, ESODBC_DSN_PACKING},
 		{&attrs->max_fetch_size, ESODBC_DSN_MAX_FETCH_SIZE},
 		{&attrs->max_body_size, ESODBC_DSN_MAX_BODY_SIZE_MB},
+		{&attrs->trace_file, ESODBC_DSN_TRACE_FILE},
+		{&attrs->trace_level, ESODBC_DSN_TRACE_LEVEL},
 		{NULL, NULL}
 	};
 
@@ -646,7 +675,8 @@ BOOL assign_dsn_defaults(esodbc_dsn_attrs_st *attrs, BOOL duplicate)
 		return FALSE;
 	}
 	if (assign_dsn_attr(attrs,
-			&MK_WSTR(ESODBC_DSN_MAX_FETCH_SIZE), &MK_WSTR(ESODBC_DEF_FETCH_SIZE),
+			&MK_WSTR(ESODBC_DSN_MAX_FETCH_SIZE),
+			&MK_WSTR(ESODBC_DEF_FETCH_SIZE),
 			/*overwrite?*/FALSE, duplicate) < 0) {
 		return FALSE;
 	}
@@ -775,6 +805,39 @@ end:
 #else /* defined(_WIN32) || defined (WIN32) */
 #error "unsupported platform" /* TODO */
 #endif /* defined(_WIN32) || defined (WIN32) */
+
+
+// asks user for the config data
+BOOL prompt_user_config(HWND hwndParent, esodbc_dsn_attrs_st *attrs,
+	/* disable non-connect-related controls? */
+	BOOL disable_nonconn)
+{
+	TRACE;
+	if (assign_dsn_attr(attrs, &MK_WSTR(ESODBC_DSN_DSN),
+			&MK_WSTR("Elasticsearch ODBC Sample DSN"), FALSE, TRUE) <= 0) {
+		//&MK_WSTR("Elasticsearch ODBC Sample DSN"), TRUE, TRUE) <= 0) {
+		return FALSE;
+	}
+#if 1
+	if (assign_dsn_attr(attrs, &MK_WSTR(ESODBC_DSN_TRACE_LEVEL),
+			&MK_WSTR("INFO"), TRUE, TRUE) <= 0) {
+		//&MK_WSTR("Elasticsearch ODBC Sample DSN2"), TRUE, TRUE) <= 0) {
+		return FALSE;
+	}
+#endif
+	return TRUE;
+}
+
+// asks user if we should overwrite the existing DSN
+// returns:
+// . negative on failure
+// . 0 on false
+// . positive on true
+int prompt_user_overwrite(HWND hwndParent, wstr_st *dsn)
+{
+	TRACE;
+	return 1;
+}
 
 
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */

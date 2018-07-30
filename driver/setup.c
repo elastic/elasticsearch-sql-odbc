@@ -116,17 +116,6 @@ end:
 	return ret;
 }
 
-static BOOL prompt_user(HWND hwndParent, esodbc_dsn_attrs_st *attrs)
-{
-	if (assign_dsn_attr(attrs, &MK_WSTR(ESODBC_DSN_DSN),
-			&MK_WSTR("Elasticsearch ODBC Sample DSN"), FALSE, TRUE) <= 0) {
-		return FALSE;
-	}
-	return TRUE;
-}
-
-// SQLRemoveDSNFromIni, SQLWriteDSNToIni, SQLValidDSN,
-// SQLWritePrivateProfileString
 BOOL SQL_API ConfigDSNW(
 	HWND     hwndParent,
 	WORD     fRequest,
@@ -135,15 +124,24 @@ BOOL SQL_API ConfigDSNW(
 {
 	esodbc_dsn_attrs_st *attrs = NULL;
 	wstr_st driver;
+	SQLWCHAR buff[MAX_REG_VAL_NAME] = {0};
+	wstr_st old_dsn = {buff, 0};
+	BOOL create_new;
+	int res;
 	BOOL ret = FALSE;
 
 	TRACE4(_IN, "phWW", hwndParent, fRequest, lpszDriver, lpszAttributes);
 
+	/* If there's a DSN in reveived attributes, load the config from the
+	 * registry. Otherwise, populate a new config with defaults. */
 	if (! (attrs = load_system_dsn((SQLWCHAR *)lpszAttributes))) {
 		ERR("failed to load system DSN for driver ` " LWPD " ` and "
 			"attributes `" LWPD "`.", lpszDriver, lpszAttributes);
 		goto err;
 	}
+	/* assign the Driver name; this is not the value of the Driver key in the
+	 * registry (i.e. the path to the DLL), which is actually skipped when
+	 * loading the config. */
 	driver = (wstr_st) {
 		(SQLWCHAR *)lpszDriver,
 		wcslen(lpszDriver)
@@ -156,13 +154,56 @@ BOOL SQL_API ConfigDSNW(
 
 	switch (fRequest) {
 		case ODBC_ADD_DSN:
-			if (! prompt_user(hwndParent, attrs)) {
-				ERR("failed getting user values.");
-				goto err;
-			}
-		/* no break */
 		case ODBC_CONFIG_DSN:
-			if (! write_system_dsn(attrs)) {
+			/* save the DSN naming, since this might be changed by the user */
+			if (attrs->dsn.cnt) {
+				/* attrs->dsn.cnt < MAX_REG_VAL_NAME due to load_sys_dsn() */
+				wcscpy(old_dsn.str, attrs->dsn.str);
+				old_dsn.cnt = attrs->dsn.cnt;
+			}
+			/* user-interraction loop */
+			while (TRUE) {
+				if (! prompt_user_config(hwndParent, attrs, FALSE)) {
+					ERR("failed getting user values.");
+					goto err;
+				}
+				/* is it a brand new DSN or has the DSN name changed? */
+				if ((! old_dsn.cnt) ||
+					(! EQ_CASE_WSTR(&old_dsn, &attrs->dsn))) {
+					/* check if target DSN (new or old) already exists */
+					res = system_dsn_exists(&attrs->dsn);
+					if (res < 0) {
+						ERR("failed to check if DSN `" LWPDL "` already "
+							"exists.", LWSTR(&attrs->dsn));
+						goto err;
+					} else if (res) {
+						res = prompt_user_overwrite(hwndParent, &attrs->dsn);
+						if (res < 0) {
+							ERR("failed to get user input.");
+							goto err;
+						} else if (! res) {
+							/* let user chose a different DSN name */
+							continue;
+						}
+					}
+					/* if an old DSN exists, delete it */
+					if (old_dsn.cnt) {
+						if (! SQLRemoveDSNFromIniW(old_dsn.str)) {
+							ERR("failed to remove old DSN ` " LWPDL " `.",
+								LWSTR(&old_dsn));
+							goto err;
+						}
+						DBG("removed now renamed DSN `" LWPDL "`.",
+							LWSTR(&old_dsn));
+					}
+					create_new = TRUE;
+				} else {
+					create_new = FALSE;
+				}
+				break;
+			}
+			/* create or update the DSN */
+			if (! write_system_dsn(attrs, create_new)) {
 				ERR("failed to add DSN to the system.");
 			} else {
 				ret = TRUE;
@@ -174,6 +215,8 @@ BOOL SQL_API ConfigDSNW(
 				ERR("failed to remove driver ` " LWPD " ` with "
 					"attributes `" LWPD "`.", lpszDriver, lpszAttributes);
 			} else {
+				INFO("removed DSN `" LWPDL "` from the system.",
+					LWSTR(&attrs->dsn));
 				ret = TRUE;
 			}
 			break;

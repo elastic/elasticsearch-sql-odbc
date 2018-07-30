@@ -1297,16 +1297,6 @@ end:
 	return ret;
 }
 
-static BOOL prompt_user(SQLHDBC hdbc, esodbc_dsn_attrs_st *attrs,
-	BOOL disable_conn)
-{
-	//
-	// TODO: display settings dialog box;
-	// An error message (if popping it more than once) might be needed.
-	//
-	return FALSE;
-}
-
 SQLRETURN EsSQLDriverConnectW
 (
 	SQLHDBC             hdbc,
@@ -1336,7 +1326,7 @@ SQLRETURN EsSQLDriverConnectW
 	SQLRETURN ret;
 	esodbc_dsn_attrs_st attrs;
 	wstr_st orig_dsn;
-	BOOL disable_conn = FALSE;
+	BOOL disable_nonconn = FALSE;
 	BOOL user_canceled = FALSE;
 	TCHAR buff[(sizeof(esodbc_dsn_attrs_st)/sizeof(wstr_st)) *
 													  MAX_REG_DATA_SIZE];
@@ -1414,12 +1404,12 @@ SQLRETURN EsSQLDriverConnectW
 			break;
 
 		case SQL_DRIVER_COMPLETE_REQUIRED:
-			disable_conn = TRUE;
+			disable_nonconn = TRUE;
 		//no break;
 		case SQL_DRIVER_COMPLETE:
 			/* try connect first, then, if that fails, prompt user */
 			while (! SQL_SUCCEEDED(do_connect(dbc, &attrs))) {
-				if (! prompt_user(hdbc, &attrs, disable_conn)) {
+				if (! prompt_user_config(hdbc, &attrs, disable_nonconn)) {
 					/* user canceled */
 					return SQL_NO_DATA;
 				}
@@ -1429,7 +1419,7 @@ SQLRETURN EsSQLDriverConnectW
 		case SQL_DRIVER_PROMPT:
 			do {
 				/* prompt user first, then try connect */
-				if (! prompt_user(hdbc, &attrs, FALSE)) {
+				if (! prompt_user_config(hdbc, &attrs, FALSE)) {
 					/* user canceled */
 					return SQL_NO_DATA;
 				}
