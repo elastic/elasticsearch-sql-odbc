@@ -103,6 +103,8 @@
 /* maximum DNS name */
 /* SQL_MAX_DSN_LENGTH=32 < IPv6 len */
 #define ESODBC_MAX_DNS_LEN				255
+/* sample DSN name provisioned with the installation  */
+#define ESODBC_DSN_SAMPLE_NAME			"Elasticsearch ODBC Sample DSN"
 
 /* SQL plugin's REST endpoint for SQL */
 #define ELASTIC_SQL_PATH				"/_xpack/sql"

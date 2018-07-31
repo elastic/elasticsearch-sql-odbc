@@ -1327,7 +1327,8 @@ SQLRETURN EsSQLDriverConnectW
 	esodbc_dsn_attrs_st attrs;
 	wstr_st orig_dsn;
 	BOOL disable_nonconn = FALSE;
-	BOOL user_canceled = FALSE;
+	BOOL prompt_user = TRUE;
+	int res;
 	TCHAR buff[(sizeof(esodbc_dsn_attrs_st)/sizeof(wstr_st)) *
 													  MAX_REG_DATA_SIZE];
 
@@ -1405,24 +1406,24 @@ SQLRETURN EsSQLDriverConnectW
 
 		case SQL_DRIVER_COMPLETE_REQUIRED:
 			disable_nonconn = TRUE;
-		//no break;
+		/* no break */
 		case SQL_DRIVER_COMPLETE:
 			/* try connect first, then, if that fails, prompt user */
-			while (! SQL_SUCCEEDED(do_connect(dbc, &attrs))) {
-				if (! prompt_user_config(hdbc, &attrs, disable_nonconn)) {
-					/* user canceled */
-					return SQL_NO_DATA;
-				}
-			}
-			break;
-
-		case SQL_DRIVER_PROMPT:
+			prompt_user = FALSE;
+		/* no break; */
+		case SQL_DRIVER_PROMPT: /* prompt user first, then try connect */
 			do {
-				/* prompt user first, then try connect */
-				if (! prompt_user_config(hdbc, &attrs, FALSE)) {
+				res = prompt_user ?
+					prompt_user_config(hdbc, &attrs, FALSE) : 1;
+				if (res < 0) {
+					ERRH(dbc, "user interaction failed.");
+					RET_HDIAGS(dbc, SQL_STATE_IM008);
+				} else if (! res) {
 					/* user canceled */
 					return SQL_NO_DATA;
 				}
+				/* promt user on next iteration */
+				prompt_user = TRUE;
 			} while (! SQL_SUCCEEDED(do_connect(dbc, &attrs)));
 			break;
 

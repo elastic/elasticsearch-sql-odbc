@@ -89,6 +89,11 @@ BOOL SQL_API ConfigDriverW(
 	WORD   *pcbMsgOut)
 {
 	BOOL ret = FALSE;
+#	define _DSN_END_MARKER	"\\"
+	SQLWCHAR *sample_dsn = MK_WPTR("DSN="
+			ESODBC_DSN_SAMPLE_NAME
+			_DSN_END_MARKER);
+	SQLWCHAR *pos;
 
 	TRACE7(_IN, "phWWpht", hwndParent, fRequest, lpszDriver, lpszArgs,
 		lpszMsg, cbMsgMax, pcbMsgOut);
@@ -99,10 +104,20 @@ BOOL SQL_API ConfigDriverW(
 			if (! ret) {
 				SQLPostInstallerError(ODBC_ERROR_REQUEST_FAILED, NULL);
 			}
+			/* add the 2nd \0 to have a 00-list */
+			pos = wcschr(sample_dsn, _DSN_END_MARKER[0]);
+			assert(pos);
+			*pos = _MK_WPTR('\0');
+			/* add a sample DSN */
+			if (! ConfigDSNW(NULL, ODBC_ADD_DSN, lpszDriver, sample_dsn)) {
+				WARN("failed to provision a sample DSN.");
+				/* no further error indication though, install succeedes */
+			}
 			break;
 		case ODBC_REMOVE_DRIVER:
-			/* nothing to do, the vales are removed along with the subkey by
-			 * caller, when needed. */
+			/* nothing to do, the vales in ODBCINST.INI are removed along with
+			 * the subkey by caller, when needed and same happens with DSNs
+			 * under ODBC.INI  */
 			ret = TRUE;
 			break;
 		default:
@@ -114,6 +129,7 @@ end:
 	TRACE8(_OUT, "dphWWpht", ret, hwndParent, fRequest, lpszDriver, lpszArgs,
 		lpszMsg, cbMsgMax, pcbMsgOut);
 	return ret;
+#	undef _DSN_END_MARKER
 }
 
 BOOL SQL_API ConfigDSNW(
@@ -153,7 +169,6 @@ BOOL SQL_API ConfigDSNW(
 	}
 
 	switch (fRequest) {
-		case ODBC_ADD_DSN:
 		case ODBC_CONFIG_DSN:
 			/* save the DSN naming, since this might be changed by the user */
 			if (attrs->dsn.cnt) {
@@ -161,13 +176,20 @@ BOOL SQL_API ConfigDSNW(
 				wcscpy(old_dsn.str, attrs->dsn.str);
 				old_dsn.cnt = attrs->dsn.cnt;
 			}
+		case ODBC_ADD_DSN:
 			/* user-interraction loop */
 			while (TRUE) {
-				if (! prompt_user_config(hwndParent, attrs, FALSE)) {
+				res = prompt_user_config(hwndParent, attrs, FALSE);
+				if (res < 0) {
 					ERR("failed getting user values.");
 					goto err;
+				} else if (! res) {
+					INFO("user canceled the dialog.");
+					goto end;
 				}
 				/* is it a brand new DSN or has the DSN name changed? */
+				DBG("old DSN: `" LWPDL "`, new DSN: `" LWPDL "`.",
+					LWSTR(&old_dsn), LWSTR(&attrs->dsn));
 				if ((! old_dsn.cnt) ||
 					(! EQ_CASE_WSTR(&old_dsn, &attrs->dsn))) {
 					/* check if target DSN (new or old) already exists */

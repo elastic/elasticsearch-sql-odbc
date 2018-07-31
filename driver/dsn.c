@@ -390,8 +390,8 @@ int system_dsn_exists(wstr_st *dsn)
 		log_installer_err();
 		return -1;
 	}
-	assert(0 < res);
-	return kbuff[0] != MK_WPTR('\\');
+	/* subkey can be found, but have nothing beneath => res == 0 */
+	return (! res) || (kbuff[0] != MK_WPTR('\\'));
 
 }
 /*
@@ -467,8 +467,9 @@ esodbc_dsn_attrs_st *load_system_dsn(SQLWCHAR *list00)
 			/* assign it to the config */
 			DBG("read DSN attribute: `" LWPDL "` = `" LWPDL "`.",
 				LWSTR(&keyword), LWSTR(&value));
+			/* assign attributes not yet given in the 00-list */
 			if (assign_dsn_attr(attrs, &keyword, &value,
-					/*overwrite?*/TRUE, /*duplicate?*/TRUE) < 0) {
+					/*overwrite?*/FALSE, /*duplicate?*/TRUE) < 0) {
 				ERR("keyword '" LWPDL "' couldn't be assigned.",
 					LWSTR(&keyword));
 				goto err;
@@ -703,6 +704,8 @@ BOOL assign_dsn_defaults(esodbc_dsn_attrs_st *attrs, BOOL duplicate)
  * TODO: use odbccp32.dll's SQLGetPrivateProfileString() & co. instead of
  * direct registry access:
  * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlgetprivateprofilestring-function
+ * Note: the provided 'buff' must be large enough to hold MAX_REG_DATA_SIZE
+ * bytes for each member of the esodbc_dsn_attrs_st structure!
  */
 BOOL read_system_info(esodbc_dsn_attrs_st *attrs, TCHAR *buff)
 {
@@ -783,8 +786,7 @@ BOOL read_system_info(esodbc_dsn_attrs_st *attrs, TCHAR *buff)
 		tdata = (tstr_st) {
 			(SQLTCHAR *)d, datalen
 		};
-		// TODO: duplicating is needed, but leaks! this needs a rewrite.
-		if (assign_dsn_attr(attrs, &tval, &tdata, FALSE, /*dup?*/TRUE) < 0) {
+		if (assign_dsn_attr(attrs, &tval, &tdata, FALSE, FALSE) < 0) {
 			ERR("failed to assign reg entry `" LTPDL "`: `" LTPDL "`.",
 				LTSTR(&tval), LTSTR(&tdata));
 			goto end;
@@ -808,24 +810,32 @@ end:
 
 
 // asks user for the config data
-BOOL prompt_user_config(HWND hwndParent, esodbc_dsn_attrs_st *attrs,
+// returns:
+// . negative: on failure
+// . 0: user canceled
+// . positive: user provided input
+int prompt_user_config(HWND hwndParent, esodbc_dsn_attrs_st *attrs,
 	/* disable non-connect-related controls? */
 	BOOL disable_nonconn)
 {
+	if (! hwndParent) {
+		INFO("no window handler provided -- configuration skipped.");
+		return 1;
+	}
 	TRACE;
+
 	if (assign_dsn_attr(attrs, &MK_WSTR(ESODBC_DSN_DSN),
-			&MK_WSTR("Elasticsearch ODBC Sample DSN"), FALSE, TRUE) <= 0) {
-		//&MK_WSTR("Elasticsearch ODBC Sample DSN"), TRUE, TRUE) <= 0) {
-		return FALSE;
+			&MK_WSTR("My Elasticsearch ODBC DSN"), FALSE, TRUE) <= 0) {
+		//&MK_WSTR("My Elasticsearch ODBC DSN"), TRUE, TRUE) <= 0) {
+		return -1;
 	}
 #if 1
 	if (assign_dsn_attr(attrs, &MK_WSTR(ESODBC_DSN_TRACE_LEVEL),
 			&MK_WSTR("INFO"), TRUE, TRUE) <= 0) {
-		//&MK_WSTR("Elasticsearch ODBC Sample DSN2"), TRUE, TRUE) <= 0) {
-		return FALSE;
+		return -1;
 	}
 #endif
-	return TRUE;
+	return 1;
 }
 
 // asks user if we should overwrite the existing DSN
@@ -835,6 +845,10 @@ BOOL prompt_user_config(HWND hwndParent, esodbc_dsn_attrs_st *attrs,
 // . positive on true
 int prompt_user_overwrite(HWND hwndParent, wstr_st *dsn)
 {
+	if (! hwndParent) {
+		INFO("no window handler provided -- forcing overwrite.");
+		return 1;
+	}
 	TRACE;
 	return 1;
 }
