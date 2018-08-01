@@ -481,8 +481,8 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	 * request timeout for liburl: negative reset to 0
 	 */
 	if (! str2bigint(&attrs->timeout, /*wide?*/TRUE, (SQLBIGINT *)&timeout)) {
-		ERRH(dbc, "failed to convert '" LWPDL "' to big int.",
-			LWSTR(&attrs->timeout));
+		ERRH(dbc, "failed to convert `" LWPDL "` [%zu] to big int.",
+			LWSTR(&attrs->timeout), attrs->timeout.cnt);
 		goto err;
 	}
 	if (timeout < 0) {
@@ -497,8 +497,8 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	 */
 	if (! str2bigint(&attrs->max_body_size, /*wide?*/TRUE,
 			(SQLBIGINT *)&max_body_size)) {
-		ERRH(dbc, "failed to convert '" LWPDL "' to long long.",
-			LWSTR(&attrs->max_body_size));
+		ERRH(dbc, "failed to convert `" LWPDL "` [%zu] to long long.",
+			LWSTR(&attrs->max_body_size), attrs->max_body_size.cnt);
 		goto err;
 	}
 	if (max_body_size < 0) {
@@ -515,8 +515,8 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	 */
 	if (! str2bigint(&attrs->max_fetch_size, /*wide?*/TRUE,
 			(SQLBIGINT *)&max_fetch_size)) {
-		ERRH(dbc, "failed to convert '" LWPDL "' to long long.",
-			LWSTR(&attrs->max_fetch_size));
+		ERRH(dbc, "failed to convert `" LWPDL "` [%zu] to long long.",
+			LWSTR(&attrs->max_fetch_size), attrs->max_fetch_size.cnt);
 		goto err;
 	}
 	if (max_fetch_size < 0) {
@@ -1329,7 +1329,7 @@ SQLRETURN EsSQLDriverConnectW
 	BOOL disable_nonconn = FALSE;
 	BOOL prompt_user = TRUE;
 	int res;
-	TCHAR buff[(sizeof(esodbc_dsn_attrs_st)/sizeof(wstr_st)) *
+	SQLWCHAR buff[(sizeof(esodbc_dsn_attrs_st)/sizeof(wstr_st)) *
 													  MAX_REG_DATA_SIZE];
 
 

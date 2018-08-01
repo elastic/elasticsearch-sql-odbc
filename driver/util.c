@@ -85,7 +85,7 @@ BOOL str2ubigint(void *val, const BOOL wide, SQLUBIGINT *out)
 BOOL str2bigint(void *val, const BOOL wide, SQLBIGINT *out)
 {
 	SQLUBIGINT ull; /* unsigned long long */
-	size_t i, at0;
+	size_t i;
 	BOOL negative, ret;
 	cstr_st cstr;
 	wstr_st wstr;
@@ -93,18 +93,16 @@ BOOL str2bigint(void *val, const BOOL wide, SQLBIGINT *out)
 	if (wide) {
 		wstr = *(wstr_st *)val;
 		i = wstr.cnt;
-		at0 = wstr.str[0];
 	} else {
 		cstr = *(cstr_st *)val;
 		i = cstr.cnt;
-		at0 = cstr.str[0];
 	}
 
 	if (i < 1) {
 		errno = EINVAL;
 		return FALSE;
 	} else {
-		switch (at0) {
+		switch (wide ? wstr.str[0] : cstr.str[0]) {
 			case '-': /* L'-' =(size_t)= '-' */
 				negative = TRUE;
 				i = 1;

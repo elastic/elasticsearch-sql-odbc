@@ -14,9 +14,16 @@
 #define REG_HKLM				"HKEY_LOCAL_MACHINE"
 #define REG_HKCU				"HKEY_CURRENT_USER"
 
+#define DSN_NOT_MATCHED		0
+#define DSN_NOT_OVERWRITTEN	1
+#define DSN_ASSIGNED		2
+#define DSN_OVERWRITTEN		3
 /*
  * returns:
- *   positive on keyword match;
+ *   positive on keyword match:
+ *     DSN_ASSIGNED for assignment on blank,
+ *     DSN_OVERWRITTEN for assignment over value,
+ *     DSN_NOT_OVERWRITTEN for skipped assignment due to !overwrite;
  *   0 on keyword mismatch;
  *   negative on error;
  */
@@ -47,6 +54,7 @@ int assign_dsn_attr(esodbc_dsn_attrs_st *attrs,
 		{&MK_WSTR(ESODBC_DSN_TRACE_LEVEL), &attrs->trace_level},
 		{NULL, NULL}
 	};
+	int ret;
 
 	for (iter = &map[0]; iter->kw; iter ++) {
 		if (! EQ_CASE_WSTR(iter->kw, keyword)) {
@@ -58,18 +66,23 @@ int assign_dsn_attr(esodbc_dsn_attrs_st *attrs,
 				INFO("keyword '" LWPDL "' already assigned; "
 					"ignoring new `" LWPDL "`, keeping previous `" LWPDL "`.",
 					LWSTR(iter->kw), LWSTR(value), LWSTR(iter->val));
-				return 1;
+				return DSN_NOT_OVERWRITTEN;
 			}
 			INFO("keyword '" LWPDL "' already assigned: "
 				"overwriting previous `" LWPDL "` with new `" LWPDL "`.",
 				LWSTR(iter->kw), LWSTR(iter->val), LWSTR(value));
+			ret = DSN_OVERWRITTEN;
+		} else {
+			INFO("keyword '" LWPDL "' new assignment: `" LWPDL "`.",
+				LWSTR(iter->kw), LWSTR(value));
+			ret = DSN_ASSIGNED;
 		}
 		if (duplicate) {
 			if (iter->val->str) {
 				free(iter->val->str);
 			}
 			if (! (iter->val->str = _wcsdup(value->str))) {
-				ERR("OOM duplicating wstring of len %zu.", value->cnt);
+				ERRN("OOM duplicating wstring of len %zu.", value->cnt);
 				return -1;
 			} else {
 				iter->val->cnt = value->cnt;
@@ -77,13 +90,13 @@ int assign_dsn_attr(esodbc_dsn_attrs_st *attrs,
 		} else {
 			*iter->val = *value;
 		}
-		return 1;
+		return ret;
 	}
 
 	/* entry not directly relevant to driver config */
 	WARN("keyword `" LWPDL "` (with value `" LWPDL "`) not DSN config "
 		"specific, so not assigned.", LWSTR(keyword), LWSTR(value));
-	return 0;
+	return DSN_NOT_MATCHED;
 }
 
 /*
@@ -707,20 +720,20 @@ BOOL assign_dsn_defaults(esodbc_dsn_attrs_st *attrs, BOOL duplicate)
  * Note: the provided 'buff' must be large enough to hold MAX_REG_DATA_SIZE
  * bytes for each member of the esodbc_dsn_attrs_st structure!
  */
-BOOL read_system_info(esodbc_dsn_attrs_st *attrs, TCHAR *buff)
+BOOL read_system_info(esodbc_dsn_attrs_st *attrs, SQLWCHAR *buff)
 {
 	HKEY hkey;
 	BOOL ret = FALSE;
 	const char *ktree;
-	DWORD valsno, i, j; /* number of values in subkey */
+	DWORD valsno/* number of values in subkey */, i, j, res;
 	DWORD maxvallen; /* len of longest value name */
 	DWORD maxdatalen; /* len of longest data (buffer) */
-	TCHAR val[MAX_REG_VAL_NAME];
+	SQLWCHAR val[MAX_REG_VAL_NAME];
 	DWORD vallen;
 	DWORD valtype;
 	BYTE *d;
 	DWORD datalen;
-	tstr_st tval, tdata;
+	wstr_st val_name, val_data;
 
 	if (swprintf(val, sizeof(val)/sizeof(val[0]), WPFCP_DESC "\\" WPFWP_LDESC,
 			ODBC_REG_SUBKEY_PATH, LWSTR(&attrs->dsn)) < 0) {
@@ -728,7 +741,7 @@ BOOL read_system_info(esodbc_dsn_attrs_st *attrs, TCHAR *buff)
 		return FALSE;
 	}
 	/* try accessing local user's config first, if that fails, systems' */
-	if (RegOpenKeyEx(HKEY_CURRENT_USER, val, /*options*/0, KEY_READ,
+	if (RegOpenKeyExW(HKEY_CURRENT_USER, val, /*options*/0, KEY_READ,
 			&hkey) != ERROR_SUCCESS) {
 		INFO("failed to open registry key `" REG_HKCU "\\" LWPD "`.",
 			val);
@@ -744,7 +757,7 @@ BOOL read_system_info(esodbc_dsn_attrs_st *attrs, TCHAR *buff)
 		ktree = REG_HKCU;
 	}
 
-	if (RegQueryInfoKey(hkey, /*key class*/NULL, /*len of key class*/NULL,
+	if (RegQueryInfoKeyW(hkey, /*key class*/NULL, /*len of key class*/NULL,
 			/*reserved*/NULL, /*no subkeys*/NULL, /*longest subkey*/NULL,
 			/*longest subkey class name*/NULL, &valsno, &maxvallen,
 			&maxdatalen, /*sec descr*/NULL,
@@ -757,20 +770,27 @@ BOOL read_system_info(esodbc_dsn_attrs_st *attrs, TCHAR *buff)
 			"lengthiest data: %d.", ktree, val, valsno, maxvallen,
 			maxdatalen);
 		// malloc buffers?
-		if (MAX_REG_VAL_NAME < maxvallen)
+		if (MAX_REG_VAL_NAME < maxvallen) {
 			BUG("value name buffer too small (%d), needed: %dB.",
 				MAX_REG_VAL_NAME, maxvallen);
-		if (MAX_REG_DATA_SIZE < maxdatalen)
+		}
+		if (MAX_REG_DATA_SIZE < maxdatalen) {
 			BUG("value data buffer too small (%d), needed: %dB.",
 				MAX_REG_DATA_SIZE, maxdatalen);
+		}
 		/* connection could still succeeded, so carry on */
 	}
 
 	for (i = 0, j = 0; i < valsno; i ++) {
 		vallen = sizeof(val) / sizeof(val[0]);
-		datalen = MAX_REG_DATA_SIZE;
-		d = (BYTE *)&buff[j * datalen];
-		if (RegEnumValue(hkey, i, val, &vallen, /*reserved*/NULL, &valtype,
+		datalen = MAX_REG_DATA_SIZE * sizeof(buff[0]);
+
+		/* each element in esodbc_dsn_attrs_st has a chunk of MAX_REG_DATA_SIZE
+		 * reserved in the buffer */
+		assert(j <= sizeof(esodbc_dsn_attrs_st)/sizeof(wstr_st));
+		d = (BYTE *)&buff[j * MAX_REG_DATA_SIZE];
+		
+		if (RegEnumValueW(hkey, i, val, &vallen, /*reserved*/NULL, &valtype,
 				d, &datalen) != ERROR_SUCCESS) {
 			ERR("failed to read register subkey value.");
 			goto end;
@@ -780,23 +800,32 @@ BOOL read_system_info(esodbc_dsn_attrs_st *attrs, TCHAR *buff)
 				valtype);
 			continue;
 		}
-		tval = (tstr_st) {
-			val, vallen
+		val_name = (wstr_st) {
+			val, vallen /* vallen doesn't count the \0 */
 		};
-		tdata = (tstr_st) {
-			(SQLTCHAR *)d, datalen
-		};
-		if (assign_dsn_attr(attrs, &tval, &tdata, FALSE, FALSE) < 0) {
-			ERR("failed to assign reg entry `" LTPDL "`: `" LTPDL "`.",
-				LTSTR(&tval), LTSTR(&tdata));
-			goto end;
+		if (datalen <= 0) {
+			INFO("value `" LWPDL "` has empty value -- skipped.",
+					LWSTR(&val_name));
+			continue;
 		}
-		// else if == 0: entry not directly relevant to driver config
-		j ++;
-		DBG("reg entry`" LTPDL "`: `" LTPDL "` assigned.",
-			LTSTR(&tval), LTSTR(&tdata));
+		assert(datalen % sizeof(SQLTCHAR) == 0);
+		val_data = (wstr_st) {
+			/* datalen counts all bytes returned, so including \0 */
+			(SQLWCHAR *)d, datalen/sizeof(SQLWCHAR) - /*\0*/1
+		};
+		if ((res = assign_dsn_attr(attrs, &val_name, &val_data,
+				/*overwrite?*/FALSE, /*duplicatE?*/FALSE)) < 0) {
+			ERR("failed to assign reg entry `" LTPDL "`: `" LTPDL "`.",
+				LTSTR(&val_name), LTSTR(&val_data));
+			goto end;
+		} else if (res) {
+			/* the values in the registry should be unique */
+			assert(res == DSN_ASSIGNED);
+			j ++;
+			DBG("reg entry`" LTPDL "`: `" LTPDL "` assigned (idx #%d).",
+				LTSTR(&val_name), LTSTR(&val_data), j);
+		} // else if == 0: entry not directly relevant to driver config
 	}
-
 
 	ret = TRUE;
 end:
