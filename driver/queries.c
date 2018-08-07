@@ -11,8 +11,7 @@
 #include <math.h>
 #include <errno.h>
 
-#include "ujdecode.h"
-#include "timestamp.h"
+#include <timestamp.h>
 
 #include "queries.h"
 #include "log.h"
@@ -225,6 +224,9 @@ void clear_resultset(esodbc_stmt_st *stmt)
 		UJFree(stmt->rset.state);
 	}
 	memset(&stmt->rset, 0, sizeof(stmt->rset));
+
+	/* reset SQLGetData state to detect sequence "SQLExec*(); SQLGetData();" */
+	STMT_GD_RESET(stmt);
 }
 
 /* Set the desriptor fields associated with "size". This step is needed since
@@ -438,6 +440,7 @@ SQLRETURN TEST_API attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 		stmt->rset.nrows = 0;
 #endif /*0*/
 	} else {
+		/* the cast is made safe by the decoding format indicator for array  */
 		stmt->rset.nrows = (size_t)UJLengthArray(rows);
 	}
 	DBGH(stmt, "rows received in result set: %zd.", stmt->rset.nrows);
@@ -452,20 +455,22 @@ SQLRETURN TEST_API attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 			if (! stmt->hdr.dbc->fetch.max) {
 				INFOH(stmt, "no fetch size defined, but cursor returned.");
 			}
-			if (stmt->rset.ecurs)
+			if (stmt->rset.ecurs.cnt) {
 				DBGH(stmt, "replacing old cursor `" LWPDL "`.",
-					stmt->rset.eccnt, stmt->rset.ecurs);
+					LWSTR(&stmt->rset.ecurs));
+			}
 			/* store new cursor vals */
-			stmt->rset.ecurs = wcurs;
-			stmt->rset.eccnt = eccnt;
+			stmt->rset.ecurs = (wstr_st) {
+				(SQLWCHAR *)wcurs, eccnt
+			};
 			DBGH(stmt, "new elastic cursor: `" LWPDL "`[%zd].",
-				stmt->rset.eccnt, stmt->rset.ecurs, stmt->rset.eccnt);
+				LWSTR(&stmt->rset.ecurs), stmt->rset.ecurs.cnt);
 		} else {
 			WARNH(stmt, "empty cursor found in the answer.");
 		}
 	} else {
 		/* should have been cleared by now */
-		assert(! stmt->rset.eccnt);
+		assert(! stmt->rset.ecurs.cnt);
 	}
 
 	/*
@@ -686,13 +691,13 @@ SQLRETURN EsSQLBindCol(
 		RET_HDIAGS(STMH(StatementHandle), SQL_STATE_HY090);
 	}
 
-	if ((STMH(StatementHandle)->bookmarks != SQL_UB_OFF) || (! ColumnNumber)) {
+	if (! ColumnNumber) {
 		/* "The statement attribute SQL_ATTR_USE_BOOKMARKS should always be
 		 * set before binding a column to column 0. This is not required but
 		 * is strongly recommended." */
-		//RET_HDIAGS(STMH(StatementHandle), SQL_STATE_IM001);
-		/* TODO: implement bookmarks? */
-		FIXME;
+		assert(stmt->bookmarks == SQL_UB_OFF); // TODO: bookmarks
+		ERRH(stmt, "bookmarks use turned off.");
+		RET_HDIAGS(stmt, SQL_STATE_07009);
 	}
 
 	ard_prev_count = ard->count;
@@ -1284,6 +1289,7 @@ static SQLRETURN copy_longlong(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	void *data_ptr;
 	SQLLEN *octet_len_ptr;
 	esodbc_desc_st *ard, *ird;
+	SQLSMALLINT ctype;
 	SQLRETURN ret;
 
 	stmt = arec->desc->hdr.stmt;
@@ -1316,13 +1322,11 @@ static SQLRETURN copy_longlong(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			_ll, (intptr_t)*(_sqlctype *)data_ptr); \
 	} while (0)
 
-	switch (get_rec_c_type(arec, irec)) {
+	switch ((ctype = get_rec_c_type(arec, irec))) {
 		case SQL_C_CHAR:
-			return longlong_to_str(arec, irec, ll, data_ptr, octet_len_ptr,
-					FALSE);
 		case SQL_C_WCHAR:
 			return longlong_to_str(arec, irec, ll, data_ptr, octet_len_ptr,
-					TRUE);
+					ctype == SQL_C_WCHAR);
 
 		case SQL_C_TINYINT:
 		case SQL_C_STINYINT:
@@ -1565,6 +1569,7 @@ static SQLRETURN copy_double(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	void *data_ptr;
 	SQLLEN *octet_len_ptr;
 	esodbc_desc_st *ard, *ird;
+	SQLSMALLINT ctype;
 	SQLRETURN ret;
 	double udbl;
 
@@ -1601,13 +1606,11 @@ static SQLRETURN copy_double(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		RET_HDIAGS(stmt, SQL_STATE_01S07); \
 	} while (0)
 
-	switch (get_rec_c_type(arec, irec)) {
+	switch ((ctype = get_rec_c_type(arec, irec))) {
 		case SQL_C_CHAR:
-			return double_to_str(arec, irec, dbl, data_ptr, octet_len_ptr,
-					FALSE);
 		case SQL_C_WCHAR:
 			return double_to_str(arec, irec, dbl, data_ptr, octet_len_ptr,
-					TRUE);
+					ctype == SQL_C_WCHAR);
 
 		case SQL_C_TINYINT:
 		case SQL_C_STINYINT:
@@ -2238,7 +2241,7 @@ static SQLRETURN copy_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
  * pos: row number in the rowset
  * Returns: ...
  */
-static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
+static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos)
 {
 	SQLSMALLINT i;
 	SQLLEN rowno;
@@ -2272,22 +2275,32 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 		stmt->hdr.diag.column_number = _colno; \
 	} while (0)
 
-	if (! UJIsArray(row)) {
-		ERRH(stmt, "one '%s' (#%zd) element in result set not array; type:"
-			" %d.", JSON_ANSWER_ROWS, stmt->rset.vrows, UJGetType(row));
-		RET_ROW_DIAG(SQL_STATE_01S01, MSG_INV_SRV_ANS,
-			SQL_NO_COLUMN_NUMBER);
+	/* is current object an array? */
+	if (! UJIsArray(stmt->rset.row_array)) {
+		ERRH(stmt, "one '%s' element (#%zd) in result set not an array; type:"
+			" %d.", JSON_ANSWER_ROWS, stmt->rset.vrows,
+			UJGetType(stmt->rset.row_array));
+		RET_ROW_DIAG(SQL_STATE_01S01, MSG_INV_SRV_ANS, SQL_NO_COLUMN_NUMBER);
 	}
-	iter_row = UJBeginArray(row);
-	if (! iter_row) {
+	/* are there elements in this row array to at least match the number of
+	 * columns? */
+	if (UJLengthArray(stmt->rset.row_array) < ird->count) {
+		ERRH(stmt, "current row counts less elements (%d) than columns (%hd)",
+			UJLengthArray(stmt->rset.row_array), ird->count);
+		RET_ROW_DIAG(SQL_STATE_01S01, MSG_INV_SRV_ANS, SQL_NO_COLUMN_NUMBER);
+	} else if (ird->count < UJLengthArray(stmt->rset.row_array)) {
+		WARNH(stmt, "current row counts more elements (%d) than columns (%hd)",
+			UJLengthArray(stmt->rset.row_array), ird->count);
+	}
+	/* get an iterator over the row array */
+	if (! (iter_row = UJBeginArray(stmt->rset.row_array))) {
 		ERRH(stmt, "Failed to obtain iterator on row (#%zd): %s.", rowno,
 			UJGetError(stmt->rset.state));
-		RET_ROW_DIAG(SQL_STATE_01S01, MSG_INV_SRV_ANS,
-			SQL_NO_COLUMN_NUMBER);
+		RET_ROW_DIAG(SQL_STATE_01S01, MSG_INV_SRV_ANS, SQL_NO_COLUMN_NUMBER);
 	}
 
 	with_info = FALSE;
-	/* iterate over the contents of one table row */
+	/* iterate over the bound cols and contents of one (table) row */
 	for (i = 0; i < ard->count && UJIterArray(&iter_row, &obj); i ++) {
 		arec = &ard->recs[i]; /* access safe if 'i < ard->count' */
 		/* if record not bound skip it */
@@ -2296,7 +2309,8 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 			continue;
 		}
 
-		irec = &ird->recs[i]; /* access checked by UJIterArray() condition */
+		/* access made safe by ird->count match against array len above  */
+		irec = &ird->recs[i];
 
 		switch (UJGetType(obj)) {
 			default:
@@ -2380,7 +2394,7 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos, UJObject row)
 }
 
 /* TODO: implementation for the below */
-static BOOL conv_implemented(SQLSMALLINT sqltype, SQLSMALLINT ctype)
+static inline BOOL conv_implemented(SQLSMALLINT sqltype, SQLSMALLINT ctype)
 {
 	switch (ctype) {
 		case SQL_C_GUID:
@@ -2427,10 +2441,9 @@ static BOOL conv_implemented(SQLSMALLINT sqltype, SQLSMALLINT ctype)
 	return TRUE;
 }
 
-
 /* check if data types in returned columns are compabile with buffer types
  * bound for those columns */
-static int sql2c_convertible(esodbc_stmt_st *stmt)
+static SQLRETURN sql2c_convertible(esodbc_stmt_st *stmt)
 {
 	SQLSMALLINT i, min;
 	esodbc_desc_st *ard, *ird;
@@ -2451,20 +2464,23 @@ static int sql2c_convertible(esodbc_stmt_st *stmt)
 		}
 		irec = &ird->recs[i];
 
-		if (! ESODBC_TYPES_COMPATIBLE(irec->concise_type,
-				arec->concise_type)) {
+		if (! ESODBC_TYPES_COMPATIBLE(irec->concise_type,arec->concise_type)) {
 			ERRH(stmt, "type conversion not possible on column %d: IRD: %hd, "
-				"ARD: %hd.", i, irec->concise_type, arec->concise_type);
-			return CONVERSION_VIOLATION;
+				"ARD: %hd.", i + 1, irec->concise_type, arec->concise_type);
+			stmt->sql2c_conversion = CONVERSION_VIOLATION;
+			RET_HDIAGS(stmt, SQL_STATE_07006);
 		}
 		if (! conv_implemented(irec->concise_type, arec->concise_type)) {
 			ERRH(stmt, "conversion not supported on column %d types: IRD: %hd,"
-				" ARD: %hd.", i, irec->concise_type, arec->concise_type);
-			return CONVERSION_UNSUPPORTED;
+				" ARD: %hd.", i + 1, irec->concise_type, arec->concise_type);
+			stmt->sql2c_conversion = CONVERSION_UNSUPPORTED;
+			RET_HDIAGS(stmt, SQL_STATE_HYC00);
 		}
 	}
 
-	return CONVERSION_SUPPORTED;
+	stmt->sql2c_conversion = CONVERSION_SUPPORTED;
+	DBGH(stmt, "convertibility check: OK.");
+	return SQL_SUCCESS;
 }
 
 /*
@@ -2528,7 +2544,6 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 	esodbc_stmt_st *stmt;
 	esodbc_desc_st *ard, *ird;
 	SQLULEN i, j;
-	UJObject row;
 	SQLRETURN ret;
 	int errors;
 
@@ -2569,14 +2584,9 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 			break;
 
 		case CONVERSION_UNCHECKED:
-			stmt->sql2c_conversion = sql2c_convertible(stmt);
-			if (stmt->sql2c_conversion < 0) {
-				ERRH(stmt, "convertibility check: failed!");
-				RET_HDIAGS(stmt,
-					stmt->sql2c_conversion == CONVERSION_VIOLATION ?
-					SQL_STATE_07006 : SQL_STATE_HYC00);
+			if (! SQL_SUCCEEDED(ret = sql2c_convertible(stmt))) {
+				return ret;
 			}
-			DBGH(stmt, "convertibility check: OK.");
 		/* no break; */
 
 		default:
@@ -2586,14 +2596,17 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 	DBGH(stmt, "(`" LCPDL "`); cursor @ %zd / %zd.", LCSTR(&stmt->u8sql),
 		stmt->rset.vrows, stmt->rset.nrows);
 
+	/* reset SQLGetData state, to reset fetch position */
+	STMT_GD_RESET(stmt);
+
 	DBGH(stmt, "rowset max size: %d.", ard->array_size);
 	errors = 0;
 	/* for all rows in rowset/array, iterate over rows in current resultset */
 	for (i = stmt->rset.array_pos; i < ard->array_size; i ++) {
-		if (! UJIterArray(&stmt->rset.rows_iter, &row)) {
+		if (! UJIterArray(&stmt->rset.rows_iter, &stmt->rset.row_array)) {
 			DBGH(stmt, "ran out of rows in current result set: nrows=%zd, "
 				"vrows=%zd.", stmt->rset.nrows, stmt->rset.vrows);
-			if (stmt->rset.eccnt) { /*do I have an Elastic cursor? */
+			if (stmt->rset.ecurs.cnt) { /* is there an Elastic cursor? */
 				stmt->rset.array_pos = i;
 				ret = EsSQLExecute(stmt);
 				if (! SQL_SUCCEEDED(ret)) {
@@ -2612,7 +2625,7 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 			}
 			break;
 		}
-		ret = copy_one_row(stmt, i, row);
+		ret = copy_one_row(stmt, i);
 		if (! SQL_SUCCEEDED(ret)) {
 			ERRH(stmt, "copying row %zd failed.", stmt->rset.vrows + i + 1);
 			errors ++;
@@ -2630,7 +2643,9 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 		*ird->rows_processed_ptr = i;
 	}
 
+	/* no data has been copied out */
 	if (i <= 0) {
+		/* ard->array_size is in interval [1, ESODBC_MAX_ROW_ARRAY_SIZE] */
 		DBGH(stmt, "no data %sto return.", stmt->rset.vrows ? "left ": "");
 		return SQL_NO_DATA;
 	}
@@ -2642,6 +2657,171 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 
 	/* only failures need stmt.diag defer'ing */
 	return SQL_SUCCESS;
+}
+
+
+/*
+ * data availability, call sanity checks and init'ing
+ */
+static SQLRETURN gd_checks(esodbc_stmt_st *stmt, SQLUSMALLINT colno)
+{
+	/* is there a result set? */
+	if (! STMT_HAS_RESULTSET(stmt)) {
+		if (STMT_NODATA_FORCED(stmt)) {
+			DBGH(stmt, "empty result flag set - returning no data.");
+			return SQL_NO_DATA;
+		}
+		ERRH(stmt, "no resultset available on statement.");
+		RET_HDIAGS(stmt, SQL_STATE_HY010);
+	}
+	/* is there a block cursor bound? */
+	if (1 < stmt->ard->array_size) {
+		ERRH(stmt, "can't use function with block cursor "
+			"(array_size=%llu).", stmt->ard->array_size);
+		RET_HDIAGS(stmt, SQL_STATE_HYC00);
+	}
+	/* has SQLFetch() been called? rset is reset with every new result */
+	if (! stmt->rset.row_array) {
+		/* DM should have detected this case */
+		ERRH(stmt, "SQLFetch() hasn't yet been called on result set.");
+		RET_HDIAGS(stmt, SQL_STATE_24000);
+	}
+
+	return SQL_SUCCESS;
+}
+
+static SQLRETURN gd_bind_col(
+	esodbc_stmt_st *stmt,
+	esodbc_desc_st *ard,
+	SQLUSMALLINT colno,
+	SQLSMALLINT target_type,
+	SQLPOINTER buff_ptr,
+	SQLLEN buff_len,
+	SQLLEN *len_ind)
+{
+	SQLRETURN ret;
+	SQLSMALLINT ctype;
+	esodbc_rec_st *arec, *gd_arec;
+
+	switch (target_type) {
+		case SQL_ARD_TYPE:
+			if (! (arec = get_record(ard, colno, /*grow?*/FALSE))) {
+				ERRH(stmt, "no bound column #%hu to copy its concise type.",
+					colno);
+				RET_HDIAGS(stmt, SQL_STATE_07009);
+			}
+			ctype = arec->concise_type;
+		case SQL_APD_TYPE:
+			ERRH(stmt, "procedure parameters not unsupported.");
+			RET_HDIAGS(stmt, SQL_STATE_HYC00);
+		default:
+			arec = NULL;
+			ctype = target_type;
+	}
+
+	/* bind the column */
+	ret = EsSQLBindCol(stmt, colno, ctype, buff_ptr, buff_len, len_ind);
+	if (! SQL_SUCCEEDED(ret)) {
+		return ret;
+	}
+
+	/* If target is SQL_ARD_TYPE, use "SQL_DESC_DATETIME_INTERVAL_PRECISION,
+	 * SQL_DESC_PRECISION, and SQL_DESC_SCALE fields of the ARD" */
+	if (arec) {
+		if (! (gd_arec = get_record(stmt->ard, colno, FALSE))) {
+			BUGH(stmt, "can't fetch just set record.");
+			RET_HDIAG(stmt, SQL_STATE_HY000, "BUG: failed to prepare "
+				"SQLGetData call", 0);
+		}
+		gd_arec->datetime_interval_precision =
+			arec->datetime_interval_precision;
+		gd_arec->precision = arec->precision;
+		gd_arec->scale = arec->scale;
+	}
+
+	return SQL_SUCCESS;
+}
+
+SQLRETURN EsSQLGetData(
+	SQLHSTMT StatementHandle,
+	SQLUSMALLINT ColumnNumber,
+	SQLSMALLINT TargetType,
+	_Out_writes_opt_(_Inexpressible_(BufferLength)) SQLPOINTER TargetValuePtr,
+	SQLLEN BufferLength,
+	_Out_opt_ SQLLEN *StrLen_or_IndPtr)
+{
+	SQLRETURN ret;
+	esodbc_desc_st *ard, gd_ard;
+	int sql2c_conversion;
+	esodbc_rec_st arecs[ESODBC_GD_DESC_COUNT];
+	esodbc_stmt_st *stmt = STMH(StatementHandle);
+
+	if (stmt->gd_col == ColumnNumber) {
+		DBGH(stmt, "resuming get on column #%hu (pos @ %lld).",
+			stmt->gd_col, stmt->gd_pos);
+		if (stmt->gd_pos < 0) {
+			WARNH(stmt, "data for current column exhausted.");
+			return SQL_NO_DATA;
+		}
+	} else {
+		if (0 <= stmt->gd_col) {
+			INFOH(stmt, "previous source column #%hu (pos @ %lld) abandoned "
+				"for new one #%hu.", stmt->gd_col, stmt->gd_pos,
+				ColumnNumber);
+			/* reset fields now, should the call eventually fail */
+			STMT_GD_RESET(stmt);
+		} else {
+			DBGH(stmt, "prep. column #%hu as the new data src.", ColumnNumber);
+		}
+		ret = gd_checks(stmt, ColumnNumber);
+		if (! SQL_SUCCEEDED(ret)) {
+			return ret;
+		}
+	}
+	/* data is available */
+
+	/* save stmt originals before overwriting them */
+	ard = getdata_set_ard(stmt, &gd_ard, ColumnNumber, arecs,
+			sizeof(arecs)/sizeof(arecs[0]));
+	if (! ard) {
+		BUGH(stmt, "failed to prepare GD ARD.");
+		RET_HDIAG(stmt, SQL_STATE_HY000,
+			"BUG: failed to prepare SQLGetData call", 0);
+	}
+	sql2c_conversion = stmt->sql2c_conversion;
+
+	ret = gd_bind_col(stmt, ard, ColumnNumber, TargetType, TargetValuePtr,
+			BufferLength, StrLen_or_IndPtr);
+	if (! SQL_SUCCEEDED(ret)) {
+		goto end;
+	}
+
+	/* check if data types are compatible/convertible */
+	ret = sql2c_convertible(stmt);
+	if (! SQL_SUCCEEDED(ret)) {
+		goto end;
+	}
+
+	/* copy the data */
+	ret = copy_one_row(stmt, 0);
+	if (! SQL_SUCCEEDED(ret)) {
+		goto end;
+	}
+
+	/* set column for next invocation to skip the sanity checks */
+	stmt->gd_col = ColumnNumber;
+	DBGH(stmt, "succesfully copied data from column #%hu (pos @ %lld).",
+		ColumnNumber, stmt->gd_pos);
+end:
+	/* reinstate originals */
+	stmt->sql2c_conversion = sql2c_conversion;
+	getdata_reset_ard(stmt, ard, ColumnNumber, arecs,
+		sizeof(arecs)/sizeof(arecs[0]));
+	if (! SQL_SUCCEEDED(ret)) {
+		/* if function call failed, reset GD state */
+		STMT_GD_RESET(stmt);
+	}
+	return ret;
 }
 
 /*
@@ -2678,6 +2858,7 @@ SQLRETURN EsSQLSetPos(
 	switch(Operation) {
 		case SQL_POSITION:
 			// FIXME
+			// check ESODBC_GETDATA_EXTENSIONS (GD_BLOCK) when implementing
 			FIXME;
 			break;
 
@@ -2708,6 +2889,12 @@ SQLRETURN EsSQLBulkOperations(
 {
 	ERRH(StatementHandle, "data update functions not supported");
 	RET_HDIAGS(STMH(StatementHandle), SQL_STATE_IM001);
+}
+
+SQLRETURN EsSQLMoreResults(SQLHSTMT hstmt)
+{
+	INFOH(hstmt, "multiple result sets not supported."); // TODO?
+	return SQL_NO_DATA;
 }
 
 SQLRETURN EsSQLCloseCursor(SQLHSTMT StatementHandle)
@@ -4367,14 +4554,14 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 
 	bodylen = 1; /* { */
 	/* evaluate how long the stringified REST object will be */
-	if (stmt->rset.eccnt) { /* eval CURSOR object length */
+	if (stmt->rset.ecurs.cnt) { /* eval CURSOR object length */
 		/* convert cursor to C [mb]string. */
 		/* TODO: ansi_w2c() fits better for Base64 encoded cursors. */
-		u8len = WCS2U8(stmt->rset.ecurs, (int)stmt->rset.eccnt, u8curs,
+		u8len = WCS2U8(stmt->rset.ecurs.str, (int)stmt->rset.ecurs.cnt, u8curs,
 				sizeof(u8curs));
 		if (u8len <= 0) {
 			ERRH(stmt, "failed to convert cursor `" LWPDL "` to UTF8: %d.",
-				stmt->rset.eccnt, stmt->rset.ecurs, WCS2U8_ERRNO());
+				LWSTR(&stmt->rset.ecurs), WCS2U8_ERRNO());
 			RET_HDIAGS(stmt, SQL_STATE_24000);
 		}
 
@@ -4426,7 +4613,7 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 	pos = 0;
 	body[pos ++] = '{';
 	/* build the actual stringified JSON object */
-	if (stmt->rset.eccnt) { /* copy CURSOR object */
+	if (stmt->rset.ecurs.cnt) { /* copy CURSOR object */
 		memcpy(body + pos, JSON_KEY_CURSOR, sizeof(JSON_KEY_CURSOR) - 1);
 		pos += sizeof(JSON_KEY_CURSOR) - 1;
 		body[pos ++] = '"';
@@ -4872,7 +5059,8 @@ SQLRETURN EsSQLColAttributeW(
 /* function implementation is correct, but it can't really be used as
  * intended, since the driver's "preparation" doesn't really involve sending
  * it to ES or even parameter marker counting.
- * TODO: marker counting? (SQLDescribeParam would need ES/SQL support, tho) */
+ * TODO: marker counting? (SQLDescribeParam would need ES/SQL support, tho);
+ * or execute with fetch_size 0 or 1. */
 SQLRETURN EsSQLNumParams(
 	SQLHSTMT           StatementHandle,
 	_Out_opt_
@@ -4901,7 +5089,7 @@ SQLRETURN EsSQLRowCount(_In_ SQLHSTMT StatementHandle, _Out_ SQLLEN *RowCount)
 	DBGH(stmt, "current resultset rows count: %zd.", stmt->rset.nrows);
 	*RowCount = (SQLLEN)stmt->rset.nrows;
 
-	if (stmt->rset.eccnt) {
+	if (stmt->rset.ecurs.cnt) {
 		/* fetch_size or scroller size chunks the result */
 		WARNH(stmt, "this function will only return the row count of the "
 			"partial result set available.");

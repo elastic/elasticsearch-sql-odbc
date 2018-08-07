@@ -821,16 +821,23 @@ SQLRETURN  SQL_API SQLFetchScroll(SQLHSTMT StatementHandle,
 {
 	RET_NOT_IMPLEMENTED;
 }
+#endif /* WITH_EMPTY */
 
-SQLRETURN  SQL_API SQLGetData(SQLHSTMT StatementHandle,
+SQLRETURN SQL_API SQLGetData(SQLHSTMT StatementHandle,
 	SQLUSMALLINT ColumnNumber, SQLSMALLINT TargetType,
-	_Out_writes_opt_(_Inexpressible_(BufferLength)) SQLPOINTER TargetValue,
+	_Out_writes_opt_(_Inexpressible_(BufferLength)) SQLPOINTER TargetValuePtr,
 	SQLLEN BufferLength,
 	_Out_opt_ SQLLEN *StrLen_or_IndPtr)
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE6(_IN, "pHhplp", StatementHandle, ColumnNumber, TargetType,
+		TargetValuePtr, BufferLength, StrLen_or_IndPtr);
+	ret = EsSQLGetData(StatementHandle, ColumnNumber, TargetType,
+			TargetValuePtr, BufferLength, StrLen_or_IndPtr);
+	TRACE7(_OUT, "dpHhpln", ret, StatementHandle, ColumnNumber, TargetType,
+		TargetValuePtr, BufferLength, StrLen_or_IndPtr);
+	return ret;
 }
-#endif /* WITH_EMPTY */
 
 SQLRETURN SQL_API SQLSetPos(
 	SQLHSTMT        StatementHandle,
@@ -856,13 +863,14 @@ SQLRETURN   SQL_API SQLBulkOperations(
 	return ret;
 }
 
-#if WITH_EMPTY
-SQLRETURN SQL_API SQLMoreResults(
-	SQLHSTMT           hstmt)
+SQLRETURN SQL_API SQLMoreResults(SQLHSTMT StatementHandle)
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE1(_IN, "p", StatementHandle);
+	ret = EsSQLMoreResults(StatementHandle);
+	TRACE2(_OUT, "dp", ret, StatementHandle);
+	return ret;
 }
-#endif /* WITH_EMPTY */
 
 /* TODO: see error.h: esodbc_errors definition note (2.x apps support) */
 SQLRETURN  SQL_API SQLGetDiagFieldW(

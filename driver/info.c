@@ -161,7 +161,7 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			DBGH(dbc, "requested: GetData extentions.");
 			// FIXME: review@alpha
 			// TODO: GetData review
-			*(SQLUINTEGER *)InfoValue = 0;
+			*(SQLUINTEGER *)InfoValue = ESODBC_GETDATA_EXTENSIONS;
 			break;
 
 		case SQL_DATA_SOURCE_NAME:
@@ -216,6 +216,12 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			return write_wstr(dbc, InfoValue,
 					&MK_WSTR(ESODBC_CATALOG_SEPARATOR), BufferLength,
 					StringLengthPtr);
+
+		case SQL_CATALOG_LOCATION:
+			DBGH(dbc, "requested: catalogue location (`%d`).",
+				ESODBC_CATALOG_LOCATION);
+			*(SQLUSMALLINT *)InfoValue = ESODBC_CATALOG_LOCATION;
+			break;
 
 		case SQL_FILE_USAGE:
 			/* JDBC[0]: usesLocalFilePerTable() */
@@ -442,6 +448,43 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_COLUMN_ALIAS),
 					BufferLength, StringLengthPtr);
 
+		case SQL_MAX_COLUMNS_IN_ORDER_BY:
+			DBGH(dbc, "requested: max columns in ORDER BY (%u).",
+				ESODBC_MAX_COLUMNS_IN_ORDER_BY);
+			*(SQLUSMALLINT *)InfoValue = ESODBC_MAX_COLUMNS_IN_ORDER_BY;
+			break;
+
+		case SQL_MAX_COLUMNS_IN_GROUP_BY:
+			DBGH(dbc, "requested: max columns in GROUP BY (%u).",
+				ESODBC_MAX_COLUMNS_IN_GROUP_BY);
+			*(SQLUSMALLINT *)InfoValue = ESODBC_MAX_COLUMNS_IN_GROUP_BY;
+			break;
+
+		case SQL_MAX_COLUMNS_IN_SELECT:
+			DBGH(dbc, "requested: max columns in SELECT (%u).",
+				ESODBC_MAX_COLUMNS_IN_SELECT);
+			*(SQLUSMALLINT *)InfoValue = ESODBC_MAX_COLUMNS_IN_SELECT;
+			break;
+
+		case SQL_ORDER_BY_COLUMNS_IN_SELECT:
+			DBGH(dbc, "requested: requirement for ORDER BY columns in SELECT "
+				"(%s).", ESODBC_ORDER_BY_COLUMNS_IN_SELECT);
+			return write_wstr(dbc, InfoValue,
+					&MK_WSTR(ESODBC_ORDER_BY_COLUMNS_IN_SELECT),
+					BufferLength, StringLengthPtr);
+
+		case SQL_GROUP_BY:
+			DBGH(dbc, "requested: requirement for GROUP BY (%u).",
+				ESODBC_GROUP_BY);
+			*(SQLUSMALLINT *)InfoValue = ESODBC_GROUP_BY;
+			break;
+
+		case SQL_CONCAT_NULL_BEHAVIOR:
+			DBGH(dbc, "requested: concat NULL behavior (%u).",
+				ESODBC_CONCAT_NULL_BEHAVIOR);
+			*(SQLUSMALLINT *)InfoValue = ESODBC_CONCAT_NULL_BEHAVIOR;
+			break;
+
 		case SQL_SQL_CONFORMANCE:
 			DBGH(dbc, "requested: SQL conformance (%lu).",
 				ESODBC_SQL_CONFORMANCE);
@@ -482,6 +525,7 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		case SQL_CONVERT_BIGINT:
 		case SQL_CONVERT_BINARY:
 		case SQL_CONVERT_BIT:
+		case SQL_CONVERT_GUID:
 		case SQL_CONVERT_CHAR:
 		case SQL_CONVERT_DATE:
 		case SQL_CONVERT_DECIMAL:
@@ -500,6 +544,9 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 		case SQL_CONVERT_TINYINT:
 		case SQL_CONVERT_VARBINARY:
 		case SQL_CONVERT_VARCHAR:
+		case SQL_CONVERT_WCHAR:
+		case SQL_CONVERT_WLONGVARCHAR:
+		case SQL_CONVERT_WVARCHAR:
 			DBGH(dbc, "requested: convert data-type support (0).");
 			INFOH(dbc, "no CONVERT scalar function support.");
 			*(SQLUINTEGER *)InfoValue = 0;
@@ -521,6 +568,25 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			DBGH(dbc, "requested: reselt set availability with parameterized "
 				"execution (%d).", ESODBC_PARAM_ARRAY_SELECTS);
 			*(SQLUINTEGER *)InfoValue = ESODBC_PARAM_ARRAY_SELECTS;
+			break;
+
+		case SQL_DTC_TRANSITION_COST:
+			INFOH(dbc, "no connection pooling / DTC support.");
+			DBGH(dbc, "requested: DTC transition cost (%d).",
+				ESODBC_DTC_TRANSITION_COST);
+			*(SQLUINTEGER *)InfoValue = ESODBC_DTC_TRANSITION_COST;
+			break;
+
+#if (ODBCVER < 0x0400)
+		/* this is an ODBC 4.0, but Excel seems to asks for it anyways in
+		 * certain cases with a 3.80 driver */
+		case 180: /* = SQL_RETURN_ESCAPE_CLAUSE */
+#else
+		case SQL_RETURN_ESCAPE_CLAUSE:
+#endif /* SQL_RETURN_ESCAPE_CLAUSE */
+			/* actually an error, but po */
+			INFOH(dbc, "SQL_RETURN_ESCAPE_CLAUSE not supported");
+			*(SQLUINTEGER *)InfoValue = 0; /* = SQL_RC_NONE */
 			break;
 
 		default:

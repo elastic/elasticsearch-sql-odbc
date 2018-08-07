@@ -29,6 +29,13 @@ SQLRETURN EsSQLBindCol(
 	SQLLEN BufferLength,
 	_Inout_opt_ SQLLEN *StrLen_or_Ind);
 SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle);
+SQLRETURN EsSQLGetData(
+	SQLHSTMT StatementHandle,
+	SQLUSMALLINT ColumnNumber,
+	SQLSMALLINT TargetType,
+	_Out_writes_opt_(_Inexpressible_(BufferLength)) SQLPOINTER TargetValue,
+	SQLLEN BufferLength,
+	_Out_opt_ SQLLEN *StrLen_or_IndPtr);
 SQLRETURN EsSQLSetPos(
 	SQLHSTMT        StatementHandle,
 	SQLSETPOSIROW   RowNumber,
@@ -37,6 +44,7 @@ SQLRETURN EsSQLSetPos(
 SQLRETURN EsSQLBulkOperations(
 	SQLHSTMT            StatementHandle,
 	SQLSMALLINT         Operation);
+SQLRETURN EsSQLMoreResults(SQLHSTMT hstmt);
 SQLRETURN EsSQLCloseCursor(SQLHSTMT StatementHandle);
 SQLRETURN EsSQLNumResultCols(SQLHSTMT StatementHandle,
 	_Out_ SQLSMALLINT *ColumnCount);

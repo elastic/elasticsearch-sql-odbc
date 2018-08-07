@@ -169,7 +169,7 @@ static void log_file_write(char *buff, size_t pos)
 	} else {
 #ifndef NDEBUG
 #ifdef _WIN32
-		FlushFileBuffers(log_handle);
+		//FlushFileBuffers(log_handle);
 #endif /* _WIN32 */
 #endif /* NDEBUG */
 	}

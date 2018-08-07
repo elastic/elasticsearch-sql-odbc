@@ -26,8 +26,8 @@ static void free_rec_fields(esodbc_rec_st *rec)
 		&rec->table_name.str,
 	};
 	for (i = 0; i < sizeof(wptr)/sizeof(wptr[0]); i ++) {
-		DBGH(rec->desc, "freeing field #%d = 0x%p.", i, *wptr[i]);
 		if (*wptr[i]) {
+			DBGH(rec->desc, "freeing field #%d = 0x%p.", i, *wptr[i]);
 			free(*wptr[i]);
 			*wptr[i] = NULL;
 		}
@@ -63,11 +63,9 @@ static void init_desc(esodbc_desc_st *desc, esodbc_stmt_st *stmt,
 
 	init_hheader(&desc->hdr, SQL_HANDLE_DESC, stmt);
 
-	desc->type = type;
 	desc->alloc_type = alloc_type;
-	/* a user can only alloc an anon type -> can't have IxD on _USER type */
-	assert((alloc_type == SQL_DESC_ALLOC_USER && type == DESC_TYPE_ANON) ||
-		(alloc_type == SQL_DESC_ALLOC_AUTO));
+	/* user allocated descriptors are reset to ANON */
+	desc->type = alloc_type == SQL_DESC_ALLOC_USER ? DESC_TYPE_ANON : type;
 
 	desc->array_size = ESODBC_DEF_ARRAY_SIZE;
 	if (DESC_TYPE_IS_APPLICATION(type)) {
@@ -75,28 +73,23 @@ static void init_desc(esodbc_desc_st *desc, esodbc_stmt_st *stmt,
 	}
 }
 
-static void clear_desc(esodbc_stmt_st *stmt, desc_type_et dtype, BOOL reinit)
+static void clear_desc(esodbc_desc_st *desc, BOOL reinit)
 {
-	esodbc_desc_st *desc;
-	DBGH(stmt, "clearing desc type %d.", dtype);
-	switch (dtype) {
+	DBGH(desc, "clearing desc type %d.", desc->type);
+	switch (desc->type) {
+		case DESC_TYPE_ANON:
 		case DESC_TYPE_ARD:
-			desc = stmt->ard;
-			break;
-		case DESC_TYPE_IRD:
-			if (STMT_HAS_RESULTSET(stmt)) {
-				clear_resultset(stmt);
-			}
-			desc = stmt->ird;
-			break;
 		case DESC_TYPE_APD:
-			desc = stmt->apd;
-			break;
 		case DESC_TYPE_IPD:
-			desc = stmt->ipd;
+			break;
+
+		case DESC_TYPE_IRD:
+			if (STMT_HAS_RESULTSET(desc->hdr.stmt)) {
+				clear_resultset(desc->hdr.stmt);
+			}
 			break;
 		default:
-			BUG("no such descriptor of type %d.", dtype);
+			BUG("no such descriptor of type %d.", desc->type);
 			return;
 	}
 	if (desc->recs) {
@@ -151,6 +144,7 @@ void dump_record(esodbc_rec_st *rec)
 #undef DUMP_FIELD
 }
 
+
 /*
  * The Driver Manager does not call the driver-level environment handle
  * allocation function until the application calls SQLConnect,
@@ -172,6 +166,7 @@ void dump_record(esodbc_rec_st *rec)
 SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 	SQLHANDLE InputHandle, _Out_ SQLHANDLE *OutputHandle)
 {
+	esodbc_env_st *env;
 	esodbc_dbc_st *dbc;
 	esodbc_stmt_st *stmt;
 	esodbc_hhdr_st *hdr;
@@ -216,16 +211,17 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			 * return SQLSTATE HY010 (Function sequence error).
 			 * """
 			 */
-			if (! ENVH(InputHandle)->version) {
-				ERR("no version set in env when allocating DBC.");
-				RET_HDIAG(ENVH(InputHandle), SQL_STATE_HY010,
+			env = ENVH(InputHandle);
+			if (! env->version) {
+				ERRH(env, "no version set in env when allocating DBC.");
+				RET_HDIAG(env, SQL_STATE_HY010,
 					"enviornment has no version set yet", 0);
 			}
 			dbc = (esodbc_dbc_st *)calloc(1, sizeof(esodbc_dbc_st));
 			*OutputHandle = (SQLHANDLE *)dbc;
 			if (! dbc) {
-				ERRN("failed to callocate connection handle.");
-				RET_HDIAGS(ENVH(InputHandle), SQL_STATE_HY001);
+				ERRNH(env, "failed to callocate connection handle.");
+				RET_HDIAGS(env, SQL_STATE_HY001);
 			}
 			dbc->dsn.str = MK_WPTR(""); /* see explanation in cleanup_dbc() */
 			dbc->metadata_id = SQL_FALSE;
@@ -234,7 +230,7 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 
 			/* rest of initialization done at connect time */
 
-			DBG("new Connection handle allocated @0x%p.", *OutputHandle);
+			DBGH(env, "new Connection handle allocated @0x%p.", *OutputHandle);
 			break;
 
 		case SQL_HANDLE_STMT: /* Statement Handle */
@@ -242,7 +238,7 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			stmt = (esodbc_stmt_st *)calloc(1, sizeof(esodbc_stmt_st));
 			*OutputHandle = stmt;
 			if (! stmt) {
-				ERRN("failed to callocate statement handle.");
+				ERRNH(dbc, "failed to callocate statement handle.");
 				RET_HDIAGS(dbc, SQL_STATE_HY001);
 			}
 
@@ -259,6 +255,7 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			stmt->ipd = &stmt->i_ipd;
 
 			/* set option defaults */
+			/* TODO: change to SQL_UB_DEFAULT when supporting bookmarks */
 			stmt->bookmarks = SQL_UB_OFF;
 			/* inherit this connection-statement attributes
 			 * Note: these attributes won't propagate at statement level when
@@ -267,18 +264,19 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			stmt->async_enable = dbc->async_enable;
 			stmt->sql2c_conversion = CONVERSION_UNCHECKED;
 
-			DBG("new Statement handle allocated @0x%p.", *OutputHandle);
+			DBGH(dbc, "new Statement handle allocated @0x%p.", *OutputHandle);
 			break;
 
 		case SQL_HANDLE_DESC:
+			stmt = STMH(InputHandle);
 			*OutputHandle = (SQLHANDLE *)calloc(1, sizeof(esodbc_desc_st));
 			if (! *OutputHandle) {
-				ERRN("failed to callocate descriptor handle.");
-				RET_HDIAGS(STMH(InputHandle), SQL_STATE_HY001);
+				ERRNH(stmt, "failed to callocate descriptor handle.");
+				RET_HDIAGS(stmt, SQL_STATE_HY001);
 			}
 			init_desc(*OutputHandle, InputHandle, DESC_TYPE_ANON,
 				SQL_DESC_ALLOC_USER);
-			DBG("new Descriptor handle allocated @0x%p.", *OutputHandle);
+			DBGH(stmt, "new Descriptor handle allocated @0x%p.",*OutputHandle);
 			// FIXME: assign/chain to statement?
 			break;
 
@@ -306,6 +304,7 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 {
 	esodbc_stmt_st *stmt;
+	esodbc_desc_st *desc;
 
 	if (! Handle) {
 		ERR("provided null Handle.");
@@ -326,21 +325,24 @@ SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 		case SQL_HANDLE_STMT:
 			// TODO: remove from (potential) list?
 			stmt = STMH(Handle);
+
 			detach_sql(stmt);
-			clear_desc(stmt, DESC_TYPE_ARD, FALSE);
-			clear_desc(stmt, DESC_TYPE_IRD, FALSE);
-			clear_desc(stmt, DESC_TYPE_APD, FALSE);
-			clear_desc(stmt, DESC_TYPE_IPD, FALSE);
+
+			clear_desc(stmt->ard, FALSE);
+			clear_desc(stmt->ird, FALSE);
+			clear_desc(stmt->apd, FALSE);
+			clear_desc(stmt->ipd, FALSE);
 			free(stmt);
 			break;
 
+		// FIXME:
 		/* "When an explicitly allocated descriptor is freed, all statement
 		 * handles to which the freed descriptor applied automatically revert
 		 * to the descriptors implicitly allocated for them." */
 		case SQL_HANDLE_DESC:
-			//break;
-			// FIXME
-			FIXME;
+			desc = DSCH(Handle);
+			clear_desc(desc, FALSE);
+			break;
 
 		case SQL_HANDLE_SENV: /* Shared Environment Handle */
 			// TODO: do I need to set the state into the Handle?
@@ -413,7 +415,7 @@ SQLRETURN EsSQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option)
 		 * pending results." */
 		case SQL_CLOSE:
 			DBGH(stmt, "closing.");
-			clear_desc(stmt, DESC_TYPE_IRD, FALSE /*keep the header values*/);
+			clear_desc(stmt->ird, FALSE /*keep the header values*/);
 			// TODO: /_xpack/sql/close ? if still pending data?
 			break;
 
@@ -562,8 +564,8 @@ SQLRETURN EsSQLSetStmtAttrW(
 		case SQL_ATTR_USE_BOOKMARKS:
 			DBGH(stmt, "setting use-bookmarks to: %u.", (SQLULEN)ValuePtr);
 			if ((SQLULEN)ValuePtr != SQL_UB_OFF) {
-				WARNH(stmt, "bookmarks are not supported by driver.");
-				RET_HDIAG(stmt, SQL_STATE_01000,
+				ERRH(stmt, "bookmarks are not supported by driver.");
+				RET_HDIAG(stmt, SQL_STATE_HYC00,
 						"bookmarks are not supported by driver", 0);
 			}
 			break;
@@ -704,32 +706,48 @@ SQLRETURN EsSQLSetStmtAttrW(
 			return ret;
 
 		case SQL_ATTR_APP_ROW_DESC:
-			if ((ValuePtr == (SQLPOINTER *)&stmt->i_ard) || 
-					(ValuePtr == SQL_NULL_HDESC)) {
-				if (stmt->ard) {
-					DBGH(stmt, "unbinding ARD 0x%p.", stmt->ard);
-					// FIXME: unbind
-					FIXME;
-				}
+			desc = DSCH(ValuePtr);
+			if (desc == stmt->ard) {
+				WARNH(stmt, "trying to overwrite ARD with same value (@0x%p).",
+						ValuePtr);
+				break; /* nop */
+			}
+			if (desc == &stmt->i_ard || desc == SQL_NULL_HDESC) {
+				DBGH(stmt, "unbinding current ARD (@0x%p), rebinding with "
+						"implicit value (@0x%p).", stmt->ard, &stmt->i_ard);
+				/* re-anonymize the descriptor, makingit re-usable */
 				stmt->ard = &stmt->i_ard;
-				FIXME;
-			} else if (FALSE) {
+			} else {
 				/* "This attribute cannot be set to a descriptor handle that
 				 * was implicitly allocated for another statement or to
 				 * another descriptor handle that was implicitly set on the
 				 * same statement; implicitly allocated descriptor handles
 				 * cannot be associated with more than one statement or
 				 * descriptor handle." */
-				/* TODO: check if this is implicitely allocated in all
-				statements??? */
-				ERRH(stmt, "trying to set AxD (%d) descriptor to the wrong "
-						"implicit descriptor @0x%p.", Attribute, ValuePtr);
-				RET_HDIAGS(stmt, SQL_STATE_HY017);
-			} else {
-				stmt->ard = (esodbc_desc_st *)ValuePtr;
-				// FIXME: bind: re-init
-				FIXME;
+				if (desc->alloc_type == SQL_DESC_ALLOC_AUTO) {
+					ERRH(stmt, "source ARD (@0x%p) is implicit (alloc: %d).",
+							desc, desc->alloc_type);
+					RET_HDIAGS(stmt, SQL_STATE_HY017);
+				} else {
+					switch (desc->type) {
+						case DESC_TYPE_ANON:
+							desc->type = DESC_TYPE_ARD;
+						case DESC_TYPE_ARD:
+							break;
+						default:
+							// TODO: should this be allowed?
+							/* this means a descriptor can not be changed from
+							 * APD to ARD (IxD is also ruled out) */
+							ERRH(stmt, "can't convert descriptor from type %d"
+									" to ARD.", desc->type);
+							RET_HDIAGS(stmt, SQL_STATE_HY024);
+					}
+					DBGH(stmt, "overwritting current ARD (@0x%p) with new "
+							"value (@0x%p).", stmt->ard, desc);
+					stmt->ard = desc;
+				}
 			}
+			break;
 		case SQL_ATTR_APP_PARAM_DESC:
 			// FIXME: same logic for ARD as above (part of params passing)
 			FIXME;
@@ -854,8 +872,10 @@ SQLRETURN EsSQLGetStmtAttrW(
 			desc = stmt->apd;
 			break;
 		} while (0);
+			/* " If Attribute is an ODBC-defined attribute and *ValuePtr is an
+			 * integer, BufferLength is ignored." */
 			ret = EsSQLGetDescFieldW(desc, NO_REC_NR, SQL_DESC_ARRAY_SIZE,
-					ValuePtr, BufferLength, NULL);
+					ValuePtr, SQL_IS_UINTEGER, NULL);
 			if (ret != SQL_SUCCESS) { /* _WITH_INFO wud be "error" here */
 				/* if SetDescField() fails, DM will check statement's diag */
 				HDIAG_COPY(desc, stmt);
@@ -1339,6 +1359,56 @@ static SQLSMALLINT recount_bound(esodbc_desc_st *desc)
 		;
 	return i;
 }
+
+esodbc_desc_st *getdata_set_ard(esodbc_stmt_st *stmt, esodbc_desc_st *gd_ard,
+	SQLUSMALLINT colno, esodbc_rec_st *recs, SQLUSMALLINT count)
+{
+	SQLRETURN ret;
+	SQLUSMALLINT i;
+	esodbc_desc_st *ard = stmt->ard;
+
+	init_desc(gd_ard, stmt, DESC_TYPE_ARD, SQL_DESC_ALLOC_USER);
+	ret = EsSQLSetStmtAttrW(stmt, SQL_ATTR_APP_ROW_DESC, gd_ard,
+			SQL_IS_POINTER);
+	if (! SQL_SUCCEEDED(ret)) {
+		stmt->ard = ard;
+		return NULL;
+	}
+
+	if (colno < count) { /* can the static recs be used? */
+		/* need to init all records, not only the single one that will be
+		 * bound, since data compat. check will run against all bound recs. */
+		for (i = 0; i < count; i ++) {
+			init_rec(&recs[i], gd_ard);
+		}
+
+		gd_ard->count = count;
+		gd_ard->recs = recs;
+	}
+
+	DBGH(stmt, "GD ARD @0x%p, records allocated %s.", gd_ard,
+		colno < count ? "statically" : "dynamically");
+	return ard;
+}
+
+void getdata_reset_ard(esodbc_stmt_st *stmt, esodbc_desc_st *ard,
+	SQLUSMALLINT colno, esodbc_rec_st *recs, SQLUSMALLINT count)
+{
+	SQLRETURN ret;
+
+	if (stmt->ard->recs != recs) { /* the recs are allocated */
+		ret = update_rec_count(stmt->ard, 0); /* free all */
+		assert(SQL_SUCCEEDED(ret));
+	} else { /* recs are on stack */
+		/* only the fields of the used rec */
+		free_rec_fields(&recs[colno - 1]);
+	}
+
+	/* re-instate old ARD value */
+	stmt->ard = ard;
+	DBGH(stmt, "ARD reset @0x%p.", stmt->ard);
+}
+
 
 
 /*
@@ -2180,7 +2250,7 @@ SQLRETURN EsSQLSetDescFieldW(
 			return update_rec_count(desc, (SQLSMALLINT)(intptr_t)ValuePtr);
 
 		case SQL_DESC_ROWS_PROCESSED_PTR:
-			DBGH(desc, "setting desc rwos processed ptr to: 0x%p.", ValuePtr);
+			DBGH(desc, "setting desc rows processed ptr to: 0x%p.", ValuePtr);
 			desc->rows_processed_ptr = (SQLULEN *)ValuePtr;
 			return SQL_SUCCESS;
 	}
