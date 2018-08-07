@@ -159,6 +159,9 @@ size_t quote_tokens(SQLWCHAR *src, size_t len, SQLWCHAR *dest)
 		}
 		*pos ++ = src[i];
 	}
+	if (copying) {
+		*pos ++ = L'\''; /* end last token */
+	}
 	/* should not overrun */
 	assert(i < 2/*see typ_buf below*/ * ESODBC_MAX_IDENTIFIER_LEN);
 	return pos - dest;
