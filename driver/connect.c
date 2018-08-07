@@ -1325,29 +1325,28 @@ SQLRETURN EsSQLDriverConnectW
 	esodbc_dbc_st *dbc = DBCH(hdbc);
 	SQLRETURN ret;
 	esodbc_dsn_attrs_st attrs;
-	wstr_st orig_dsn;
+	SQLWCHAR buff_dsn[ESODBC_DSN_MAX_ATTR_LEN];
+	wstr_st orig_dsn = {buff_dsn, 0};
 	BOOL disable_nonconn = FALSE;
 	BOOL prompt_user = TRUE;
 	int res;
-	SQLWCHAR buff[(sizeof(esodbc_dsn_attrs_st)/sizeof(wstr_st)) *
-													  MAX_REG_DATA_SIZE];
 
-
-	memset(&attrs, 0, sizeof(attrs));
+	init_dsn_attrs(&attrs);
 
 	if (szConnStrIn) {
 		DBGH(dbc, "Input connection string: '"LWPD"'[%d].", szConnStrIn,
 			cchConnStrIn);
 		/* parse conn str into attrs */
-		if (! parse_connection_string(&attrs, szConnStrIn, cchConnStrIn,
-				/*duplicate?*/FALSE)) {
+		if (! parse_connection_string(&attrs, szConnStrIn, cchConnStrIn)) {
 			ERRH(dbc, "failed to parse connection string `" LWPDL "`.",
 				cchConnStrIn < 0 ? wcslen(szConnStrIn) : cchConnStrIn,
 				szConnStrIn);
 			RET_HDIAGS(dbc, SQL_STATE_HY000);
 		}
 		/* original received DSN saved for later query by the app */
-		orig_dsn = attrs.dsn;
+		memcpy(orig_dsn.str, attrs.dsn.str,
+				attrs.dsn.cnt * sizeof(*attrs.dsn.str));
+		orig_dsn.cnt = attrs.dsn.cnt;
 
 		/* set DSN (to DEFAULT) only if both DSN and Driver kw are missing */
 		if ((! attrs.driver.cnt) && (! attrs.dsn.cnt)) {
@@ -1357,11 +1356,15 @@ SQLRETURN EsSQLDriverConnectW
 			 * Default data source. */
 			INFOH(dbc, "no DRIVER or DSN keyword found in connection string: "
 				"using the \"DEFAULT\" DSN.");
-			attrs.dsn = MK_WSTR("DEFAULT");
+			res = assign_dsn_attr(&attrs, &MK_WSTR(ESODBC_DSN_DSN),
+						&MK_WSTR("DEFAULT"), /*overwrite?*/TRUE);
+			assert(0 < res);
 		}
 	} else {
 		INFOH(dbc, "empty connection string: using the \"DEFAULT\" DSN.");
-		attrs.dsn = MK_WSTR("DEFAULT");
+		res = assign_dsn_attr(&attrs, &MK_WSTR(ESODBC_DSN_DSN),
+					&MK_WSTR("DEFAULT"), /*overwrite?*/TRUE);
+		assert(0 < res);
 	}
 	assert(attrs.driver.cnt || attrs.dsn.cnt);
 
@@ -1373,14 +1376,16 @@ SQLRETURN EsSQLDriverConnectW
 		 * the information in the connection string." */
 		INFOH(dbc, "configuring the driver by DSN '" LWPDL "'.",
 			LWSTR(&attrs.dsn));
-		if (! read_system_info(&attrs, buff)) {
+		if (! read_system_info(&attrs)) {
 			/* warn, but try to carry on */
 			WARNH(dbc, "failed to read system info for DSN '" LWPDL "' data.",
 				LWSTR(&attrs.dsn));
 			/* DM should take care of this, but just in case */
 			if (! EQ_WSTR(&attrs.dsn, &MK_WSTR("DEFAULT"))) {
-				attrs.dsn = MK_WSTR("DEFAULT");
-				if (! read_system_info(&attrs, buff)) {
+				res = assign_dsn_attr(&attrs, &MK_WSTR(ESODBC_DSN_DSN),
+							&MK_WSTR("DEFAULT"), /*overwrite?*/TRUE);
+				assert(0 < res);
+				if (! read_system_info(&attrs)) {
 					ERRH(dbc, "failed to read system info for default DSN.");
 					RET_HDIAGS(dbc, SQL_STATE_IM002);
 				}
@@ -1390,11 +1395,12 @@ SQLRETURN EsSQLDriverConnectW
 		/* "If the connection string contains the DRIVER keyword, the driver
 		 * cannot retrieve information about the data source from the system
 		 * information." */
-		INFOH(dbc, "configuring the driver '" LWPDL "'.", LWSTR(&attrs.driver));
+		INFOH(dbc, "configuring the driver '" LWPDL "'.",
+				LWSTR(&attrs.driver));
 	}
 
 	/* whatever attributes haven't yet been set, init them with defaults */
-	assign_dsn_defaults(&attrs, /*duplicate?*/FALSE);
+	assign_dsn_defaults(&attrs);
 
 	switch (fDriverCompletion) {
 		case SQL_DRIVER_NOPROMPT:
@@ -1460,7 +1466,9 @@ SQLRETURN EsSQLDriverConnectW
 	/* return the final connection string */
 	if (szConnStrOut || pcchConnStrOut) {
 		/* might have been reset to DEFAULT, if orig was not found */
-		attrs.dsn = orig_dsn;
+		res = assign_dsn_attr(&attrs, &MK_WSTR(ESODBC_DSN_DSN), &orig_dsn,
+				/*overwrite?*/TRUE);
+		assert(0 < res);
 		if (! write_connection_string(&attrs, szConnStrOut, cchConnStrOutMax,
 				pcchConnStrOut)) {
 			ERRH(dbc, "failed to build output connection string.");

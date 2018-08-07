@@ -14,6 +14,20 @@
 #define REG_HKLM				"HKEY_LOCAL_MACHINE"
 #define REG_HKCU				"HKEY_CURRENT_USER"
 
+
+void init_dsn_attrs(esodbc_dsn_attrs_st *attrs)
+{
+	size_t i;
+	wstr_st *wstr;
+
+	memset(attrs, 0, sizeof(*attrs));
+
+	for (i = 0; i < ESODBC_DSN_ATTRS_COUNT; i ++) {
+		wstr = &((wstr_st*)attrs)[i];
+		wstr->str = &attrs->buff[i * ESODBC_DSN_MAX_ATTR_LEN];
+	}
+}
+
 #define DSN_NOT_MATCHED		0
 #define DSN_NOT_OVERWRITTEN	1
 #define DSN_ASSIGNED		2
@@ -28,7 +42,7 @@
  *   negative on error;
  */
 int assign_dsn_attr(esodbc_dsn_attrs_st *attrs,
-	wstr_st *keyword, wstr_st *value, BOOL overwrite, BOOL duplicate)
+	wstr_st *keyword, wstr_st *value, BOOL overwrite)
 {
 	struct {
 		wstr_st *kw;
@@ -56,6 +70,12 @@ int assign_dsn_attr(esodbc_dsn_attrs_st *attrs,
 	};
 	int ret;
 
+	if (ESODBC_DSN_MAX_ATTR_LEN < value->cnt) {
+		ERR("attribute value lenght too large: %zu; max=%zu.", value->cnt,
+				ESODBC_DSN_MAX_ATTR_LEN);
+		return -1;
+	}
+
 	for (iter = &map[0]; iter->kw; iter ++) {
 		if (! EQ_CASE_WSTR(iter->kw, keyword)) {
 			continue;
@@ -77,19 +97,8 @@ int assign_dsn_attr(esodbc_dsn_attrs_st *attrs,
 				LWSTR(iter->kw), LWSTR(value));
 			ret = DSN_ASSIGNED;
 		}
-		if (duplicate) {
-			if (iter->val->str) {
-				free(iter->val->str);
-			}
-			if (! (iter->val->str = _wcsdup(value->str))) {
-				ERRN("OOM duplicating wstring of len %zu.", value->cnt);
-				return -1;
-			} else {
-				iter->val->cnt = value->cnt;
-			}
-		} else {
-			*iter->val = *value;
-		}
+		memcpy(iter->val->str, value->str, value->cnt * sizeof(*value->str));
+		iter->val->cnt = value->cnt;
 		return ret;
 	}
 
@@ -263,7 +272,7 @@ static SQLWCHAR *parse_separator(SQLWCHAR **pos, SQLWCHAR *end)
  *  * brances need to be returned to out-str;
  */
 BOOL parse_connection_string(esodbc_dsn_attrs_st *attrs,
-	SQLWCHAR *szConnStrIn, SQLSMALLINT cchConnStrIn, BOOL duplicate)
+	SQLWCHAR *szConnStrIn, SQLSMALLINT cchConnStrIn)
 {
 
 	SQLWCHAR *pos;
@@ -303,7 +312,7 @@ BOOL parse_connection_string(esodbc_dsn_attrs_st *attrs,
 
 		DBG("read connection string attribute: `" LWPDL "` = `" LWPDL "`.",
 			LWSTR(&keyword), LWSTR(&value));
-		if (assign_dsn_attr(attrs, &keyword, &value, TRUE, duplicate) < 0) {
+		if (assign_dsn_attr(attrs, &keyword, &value, TRUE) < 0) {
 			ERRN("failed to assign keyword `" LWPDL "` with val `" LWPDL "`.",
 				LWSTR(&keyword), LWSTR(&value));
 			return FALSE;
@@ -325,8 +334,7 @@ BOOL parse_00_list(esodbc_dsn_attrs_st *attrs, SQLWCHAR *list00)
 			ERR("invalid list lenght (%zu).", cnt);
 			return FALSE;
 		}
-		if (! parse_connection_string(attrs, pos, (SQLSMALLINT)cnt,
-				/*duplicate?*/TRUE)) {
+		if (! parse_connection_string(attrs, pos, (SQLSMALLINT)cnt)) {
 			ERR("failed parsing list entry `" LWPDL "`.", cnt, pos);
 			return FALSE;
 		}
@@ -347,42 +355,6 @@ static void log_installer_err()
 	}
 }
 
-void free_dsn_attrs(esodbc_dsn_attrs_st *attrs)
-{
-	size_t i;
-	SQLWCHAR *ptrs[] = {
-		attrs->driver.str,
-		attrs->description.str,
-		attrs->dsn.str,
-		attrs->pwd.str,
-		attrs->uid.str,
-		attrs->savefile.str,
-		attrs->filedsn.str,
-		attrs->server.str,
-		attrs->port.str,
-		attrs->secure.str,
-		attrs->timeout.str,
-		attrs->follow.str,
-		attrs->catalog.str,
-		attrs->packing.str,
-		attrs->max_fetch_size.str,
-		attrs->max_body_size.str,
-		attrs->trace_file.str,
-		attrs->trace_level.str,
-	};
-
-	if (! attrs) {
-		return;
-	}
-
-	for (i = 0; i < sizeof(ptrs)/sizeof(ptrs[0]); i ++) {
-		if (ptrs[i]) {
-			free(ptrs[i]);
-		}
-	}
-	free(attrs);
-}
-
 /*
  * Checks if a DSN entry with the given name exists already.
  * Returns:
@@ -393,7 +365,7 @@ void free_dsn_attrs(esodbc_dsn_attrs_st *attrs)
 int system_dsn_exists(wstr_st *dsn)
 {
 	int res;
-	SQLWCHAR kbuff[MAX_REG_VAL_NAME];
+	SQLWCHAR kbuff[ESODBC_DSN_MAX_ATTR_LEN];
 
 	/* '\' can't be a key name */
 	res = SQLGetPrivateProfileStringW(dsn->str, NULL, MK_WPTR("\\"),
@@ -419,42 +391,35 @@ int system_dsn_exists(wstr_st *dsn)
  * overwritten by registry entries (which theoretically should be the same
  * anyways).
  */
-esodbc_dsn_attrs_st *load_system_dsn(SQLWCHAR *list00)
+BOOL load_system_dsn(esodbc_dsn_attrs_st *attrs, SQLWCHAR *list00)
 {
-	esodbc_dsn_attrs_st *attrs;
 	int res;
-	SQLWCHAR buff[MAX_REG_DATA_SIZE], *pos;
-	SQLWCHAR kbuff[MAX_REG_VAL_NAME *
-						 (sizeof(esodbc_dsn_attrs_st)/sizeof(wstr_st))];
+	SQLWCHAR buff[ESODBC_DSN_MAX_ATTR_LEN], *pos;
+	SQLWCHAR kbuff[sizeof(attrs->buff)/sizeof(attrs->buff[0])];
 	wstr_st keyword, value;
 
-	attrs = calloc(1, sizeof(esodbc_dsn_attrs_st));
-	if (! attrs) {
-		ERR("OOM allocating config attrs (%zu).", sizeof(esodbc_dsn_attrs_st));
-		return NULL;
-	}
 	if (! parse_00_list(attrs, list00)) {
 		ERR("failed to parse doubly null-terminated attributes "
 			"list `" LWPD "`.", list00);
-		goto err;
+		return FALSE;
 	}
 	/* ConfigDSN() requirement */
 	if (attrs->driver.cnt) {
 		ERR("function can not accept '" ESODBC_DSN_DRIVER "' keyword.");
-		goto err;
+		return FALSE;
 	}
 
 	if (attrs->dsn.cnt) {
 		DBG("loading attributes for DSN `" LWPDL "`.", LWSTR(&attrs->dsn));
 
-		/* load available key names first;
-		 * it's another doubly null-terminated list. */
+		/* load available key *names* first;
+		 * it's another doubly null-terminated list (w/o values). */
 		res = SQLGetPrivateProfileStringW(attrs->dsn.str, NULL, MK_WPTR(""),
 				kbuff, sizeof(kbuff)/sizeof(kbuff[0]), MK_WPTR(SUBKEY_ODBC));
 		if (res < 0) {
 			ERR("failed to query for DSN registry keys.");
 			log_installer_err();
-			goto err;
+			return FALSE;
 		}
 		/* for each key name, read its value and add it to 'attrs' */
 		for (pos = kbuff; *pos; pos += keyword.cnt + 1) {
@@ -472,7 +437,7 @@ esodbc_dsn_attrs_st *load_system_dsn(SQLWCHAR *list00)
 				ERR("failed to query value for DSN registry key `" LWPDL "`.",
 					LWSTR(&keyword));
 				log_installer_err();
-				goto err;
+				return FALSE;
 			} else {
 				value.cnt = (size_t)res;
 				value.str = buff;
@@ -481,24 +446,20 @@ esodbc_dsn_attrs_st *load_system_dsn(SQLWCHAR *list00)
 			DBG("read DSN attribute: `" LWPDL "` = `" LWPDL "`.",
 				LWSTR(&keyword), LWSTR(&value));
 			/* assign attributes not yet given in the 00-list */
-			if (assign_dsn_attr(attrs, &keyword, &value,
-					/*overwrite?*/FALSE, /*duplicate?*/TRUE) < 0) {
+			if (assign_dsn_attr(attrs, &keyword, &value, /*over?*/FALSE) < 0) {
 				ERR("keyword '" LWPDL "' couldn't be assigned.",
 					LWSTR(&keyword));
-				goto err;
+				return FALSE;
 			}
 		}
 	}
 
-	if (! assign_dsn_defaults(attrs, /*duplicate?*/TRUE)) {
+	if (! assign_dsn_defaults(attrs)) {
 		ERR("OOM assigning defaults");
-		goto err;
+		return FALSE;
 	}
 
-	return attrs;
-err:
-	free_dsn_attrs(attrs);
-	return NULL;
+	return TRUE;
 }
 
 BOOL write_system_dsn(esodbc_dsn_attrs_st *attrs, BOOL create_new)
@@ -653,57 +614,56 @@ BOOL write_connection_string(esodbc_dsn_attrs_st *attrs,
 	return TRUE;
 }
 
-/* calling function must mem-manage also in failure case */
-BOOL assign_dsn_defaults(esodbc_dsn_attrs_st *attrs, BOOL duplicate)
+BOOL assign_dsn_defaults(esodbc_dsn_attrs_st *attrs)
 {
 	/* assign defaults where not assigned and applicable */
 	if (assign_dsn_attr(attrs,
 			&MK_WSTR(ESODBC_DSN_SERVER), &MK_WSTR(ESODBC_DEF_SERVER),
-			/*overwrite?*/FALSE, duplicate) < 0) {
+			/*overwrite?*/FALSE) < 0) {
 		return FALSE;
 	}
 	if (assign_dsn_attr(attrs,
 			&MK_WSTR(ESODBC_DSN_PORT), &MK_WSTR(ESODBC_DEF_PORT),
-			/*overwrite?*/FALSE, duplicate) < 0) {
+			/*overwrite?*/FALSE) < 0) {
 		return FALSE;
 	}
 	if (assign_dsn_attr(attrs,
 			&MK_WSTR(ESODBC_DSN_SECURE), &MK_WSTR(ESODBC_DEF_SECURE),
-			/*overwrite?*/FALSE, duplicate) < 0) {
+			/*overwrite?*/FALSE) < 0) {
 		return FALSE;
 	}
 	if (assign_dsn_attr(attrs,
 			&MK_WSTR(ESODBC_DSN_TIMEOUT), &MK_WSTR(ESODBC_DEF_TIMEOUT),
-			/*overwrite?*/FALSE, duplicate) < 0) {
+			/*overwrite?*/FALSE) < 0) {
 		return FALSE;
 	}
 	if (assign_dsn_attr(attrs,
 			&MK_WSTR(ESODBC_DSN_FOLLOW), &MK_WSTR(ESODBC_DEF_FOLLOW),
-			/*overwrite?*/FALSE, duplicate) < 0) {
+			/*overwrite?*/FALSE) < 0) {
 		return FALSE;
 	}
 
 	if (assign_dsn_attr(attrs,
 			&MK_WSTR(ESODBC_DSN_PACKING), &MK_WSTR(ESODBC_DEF_PACKING),
-			/*overwrite?*/FALSE, duplicate) < 0) {
+			/*overwrite?*/FALSE) < 0) {
 		return FALSE;
 	}
 	if (assign_dsn_attr(attrs,
 			&MK_WSTR(ESODBC_DSN_MAX_FETCH_SIZE),
 			&MK_WSTR(ESODBC_DEF_FETCH_SIZE),
-			/*overwrite?*/FALSE, duplicate) < 0) {
+			/*overwrite?*/FALSE) < 0) {
 		return FALSE;
 	}
 	if (assign_dsn_attr(attrs, &MK_WSTR(ESODBC_DSN_MAX_BODY_SIZE_MB),
 			&MK_WSTR(ESODBC_DEF_MAX_BODY_SIZE_MB),
-			/*overwrite?*/FALSE, duplicate) < 0) {
+			/*overwrite?*/FALSE) < 0) {
 		return FALSE;
 	}
 
 	/* default: no trace file */
 	if (assign_dsn_attr(attrs,
 			&MK_WSTR(ESODBC_DSN_TRACE_LEVEL), &MK_WSTR(ESODBC_DEF_TRACE_LEVEL),
-			/*overwrite?*/FALSE, duplicate) < 0) {
+			/*overwrite?*/FALSE) < 0) {
 		return FALSE;
 	}
 
@@ -717,38 +677,38 @@ BOOL assign_dsn_defaults(esodbc_dsn_attrs_st *attrs, BOOL duplicate)
  * TODO: use odbccp32.dll's SQLGetPrivateProfileString() & co. instead of
  * direct registry access:
  * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlgetprivateprofilestring-function
- * Note: the provided 'buff' must be large enough to hold MAX_REG_DATA_SIZE
- * bytes for each member of the esodbc_dsn_attrs_st structure!
  */
-BOOL read_system_info(esodbc_dsn_attrs_st *attrs, SQLWCHAR *buff)
+BOOL read_system_info(esodbc_dsn_attrs_st *attrs)
 {
 	HKEY hkey;
 	BOOL ret = FALSE;
 	const char *ktree;
-	DWORD valsno/* number of values in subkey */, i, j, res;
+	DWORD valsno/* number of values in subkey */, i, res;
 	DWORD maxvallen; /* len of longest value name */
 	DWORD maxdatalen; /* len of longest data (buffer) */
-	SQLWCHAR val[MAX_REG_VAL_NAME];
 	DWORD vallen;
 	DWORD valtype;
-	BYTE *d;
 	DWORD datalen;
-	wstr_st val_name, val_data;
+	SQLWCHAR val_buff[ESODBC_DSN_MAX_ATTR_LEN];
+	wstr_st val_name = {val_buff, 0};
+	SQLWCHAR data_buff[ESODBC_DSN_MAX_ATTR_LEN];
+	wstr_st val_data = {data_buff, 0};
 
-	if (swprintf(val, sizeof(val)/sizeof(val[0]), WPFCP_DESC "\\" WPFWP_LDESC,
+	if (swprintf(val_buff, sizeof(val_buff)/sizeof(val_buff[0]),
+			WPFCP_DESC "\\" WPFWP_LDESC,
 			ODBC_REG_SUBKEY_PATH, LWSTR(&attrs->dsn)) < 0) {
 		ERRN("failed to print registry key path.");
 		return FALSE;
 	}
 	/* try accessing local user's config first, if that fails, systems' */
-	if (RegOpenKeyExW(HKEY_CURRENT_USER, val, /*options*/0, KEY_READ,
+	if (RegOpenKeyExW(HKEY_CURRENT_USER, val_buff, /*options*/0, KEY_READ,
 			&hkey) != ERROR_SUCCESS) {
 		INFO("failed to open registry key `" REG_HKCU "\\" LWPD "`.",
-			val);
-		if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, val, /*options*/0, KEY_READ,
+			val_buff);
+		if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, val_buff, /*options*/0, KEY_READ,
 				&hkey) != ERROR_SUCCESS) {
 			INFO("failed to open registry key `" REG_HKLM "\\" LWPD "`.",
-				val);
+				val_buff);
 			goto end;
 		} else {
 			ktree = REG_HKLM;
@@ -763,68 +723,60 @@ BOOL read_system_info(esodbc_dsn_attrs_st *attrs, SQLWCHAR *buff)
 			&maxdatalen, /*sec descr*/NULL,
 			/*update time */NULL) != ERROR_SUCCESS) {
 		ERRN("Failed to query registery key info for path `%s\\" LWPD
-			"`.", ktree, val);
+			"`.", ktree, val_buff);
 		goto end;
 	} else {
 		DBG("Subkey '%s\\" LWPD "': vals: %d, lengthiest name: %d, "
-			"lengthiest data: %d.", ktree, val, valsno, maxvallen,
+			"lengthiest data: %d.", ktree, val_buff, valsno, maxvallen,
 			maxdatalen);
-		// malloc buffers?
-		if (MAX_REG_VAL_NAME < maxvallen) {
-			BUG("value name buffer too small (%d), needed: %dB.",
-				MAX_REG_VAL_NAME, maxvallen);
+		if (sizeof(val_buff)/sizeof(val_buff[0]) < maxvallen) {
+			WARN("value name buffer too small (%d), needed: %dB.",
+				sizeof(val_buff)/sizeof(val_buff[0]), maxvallen);
 		}
-		if (MAX_REG_DATA_SIZE < maxdatalen) {
-			BUG("value data buffer too small (%d), needed: %dB.",
-				MAX_REG_DATA_SIZE, maxdatalen);
+		if (sizeof(data_buff)/sizeof(data_buff[0]) < maxdatalen) {
+			WARN("value data buffer too small (%d), needed: %dB.",
+			sizeof(data_buff)/sizeof(data_buff[0]), maxdatalen);
 		}
-		/* connection could still succeeded, so carry on */
+		/* the registry might contain other, non connection-related strings,
+		 * so these conditions are not necearily an error. */
 	}
 
-	for (i = 0, j = 0; i < valsno; i ++) {
-		vallen = sizeof(val) / sizeof(val[0]);
-		datalen = MAX_REG_DATA_SIZE * sizeof(buff[0]);
+	for (i = 0; i < valsno; i ++) {
+		vallen = sizeof(val_buff) / sizeof(val_buff[0]);
+		datalen = sizeof(data_buff);
 
-		/* each element in esodbc_dsn_attrs_st has a chunk of MAX_REG_DATA_SIZE
-		 * reserved in the buffer */
-		assert(j <= sizeof(esodbc_dsn_attrs_st)/sizeof(wstr_st));
-		d = (BYTE *)&buff[j * MAX_REG_DATA_SIZE];
-		
-		if (RegEnumValueW(hkey, i, val, &vallen, /*reserved*/NULL, &valtype,
-				d, &datalen) != ERROR_SUCCESS) {
+		if (RegEnumValueW(hkey, i, val_buff, &vallen, /*reserved*/NULL, &valtype,
+				(BYTE *)data_buff, &datalen) != ERROR_SUCCESS) {
 			ERR("failed to read register subkey value.");
 			goto end;
 		}
+		/* vallen doesn't count the \0 */
+		val_name.cnt = vallen;
 		if (valtype != REG_SZ) {
-			INFO("unused register values of type %d -- skipping.",
-				valtype);
+			INFO("skipping register value `" LWPDL "` of type %d.",
+				LWSTR(&val_name), valtype);
 			continue;
 		}
-		val_name = (wstr_st) {
-			val, vallen /* vallen doesn't count the \0 */
-		};
 		if (datalen <= 0) {
-			INFO("value `" LWPDL "` has empty value -- skipped.",
+			INFO("skipping value `" LWPDL "` with empty data.",
 					LWSTR(&val_name));
 			continue;
 		}
-		assert(datalen % sizeof(SQLTCHAR) == 0);
-		val_data = (wstr_st) {
-			/* datalen counts all bytes returned, so including \0 */
-			(SQLWCHAR *)d, datalen/sizeof(SQLWCHAR) - /*\0*/1
-		};
+		assert(datalen % sizeof(SQLWCHAR) == 0);
+		/* datalen counts all bytes returned, so including the \0 */
+		val_data.cnt = datalen/sizeof(SQLWCHAR) - /*\0*/1;
+
 		if ((res = assign_dsn_attr(attrs, &val_name, &val_data,
-				/*overwrite?*/FALSE, /*duplicatE?*/FALSE)) < 0) {
+						/*overwrite?*/FALSE)) < 0) {
 			ERR("failed to assign reg entry `" LTPDL "`: `" LTPDL "`.",
 				LTSTR(&val_name), LTSTR(&val_data));
 			goto end;
-		} else if (res) {
-			/* the values in the registry should be unique */
-			assert(res == DSN_ASSIGNED);
-			j ++;
-			DBG("reg entry`" LTPDL "`: `" LTPDL "` assigned (idx #%d).",
-				LTSTR(&val_name), LTSTR(&val_data), j);
-		} // else if == 0: entry not directly relevant to driver config
+		} else if (res == DSN_ASSIGNED) {
+			DBG("reg entry`" LTPDL "`: `" LTPDL "` assigned.",
+				LTSTR(&val_name), LTSTR(&val_data));
+		}
+		/* if == 0: entry not directly relevant to driver config
+		 * if == DSN_NOT_OVERWRITTEN: entry provisioned in the conn str. */
 	}
 
 	ret = TRUE;
@@ -847,23 +799,40 @@ int prompt_user_config(HWND hwndParent, esodbc_dsn_attrs_st *attrs,
 	/* disable non-connect-related controls? */
 	BOOL disable_nonconn)
 {
+	static int attempts = 0;
+
 	if (! hwndParent) {
 		INFO("no window handler provided -- configuration skipped.");
 		return 1;
 	}
 	TRACE;
 
+	//
+	// TODO: problematic: called from setup (dyn) and driverconnect (static),
+	// so dunno when to duplicate: either use all static, all dyn, add
+	// attrs.dynamic?
+	//
+
 	if (assign_dsn_attr(attrs, &MK_WSTR(ESODBC_DSN_DSN),
-			&MK_WSTR("My Elasticsearch ODBC DSN"), FALSE, TRUE) <= 0) {
+			&MK_WSTR("My Elasticsearch ODBC DSN"), FALSE) <= 0) {
 		//&MK_WSTR("My Elasticsearch ODBC DSN"), TRUE, TRUE) <= 0) {
 		return -1;
 	}
 #if 1
 	if (assign_dsn_attr(attrs, &MK_WSTR(ESODBC_DSN_TRACE_LEVEL),
-			&MK_WSTR("INFO"), TRUE, TRUE) <= 0) {
+			&MK_WSTR("INFO"), FALSE) <= 0) {
 		return -1;
 	}
 #endif
+	if (1 < attempts ++) {
+		/* prevent infinite loops */
+		return 0;
+	}
+
+	if (SQL_MAX_DSN_LENGTH < attrs->dsn.cnt) {
+		ERR("DSN name longer than max (%d).", SQL_MAX_DSN_LENGTH);
+	}
+
 	return 1;
 }
 

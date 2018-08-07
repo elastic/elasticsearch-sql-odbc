@@ -8,6 +8,7 @@
 #define __DSN_H__
 
 #include "util.h"
+#include "defs.h"
 
 #define SUBKEY_ODBCINST		"ODBCINST.INI"
 #define SUBKEY_ODBC			"ODBC.INI"
@@ -52,20 +53,22 @@ typedef struct {
 	wstr_st max_body_size;
 	wstr_st trace_file;
 	wstr_st trace_level;
+#define ESODBC_DSN_ATTRS_COUNT	18
+	SQLWCHAR buff[ESODBC_DSN_ATTRS_COUNT * ESODBC_DSN_MAX_ATTR_LEN];
 } esodbc_dsn_attrs_st;
 
-BOOL assign_dsn_defaults(esodbc_dsn_attrs_st *attrs, BOOL duplicate);
+void init_dsn_attrs(esodbc_dsn_attrs_st *attrs);
+BOOL assign_dsn_defaults(esodbc_dsn_attrs_st *attrs);
 BOOL assign_dsn_attr(esodbc_dsn_attrs_st *attrs,
-	wstr_st *keyword, wstr_st *value, BOOL overwrite, BOOL duplicate);
+	wstr_st *keyword, wstr_st *value, BOOL overwrite);
 
-BOOL read_system_info(esodbc_dsn_attrs_st *attrs, TCHAR *buff);
+BOOL read_system_info(esodbc_dsn_attrs_st *attrs);
 int system_dsn_exists(wstr_st *dsn);
-esodbc_dsn_attrs_st *load_system_dsn(SQLWCHAR *list00);
+BOOL load_system_dsn(esodbc_dsn_attrs_st *attrs, SQLWCHAR *list00);
 BOOL write_system_dsn(esodbc_dsn_attrs_st *attrs, BOOL create_new);
-void free_dsn_attrs(esodbc_dsn_attrs_st *attrs);
 
 BOOL parse_connection_string(esodbc_dsn_attrs_st *attrs,
-	SQLWCHAR *szConnStrIn, SQLSMALLINT cchConnStrIn, BOOL duplicate);
+	SQLWCHAR *szConnStrIn, SQLSMALLINT cchConnStrIn);
 BOOL write_connection_string(esodbc_dsn_attrs_st *attrs,
 	SQLWCHAR *szConnStrOut, SQLSMALLINT cchConnStrOutMax,
 	SQLSMALLINT *pcchConnStrOut);

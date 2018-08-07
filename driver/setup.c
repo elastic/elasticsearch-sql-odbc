@@ -138,9 +138,9 @@ BOOL SQL_API ConfigDSNW(
 	LPCWSTR   lpszDriver,
 	LPCWSTR   lpszAttributes)
 {
-	esodbc_dsn_attrs_st *attrs = NULL;
+	esodbc_dsn_attrs_st attrs;
 	wstr_st driver;
-	SQLWCHAR buff[MAX_REG_VAL_NAME] = {0};
+	SQLWCHAR buff[ESODBC_DSN_MAX_ATTR_LEN] = {0};
 	wstr_st old_dsn = {buff, 0};
 	BOOL create_new;
 	int res;
@@ -148,12 +148,14 @@ BOOL SQL_API ConfigDSNW(
 
 	TRACE4(_IN, "phWW", hwndParent, fRequest, lpszDriver, lpszAttributes);
 
+	init_dsn_attrs(&attrs);
+
 	/* If there's a DSN in reveived attributes, load the config from the
 	 * registry. Otherwise, populate a new config with defaults. */
-	if (! (attrs = load_system_dsn((SQLWCHAR *)lpszAttributes))) {
+	if (! load_system_dsn(&attrs, (SQLWCHAR *)lpszAttributes)) {
 		ERR("failed to load system DSN for driver ` " LWPD " ` and "
 			"attributes `" LWPD "`.", lpszDriver, lpszAttributes);
-		goto err;
+		return FALSE;;
 	}
 	/* assign the Driver name; this is not the value of the Driver key in the
 	 * registry (i.e. the path to the DLL), which is actually skipped when
@@ -162,24 +164,23 @@ BOOL SQL_API ConfigDSNW(
 		(SQLWCHAR *)lpszDriver,
 		wcslen(lpszDriver)
 	};
-	if (assign_dsn_attr(attrs, &MK_WSTR(ESODBC_DSN_DRIVER), &driver,
-			/*overwrite?*/FALSE, /*duplicate?*/TRUE) <= 0) {
-		ERR("failed to assign driver `" LWPDL "` attribute.", LWSTR(&driver));
-		goto err;
-	}
+	res = assign_dsn_attr(&attrs, &MK_WSTR(ESODBC_DSN_DRIVER), &driver,
+			/*overwrite?*/FALSE);
+	assert(0 < res);
 
 	switch (fRequest) {
 		case ODBC_CONFIG_DSN:
 			/* save the DSN naming, since this might be changed by the user */
-			if (attrs->dsn.cnt) {
-				/* attrs->dsn.cnt < MAX_REG_VAL_NAME due to load_sys_dsn() */
-				wcscpy(old_dsn.str, attrs->dsn.str);
-				old_dsn.cnt = attrs->dsn.cnt;
+			if (attrs.dsn.cnt) {
+				/* attrs.dsn.cnt < ESODBC_DSN_MAX_ATTR_LEN due to
+				 * load_sys_dsn() */
+				wcscpy(old_dsn.str, attrs.dsn.str);
+				old_dsn.cnt = attrs.dsn.cnt;
 			}
 		case ODBC_ADD_DSN:
 			/* user-interraction loop */
 			while (TRUE) {
-				res = prompt_user_config(hwndParent, attrs, FALSE);
+				res = prompt_user_config(hwndParent, &attrs, FALSE);
 				if (res < 0) {
 					ERR("failed getting user values.");
 					goto err;
@@ -189,17 +190,17 @@ BOOL SQL_API ConfigDSNW(
 				}
 				/* is it a brand new DSN or has the DSN name changed? */
 				DBG("old DSN: `" LWPDL "`, new DSN: `" LWPDL "`.",
-					LWSTR(&old_dsn), LWSTR(&attrs->dsn));
+					LWSTR(&old_dsn), LWSTR(&attrs.dsn));
 				if ((! old_dsn.cnt) ||
-					(! EQ_CASE_WSTR(&old_dsn, &attrs->dsn))) {
+					(! EQ_CASE_WSTR(&old_dsn, &attrs.dsn))) {
 					/* check if target DSN (new or old) already exists */
-					res = system_dsn_exists(&attrs->dsn);
+					res = system_dsn_exists(&attrs.dsn);
 					if (res < 0) {
 						ERR("failed to check if DSN `" LWPDL "` already "
-							"exists.", LWSTR(&attrs->dsn));
+							"exists.", LWSTR(&attrs.dsn));
 						goto err;
 					} else if (res) {
-						res = prompt_user_overwrite(hwndParent, &attrs->dsn);
+						res = prompt_user_overwrite(hwndParent, &attrs.dsn);
 						if (res < 0) {
 							ERR("failed to get user input.");
 							goto err;
@@ -225,7 +226,7 @@ BOOL SQL_API ConfigDSNW(
 				break;
 			}
 			/* create or update the DSN */
-			if (! write_system_dsn(attrs, create_new)) {
+			if (! write_system_dsn(&attrs, create_new)) {
 				ERR("failed to add DSN to the system.");
 			} else {
 				ret = TRUE;
@@ -233,12 +234,12 @@ BOOL SQL_API ConfigDSNW(
 			break;
 
 		case ODBC_REMOVE_DSN:
-			if (! SQLRemoveDSNFromIniW(attrs->dsn.str)) {
+			if (! SQLRemoveDSNFromIniW(attrs.dsn.str)) {
 				ERR("failed to remove driver ` " LWPD " ` with "
 					"attributes `" LWPD "`.", lpszDriver, lpszAttributes);
 			} else {
 				INFO("removed DSN `" LWPDL "` from the system.",
-					LWSTR(&attrs->dsn));
+					LWSTR(&attrs.dsn));
 				ret = TRUE;
 			}
 			break;
@@ -254,9 +255,6 @@ err:
 		SQLPostInstallerError(ODBC_ERROR_REQUEST_FAILED, NULL);
 	}
 end:
-	if (attrs) {
-		free_dsn_attrs(attrs);
-	}
 	TRACE5(_OUT, "dphWW", ret, hwndParent, fRequest, lpszDriver,
 		lpszAttributes);
 	return ret;

@@ -100,9 +100,9 @@
  */
 /* maximum URL size */
 #define ESODBC_MAX_URL_LEN				2048
-/* maximum DNS name */
-/* SQL_MAX_DSN_LENGTH=32 < IPv6 len */
-#define ESODBC_MAX_DNS_LEN				255
+/* maximum DNS attribute value lenght (should be long enought to accomodate a
+ * decently long FQ file path name) */
+#define ESODBC_DSN_MAX_ATTR_LEN			1024
 /* sample DSN name provisioned with the installation  */
 #define ESODBC_DSN_SAMPLE_NAME			"Elasticsearch ODBC Sample DSN"
 
@@ -396,13 +396,5 @@
 /* 2002: ??? -> SQL_C_BINARY */
 #define ESODBC_ES_TO_CSQL_NESTED		SQL_C_BINARY
 #define ESODBC_ES_TO_SQL_NESTED			ESODBC_SQL_NESTED
-
-/*
- * Registry maxes.
- */
-/* max length of a registry key value name */
-#define MAX_REG_VAL_NAME		1024
-/* max size of a registry key data */
-#define MAX_REG_DATA_SIZE		4096
 
 #endif /* __DEFS_H__ */
