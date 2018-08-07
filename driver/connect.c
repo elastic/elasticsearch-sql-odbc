@@ -1345,7 +1345,7 @@ SQLRETURN EsSQLDriverConnectW
 		}
 		/* original received DSN saved for later query by the app */
 		memcpy(orig_dsn.str, attrs.dsn.str,
-				attrs.dsn.cnt * sizeof(*attrs.dsn.str));
+			attrs.dsn.cnt * sizeof(*attrs.dsn.str));
 		orig_dsn.cnt = attrs.dsn.cnt;
 
 		/* set DSN (to DEFAULT) only if both DSN and Driver kw are missing */
@@ -1357,13 +1357,13 @@ SQLRETURN EsSQLDriverConnectW
 			INFOH(dbc, "no DRIVER or DSN keyword found in connection string: "
 				"using the \"DEFAULT\" DSN.");
 			res = assign_dsn_attr(&attrs, &MK_WSTR(ESODBC_DSN_DSN),
-						&MK_WSTR("DEFAULT"), /*overwrite?*/TRUE);
+					&MK_WSTR("DEFAULT"), /*overwrite?*/TRUE);
 			assert(0 < res);
 		}
 	} else {
 		INFOH(dbc, "empty connection string: using the \"DEFAULT\" DSN.");
 		res = assign_dsn_attr(&attrs, &MK_WSTR(ESODBC_DSN_DSN),
-					&MK_WSTR("DEFAULT"), /*overwrite?*/TRUE);
+				&MK_WSTR("DEFAULT"), /*overwrite?*/TRUE);
 		assert(0 < res);
 	}
 	assert(attrs.driver.cnt || attrs.dsn.cnt);
@@ -1383,7 +1383,7 @@ SQLRETURN EsSQLDriverConnectW
 			/* DM should take care of this, but just in case */
 			if (! EQ_WSTR(&attrs.dsn, &MK_WSTR("DEFAULT"))) {
 				res = assign_dsn_attr(&attrs, &MK_WSTR(ESODBC_DSN_DSN),
-							&MK_WSTR("DEFAULT"), /*overwrite?*/TRUE);
+						&MK_WSTR("DEFAULT"), /*overwrite?*/TRUE);
 				assert(0 < res);
 				if (! read_system_info(&attrs)) {
 					ERRH(dbc, "failed to read system info for default DSN.");
@@ -1396,7 +1396,7 @@ SQLRETURN EsSQLDriverConnectW
 		 * cannot retrieve information about the data source from the system
 		 * information." */
 		INFOH(dbc, "configuring the driver '" LWPDL "'.",
-				LWSTR(&attrs.driver));
+			LWSTR(&attrs.driver));
 	}
 
 	/* whatever attributes haven't yet been set, init them with defaults */

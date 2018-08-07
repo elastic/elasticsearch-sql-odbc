@@ -23,7 +23,7 @@ void init_dsn_attrs(esodbc_dsn_attrs_st *attrs)
 	memset(attrs, 0, sizeof(*attrs));
 
 	for (i = 0; i < ESODBC_DSN_ATTRS_COUNT; i ++) {
-		wstr = &((wstr_st*)attrs)[i];
+		wstr = &((wstr_st *)attrs)[i];
 		wstr->str = &attrs->buff[i * ESODBC_DSN_MAX_ATTR_LEN];
 	}
 }
@@ -72,7 +72,7 @@ int assign_dsn_attr(esodbc_dsn_attrs_st *attrs,
 
 	if (ESODBC_DSN_MAX_ATTR_LEN < value->cnt) {
 		ERR("attribute value lenght too large: %zu; max=%zu.", value->cnt,
-				ESODBC_DSN_MAX_ATTR_LEN);
+			ESODBC_DSN_MAX_ATTR_LEN);
 		return -1;
 	}
 
@@ -735,7 +735,7 @@ BOOL read_system_info(esodbc_dsn_attrs_st *attrs)
 		}
 		if (sizeof(data_buff)/sizeof(data_buff[0]) < maxdatalen) {
 			WARN("value data buffer too small (%d), needed: %dB.",
-			sizeof(data_buff)/sizeof(data_buff[0]), maxdatalen);
+				sizeof(data_buff)/sizeof(data_buff[0]), maxdatalen);
 		}
 		/* the registry might contain other, non connection-related strings,
 		 * so these conditions are not necearily an error. */
@@ -759,7 +759,7 @@ BOOL read_system_info(esodbc_dsn_attrs_st *attrs)
 		}
 		if (datalen <= 0) {
 			INFO("skipping value `" LWPDL "` with empty data.",
-					LWSTR(&val_name));
+				LWSTR(&val_name));
 			continue;
 		}
 		assert(datalen % sizeof(SQLWCHAR) == 0);

@@ -20,8 +20,8 @@
 	do { \
 		switch(type) { \
 				/*
-							 * numeric pointers
-							 */ \
+				 * numeric pointers
+				 */ \
 				/* SQLNUMERIC/SQLDATE/SQLCHAR/etc. = unsigned char */ \
 				/* SQLSCHAR = char */ \
 			case 'c': /* char signed */ \
