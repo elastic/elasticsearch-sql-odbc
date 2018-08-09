@@ -82,6 +82,8 @@ if (${WIN32})
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /D_CRT_SECURE_NO_WARNINGS")
 	# don't complain about non-constant aggregate initializer (C4204)
 	# set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /Ze")
+	# parallel building
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MP")
 
 	if (${IS_UNICODE})
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DUNICODE /D_UNICODE")

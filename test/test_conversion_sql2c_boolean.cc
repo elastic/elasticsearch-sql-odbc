@@ -204,5 +204,35 @@ TEST_F(ConvertSQL2C_Boolean, Boolean2WString) {
   EXPECT_STREQ(wbuff, MK_WPTR("1"));
 }
 
+TEST_F(ConvertSQL2C_Boolean, Boolean2WString_empty) {
+
+#undef SQL_VAL
+#undef SQL
+#define SQL_VAL "true"
+#define SQL "CAST(" SQL_VAL " AS W-TEXT)"
+
+  const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"boolean\"}\
+  ],\
+  \"rows\": [\
+    [" SQL_VAL "]\
+  ]\
+}\
+";
+  prepareStatement(json_answer);
+
+  SQLWCHAR wbuff[1] = {0};
+  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_WCHAR, &wbuff, sizeof(wbuff),
+      &ind_len);
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+  ret = SQLFetch(stmt);
+  ASSERT_FALSE(SQL_SUCCEEDED(ret));
+  assertState(MK_WPTR("22003"));
+}
+
+
 } // test namespace
 

@@ -57,10 +57,10 @@
 #define REJECT_AS_OOR(_stmt, _val, _fix_val, _target) /* Out Of Range */ \
 	do { \
 		if (_fix_val) { \
-			ERRH(_stmt, "can't convert value %llx to %s: out of range", \
+			ERRH(_stmt, "can't convert value %llx to %s: out of range.", \
 				_val, STR(_target)); \
 		} else { \
-			ERRH(_stmt, "can't convert value %f to %s: out of range", \
+			ERRH(_stmt, "can't convert value %f to %s: out of range.", \
 				_val, STR(_target)); \
 		} \
 		RET_HDIAGS(_stmt, SQL_STATE_22003); \
@@ -961,96 +961,126 @@ static inline SQLSMALLINT get_rec_c_type(esodbc_rec_st *arec,
 	return ctype;
 }
 
-/* transfer to the application a 0-terminated (but unaccounted for) wstr_st */
-static SQLRETURN transfer_wstr0(esodbc_rec_st *arec, esodbc_rec_st *irec,
-	wstr_st *src, void *data_ptr, SQLLEN *octet_len_ptr)
+
+static inline void gd_offset_apply(esodbc_stmt_st *stmt, xstr_st *xstr)
 {
-	size_t in_bytes;
-	esodbc_state_et state;
-	SQLWCHAR *dst;
-	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
-
-	/* the source string must be 0-term'd (since this needs to be transfered
-	 * out to the application) */
-	assert(src->str[src->cnt] == 0);
-
-	/* always return the app the untruncated number of bytes */
-	write_out_octets(octet_len_ptr, src->cnt * sizeof(*src->str), irec);
-
-	if (data_ptr) {
-		dst = (SQLWCHAR *)data_ptr;
-		state = SQL_STATE_00000;
-		in_bytes = buff_octet_size((src->cnt + 1) * sizeof(*src->str),
-				sizeof(*src->str), arec, irec, &state);
-
-		if (in_bytes) {
-			memcpy(dst, src->str, in_bytes);
-			/* TODO: should the left be filled with spaces? :
-			 * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/rules-for-conversions */
-
-			if (state != SQL_STATE_00000) {
-				/* 0-term the buffer */
-				((SQLWCHAR *)data_ptr)[(in_bytes/sizeof(SQLWCHAR)) - 1] = 0;
-				DBGH(stmt, "aREC@0x%p: `" LWPDL "` transfered truncated as "
-					"`%s`.", arec, LWSTR(src), dst);
-				RET_HDIAGS(stmt, state);
-			} else {
-				assert(((SQLWCHAR *)data_ptr)[(in_bytes/sizeof(SQLWCHAR))-1]
-					== 0);
-				DBGH(stmt, "aREC@0x%p: `" LWPDL "` transfered @ "
-					"data_ptr@0x%p.", arec, LWSTR(src), dst);
-			}
-		}
-	} else {
-		DBGH(stmt, "aREC@0x%p: NULL transfer buffer.", arec);
+	if (! STMT_GD_CALLING(stmt)) {
+		return;
 	}
 
-	return SQL_SUCCESS;
+	assert(0 <= stmt->gd_offt); /* negative means "data exhausted" */
+	assert(stmt->gd_offt < (SQLLEN)xstr->w.cnt + /*\0*/1);
+
+	if (xstr->wide) {
+		xstr->w.str += stmt->gd_offt;
+		xstr->w.cnt -= stmt->gd_offt;
+	} else {
+		xstr->c.str += stmt->gd_offt;
+		xstr->c.cnt -= stmt->gd_offt;
+	}
+
+	DBGH(stmt, "applied an offset of %lld.", stmt->gd_offt);
 }
 
-/* transfer to the application a 0-terminated (but unaccounted for) cstr_st */
-static SQLRETURN transfer_cstr0(esodbc_rec_st *arec, esodbc_rec_st *irec,
-	cstr_st *src, void *data_ptr, SQLLEN *octet_len_ptr)
+static inline void gd_offset_update(esodbc_stmt_st *stmt, size_t chars_0,
+	size_t xfed)
 {
-	size_t in_bytes;
-	esodbc_state_et state;
-	SQLCHAR *dst = (SQLCHAR *)data_ptr;
+	if (! STMT_GD_CALLING(stmt)) {
+		return;
+	}
+
+	assert(0 < chars_0); /* it must count at least the \0 */
+	if (chars_0 - /*\0*/1 <= xfed) {
+		/* if all has been transfered, indicate so in the gd_offt */
+		stmt->gd_offt = -1;
+	} else {
+		stmt->gd_offt += xfed;
+	}
+
+	DBGH(stmt, "offset updated with %zu to new value of %lld.", xfed,
+		stmt->gd_offt);
+}
+
+
+
+/* transfer to the application a 0-terminated (but unaccounted for) cstr_st */
+static SQLRETURN transfer_xstr0(esodbc_rec_st *arec, esodbc_rec_st *irec,
+	xstr_st *xsrc, void *data_ptr, SQLLEN *octet_len_ptr)
+{
+	size_t in_bytes, in_chars;
+	SQLCHAR *dst_c;
+	SQLWCHAR *dst_w;
+	size_t cnt, char_sz;
+	esodbc_state_et state = SQL_STATE_00000;
 	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
 
-	/* the source string must be 0-term'd (since this needs to be transfered
-	 * out to the application) */
-	assert(src->str[src->cnt] == 0);
+	/* apply source offset, if this is a SQLGetData() call  */
+	gd_offset_apply(stmt, xsrc);
+
+	cnt = xsrc->w.cnt; /*==->c.cnt*/
+	if (xsrc->wide) {
+		/* the source string must be 0-term'd (buff_octet_size param below
+		 * counts it) */
+		assert(xsrc->w.str[cnt] == 0);
+		char_sz = sizeof(*xsrc->w.str);
+	} else {
+		assert(xsrc->c.str[cnt] == 0);
+		char_sz = sizeof(*xsrc->c.str);
+	}
 
 	/* always return the app the untruncated number of bytes */
-	write_out_octets(octet_len_ptr, src->cnt * sizeof(*src->str), irec);
+	write_out_octets(octet_len_ptr, cnt * char_sz, irec);
 
 	if (data_ptr) {
-		dst = (SQLCHAR *)data_ptr;
-		state = SQL_STATE_00000;
-		in_bytes = buff_octet_size((src->cnt + 1) * sizeof(*src->str),
-				sizeof(*src->str), arec, irec, &state);
-
+		in_bytes = buff_octet_size((cnt + /*\0*/1) * char_sz, char_sz,
+				arec, irec, &state);
 		if (in_bytes) {
-			memcpy(dst, src->str, in_bytes);
-			/* TODO: should the left be filled with spaces? :
-			 * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/rules-for-conversions */
+			in_chars = in_bytes / char_sz;
 
-			if (state != SQL_STATE_00000) {
-				/* 0-term the buffer */
-				dst[(in_bytes/sizeof(SQLCHAR)) - 1] = 0;
-				DBGH(stmt, "aREC@0x%p: `" LCPDL "` transfered truncated as "
-					"`%s`.", arec, LCSTR(src), dst);
-				RET_HDIAGS(stmt, state);
+			if (xsrc->wide) {
+				dst_w = (SQLWCHAR *)data_ptr;
+				memcpy(dst_w, xsrc->w.str, in_bytes);
+				/* TODO: should the left be filled with spaces? :
+				 * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/rules-for-conversions */
+
+				if (state != SQL_STATE_00000) {
+					/* 0-term the buffer */
+					dst_w[in_chars - 1] = 0;
+					DBGH(stmt, "aREC@0x%p: `" LWPDL "` transfered truncated "
+						"as `" LWPDL "` at data_ptr@0x%p.", arec,
+						LWSTR(&xsrc->w), in_chars, dst_w, dst_w);
+				} else {
+					assert(dst_w[in_chars - 1] == 0);
+					DBGH(stmt, "aREC@0x%p: `" LWPDL "` transfered at "
+						"data_ptr@0x%p.", arec, LWSTR(&xsrc->w), dst_w);
+				}
 			} else {
-				assert(dst[(in_bytes/sizeof(SQLCHAR)) - 1] == 0);
-				DBGH(stmt, "aREC@0x%p: `" LCPDL "` transfered @ "
-					"data_ptr@0x%p.", arec, LCSTR(src), dst);
+				dst_c = (SQLCHAR *)data_ptr;
+				memcpy(dst_c, xsrc->c.str, in_bytes);
+
+				if (state != SQL_STATE_00000) {
+					/* 0-term the buffer */
+					dst_c[in_chars - 1] = 0;
+					DBGH(stmt, "aREC@0x%p: `" LCPDL "` transfered truncated "
+						"as `" LCPDL "` at data_ptr@0x%p.", arec,
+						LCSTR(&xsrc->w), in_chars, dst_c, dst_c);
+				} else {
+					assert(dst_c[in_chars - 1] == 0);
+					DBGH(stmt, "aREC@0x%p: `" LCPDL "` transfered at "
+						"data_ptr@0x%p.", arec, LCSTR(&xsrc->c), dst_c);
+				}
 			}
+
+			/* only update offset if data is copied out */
+			gd_offset_update(stmt, xsrc->w.cnt, in_chars - 1); /*==->c.cnt*/
 		}
 	} else {
 		DBGH(stmt, "aREC@0x%p: NULL transfer buffer.", arec);
 	}
 
+	if (state != SQL_STATE_00000) {
+		RET_HDIAGS(stmt, state);
+	}
 	return SQL_SUCCESS;
 }
 
@@ -1252,32 +1282,38 @@ static SQLRETURN llong_to_binary(esodbc_rec_st *arec, esodbc_rec_st *irec,
 static SQLRETURN longlong_to_str(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	long long ll, void *data_ptr, SQLLEN *octet_len_ptr, BOOL wide)
 {
+	SQLRETURN ret;
 	/* buffer is overprovisioned for !wide, but avoids double declaration */
 	SQLCHAR buff[(ESODBC_PRECISION_INT64 + /*0-term*/1 + /*+/-*/1)
 		* sizeof(SQLWCHAR)];
-	size_t cnt;
-	SQLRETURN ret;
 	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
+	xstr_st xsrc = (xstr_st) {
+		.wide = wide,
+		.c = (cstr_st) {
+			buff, 0
+		}
+	};
 
-	cnt = i64tot((int64_t)ll, buff, wide);
+	xsrc.w.cnt = i64tot((int64_t)ll, buff, wide); /*==.c.cnt*/
 
 	if (wide) {
-		wstr_st llwstr = {.str = (SQLWCHAR *)buff, .cnt = cnt};
-		ret = transfer_wstr0(arec, irec, &llwstr, data_ptr, octet_len_ptr);
 		DBGH(stmt, "long long %lld convertible to w-string `" LWPD "` on "
-			"%zd octets.", ll, (SQLWCHAR *)buff, cnt);
+			"%zd octets.", ll, xsrc.w.str, xsrc.w.cnt);
 	} else {
-		cstr_st llcstr = {.str = buff, .cnt = cnt};
-		ret = transfer_cstr0(arec, irec, &llcstr, data_ptr, octet_len_ptr);
 		DBGH(stmt, "long long %lld convertible to string `" LCPD "` on "
-			"%zd octets.", ll, (SQLCHAR *)buff, cnt);
+			"%zd octets.", ll, xsrc.c.str, xsrc.c.cnt);
 	}
+	ret = transfer_xstr0(arec, irec, &xsrc, data_ptr, octet_len_ptr);
 
 	/* need to change the error code from truncation to "out of
 	 * range", since "whole digits" are truncated */
 	if (ret == SQL_SUCCESS_WITH_INFO &&
 		HDRH(stmt)->diag.state == SQL_STATE_01004) {
-		REJECT_AS_OOR(stmt, ll, /*fixed?*/TRUE, "[STRING]<[value]");
+		if (STMT_GD_CALLING(stmt)) {
+			return ret;
+		} else {
+			REJECT_AS_OOR(stmt, ll, /*fixed?*/TRUE, "[STRING]<[value]");
+		}
 	}
 	return SQL_SUCCESS;
 }
@@ -1488,13 +1524,21 @@ static SQLRETURN double_to_str(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	double rest;
 	SQLSMALLINT scale;
 	size_t pos, octets;
-	/* buffer is overprovisioned for !wide, but avoids double declaration */
-	SQLCHAR buff[(2 * ESODBC_PRECISION_INT64 + /*.*/1 + /*\0*/1)
-		* sizeof(SQLWCHAR)];
 	/* buffer unit size */
 	size_t usize = wide ? sizeof(SQLWCHAR) : sizeof(SQLCHAR);
 	esodbc_state_et state = SQL_STATE_00000;
 	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
+	/* buffer is overprovisioned for !wide, but avoids double declaration */
+	SQLCHAR buff[(2 * ESODBC_PRECISION_INT64 + /*.*/1 + /*\0*/1)
+		* sizeof(SQLWCHAR)];
+	xstr_st xstr = (xstr_st) {
+		.wide = wide,
+		.c  = (cstr_st) {
+			/* same vals for both wide and C strings */
+			.str = buff,
+			.cnt = 0
+		}
+	};
 
 	/*
 	 * split the whole and fractional parts
@@ -1529,37 +1573,9 @@ static SQLRETURN double_to_str(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	/* copy fractional part into work buffer */
 	pos += ui64tot((uint64_t)fraction, (char *)buff + pos * usize, wide);
 
-	/* write how many bytes (w/o \0) we'd write if buffer is large enough */
-	write_out_octets(octet_len_ptr, pos * usize, irec);
-	/* compute how many bytes we can actually transfer, including \0 */
-	octets = buff_octet_size((pos + 1) * usize, usize, arec, irec, &state);
+	xstr.w.cnt = pos; /*==.c.cnt*/
 
-	if (data_ptr) {
-		/* transfer the bytes out */
-		memcpy(data_ptr, buff, octets);
-		if (state) {
-			/* usize < octets, since user input is checked above for OOR  */
-			if (wide) {
-				((SQLWCHAR *)data_ptr)[octets/usize - 1] = L'\0';
-			} else {
-				((SQLCHAR *)data_ptr)[octets/usize - 1] = '\0';
-			}
-		}
-	}
-
-	if (wide) {
-		DBGH(stmt, "double %.6e converted to w-string `" LWPD "` on %zd "
-			"octets (state: %d; scale: %d).", dbl, buff, octets, state, scale);
-	} else {
-		DBGH(stmt, "double %.6e converted to string `" LCPD "` on %zd "
-			"octets (state: %d; scale: %d).", dbl, buff, octets, state, scale);
-	}
-
-	if (state) {
-		RET_HDIAGS(stmt, state);
-	} else {
-		return SQL_SUCCESS;
-	}
+	return transfer_xstr0(arec, irec, &xstr, data_ptr, octet_len_ptr);
 }
 
 static SQLRETURN copy_double(esodbc_rec_st *arec, esodbc_rec_st *irec,
@@ -1676,52 +1692,6 @@ static SQLRETURN copy_double(esodbc_rec_st *arec, esodbc_rec_st *irec,
 #	undef RET_TRANSFER_DBL
 }
 
-/* https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/sql-to-c-bit */
-static SQLRETURN copy_boolean(esodbc_rec_st *arec, esodbc_rec_st *irec,
-	SQLULEN pos, BOOL boolval)
-{
-	esodbc_stmt_st *stmt;
-	void *data_ptr;
-	SQLLEN *octet_len_ptr;
-	wstr_st wbool;
-	cstr_st cbool;
-
-	stmt = arec->desc->hdr.stmt;
-
-	/* pointer where to write how many bytes we will/would use */
-	octet_len_ptr = deferred_address(SQL_DESC_OCTET_LENGTH_PTR, pos, arec);
-	/* pointer to app's buffer */
-	data_ptr = deferred_address(SQL_DESC_DATA_PTR, pos, arec);
-
-	switch (get_rec_c_type(arec, irec)) {
-		case SQL_C_WCHAR:
-			if (arec->octet_length < 1) { /* can't inquiry needed buffer len */
-				REJECT_AS_OOR(stmt, boolval, /*fixed int*/TRUE, NULL WCHAR);
-			}
-			/* "When bit SQL data is converted to character C data, the
-			 * possible values are "0" and "1"." */
-			wbool = boolval ? MK_WSTR("1") : MK_WSTR("0");
-			return transfer_wstr0(arec, irec, &wbool, data_ptr, octet_len_ptr);
-		case SQL_C_CHAR:
-			if (arec->octet_length < 1) { /* can't inquiry needed buffer len */
-				REJECT_AS_OOR(stmt, boolval, /*fixed int*/TRUE, NULL CHAR);
-			}
-			cbool = boolval ? MK_CSTR("1") : MK_CSTR("0");
-			return transfer_cstr0(arec, irec, &cbool, data_ptr, octet_len_ptr);
-		default:
-			return copy_longlong(arec, irec, pos, boolval ? 1LL : 0LL);
-	}
-
-	DBGH(stmt, "REC@0x%p, data_ptr@0x%p, copied boolean: `%d`.", arec,
-		data_ptr, boolval);
-	return SQL_SUCCESS;
-}
-
-/*
- * -> SQL_C_CHAR
- * Note: chars_0 param accounts for 0-term, but length indicated back to the
- * application must not.
- */
 static SQLRETURN wstr_to_cstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	void *data_ptr, SQLLEN *octet_len_ptr,
 	const wchar_t *wstr, size_t chars_0)
@@ -1730,22 +1700,30 @@ static SQLRETURN wstr_to_cstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
 	char *charp;
 	int in_bytes, out_bytes, c;
+	xstr_st xstr = (xstr_st) {
+		.wide = TRUE,
+		.w = (wstr_st) {
+			(SQLWCHAR *)wstr, chars_0 - 1
+		}
+	};
+
+	gd_offset_apply(stmt, &xstr);
 
 	if (data_ptr) {
 		charp = (char *)data_ptr;
 
-		in_bytes = (int)buff_octet_size(chars_0 * sizeof(*wstr),
-				sizeof(*charp), arec, irec, &state);
+		in_bytes = (int)buff_octet_size((xstr.w.cnt + 1) * sizeof(SQLWCHAR),
+				sizeof(SQLCHAR), arec, irec, &state);
 		/* trim the original string until it fits in output buffer, with given
 		 * length limitation */
-		for (c = (int)chars_0; 0 < c; c --) {
-			out_bytes = WCS2U8(wstr, c, charp, in_bytes);
+		for (c = (int)xstr.w.cnt + 1; 0 < c; c --) {
+			out_bytes = WCS2U8(xstr.w.str, c, charp, in_bytes);
 			if (out_bytes <= 0) {
 				if (WCS2U8_BUFF_INSUFFICIENT) {
 					continue;
 				}
-				ERRNH(stmt, "failed to convert wchar* to char* for string `"
-					LWPDL "`.", chars_0, wstr);
+				ERRNH(stmt, "failed to convert wchar_t* to char* for string `"
+					LWPDL "`.", c, xstr.w.str);
 				RET_HDIAGS(stmt, SQL_STATE_22018);
 			} else {
 				/* conversion succeeded */
@@ -1754,14 +1732,18 @@ static SQLRETURN wstr_to_cstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		}
 
 		/* if 0's present => 0 < out_bytes */
-		assert(wstr[chars_0 - 1] == L'\0');
+		assert(xstr.w.str[xstr.w.cnt] == L'\0');
 		assert(0 < out_bytes);
-		/* is user gives 0 as buffer size, out_bytes will also be 0 */
+		/* if user gives 0 as buffer size, out_bytes will also be 0 */
 		if (charp[out_bytes - 1]) {
 			/* ran out of buffer => not 0-terminated and truncated already */
 			charp[out_bytes - 1] = 0;
 			state = SQL_STATE_01004; /* indicate truncation */
+			c --; /* last char was overwritten with 0 -> dec xfed count */
 		}
+
+		/* only update offset if data is copied out */
+		gd_offset_update(stmt, xstr.w.cnt + 1, c);
 
 		DBGH(stmt, "REC@0x%p, data_ptr@0x%p, copied %zd bytes: `" LWPD "`.",
 			arec, data_ptr, out_bytes, charp);
@@ -1771,10 +1753,10 @@ static SQLRETURN wstr_to_cstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 	/* if length needs to be given, calculate it (not truncated) & converted */
 	if (octet_len_ptr) {
-		out_bytes = (size_t)WCS2U8(wstr, (int)chars_0, NULL, 0);
+		out_bytes = (size_t)WCS2U8(xstr.w.str, (int)xstr.w.cnt + 1, NULL, 0);
 		if (out_bytes <= 0) {
 			ERRNH(stmt, "failed to convert wchar* to char* for string `"
-				LWPDL "`.", chars_0, wstr);
+				LWPDL "`.", LWSTR(&xstr.w));
 			RET_HDIAGS(stmt, SQL_STATE_22018);
 		} else {
 			/* chars_0 accounts for 0-terminator, so WCS2U8 will count that in
@@ -1802,8 +1784,13 @@ static SQLRETURN wstr_to_wstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	void *data_ptr, SQLLEN *octet_len_ptr,
 	const wchar_t *wstr, size_t chars_0)
 {
-	wstr_st wsrc = {(SQLWCHAR *)wstr, chars_0 - 1};
-	return transfer_wstr0(arec, irec, &wsrc, data_ptr, octet_len_ptr);
+	xstr_st xsrc = (xstr_st) {
+		.wide = TRUE,
+		.w = (wstr_st) {
+			(SQLWCHAR *)wstr, chars_0 - 1
+		}
+	};
+	return transfer_xstr0(arec, irec, &xsrc, data_ptr, octet_len_ptr);
 }
 
 /* Converts an xstr to a TS.
@@ -2127,7 +2114,7 @@ static SQLRETURN copy_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		case SQL_C_CHAR:
 			return wstr_to_cstr(arec, irec, data_ptr, octet_len_ptr,
 					wstr, chars_0);
-		case SQL_C_BINARY: /* treat binary as WCHAR */
+		case SQL_C_BINARY: /* treat binary as WCHAR */ // TODO: add \0???
 		case SQL_C_WCHAR:
 			return wstr_to_wstr(arec, irec, data_ptr, octet_len_ptr,
 					wstr, chars_0);
@@ -2364,7 +2351,9 @@ static SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos)
 				boolval = UJGetType(obj) == UJT_True ? TRUE : FALSE;
 				DBGH(stmt, "value [%zd, %d] is boolean: %d.", rowno, i + 1,
 					boolval);
-				ret = copy_boolean(arec, irec, pos, boolval);
+				/* "When bit SQL data is converted to character C data, the
+				 * possible values are "0" and "1"." */
+				ret = copy_longlong(arec, irec, pos, boolval ? 1LL : 0LL);
 				break;
 		}
 
@@ -2756,18 +2745,18 @@ SQLRETURN EsSQLGetData(
 	esodbc_rec_st arecs[ESODBC_GD_DESC_COUNT];
 	esodbc_stmt_st *stmt = STMH(StatementHandle);
 
-	if (stmt->gd_col == ColumnNumber) {
+	if (stmt->gd_col == ColumnNumber && stmt->gd_ctype == TargetType) {
 		DBGH(stmt, "resuming get on column #%hu (pos @ %lld).",
-			stmt->gd_col, stmt->gd_pos);
-		if (stmt->gd_pos < 0) {
+			stmt->gd_col, stmt->gd_offt);
+		if (stmt->gd_offt < 0) {
 			WARNH(stmt, "data for current column exhausted.");
 			return SQL_NO_DATA;
 		}
 	} else {
 		if (0 <= stmt->gd_col) {
-			INFOH(stmt, "previous source column #%hu (pos @ %lld) abandoned "
-				"for new one #%hu.", stmt->gd_col, stmt->gd_pos,
-				ColumnNumber);
+			INFOH(stmt, "previous source column #%hu (pos @ %lld), SQL C %hd "
+				"abandoned for new #%hu, SQL C %hd.", stmt->gd_col,
+				stmt->gd_offt, stmt->gd_ctype, ColumnNumber, TargetType);
 			/* reset fields now, should the call eventually fail */
 			STMT_GD_RESET(stmt);
 		} else {
@@ -2777,6 +2766,9 @@ SQLRETURN EsSQLGetData(
 		if (! SQL_SUCCEEDED(ret)) {
 			return ret;
 		}
+
+		stmt->gd_col = ColumnNumber;
+		stmt->gd_ctype = TargetType;
 	}
 	/* data is available */
 
@@ -2808,13 +2800,13 @@ SQLRETURN EsSQLGetData(
 		goto end;
 	}
 
-	/* set column for next invocation to skip the sanity checks */
-	stmt->gd_col = ColumnNumber;
-	DBGH(stmt, "succesfully copied data from column #%hu (pos @ %lld).",
-		ColumnNumber, stmt->gd_pos);
+	DBGH(stmt, "succesfully copied data from column #%hu (pos @ %lld), "
+		"SQL C %hd.", ColumnNumber, stmt->gd_offt, TargetType);
 end:
 	/* reinstate originals */
 	stmt->sql2c_conversion = sql2c_conversion;
+	/* XXX: if get_record(gd_ard, ColumnNumber)->meta_type != string/bin,
+	 * should stmt->gd_offt bet set to -1 ?? */
 	getdata_reset_ard(stmt, ard, ColumnNumber, arecs,
 		sizeof(arecs)/sizeof(arecs[0]));
 	if (! SQL_SUCCEEDED(ret)) {

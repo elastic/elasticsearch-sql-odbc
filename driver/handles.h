@@ -328,7 +328,8 @@ typedef struct struct_stmt {
 
 	/* SQLGetData state members */
 	SQLINTEGER gd_col; /* current column to get from, if positive */
-	SQLLEN gd_pos; /* position in source buffer */
+	SQLINTEGER gd_ctype; /* current target type */
+	SQLLEN gd_offt; /* position in source buffer */
 
 } esodbc_stmt_st;
 
@@ -337,8 +338,11 @@ typedef struct struct_stmt {
 #define STMT_GD_RESET(_stmt)		\
 	do { \
 		_stmt->gd_col = -1; \
-		_stmt->gd_pos = 0; \
+		_stmt->gd_ctype = 0; \
+		_stmt->gd_offt = 0; \
 	} while (0)
+/* is currently a SQLGetData() call being serviced? */
+#define STMT_GD_CALLING(_stmt)		(0 <= _stmt->gd_col)
 
 SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count);
 esodbc_rec_st *get_record(esodbc_desc_st *desc, SQLSMALLINT rec_no, BOOL grow);

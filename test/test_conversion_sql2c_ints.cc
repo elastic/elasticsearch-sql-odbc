@@ -159,13 +159,16 @@ TEST_F(ConvertSQL2C_Ints, Long2Char_zero_copy) {
   prepareStatement(json_answer);
 
   SQLCHAR buff[sizeof(SQL_VAL)] = {0};
-  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_CHAR, &buff, 0, &ind_len);
+  // test correction: if destionation buffer is non-NULL, truncation
+  // indication is the expected result even with a given len of 0
+  //ret = SQLBindCol(stmt, /*col#*/1, SQL_C_CHAR, &buff, 0, &ind_len);
+  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_CHAR, NULL, 0, &ind_len);
   ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
   ret = SQLFetch(stmt);
   ASSERT_TRUE(SQL_SUCCEEDED(ret));
   EXPECT_EQ(ind_len, sizeof(SQL_VAL) - 1);
-  EXPECT_EQ(buff[0], 0); /* nothing copied, since 0 buff size indicated */
+  //EXPECT_EQ(buff[0], 0); /* nothing copied, since 0 buff size indicated */
 }
 
 

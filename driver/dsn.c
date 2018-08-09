@@ -807,12 +807,6 @@ int prompt_user_config(HWND hwndParent, esodbc_dsn_attrs_st *attrs,
 	}
 	TRACE;
 
-	//
-	// TODO: problematic: called from setup (dyn) and driverconnect (static),
-	// so dunno when to duplicate: either use all static, all dyn, add
-	// attrs.dynamic?
-	//
-
 	if (assign_dsn_attr(attrs, &MK_WSTR(ESODBC_DSN_DSN),
 			&MK_WSTR("My Elasticsearch ODBC DSN"), FALSE) <= 0) {
 		//&MK_WSTR("My Elasticsearch ODBC DSN"), TRUE, TRUE) <= 0) {
