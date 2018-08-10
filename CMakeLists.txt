@@ -139,29 +139,16 @@ endif (${CMD_RETURN})
 #
 # add ODBC-Specification to the project
 #
-# TODO: add this as a git subtree and/or as ExternalProject
 set(ODBC_PATH_SRC ${CMAKE_SOURCE_DIR}/libs/ODBC-Specification CACHE PATH
 	"ODBC-Specification source path")
-if (NOT IS_DIRECTORY ${ODBC_PATH_SRC})
-	message(FATAL_ERROR "No ODBC-Specification directory found: use "
-		"ODBC_PATH_SRC cmake option or place an 'ODBC-Specification' "
-		"clone into local 'lib' dir.")
-endif (NOT IS_DIRECTORY ${ODBC_PATH_SRC})
-message("ODBC-Specification source path: ${ODBC_PATH_SRC} .")
 set(ODBC_INC ${ODBC_PATH_SRC}/Windows/inc)
 
 
 #
 # add ujson4c to the project
 #
-# TODO: add this as a git subtree and/or as ExternalProject (with patching)
 set(UJSON4C_PATH_SRC ${CMAKE_SOURCE_DIR}/libs/ujson4c CACHE PATH
 	"Lib ujson4c source path")
-if (NOT IS_DIRECTORY ${UJSON4C_PATH_SRC})
-	message(FATAL_ERROR "No ujson4c directory found: use UJSON4C_PATH_SRC "
-		"cmake option or place an 'ujson4c' clone into local 'libs' dir.")
-endif (NOT IS_DIRECTORY ${UJSON4C_PATH_SRC})
-message("Lib ujson4c source path: ${UJSON4C_PATH_SRC} .")
 aux_source_directory(${UJSON4C_PATH_SRC}/src DRV_SRC)
 aux_source_directory(${UJSON4C_PATH_SRC}/3rdparty DRV_SRC)
 set(UJSON4C_INC ${UJSON4C_PATH_SRC}/src ${UJSON4C_PATH_SRC}/3rdparty )
@@ -169,35 +156,41 @@ set(UJSON4C_INC ${UJSON4C_PATH_SRC}/src ${UJSON4C_PATH_SRC}/3rdparty )
 #
 # add c-timestamp to the project
 #
-# TODO: add this as a git subtree and/or as ExternalProject
 set(CTIMESTAMP_PATH_SRC ${CMAKE_SOURCE_DIR}/libs/c-timestamp CACHE PATH
 	"Lib c-timestamp source path")
-if (NOT IS_DIRECTORY ${CTIMESTAMP_PATH_SRC})
-	message(FATAL_ERROR "No c-timestamp directory found: use "
-		"CTIMESTAMP_PATH_SRC cmake option or place a 'c-timestamp' clone "
-		"in local 'lib' dir.")
-endif (NOT IS_DIRECTORY ${CTIMESTAMP_PATH_SRC})
-message("Lib c-timestamp source path: ${CTIMESTAMP_PATH_SRC} .")
 aux_source_directory(${CTIMESTAMP_PATH_SRC}/ DRV_SRC)
 
 #
 # add libcurl to the project
 #
-# TODO: add this as a git subtree and/or as ExternalProject
+set(LIBCURL_PATH_SRC ${CMAKE_SOURCE_DIR}/libs/curl CACHE PATH
+	"Lib curl source path")
 set(LIBCURL_LD_PATH
-	# curl "installs" the .dll and .lib in different directories -> use the
-	# build dir to find both files in same directory instead of installing
-	${CMAKE_SOURCE_DIR}/libs/curl/builds/libcurl-vc-${TARCH}-release-dll-ipv6-sspi-winssl-obj-lib/
+	# Curl "installs" the .dll and .lib in different directories -> use the
+	# build dir to find both files in same directory instead of installing.
+	# Curl's win build root directory is not configurable.
+	# The path built below is only constant for the subtree tag (current:
+	# 7.61.0) and it's default nmake options (only with: IPv6, SSPI, WinSSL).
+	${LIBCURL_PATH_SRC}/builds/libcurl-vc-${TARCH}-release-dll-ipv6-sspi-winssl-obj-lib/
 	CACHE PATH "Lib curl load library path")
-set(LIBCURL_INC_PATH ${CMAKE_SOURCE_DIR}/libs/curl/include CACHE PATH
+set(LIBCURL_INC_PATH ${LIBCURL_PATH_SRC}/include CACHE PATH
 	"Lib curl include path")
-if (NOT IS_DIRECTORY ${LIBCURL_LD_PATH}
-		OR NOT IS_DIRECTORY ${LIBCURL_INC_PATH})
-	message(FATAL_ERROR "Missing libcurl lib and/or inc directories: use "
-		"LIBCURL_LD_PATH and LIBCURL_INC_PATH cmake options or place a built "
-		"'curl' clone in local 'libs' dir.")
-endif()
-message("Curl paths load lib: ${LIBCURL_LD_PATH}, inc: ${LIBCURL_INC_PATH} .")
+if (NOT IS_DIRECTORY ${LIBCURL_LD_PATH})
+	# Note: building libcurl happens at config time (as a pre-requisite), for
+	# now. This might be changed to a build target later.
+	# TODO: add non-WiN32 building.
+	execute_process(COMMAND buildconf.bat
+		WORKING_DIRECTORY "${LIBCURL_PATH_SRC}"
+		)
+	if (NOT ${CMD_RETURN})
+		execute_process(COMMAND nmake /f Makefile.vc mode=dll MACHINE=${TARCH}
+			WORKING_DIRECTORY "${LIBCURL_PATH_SRC}/winbuild"
+			)
+	endif (NOT ${CMD_RETURN})
+	if (${CMD_RETURN})
+		message(FATAL_ERROR "Building libcurl failed:")
+	endif (${CMD_RETURN})
+endif(NOT IS_DIRECTORY ${LIBCURL_LD_PATH})
 # add libcurl as dependency
 add_library(libcurl SHARED IMPORTED)
 if (${WIN32})
@@ -209,6 +202,11 @@ else (${WIN32})
 	set_property(TARGET libcurl PROPERTY IMPORTED_LOCATION
 		${LIBCURL_LD_PATH}/libcurl${CMAKE_SHARED_LIBRARY_SUFFIX})
 endif (${WIN32})
+
+add_custom_target(curlclean
+	COMMAND nmake /f Makefile.vc mode=dll clean
+	WORKING_DIRECTORY "${LIBCURL_PATH_SRC}/winbuild"
+	)
 
 
 message("Driver source files: ${DRV_SRC} .")
