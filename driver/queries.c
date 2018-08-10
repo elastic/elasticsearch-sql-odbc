@@ -982,15 +982,18 @@ static inline void gd_offset_apply(esodbc_stmt_st *stmt, xstr_st *xstr)
 	DBGH(stmt, "applied an offset of %lld.", stmt->gd_offt);
 }
 
-static inline void gd_offset_update(esodbc_stmt_st *stmt, size_t chars_0,
+/*
+ * cnt: character count of string/bin to transfer, excluding \0
+ * xfed: char count of copied data.
+ */
+static inline void gd_offset_update(esodbc_stmt_st *stmt, size_t cnt,
 	size_t xfed)
 {
 	if (! STMT_GD_CALLING(stmt)) {
 		return;
 	}
 
-	assert(0 < chars_0); /* it must count at least the \0 */
-	if (chars_0 - /*\0*/1 <= xfed) {
+	if (cnt <= xfed) {
 		/* if all has been transfered, indicate so in the gd_offt */
 		stmt->gd_offt = -1;
 	} else {
@@ -1036,6 +1039,10 @@ static SQLRETURN transfer_xstr0(esodbc_rec_st *arec, esodbc_rec_st *irec,
 				arec, irec, &state);
 		if (in_bytes) {
 			in_chars = in_bytes / char_sz;
+			/* deduct the \0 added above; which is needed, since we need to
+			 * copy it too out to the app (or truncate the data, but still not
+			 * count the \0) */
+			in_chars --;
 
 			if (xsrc->wide) {
 				dst_w = (SQLWCHAR *)data_ptr;
@@ -1045,12 +1052,12 @@ static SQLRETURN transfer_xstr0(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 				if (state != SQL_STATE_00000) {
 					/* 0-term the buffer */
-					dst_w[in_chars - 1] = 0;
+					dst_w[in_chars] = 0;
 					DBGH(stmt, "aREC@0x%p: `" LWPDL "` transfered truncated "
 						"as `" LWPDL "` at data_ptr@0x%p.", arec,
 						LWSTR(&xsrc->w), in_chars, dst_w, dst_w);
 				} else {
-					assert(dst_w[in_chars - 1] == 0);
+					assert(dst_w[in_chars] == 0);
 					DBGH(stmt, "aREC@0x%p: `" LWPDL "` transfered at "
 						"data_ptr@0x%p.", arec, LWSTR(&xsrc->w), dst_w);
 				}
@@ -1060,19 +1067,19 @@ static SQLRETURN transfer_xstr0(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 				if (state != SQL_STATE_00000) {
 					/* 0-term the buffer */
-					dst_c[in_chars - 1] = 0;
+					dst_c[in_chars] = 0;
 					DBGH(stmt, "aREC@0x%p: `" LCPDL "` transfered truncated "
 						"as `" LCPDL "` at data_ptr@0x%p.", arec,
 						LCSTR(&xsrc->w), in_chars, dst_c, dst_c);
 				} else {
-					assert(dst_c[in_chars - 1] == 0);
+					assert(dst_c[in_chars] == 0);
 					DBGH(stmt, "aREC@0x%p: `" LCPDL "` transfered at "
 						"data_ptr@0x%p.", arec, LCSTR(&xsrc->c), dst_c);
 				}
 			}
 
 			/* only update offset if data is copied out */
-			gd_offset_update(stmt, xsrc->w.cnt, in_chars - 1); /*==->c.cnt*/
+			gd_offset_update(stmt, xsrc->w.cnt, in_chars); /*==->c.cnt*/
 		}
 	} else {
 		DBGH(stmt, "aREC@0x%p: NULL transfer buffer.", arec);
@@ -1743,7 +1750,7 @@ static SQLRETURN wstr_to_cstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		}
 
 		/* only update offset if data is copied out */
-		gd_offset_update(stmt, xstr.w.cnt + 1, c);
+		gd_offset_update(stmt, xstr.w.cnt, c);
 
 		DBGH(stmt, "REC@0x%p, data_ptr@0x%p, copied %zd bytes: `" LWPD "`.",
 			arec, data_ptr, out_bytes, charp);
