@@ -10,6 +10,7 @@
 #include "info.h"
 #include "connect.h"
 #include "queries.h"
+#include "convert.h"
 #include "catalogue.h"
 
 //#include "elasticodbc_export.h"
@@ -29,8 +30,8 @@
 static BOOL driver_init()
 {
 	if (log_init()) {
-		queries_init();
 		INFO("initializing driver %s.", ESODBC_DRIVER_VER);
+		convert_init();
 		return connect_init();
 	}
 	return FALSE;
