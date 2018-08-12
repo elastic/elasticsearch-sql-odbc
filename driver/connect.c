@@ -441,6 +441,7 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	 * build connection URL
 	 */
 	secure = wstr2bool(&attrs->secure);
+	INFOH(dbc, "connect secure: %s.", secure ? "true" : "false");
 	cnt = swprintf(urlw, sizeof(urlw)/sizeof(urlw[0]),
 			L"http" WPFCP_DESC "://" WPFWP_LDESC ":" WPFWP_LDESC
 			ELASTIC_SQL_PATH, secure ? "s" : "", LWSTR(&attrs->server),
@@ -506,7 +507,7 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 			ESODBC_DSN_MAX_BODY_SIZE_MB, max_body_size);
 		goto err;
 	} else {
-		dbc->amax = max_body_size * 1024 * 1024;
+		dbc->amax = (size_t)max_body_size * 1024 * 1024;
 	}
 	INFOH(dbc, "max body size: %zd.", dbc->amax);
 
@@ -524,7 +525,7 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 			ESODBC_DSN_MAX_FETCH_SIZE, max_fetch_size);
 		goto err;
 	} else {
-		dbc->fetch.max = max_fetch_size;
+		dbc->fetch.max = (size_t)max_fetch_size;
 	}
 	/* set the string representation of fetch_size, once for all STMTs */
 	if (dbc->fetch.max) {
@@ -956,7 +957,8 @@ static void *copy_types_rows(estype_row_st *type_row, SQLULEN rows_fetched,
 	esodbc_estype_st *types)
 {
 	SQLWCHAR *pos;
-	int i, c;
+	int c;
+	SQLULEN i;
 	SQLSMALLINT sql_type;
 
 	/* pointer to start position where the strings will be copied in */
@@ -1447,6 +1449,7 @@ SQLRETURN EsSQLDriverConnectW
 			RET_HDIAGS(dbc, SQL_STATE_HY110);
 	}
 
+	TRACE;
 	if (! load_es_types(dbc)) {
 		ERRH(dbc, "failed to load Elasticsearch/SQL types.");
 		RET_HDIAG(dbc, SQL_STATE_HY000,

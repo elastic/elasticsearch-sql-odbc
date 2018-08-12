@@ -815,9 +815,8 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 {
 	esodbc_stmt_st *stmt;
 	esodbc_desc_st *ard, *ird;
-	SQLULEN i, j;
+	SQLULEN i, j, errors;
 	SQLRETURN ret;
-	int errors;
 
 	stmt = STMH(StatementHandle);
 	ard = stmt->ard;
@@ -925,7 +924,7 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 	}
 
 	if (errors && i <= errors) {
-		ERRH(stmt, "processing failed for all rows [%d].", errors);
+		ERRH(stmt, "processing failed for all rows [%llu].", errors);
 		return SQL_ERROR;
 	}
 
@@ -1235,7 +1234,8 @@ static esodbc_estype_st *lookup_es_type(esodbc_dbc_st *dbc,
 			if (col_size <= 0) {
 				return &dbc->es_types[i];
 			} else {
-				if (col_size <= dbc->es_types[i].column_size) {
+				assert(col_size < LONG_MAX);
+				if ((SQLINTEGER)col_size <= dbc->es_types[i].column_size) {
 					return &dbc->es_types[i];
 				}
 				if (es_type == SQL_VARCHAR &&
@@ -1277,7 +1277,8 @@ static esodbc_estype_st *match_es_type(esodbc_rec_st *arec,
 					break;
 				case SQL_VARCHAR: /* KEYWORD, TEXT */
 					length = irec->length ? irec->length : arec->octet_length;
-					if (length <= dbc->es_types[i].column_size ||
+					assert(length < LONG_MAX);
+					if ((SQLINTEGER)length <= dbc->es_types[i].column_size ||
 						dbc->es_types[i].column_size==dbc->max_varchar_size) {
 						return &dbc->es_types[i];
 					}
