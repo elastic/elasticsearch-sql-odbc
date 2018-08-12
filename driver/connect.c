@@ -1115,15 +1115,24 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 	SQLLEN row_cnt;
 	/* both arrays below must use ESODBC_MAX_ROW_ARRAY_SIZE since no SQLFetch()
 	 * looping is implemented (see check after SQLFetch() below). */
-	estype_row_st type_row[ESODBC_MAX_ROW_ARRAY_SIZE];
 	SQLUSMALLINT row_status[ESODBC_MAX_ROW_ARRAY_SIZE];
+	/* a static estype_row_st array is over 350KB and too big for the default
+	 * stack size in certain cases: needs allocation on heap */
+	estype_row_st *type_row = NULL;
 	SQLULEN rows_fetched, i, strs_len;
 	size_t size;
 	esodbc_estype_st *types = NULL;
 	void *pos;
 
+	type_row = calloc(ESODBC_MAX_ROW_ARRAY_SIZE, sizeof(estype_row_st));
+	if (! type_row) {
+		ERRNH(dbc, "OOM");
+		return FALSE;
+	}
+
 	if (! SQL_SUCCEEDED(EsSQLAllocHandle(SQL_HANDLE_STMT, dbc, &stmt))) {
 		ERRH(dbc, "failed to alloc a statement handle.");
+		free(type_row);
 		return FALSE;
 	}
 	assert(stmt);
@@ -1295,6 +1304,10 @@ end:
 		free(types);
 		types = NULL;
 	}
+	if (type_row) {
+		free(type_row);
+		type_row = NULL;
+	}
 
 	return ret;
 }
@@ -1449,7 +1462,6 @@ SQLRETURN EsSQLDriverConnectW
 			RET_HDIAGS(dbc, SQL_STATE_HY110);
 	}
 
-	TRACE;
 	if (! load_es_types(dbc)) {
 		ERRH(dbc, "failed to load Elasticsearch/SQL types.");
 		RET_HDIAG(dbc, SQL_STATE_HY000,

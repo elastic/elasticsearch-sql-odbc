@@ -85,6 +85,10 @@ if (${WIN32})
 	# parallel building
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MP")
 
+	# 2MB stack size
+	# set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /STACK:2097152")
+	# set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /F 2097152")
+
 	if (${IS_UNICODE})
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DUNICODE /D_UNICODE")
 	endif (${IS_UNICODE})
