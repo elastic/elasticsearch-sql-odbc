@@ -265,15 +265,16 @@ void trim_ws(cstr_st *cstr)
  */
 int ansi_w2c(const SQLWCHAR *src, char *dst, size_t chars)
 {
-	int i = 0;
+	size_t i = 0;
 
 	if (chars < 1) {
 		return -1;
 	}
+	assert(chars < INT_MAX);
 
 	do {
 		if (CHAR_MAX < src[i]) {
-			return -(i + 1);
+			return -((int)i + 1);
 		}
 		dst[i] = (char)src[i];
 	} while (src[i] && (++i < chars));
@@ -282,7 +283,7 @@ int ansi_w2c(const SQLWCHAR *src, char *dst, size_t chars)
 		/* loop stopped b/c of length -> src is not 0-term'd */
 		dst[i] = 0; /* chars + 1 <= [dst] */
 	}
-	return i + 1;
+	return (int)i + 1;
 }
 
 int wmemncasecmp(const SQLWCHAR *a, const SQLWCHAR *b, size_t len)
