@@ -1,5 +1,5 @@
 *.swp
 driver/*.swp
-builds/*
+builds/
 cscope.out
 .vs
