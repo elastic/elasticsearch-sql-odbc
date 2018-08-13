@@ -474,8 +474,6 @@ REM REGDEL function: remove driver from the registry
 
 
 :END
-	echo %ERRORLEVEL%
-	exit /b 0
 	exit /b %ERRORLEVEL%
 
 endlocal
