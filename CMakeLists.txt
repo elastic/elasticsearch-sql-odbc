@@ -82,6 +82,8 @@ if (${WIN32})
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /D_CRT_SECURE_NO_WARNINGS")
 	# don't complain about non-constant aggregate initializer (C4204)
 	# set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /Ze")
+	# parallel building
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MP")
 
 	if (${IS_UNICODE})
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DUNICODE /D_UNICODE")
@@ -208,7 +210,6 @@ add_custom_target(curlclean
 	WORKING_DIRECTORY "${LIBCURL_PATH_SRC}/winbuild"
 	)
 
-
 message("Driver source files: ${DRV_SRC} .")
 message("Driver include paths: " ${ODBC_INC} ${DRV_SRC_DIR}
 	${LIBCURL_INC_PATH} ${UJSON4C_INC} ${CTIMESTAMP_PATH_SRC})
@@ -223,7 +224,7 @@ target_compile_definitions(${DRV_NAME} PRIVATE "DRIVER_BUILD")
 include_directories(${ODBC_INC} ${DRV_SRC_DIR} ${LIBCURL_INC_PATH}
 	${UJSON4C_INC} ${CTIMESTAMP_PATH_SRC})
 
-target_link_libraries(${DRV_NAME} libcurl)
+target_link_libraries(${DRV_NAME} odbccp32 legacy_stdio_definitions libcurl)
 
 # add testing project/target
 enable_testing()

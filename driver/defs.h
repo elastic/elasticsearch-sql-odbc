@@ -25,6 +25,8 @@
 #define ESODBC_DEF_ARRAY_SIZE		1
 /* max cols or args to bind; needs to stay <= SHRT_MAX */
 #define ESODBC_MAX_DESC_COUNT		128
+/* number of static records for SQLGetData() */
+#define ESODBC_GD_DESC_COUNT		ESODBC_MAX_DESC_COUNT
 /* values for SQL_ATTR_MAX_LENGTH statement attribute */
 #define ESODBC_UP_MAX_LENGTH		0 // USHORT_MAX
 #define ESODBC_LO_MAX_LENGTH		0
@@ -43,6 +45,7 @@
 #define ESODBC_QUOTE_CHAR			"\""
 #define ESODBC_PATTERN_ESCAPE		"\\"
 #define ESODBC_CATALOG_SEPARATOR	":"
+#define ESODBC_CATALOG_LOCATION		SQL_CL_START /* TODO: 2x check! */
 #define ESODBC_CATALOG_TERM			"clusterName"
 #define ESODBC_TABLE_TERM			"type" // TODO: or table?
 #define ESODBC_SCHEMA_TERM			"schema"
@@ -56,6 +59,20 @@
 /* TODO: review@alpha */
 /* match 'keyword' ES type length */
 #define ESODBC_MAX_IDENTIFIER_LEN			256
+/* the following lifted/derived from ES/SQL's JdbcDatabaseMetaData.java */
+/* max columns in ORDER BY; 0 - no limit / unknown */
+#define ESODBC_MAX_COLUMNS_IN_ORDER_BY		0
+/* max columns in GROUP BY; 0 - no limit / unknown */
+#define ESODBC_MAX_COLUMNS_IN_GROUP_BY		0
+/* max columns in SELECT; 0 - no limit / unknown */
+#define ESODBC_MAX_COLUMNS_IN_SELECT		0
+/* "if the columns in the ORDER BY clause must be in the select list" */
+#define ESODBC_ORDER_BY_COLUMNS_IN_SELECT	"Y"
+/* "the relationship between the columns in the GROUP BY clause and the
+ * nonaggregated columns in the select list" */
+#define ESODBC_GROUP_BY						SQL_GB_NO_RELATION
+/* "how the data source handles the concatenation of NULL [.] with non-NULL" */
+#define ESODBC_CONCAT_NULL_BEHAVIOR			SQL_CB_NULL
 
 /* 20 = len("18446744073709551616"), 1 << (sizeof(uint64_t) * 8bits) */
 #define ESODBC_PRECISION_UINT64			20
@@ -100,9 +117,11 @@
  */
 /* maximum URL size */
 #define ESODBC_MAX_URL_LEN				2048
-/* maximum DNS name */
-/* SQL_MAX_DSN_LENGTH=32 < IPv6 len */
-#define ESODBC_MAX_DNS_LEN				255
+/* maximum DNS attribute value lenght (should be long enought to accomodate a
+ * decently long FQ file path name) */
+#define ESODBC_DSN_MAX_ATTR_LEN			1024
+/* sample DSN name provisioned with the installation  */
+#define ESODBC_DSN_SAMPLE_NAME			"Elasticsearch ODBC Sample DSN"
 
 /* SQL plugin's REST endpoint for SQL */
 #define ELASTIC_SQL_PATH				"/_xpack/sql"
@@ -144,7 +163,6 @@
 /* default tracing level */
 #define ESODBC_DEF_TRACE_LEVEL		"WARN"
 
-
 /*
  *
  * Driver/Elasticsearch capabilities
@@ -159,6 +177,8 @@
 /* Driver conformance level: CORE.
  * No scrollabe cursors et al. just yet */
 #define ESODBC_ODBC_INTERFACE_CONFORMANCE		SQL_OIC_CORE
+#define ESODBC_GETDATA_EXTENSIONS				(0 | \
+	SQL_GD_ANY_COLUMN | SQL_GD_ANY_ORDER | SQL_GD_BOUND)
 /* Read-only queries supported only */
 #define ESODBC_DATA_SOURCE_READ_ONLY			"Y"
 /* no support for transactions */
@@ -199,6 +219,8 @@
 #define ESODBC_BATCH_SUPPORT					0UL
 /* no driver support array of parameters */
 #define ESODBC_PARAM_ARRAY_SELECTS				SQL_PAS_NO_SELECT
+/* no connection pooling or distributed transactions */
+#define ESODBC_DTC_TRANSITION_COST				0
 
 
 /*

@@ -35,6 +35,7 @@
 // TODO add schema, when supported
 #define SQL_COLUMNS(...)		"SYS COLUMNS" __VA_ARGS__ \
 	" TABLE LIKE " ESODBC_STRING_DELIM WPFWP_LDESC ESODBC_STRING_DELIM \
+	" ESCAPE '" ESODBC_PATTERN_ESCAPE "' " \
 	" LIKE " ESODBC_STRING_DELIM WPFWP_LDESC ESODBC_STRING_DELIM
 #define SQL_COL_CAT \
 	" CATALOG " ESODBC_STRING_DELIM WPFWP_LDESC ESODBC_STRING_DELIM \
@@ -158,6 +159,9 @@ size_t quote_tokens(SQLWCHAR *src, size_t len, SQLWCHAR *dest)
 				copying = TRUE;
 		}
 		*pos ++ = src[i];
+	}
+	if (copying) {
+		*pos ++ = L'\''; /* end last token */
 	}
 	/* should not overrun */
 	assert(i < 2/*see typ_buf below*/ * ESODBC_MAX_IDENTIFIER_LEN);

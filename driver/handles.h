@@ -7,7 +7,8 @@
 #ifndef __HANDLES_H__
 #define __HANDLES_H__
 
-#include  <curl/curl.h>
+#include <curl/curl.h>
+#include <ujdecode.h>
 
 #include "error.h"
 #include "defs.h"
@@ -265,16 +266,17 @@ typedef struct struct_resultset {
 	char *buff; /* buffer containing the answer to the last request in a STM */
 	size_t blen; /* length of the answer */
 
+	wstr_st ecurs; /* Elastic's cursor object */
 	void *state; /* top UJSON decoder state */
-	void *rows_iter; /* UJSON array with the result set */
-	const wchar_t *ecurs; /* Elastic's cursor object */
-	size_t eccnt; /* cursor char count */
+	void *rows_iter; /* UJSON iterator with the rows in result set */
+	UJObject row_array; /* UJSON object for current row */
 
 	size_t nrows; /* (count of) rows in current result set */
 	size_t vrows; /* (count of) visited rows in current result set  */
 	size_t frows; /* (count of) fetched rows across *entire* result set  */
 
-	SQLULEN array_pos; /* position in ARD array to write_in/resume_at */
+	/* position in ARD array to write_in/resume_at with cursors */
+	SQLULEN array_pos;
 } resultset_st;
 
 /*
@@ -323,13 +325,33 @@ typedef struct struct_stmt {
 		CONVERSION_SUPPORTED,
 		CONVERSION_SKIPPED, /* used with driver's meta queries */
 	} sql2c_conversion;
+
+	/* SQLGetData state members */
+	SQLINTEGER gd_col; /* current column to get from, if positive */
+	SQLINTEGER gd_ctype; /* current target type */
+	SQLLEN gd_offt; /* position in source buffer */
+
 } esodbc_stmt_st;
 
 
+/* SQLGetData() state reset */
+#define STMT_GD_RESET(_stmt)		\
+	do { \
+		_stmt->gd_col = -1; \
+		_stmt->gd_ctype = 0; \
+		_stmt->gd_offt = 0; \
+	} while (0)
+/* is currently a SQLGetData() call being serviced? */
+#define STMT_GD_CALLING(_stmt)		(0 <= _stmt->gd_col)
 
 SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count);
 esodbc_rec_st *get_record(esodbc_desc_st *desc, SQLSMALLINT rec_no, BOOL grow);
 void dump_record(esodbc_rec_st *rec);
+
+esodbc_desc_st *getdata_set_ard(esodbc_stmt_st *stmt, esodbc_desc_st *gd_ard,
+	SQLUSMALLINT colno, esodbc_rec_st *recs, SQLUSMALLINT count);
+void getdata_reset_ard(esodbc_stmt_st *stmt, esodbc_desc_st *ard,
+	SQLUSMALLINT colno, esodbc_rec_st *recs, SQLUSMALLINT count);
 
 /* TODO: move to some utils.h */
 void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type,

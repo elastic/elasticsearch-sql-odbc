@@ -44,16 +44,16 @@ REM
 REM presence of 'help'/'?': invoke USAGE "function" and exit
 if /i not [%ARG:help=%] == [%ARG%] (
 	call:USAGE %0
-	goto end
+	goto END
 ) else if not [%ARG:?=%] == [%ARG%] (
 	call:USAGE %0
-	goto end
+	goto END
 )
 
 REM presence of 'proper' or 'clean': invoke respective "functions"
 if /i not [%ARG:proper=%] == [%ARG%] (
 	call:PROPER
-	goto end
+	goto END
 ) else if /i not [%ARG:clean=%] == [%ARG%] (
 	call:CLEAN
 )
@@ -69,7 +69,7 @@ if /i not [%ARG:setup=%] == [%ARG%] (
 		echo.
 		echo ERROR: building environment not set. Run with /? to see options.
 		echo.
-		goto end
+		goto END
 	)
 )
 
@@ -135,10 +135,6 @@ if /i not [%ARG:regdel=%] == [%ARG%] (
 ) else (
 	REM Invoked without 'regadd': registry adding skipped.
 )
-
-:end
-exit /b 0
-
 
 
 REM
@@ -211,7 +207,7 @@ REM function to check and set cmake binary (if installed)
 			echo ERROR: needed cmake executable not found: when installed,
 			echo        either set it in path or in environment variable CMAKE
 			echo.
-			goto end
+			goto END
 		)
 	) else (
 		set CMAKE=cmake.exe
@@ -231,7 +227,7 @@ REM USAGE function: output a usage message
 	echo    setup     : invoke MSVC's build environment setup script before
 	echo                building (requires 2017 version or later^).
 	echo    clean     : remove all the files in the build dir.
-	echo    proper    : clean both the libs and builds dirs and exit.
+	echo    proper    : clean libs, builds and project dirs and exit.
 	echo    nobuild   : skip project building (the default is to build^).
 	echo    type=T    : selects the build type; T can be one of Debug/Release/
 	echo                RelWithDebInfo/MinSizeRel^); defaults to Debug.
@@ -276,6 +272,8 @@ REM PROPER function: clean up the build and libs dir.
 		MSBuild %BUILD_DIR%\curlclean.vcxproj
 	)
 	call:CLEAN
+	REM delete VisualStudio files
+	rmdir /S /Q .vs
 
 	goto:eof
 
@@ -347,19 +345,18 @@ REM BUILD function: build various targets
 	) else if /i not [%ARG:all=%] == [%ARG%] (
 		echo Building all the project.
 		MSBuild ALL_BUILD.vcxproj %MSBUILD_ARGS%
-	) else if /i not [%ARG:suites=%] == [%ARG%] (
+	) else if /i not [%ARG:suiteS=%] == [%ARG%] (
 		echo Building the test projects only.
 		for %%i in (test\test_*.vcxproj) do (
 			MSBuild %%~fi %MSBUILD_ARGS%
-			if not ERRORLEVEL 1 (
+			if ERRORLEVEL 1 (
+				goto END
+			) else (
 				echo Running test\%CFG_INTDIR%\%%~ni.exe :
 				test\%CFG_INTDIR%\%%~ni.exe
 				if ERRORLEVEL 1 (
-					goto:eof
+					goto END
 				)
-			) else (
-				echo Building %%~fi failed.
-				goto:eof
 			)
 		)
 	) else if /i not [%ARG:suite==%] == [%ARG%] (
@@ -372,7 +369,9 @@ REM BUILD function: build various targets
 				echo Building and running one suite: !SUITE!
 				echo MSBuild test\%%a.vcxproj %MSBUILD_ARGS%
 				MSBuild test\%%a.vcxproj %MSBUILD_ARGS%
-				if not ERRORLEVEL 1 (
+				if ERRORLEVEL 1 (
+					goto END
+				) else (
 					test\%CFG_INTDIR%\%%a.exe
 				)
 				goto:eof
@@ -385,7 +384,7 @@ REM BUILD function: build various targets
 		REM file name expansion, cmd style...
 		for /f %%i in ("%DRIVER_BASE_NAME%*.vcxproj") do MSBuild %%~nxi %MSBUILD_ARGS%
 
-		if not ERRORLEVEL 1 if /i not [%ARG:symbols=%] == [%ARG%] (
+		if ERRORLEVEL 0 if /i not [%ARG:exports=%] == [%ARG%] (
 			dumpbin /exports %CFG_INTDIR%\%DRIVER_BASE_NAME%*.dll
 		)
 	)
@@ -440,7 +439,7 @@ REM REGADD function: add driver into the registry
 	REM check if driver exists, otherwise the filename is unknown
 	if not exist %BUILD_DIR%\%CFG_INTDIR%\%DRIVER_BASE_NAME%*.dll (
 		echo Error: Driver can only be added into the registry once built.
-		goto end
+		goto END
 	)
 	for /f %%i in ("%BUILD_DIR%\%CFG_INTDIR%\%DRIVER_BASE_NAME%*.dll") do set DRVNAME=%%~nxi
 
@@ -471,5 +470,10 @@ REM REGDEL function: remove driver from the registry
 		/reg:!BARCH!
 
 	goto:eof
+
+
+
+:END
+	exit /b %ERRORLEVEL%
 
 endlocal
