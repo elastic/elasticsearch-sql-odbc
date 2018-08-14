@@ -522,7 +522,7 @@ BOOL write_system_dsn(esodbc_dsn_attrs_st *attrs, BOOL create_new)
 
 static inline BOOL needs_braces(wstr_st *token)
 {
-	int i;
+	size_t i;
 
 	for (i = 0; i < token->cnt; i ++) {
 		switch(token->str[i]) {

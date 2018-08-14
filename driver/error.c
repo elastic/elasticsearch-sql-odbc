@@ -40,10 +40,11 @@ SQLRETURN post_diagnostic(esodbc_diag_st *dest, esodbc_state_et state,
 	if (ebufsz <= pos + tcnt) {
 		wcsncpy(dest->text + pos, text, ebufsz - (pos + 1));
 		dest->text[ebufsz - 1] = 0;
-		dest->text_len = (int)ebufsz - 1;
+		assert(1 < ebufsz && ebufsz < USHRT_MAX);
+		dest->text_len = (SQLUSMALLINT)ebufsz - 1;
 	} else {
 		wcsncpy(dest->text + pos, text, tcnt + /* 0-term */1);
-		dest->text_len = (int)(pos + tcnt);
+		dest->text_len = (SQLUSMALLINT)(pos + tcnt);
 	}
 	DBG("diagnostic message: `" LWPD "` [%d], native code: %d.",
 		dest->text, dest->text_len, dest->native_code);

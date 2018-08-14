@@ -441,6 +441,7 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	 * build connection URL
 	 */
 	secure = wstr2bool(&attrs->secure);
+	INFOH(dbc, "connect secure: %s.", secure ? "true" : "false");
 	cnt = swprintf(urlw, sizeof(urlw)/sizeof(urlw[0]),
 			L"http" WPFCP_DESC "://" WPFWP_LDESC ":" WPFWP_LDESC
 			ELASTIC_SQL_PATH, secure ? "s" : "", LWSTR(&attrs->server),
@@ -506,7 +507,7 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 			ESODBC_DSN_MAX_BODY_SIZE_MB, max_body_size);
 		goto err;
 	} else {
-		dbc->amax = max_body_size * 1024 * 1024;
+		dbc->amax = (size_t)max_body_size * 1024 * 1024;
 	}
 	INFOH(dbc, "max body size: %zd.", dbc->amax);
 
@@ -524,7 +525,7 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 			ESODBC_DSN_MAX_FETCH_SIZE, max_fetch_size);
 		goto err;
 	} else {
-		dbc->fetch.max = max_fetch_size;
+		dbc->fetch.max = (size_t)max_fetch_size;
 	}
 	/* set the string representation of fetch_size, once for all STMTs */
 	if (dbc->fetch.max) {
@@ -956,7 +957,8 @@ static void *copy_types_rows(estype_row_st *type_row, SQLULEN rows_fetched,
 	esodbc_estype_st *types)
 {
 	SQLWCHAR *pos;
-	int i, c;
+	int c;
+	SQLULEN i;
 	SQLSMALLINT sql_type;
 
 	/* pointer to start position where the strings will be copied in */
@@ -1113,15 +1115,24 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 	SQLLEN row_cnt;
 	/* both arrays below must use ESODBC_MAX_ROW_ARRAY_SIZE since no SQLFetch()
 	 * looping is implemented (see check after SQLFetch() below). */
-	estype_row_st type_row[ESODBC_MAX_ROW_ARRAY_SIZE];
 	SQLUSMALLINT row_status[ESODBC_MAX_ROW_ARRAY_SIZE];
+	/* a static estype_row_st array is over 350KB and too big for the default
+	 * stack size in certain cases: needs allocation on heap */
+	estype_row_st *type_row = NULL;
 	SQLULEN rows_fetched, i, strs_len;
 	size_t size;
 	esodbc_estype_st *types = NULL;
 	void *pos;
 
+	type_row = calloc(ESODBC_MAX_ROW_ARRAY_SIZE, sizeof(estype_row_st));
+	if (! type_row) {
+		ERRNH(dbc, "OOM");
+		return FALSE;
+	}
+
 	if (! SQL_SUCCEEDED(EsSQLAllocHandle(SQL_HANDLE_STMT, dbc, &stmt))) {
 		ERRH(dbc, "failed to alloc a statement handle.");
+		free(type_row);
 		return FALSE;
 	}
 	assert(stmt);
@@ -1292,6 +1303,10 @@ end:
 		/* freeing the statement went wrong */
 		free(types);
 		types = NULL;
+	}
+	if (type_row) {
+		free(type_row);
+		type_row = NULL;
 	}
 
 	return ret;
