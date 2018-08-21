@@ -225,7 +225,6 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			}
 			dbc->dsn.str = MK_WPTR(""); /* see explanation in cleanup_dbc() */
 			dbc->metadata_id = SQL_FALSE;
-			dbc->async_enable = SQL_ASYNC_ENABLE_OFF;
 			dbc->txn_isolation = ESODBC_DEF_TXN_ISOLATION;
 
 			/* rest of initialization done at connect time */
@@ -261,7 +260,6 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			 * Note: these attributes won't propagate at statement level when
 			 * set at connection level. */
 			stmt->metadata_id = dbc->metadata_id;
-			stmt->async_enable = dbc->async_enable;
 			stmt->sql2c_conversion = CONVERSION_UNCHECKED;
 
 			DBGH(dbc, "new Statement handle allocated @0x%p.", *OutputHandle);
@@ -767,10 +765,19 @@ SQLRETURN EsSQLSetStmtAttrW(
 			DBGH(stmt, "setting metadata_id to: %u", (SQLULEN)ValuePtr);
 			stmt->metadata_id = (SQLULEN)ValuePtr;
 			break;
+
 		case SQL_ATTR_ASYNC_ENABLE:
-			DBGH(stmt, "setting async_enable to: %u", (SQLULEN)ValuePtr);
-			stmt->async_enable = (SQLULEN)ValuePtr;
+			ERRH(stmt, "no support for async API (setting param: %llu)",
+					(SQLULEN)(uintptr_t)ValuePtr);
+			if ((SQLULEN)(uintptr_t)ValuePtr == SQL_ASYNC_ENABLE_ON) {
+				RET_HDIAGS(stmt, SQL_STATE_HYC00);
+			}
 			break;
+		case SQL_ATTR_ASYNC_STMT_EVENT:
+		// case SQL_ATTR_ASYNC_STMT_PCALLBACK:
+		// case SQL_ATTR_ASYNC_STMT_PCONTEXT:
+			ERRH(stmt, "no support for async API (attr: %ld)", Attribute);
+			RET_HDIAGS(stmt, SQL_STATE_S1118);
 
 		case SQL_ATTR_MAX_LENGTH:
 			ulen = (SQLULEN)ValuePtr;
@@ -834,8 +841,8 @@ SQLRETURN EsSQLGetStmtAttrW(
 			*(SQLULEN *)ValuePtr = stmt->metadata_id;
 			break;
 		case SQL_ATTR_ASYNC_ENABLE:
-			DBGH(stmt, "getting async_enable: %llu", stmt->async_enable);
-			*(SQLULEN *)ValuePtr = stmt->async_enable;
+			DBGH(stmt, "getting async mode: %llu", SQL_ASYNC_ENABLE_OFF);
+			*(SQLULEN *)ValuePtr = SQL_ASYNC_ENABLE_OFF;
 			break;
 		case SQL_ATTR_MAX_LENGTH:
 			DBGH(stmt, "getting max_length: %llu", stmt->max_length);

@@ -1575,10 +1575,26 @@ SQLRETURN EsSQLSetConnectAttrW(
 			DBGH(dbc, "setting metadata_id to %u.", (SQLULEN)Value);
 			dbc->metadata_id = (SQLULEN)Value;
 			break;
+
 		case SQL_ATTR_ASYNC_ENABLE:
-			DBGH(dbc, "setting async enable to %u.", (SQLULEN)Value);
-			dbc->async_enable = (SQLULEN)Value;
+			ERRH(dbc, "no support for async API (setting param: %llu)",
+				(SQLULEN)(uintptr_t)Value);
+			if ((SQLULEN)(uintptr_t)Value == SQL_ASYNC_ENABLE_ON) {
+				RET_HDIAGS(dbc, SQL_STATE_HYC00);
+			}
 			break;
+		case SQL_ATTR_ASYNC_DBC_FUNCTIONS_ENABLE:
+			ERRH(dbc, "no support for async API (setting param: %llu)",
+				(SQLULEN)(uintptr_t)Value);
+			if ((SQLULEN)(uintptr_t)Value == SQL_ASYNC_DBC_ENABLE_ON) {
+				RET_HDIAGS(dbc, SQL_STATE_HY114);
+			}
+			break;
+		case SQL_ATTR_ASYNC_DBC_EVENT:
+			// case SQL_ATTR_ASYNC_DBC_PCALLBACK:
+			// case SQL_ATTR_ASYNC_DBC_PCONTEXT:
+			ERRH(dbc, "no support for async API (attr: %ld)", Attribute);
+			RET_HDIAGS(dbc, SQL_STATE_S1118);
 
 		case SQL_ATTR_QUIET_MODE:
 			DBGH(dbc, "setting window handler to 0x%p.", Value);
@@ -1641,8 +1657,8 @@ SQLRETURN EsSQLGetConnectAttrW(
 			*(SQLULEN *)ValuePtr = dbc->metadata_id;
 			break;
 		case SQL_ATTR_ASYNC_ENABLE:
-			DBGH(dbc, "requested: async enable: %u.", dbc->async_enable);
-			*(SQLULEN *)ValuePtr = dbc->async_enable;
+			DBGH(dbc, "getting async mode: %llu", SQL_ASYNC_ENABLE_OFF);
+			*(SQLULEN *)ValuePtr = SQL_ASYNC_ENABLE_OFF;
 			break;
 
 		case SQL_ATTR_QUIET_MODE:

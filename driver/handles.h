@@ -155,7 +155,6 @@ typedef struct struct_dbc {
 
 	/* options */
 	SQLULEN metadata_id; // default: SQL_FALSE
-	SQLULEN async_enable; // default: SQL_ASYNC_ENABLE_OFF
 	SQLUINTEGER txn_isolation; // default: SQL_TXN_*
 } esodbc_dbc_st;
 
@@ -307,7 +306,6 @@ typedef struct struct_stmt {
 	/* options */
 	SQLULEN bookmarks; //default: SQL_UB_OFF
 	SQLULEN metadata_id; // default: copied from connection
-	SQLULEN async_enable; // default: copied from connection
 	/* "the maximum amount of data that the driver returns from a character or
 	 * binary column" */
 	SQLULEN max_length;

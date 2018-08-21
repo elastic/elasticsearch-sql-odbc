@@ -123,19 +123,29 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_SQL_SPEC_STRING),
 					BufferLength, StringLengthPtr);
 
+		case SQL_ASYNC_MODE:
+			DBGH(dbc, "requested: async mode (%lu).", SQL_AM_NONE);
+			*(SQLUINTEGER *)InfoValue = SQL_AM_NONE;
+			break;
+
 		/* "if the driver can execute functions asynchronously on the
 		 * connection handle" */
 		case SQL_ASYNC_DBC_FUNCTIONS:
-			/* TODO: review@alpha */
-			*(SQLUSMALLINT *)InfoValue = SQL_FALSE;
-			DBGH(dbc, "requested: support for async fuctions: no.");
+			DBGH(dbc, "requested: async DBC functions (no - %lu).",
+				SQL_ASYNC_DBC_NOT_CAPABLE);
+			*(SQLUINTEGER *)InfoValue = SQL_ASYNC_DBC_NOT_CAPABLE;
 			break;
 
 		/* "if the driver supports asynchronous notification" */
 		case SQL_ASYNC_NOTIFICATION:
-			// FIXME: review@alpha */
+			DBGH(dbc, "requested: async notification (no - %lu).",
+				SQL_ASYNC_NOTIFICATION_NOT_CAPABLE);
 			*(SQLUINTEGER *)InfoValue = SQL_ASYNC_NOTIFICATION_NOT_CAPABLE;
-			DBGH(dbc, "requested: support for async notifications: no.");
+			break;
+
+		case SQL_MAX_ASYNC_CONCURRENT_STATEMENTS:
+			DBGH(dbc, "requested: async concurrent statements (0).");
+			*(SQLUINTEGER *)InfoValue = 0;
 			break;
 
 		/* "the maximum number of active statements that the driver can
@@ -159,8 +169,6 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 
 		case SQL_GETDATA_EXTENSIONS:
 			DBGH(dbc, "requested: GetData extentions.");
-			// FIXME: review@alpha
-			// TODO: GetData review
 			*(SQLUINTEGER *)InfoValue = ESODBC_GETDATA_EXTENSIONS;
 			break;
 
