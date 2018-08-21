@@ -172,7 +172,22 @@ size_t ui64tot(uint64_t ui64, void *buff, BOOL wide);
 	(GetLastError() == ERROR_INSUFFICIENT_BUFFER)
 #define WCS2U8_ERRNO() GetLastError()
 
+
+/*
+ * Locking type and primitives.
+ */
+typedef SRWLOCK esodbc_mutex_lt;
+
+#define ESODBC_MUX_SINIT		SRWLOCK_INIT
+#define ESODBC_MUX_INIT(_m)		InitializeSRWLock(_m)
+#define ESODBC_MUX_DEL(_m)		/* not needed/possible */
+
+#define ESODBC_MUX_LOCK(_m)		AcquireSRWLockExclusive(_m)
+#define ESODBC_MUX_TRYLOCK(_m)	TryAcquireSRWLockExclusive(_m)
+#define ESODBC_MUX_UNLOCK(_m)	ReleaseSRWLockExclusive(_m)
+
 #else /* _WIN32 */
+
 #error "unsupported platform" /* TODO */
 /* "[R]eturns the number of bytes written into the multibyte output
  * string, excluding the terminating NULL (if any)".  Copies until \0 is

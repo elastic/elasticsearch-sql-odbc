@@ -743,9 +743,10 @@ SQLRETURN EsSQLGetDiagFieldW(
 			return write_wstr(&dummy, DiagInfoPtr, wstrp, BufferLength,
 					StringLengthPtr);
 
-		case SQL_DIAG_CONNECTION_NAME:
 		/* same as SQLGetInfo(SQL_DATA_SOURCE_NAME) */
-		case SQL_DIAG_SERVER_NAME: /* TODO: keep same as _CONNECTION_NAME? */
+		case SQL_DIAG_CONNECTION_NAME:
+		/* TODO: this must be the server name, not DSN. */
+		case SQL_DIAG_SERVER_NAME:
 			switch (HandleType) {
 				case SQL_HANDLE_DBC:
 					wstrp = &DBCH(Handle)->dsn;
@@ -920,7 +921,6 @@ SQLRETURN EsSQLGetFunctions(SQLHDBC ConnectionHandle,
 			}
 	}
 
-	// TODO: does this require connecting to the server?
 	return SQL_SUCCESS;
 }
 

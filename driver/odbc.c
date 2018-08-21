@@ -71,7 +71,7 @@ BOOL WINAPI DllMain(
 
 		// Perform any necessary cleanup.
 		case DLL_PROCESS_DETACH:
-			INFO("process %u dettached.", GetCurrentProcessId());
+			INFO("process %u dettaching.", GetCurrentProcessId());
 			driver_cleanup();
 			break;
 	}
@@ -88,6 +88,7 @@ SQLRETURN SQL_API SQLAllocHandle(SQLSMALLINT HandleType,
 {
 	SQLRETURN ret;
 	TRACE3(_IN, "dpp", HandleType, InputHandle, OutputHandle);
+	/* no synchronization required */
 	ret = EsSQLAllocHandle(HandleType, InputHandle, OutputHandle);
 	TRACE4(_OUT, "ddpp", ret, HandleType, InputHandle, *OutputHandle);
 	return ret;
@@ -132,8 +133,10 @@ SQLRETURN SQL_API SQLDriverConnectW
 	SQLRETURN ret;
 	TRACE8(_IN, "pppdpdpd", hdbc, hwnd, szConnStrIn, cchConnStrIn,
 		szConnStrOut, cchConnStrOutMax, pcchConnStrOut, fDriverCompletion);
+	HND_LOCK(hdbc);
 	ret = EsSQLDriverConnectW(hdbc, hwnd, szConnStrIn, cchConnStrIn,
 			szConnStrOut, cchConnStrOutMax, pcchConnStrOut, fDriverCompletion);
+	HND_UNLOCK(hdbc);
 	TRACE9(_OUT, "dppWdWdtd", ret, hdbc, hwnd, szConnStrIn, cchConnStrIn,
 		szConnStrOut, cchConnStrOutMax, pcchConnStrOut, fDriverCompletion);
 	return ret;
@@ -208,8 +211,14 @@ SQLRETURN  SQL_API SQLGetInfoW(SQLHDBC ConnectionHandle,
 	SQLRETURN ret;
 	TRACE5(_IN, "pupdp", ConnectionHandle, InfoType, InfoValue,
 		BufferLength, StringLengthPtr);
+	/* Note_sync: no synchronization really required for setting/getting of
+	 * integer attributes (atomic) or string ones (= reading static string
+	 * locations), but error handling involves posting an SQL state & string,
+	 * which needs serialization. */
+	HND_LOCK(ConnectionHandle);
 	ret = EsSQLGetInfoW(ConnectionHandle, InfoType, InfoValue,
 			BufferLength, StringLengthPtr);
+	HND_UNLOCK(ConnectionHandle);
 	TRACE6(_OUT, "dpupdt", ret, ConnectionHandle, InfoType,
 		InfoValue, BufferLength, StringLengthPtr);
 	return ret;
@@ -223,6 +232,7 @@ SQLRETURN  SQL_API SQLGetFunctions(SQLHDBC ConnectionHandle,
 {
 	SQLRETURN ret;
 	TRACE3(_IN, "pdp", ConnectionHandle, FunctionId, Supported);
+	/* no synchronization required */
 	ret = EsSQLGetFunctions(ConnectionHandle, FunctionId, Supported);
 	TRACE4(_IN, "dpdT", ret, ConnectionHandle, FunctionId, Supported);
 	return ret;
@@ -234,7 +244,9 @@ SQLRETURN SQL_API   SQLGetTypeInfoW(
 {
 	SQLRETURN ret;
 	TRACE2(_IN, "pd", StatementHandle, DataType);
+	HND_LOCK(StatementHandle);
 	ret = EsSQLGetTypeInfoW(StatementHandle, DataType);
+	HND_UNLOCK(StatementHandle);
 	TRACE3(_OUT, "dpd", ret, StatementHandle, DataType);
 	return ret;
 	//RET_NOT_IMPLEMENTED;
@@ -255,8 +267,10 @@ SQLRETURN  SQL_API SQLSetConnectAttrW(
 {
 	SQLRETURN ret;
 	TRACE4(_IN, "pdpd", ConnectionHandle, Attribute, Value, StringLength);
+	HND_LOCK(ConnectionHandle); /* see Note_sync above */
 	ret = EsSQLSetConnectAttrW(ConnectionHandle, Attribute, Value,
 			StringLength);
+	HND_UNLOCK(ConnectionHandle);
 	TRACE5(_OUT, "dpdpd", ret, ConnectionHandle, Attribute, Value,
 		StringLength);
 	return ret;
@@ -272,8 +286,10 @@ SQLRETURN SQL_API SQLGetConnectAttrW(
 	SQLRETURN ret;
 	TRACE5(_IN, "pdpdp", ConnectionHandle, Attribute, ValuePtr,
 		BufferLength, StringLengthPtr);
+	HND_LOCK(ConnectionHandle);
 	ret = EsSQLGetConnectAttrW(ConnectionHandle, Attribute, ValuePtr,
 			BufferLength, StringLengthPtr);
+	HND_UNLOCK(ConnectionHandle);
 	TRACE6(_OUT, "dpdpdg", ret, ConnectionHandle, Attribute, ValuePtr,
 		BufferLength, StringLengthPtr);
 	return ret;
@@ -287,7 +303,9 @@ SQLRETURN  SQL_API SQLSetEnvAttr(SQLHENV EnvironmentHandle,
 {
 	SQLRETURN ret;
 	TRACE4(_IN, "pdpd", EnvironmentHandle, Attribute, Value, StringLength);
+	HND_LOCK(EnvironmentHandle); /* see Note_sync above */
 	ret = EsSQLSetEnvAttr(EnvironmentHandle, Attribute, Value, StringLength);
+	HND_UNLOCK(EnvironmentHandle);
 	TRACE5(_OUT, "dpdpd", ret, EnvironmentHandle, Attribute, Value,
 		StringLength);
 	return ret;
@@ -301,8 +319,10 @@ SQLRETURN  SQL_API SQLGetEnvAttr(SQLHENV EnvironmentHandle,
 	SQLRETURN ret;
 	TRACE5(_IN, "pdpdp", EnvironmentHandle, Attribute, Value, BufferLength,
 		StringLength);
+	HND_LOCK(EnvironmentHandle); /* see Note_sync above */
 	ret = EsSQLGetEnvAttr(EnvironmentHandle, Attribute, Value, BufferLength,
 			StringLength);
+	HND_UNLOCK(EnvironmentHandle);
 	TRACE6(_OUT, "dpdpdg", ret, EnvironmentHandle, Attribute, Value,
 		BufferLength, StringLength);
 	return ret;
@@ -316,8 +336,10 @@ SQLRETURN SQL_API SQLSetStmtAttrW(
 {
 	SQLRETURN ret;
 	TRACE4(_IN, "pdpd", StatementHandle, Attribute, ValuePtr, BufferLength);
+	HND_LOCK(StatementHandle);
 	ret = EsSQLSetStmtAttrW(StatementHandle, Attribute, ValuePtr,
 			BufferLength);
+	HND_UNLOCK(StatementHandle);
 	TRACE5(_OUT, "dpdpd", ret, StatementHandle, Attribute, ValuePtr,
 		BufferLength);
 	return ret;
@@ -333,8 +355,10 @@ SQLRETURN SQL_API SQLGetStmtAttrW(
 	SQLRETURN ret;
 	TRACE5(_IN, "pdpdp", StatementHandle, Attribute, ValuePtr, BufferLength,
 		StringLengthPtr);
+	HND_LOCK(StatementHandle);
 	ret = EsSQLGetStmtAttrW(StatementHandle, Attribute, ValuePtr, BufferLength,
 			StringLengthPtr);
+	HND_UNLOCK(StatementHandle);
 	TRACE6(_OUT, "dpdpdg", ret, StatementHandle, Attribute, ValuePtr,
 		BufferLength, StringLengthPtr);
 	return ret;
@@ -359,13 +383,42 @@ SQLRETURN SQL_API SQLGetDescFieldW(
 	SQLRETURN ret;
 	TRACE6(_IN, "pddpdp", DescriptorHandle, RecNumber, FieldIdentifier,
 		ValuePtr, BufferLength, StringLengthPtr);
+	/* Note_stmt_sync: API descriptor access is serialized by statement's
+	 * mutex, not descriptor's, since statement functions working on
+	 * descriptors won't lock these, but will lock the statement instead
+	 * (which keeps the code simpler; besides, no "high-speed" concurrent
+	 * thread access on descriptors is necessary anyway). */
+	HND_LOCK(DSCH(DescriptorHandle)->hdr.stmt);
 	ret = EsSQLGetDescFieldW(DescriptorHandle, RecNumber, FieldIdentifier,
 			ValuePtr, BufferLength, StringLengthPtr);
+	HND_UNLOCK(DSCH(DescriptorHandle)->hdr.stmt);
 	TRACE7(_OUT, "dpddpdg", ret, DescriptorHandle, RecNumber, FieldIdentifier,
 		ValuePtr, BufferLength, StringLengthPtr);
 	return ret;
 }
 
+SQLRETURN  SQL_API SQLSetDescFieldW
+(
+	SQLHDESC        DescriptorHandle,
+	SQLSMALLINT     RecNumber,
+	SQLSMALLINT     FieldIdentifier,
+	SQLPOINTER      Value,
+	SQLINTEGER      BufferLength
+)
+{
+	SQLRETURN ret;
+	TRACE5(_IN, "pddpd", DescriptorHandle, RecNumber, FieldIdentifier,
+		Value, BufferLength);
+	HND_LOCK(DSCH(DescriptorHandle)->hdr.stmt); /* see Note_stmt_sync */
+	ret = EsSQLSetDescFieldW(DescriptorHandle, RecNumber, FieldIdentifier,
+			Value, BufferLength);
+	HND_UNLOCK(DSCH(DescriptorHandle)->hdr.stmt);
+	TRACE6(_OUT, "dpddpd", ret, DescriptorHandle, RecNumber, FieldIdentifier,
+		Value, BufferLength);
+	return ret;
+}
+
+#if WITH_EMPTY
 SQLRETURN SQL_API SQLGetDescRecW(
 	SQLHDESC        DescriptorHandle,
 	SQLSMALLINT     RecNumber,
@@ -388,42 +441,9 @@ SQLRETURN SQL_API SQLGetDescRecW(
 	_Out_opt_
 	SQLSMALLINT     *NullablePtr)
 {
-#if 0
-	SQLRETURN ret;
-	TRACE11(_IN, "pdpdppppppp", DescriptorHandle, RecNumber, Name,
-		BufferLength, StringLengthPtr, TypePtr, SubTypePtr, LengthPtr,
-		PrecisionPtr, ScalePtr, NullablePtr);
-	ret = EsSQLGetDescRecW(DescriptorHandle, RecNumber, Name,
-			BufferLength, StringLengthPtr, TypePtr, SubTypePtr, LengthPtr,
-			PrecisionPtr, ScalePtr, NullablePtr);
-	TRACE12(_OUT, "dpdWdttttttt", ret, DescriptorHandle, RecNumber, Name,
-		BufferLength, StringLengthPtr, TypePtr, SubTypePtr, LengthPtr,
-		PrecisionPtr, ScalePtr, NullablePtr);
-	return ret;
-#else //0
 	RET_NOT_IMPLEMENTED;
-#endif //0
 }
 
-
-SQLRETURN  SQL_API SQLSetDescFieldW
-(
-	SQLHDESC        DescriptorHandle,
-	SQLSMALLINT     RecNumber,
-	SQLSMALLINT     FieldIdentifier,
-	SQLPOINTER      Value,
-	SQLINTEGER      BufferLength
-)
-{
-	SQLRETURN ret;
-	TRACE5(_IN, "pddpd", DescriptorHandle, RecNumber, FieldIdentifier,
-		Value, BufferLength);
-	ret = EsSQLSetDescFieldW(DescriptorHandle, RecNumber, FieldIdentifier,
-			Value, BufferLength);
-	TRACE6(_OUT, "dpddpd", ret, DescriptorHandle, RecNumber, FieldIdentifier,
-		Value, BufferLength);
-	return ret;
-}
 
 SQLRETURN  SQL_API SQLSetDescRec(
 	SQLHDESC DescriptorHandle,
@@ -437,21 +457,9 @@ SQLRETURN  SQL_API SQLSetDescRec(
 	_Inout_opt_ SQLLEN *StringLength,
 	_Inout_opt_ SQLLEN *Indicator)
 {
-#if 0
-	SQLRETURN ret;
-	TRACE10(_IN, "pddddddppp", DescriptorHandle, RecNumber, Type, SubType,
-		Length, Precision, Scale, Data, StringLength, Indicator);
-	ret = EsSQLSetDescRec(DescriptorHandle, RecNumber, Type, SubType,
-			Length, Precision, Scale, Data, StringLength, Indicator);
-	TRACE11(_OUT, "dpddddddpnn", ret, DescriptorHandle, RecNumber, Type,
-		SubType, Length, Precision, Scale, Data, StringLength, Indicator);
-	return ret;
-#else //0
 	RET_NOT_IMPLEMENTED;
-#endif //0
 }
 
-#if WITH_EMPTY
 /*
  * "SQLCopyDesc function is called to copy the fields of one descriptor to
  * another descriptor. Fields can be copied only to an application descriptor
@@ -487,7 +495,9 @@ SQLRETURN SQL_API SQLPrepareW
 {
 	SQLRETURN ret;
 	TRACE3(_IN, "ppd", hstmt, szSqlStr, cchSqlStr);
+	HND_LOCK(hstmt);
 	ret = EsSQLPrepareW(hstmt, szSqlStr, cchSqlStr);
+	HND_UNLOCK(hstmt);
 	TRACE4(_OUT, "dpWd", ret, hstmt, szSqlStr, cchSqlStr);
 	return ret;
 }
@@ -513,8 +523,10 @@ SQLRETURN SQL_API SQLBindParameter(
 	SQLRETURN ret;
 	TRACE10(_IN, "pudddudpdp", hstmt, ipar, fParamType, fCType,
 		fSqlType, cbColDef, ibScale, rgbValue, cbValueMax, pcbValue);
+	HND_LOCK(hstmt);
 	ret = EsSQLBindParameter(hstmt, ipar, fParamType, fCType,
 			fSqlType, cbColDef, ibScale, rgbValue, cbValueMax, pcbValue);
+	HND_UNLOCK(hstmt);
 	TRACE11(_OUT, "dpudddudpdn", ret, hstmt, ipar, fParamType, fCType,
 		fSqlType, cbColDef, ibScale, rgbValue, cbValueMax, pcbValue);
 	return ret;
@@ -573,10 +585,11 @@ SQLRETURN SQL_API SQLSetScrollOptions(    /*      Use SQLSetStmtOptions */
  */
 SQLRETURN  SQL_API SQLExecute(SQLHSTMT hstmt)
 {
-	// TODO: set .stmt_curs = 0; in resultset
 	SQLRETURN ret;
 	TRACE1(_IN, "p", hstmt);
+	HND_LOCK(hstmt);
 	ret = EsSQLExecute(hstmt);
+	HND_UNLOCK(hstmt);
 	TRACE2(_OUT, "dp", ret, hstmt);
 	return ret;
 }
@@ -602,7 +615,9 @@ SQLRETURN SQL_API SQLExecDirectW
 {
 	SQLRETURN ret;
 	TRACE3(_IN, "ppd", hstmt, szSqlStr, cchSqlStr);
+	HND_LOCK(hstmt);
 	ret = EsSQLExecDirectW(hstmt, szSqlStr, cchSqlStr);
+	HND_UNLOCK(hstmt);
 	TRACE4(_OUT, "dpWd", ret, hstmt, szSqlStr, cchSqlStr);
 	return ret;
 }
@@ -652,7 +667,9 @@ SQLRETURN SQL_API SQLNumParams(
 {
 	SQLRETURN ret;
 	TRACE2(_IN, "pp", hstmt, pcpar);
+	HND_LOCK(hstmt);
 	ret = EsSQLNumParams(hstmt, pcpar);
+	HND_UNLOCK(hstmt);
 	TRACE3(_OUT, "dpt", ret, hstmt, pcpar);
 	return ret;
 }
@@ -683,7 +700,9 @@ SQLRETURN  SQL_API SQLRowCount(_In_ SQLHSTMT StatementHandle,
 {
 	SQLRETURN ret;
 	TRACE2(_IN, "pp", StatementHandle, RowCount);
+	HND_LOCK(StatementHandle); /* see Note_sync */
 	ret = EsSQLRowCount(StatementHandle, RowCount);
+	HND_UNLOCK(StatementHandle);
 	TRACE3(_OUT, "dpn", ret, StatementHandle, RowCount);
 	return ret;
 }
@@ -693,7 +712,9 @@ SQLRETURN  SQL_API SQLNumResultCols(SQLHSTMT StatementHandle,
 {
 	SQLRETURN ret;
 	TRACE2(_IN, "pp", StatementHandle, ColumnCount);
+	HND_LOCK(StatementHandle); /* see Note_sync */
 	ret = EsSQLNumResultCols(StatementHandle, ColumnCount);
+	HND_UNLOCK(StatementHandle);
 	TRACE3(_OUT, "dpt", ret, StatementHandle, ColumnCount);
 	return ret;
 }
@@ -721,8 +742,10 @@ SQLRETURN SQL_API SQLDescribeColW
 	SQLRETURN ret;
 	TRACE9(_IN, "pupdppppp", hstmt, icol, szColName, cchColNameMax,
 		pcchColName, pfSqlType, pcbColDef, pibScale, pfNullable);
+	HND_LOCK(hstmt);
 	ret = EsSQLDescribeColW(hstmt, icol, szColName, cchColNameMax,
 			pcchColName, pfSqlType, pcbColDef, pibScale, pfNullable);
+	HND_UNLOCK(hstmt);
 	TRACE10(_OUT, "dpuWdttNtt", ret, hstmt, icol, szColName, cchColNameMax,
 		pcchColName, pfSqlType, pcbColDef, pibScale, pfNullable);
 	return ret;
@@ -749,8 +772,10 @@ SQLRETURN SQL_API SQLColAttributeW
 	SQLRETURN ret;
 	TRACE7(_IN, "pddpdtp", hstmt, iCol, iField, pCharAttr, cbDescMax,
 		pcbCharAttr, pNumAttr);
+	HND_LOCK(hstmt);
 	ret = EsSQLColAttributeW(hstmt, iCol, iField, pCharAttr, cbDescMax,
 			pcbCharAttr, pNumAttr);
+	HND_UNLOCK(hstmt);
 #ifdef _WIN64
 	TRACE8(_OUT, "dpddpdtn", ret, hstmt, iCol, iField, pCharAttr, cbDescMax,
 		pcbCharAttr, pNumAttr);
@@ -771,8 +796,10 @@ SQLRETURN  SQL_API SQLBindCol(SQLHSTMT StatementHandle,
 	SQLRETURN ret;
 	TRACE6(_IN, "pddpdp", StatementHandle, ColumnNumber, TargetType,
 		TargetValue, BufferLength, StrLen_or_Ind);
+	HND_LOCK(StatementHandle);
 	ret = EsSQLBindCol(StatementHandle, ColumnNumber, TargetType,
 			TargetValue, BufferLength, StrLen_or_Ind);
+	HND_UNLOCK(StatementHandle);
 	TRACE7(_OUT, "dpddpdn", ret, StatementHandle, ColumnNumber, TargetType,
 		TargetValue, BufferLength, StrLen_or_Ind);
 	return ret;
@@ -783,7 +810,9 @@ SQLRETURN  SQL_API SQLFetch(SQLHSTMT StatementHandle)
 {
 	SQLRETURN ret;
 	TRACE1(_IN, "p", StatementHandle);
+	HND_LOCK(StatementHandle);
 	ret = EsSQLFetch(StatementHandle);
+	HND_UNLOCK(StatementHandle);
 	TRACE2(_OUT, "dp", ret, StatementHandle);
 	return ret;
 }
@@ -833,8 +862,10 @@ SQLRETURN SQL_API SQLGetData(SQLHSTMT StatementHandle,
 	SQLRETURN ret;
 	TRACE6(_IN, "pHhplp", StatementHandle, ColumnNumber, TargetType,
 		TargetValuePtr, BufferLength, StrLen_or_IndPtr);
+	HND_LOCK(StatementHandle);
 	ret = EsSQLGetData(StatementHandle, ColumnNumber, TargetType,
 			TargetValuePtr, BufferLength, StrLen_or_IndPtr);
+	HND_UNLOCK(StatementHandle);
 	TRACE7(_OUT, "dpHhpln", ret, StatementHandle, ColumnNumber, TargetType,
 		TargetValuePtr, BufferLength, StrLen_or_IndPtr);
 	return ret;
@@ -848,7 +879,9 @@ SQLRETURN SQL_API SQLSetPos(
 {
 	SQLRETURN ret;
 	TRACE4(_IN, "puuu", StatementHandle, RowNumber, Operation, LockType);
+	HND_LOCK(StatementHandle);
 	ret = EsSQLSetPos(StatementHandle, RowNumber, Operation, LockType);
+	HND_UNLOCK(StatementHandle);
 	TRACE5(_OUT, "dpuuu", ret,StatementHandle, RowNumber, Operation, LockType);
 	return ret;
 }
@@ -859,7 +892,9 @@ SQLRETURN   SQL_API SQLBulkOperations(
 {
 	SQLRETURN ret;
 	TRACE2(_IN, "pd", StatementHandle, Operation);
+	HND_LOCK(StatementHandle);
 	ret = EsSQLBulkOperations(StatementHandle, Operation);
+	HND_UNLOCK(StatementHandle);
 	TRACE3(_OUT, "dpd", ret, StatementHandle, Operation);
 	return ret;
 }
@@ -868,6 +903,7 @@ SQLRETURN SQL_API SQLMoreResults(SQLHSTMT StatementHandle)
 {
 	SQLRETURN ret;
 	TRACE1(_IN, "p", StatementHandle);
+	/* no synchronization required */
 	ret = EsSQLMoreResults(StatementHandle);
 	TRACE2(_OUT, "dp", ret, StatementHandle);
 	return ret;
@@ -886,8 +922,12 @@ SQLRETURN  SQL_API SQLGetDiagFieldW(
 	SQLRETURN ret;
 	TRACE7(_IN, "dpddpdp", HandleType, Handle, RecNumber, DiagIdentifier,
 		DiagInfoPtr, BufferLength, StringLengthPtr);
+	/* Note_diag: locking here only really makes sense for stmt and dbc, but
+	 * uniformly locking env and desc too is harmless and simple */
+	HND_LOCK(Handle);
 	ret = EsSQLGetDiagFieldW(HandleType, Handle, RecNumber, DiagIdentifier,
 			DiagInfoPtr, BufferLength, StringLengthPtr);
+	HND_UNLOCK(Handle);
 	TRACE8(_OUT, "ddpddpdt", ret, HandleType, Handle, RecNumber,
 		DiagIdentifier, DiagInfoPtr, BufferLength, StringLengthPtr);
 	return ret;
@@ -908,8 +948,10 @@ SQLRETURN  SQL_API SQLGetDiagRecW
 	SQLRETURN ret;
 	TRACE8(_IN, "dpdpppdp", HandleType, Handle, RecNumber, Sqlstate,
 		NativeError, MessageText, BufferLength, TextLength);
+	HND_LOCK(Handle); /* see Note_diag */
 	ret = EsSQLGetDiagRecW(HandleType, Handle, RecNumber, Sqlstate,
 			NativeError, MessageText, BufferLength, TextLength);
+	HND_UNLOCK(Handle);
 	TRACE9(_OUT, "ddpdWgWdt", ret, HandleType, Handle, RecNumber, Sqlstate,
 		NativeError, MessageText, BufferLength, TextLength);
 	return ret;
@@ -956,9 +998,11 @@ SQLRETURN SQL_API SQLColumnsW
 	TRACE9(_IN, "ppdpdpdpd", hstmt, szCatalogName, cchCatalogName,
 		szSchemaName, cchSchemaName, szTableName, cchTableName,
 		szColumnName, cchColumnName);
+	HND_LOCK(hstmt);
 	ret = EsSQLColumnsW(hstmt, szCatalogName, cchCatalogName,
 			szSchemaName, cchSchemaName, szTableName, cchTableName,
 			szColumnName, cchColumnName);
+	HND_UNLOCK(hstmt);
 	TRACE10(_OUT, "dpWdWdWdWd", ret, hstmt, szCatalogName, cchCatalogName,
 		szSchemaName, cchSchemaName, szTableName, cchTableName,
 		szColumnName, cchColumnName);
@@ -990,6 +1034,7 @@ SQLRETURN SQL_API SQLForeignKeysW
 		szFkCatalogName, cchFkCatalogName,
 		szFkSchemaName, cchFkSchemaName,
 		szFkTableName, cchFkTableName);
+	HND_LOCK(hstmt);
 	ret = EsSQLForeignKeysW(hstmt,
 			szPkCatalogName, cchPkCatalogName,
 			szPkSchemaName, cchPkSchemaName,
@@ -997,6 +1042,7 @@ SQLRETURN SQL_API SQLForeignKeysW
 			szFkCatalogName, cchFkCatalogName,
 			szFkSchemaName, cchFkSchemaName,
 			szFkTableName, cchFkTableName);
+	HND_UNLOCK(hstmt);
 	TRACE14(_OUT, "dpWdWdWdWdWdWd", ret, hstmt,
 		szPkCatalogName, cchPkCatalogName,
 		szPkSchemaName, cchPkSchemaName,
@@ -1024,10 +1070,12 @@ SQLRETURN SQL_API SQLPrimaryKeysW
 		szCatalogName, cchCatalogName,
 		szSchemaName, cchSchemaName,
 		szTableName, cchTableName);
+	HND_LOCK(hstmt);
 	ret = EsSQLPrimaryKeysW(hstmt,
 			szCatalogName, cchCatalogName,
 			szSchemaName, cchSchemaName,
 			szTableName, cchTableName);
+	HND_UNLOCK(hstmt);
 	TRACE8(_OUT, "dpWdWdWd", ret, hstmt,
 		szCatalogName, cchCatalogName,
 		szSchemaName, cchSchemaName,
@@ -1085,9 +1133,11 @@ SQLRETURN SQL_API SQLSpecialColumnsW
 	TRACE10(_IN, "pupdpdpduu", hstmt, fColType, szCatalogName,
 		cchCatalogName, szSchemaName, cchSchemaName, szTableName,
 		cchTableName, fScope, fNullable);
+	HND_LOCK(hstmt);
 	ret = EsSQLSpecialColumnsW(hstmt, fColType, szCatalogName,
 			cchCatalogName, szSchemaName, cchSchemaName, szTableName,
 			cchTableName, fScope, fNullable);
+	HND_UNLOCK(hstmt);
 	TRACE11(_OUT, "dpuWdWdWduu", ret, hstmt, fColType, szCatalogName,
 		cchCatalogName, szSchemaName, cchSchemaName, szTableName,
 		cchTableName, fScope, fNullable);
@@ -1144,9 +1194,11 @@ SQLRETURN SQL_API SQLTablesW
 	TRACE9(_IN, "ppdpdpdpd", hstmt, szCatalogName, cchCatalogName,
 		szSchemaName, cchSchemaName, szTableName, cchTableName,
 		szTableType, cchTableType);
+	HND_LOCK(hstmt);
 	ret = EsSQLTablesW(hstmt, szCatalogName, cchCatalogName,
 			szSchemaName, cchSchemaName, szTableName, cchTableName,
 			szTableType, cchTableType);
+	HND_UNLOCK(hstmt);
 	TRACE10(_OUT, "dpWdWdWdWd", ret, hstmt, szCatalogName, cchCatalogName,
 		szSchemaName, cchSchemaName, szTableName, cchTableName,
 		szTableType, cchTableType);
@@ -1164,7 +1216,9 @@ SQLRETURN  SQL_API SQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option)
 {
 	SQLRETURN ret;
 	TRACE2(_IN, "pd", StatementHandle, Option);
+	HND_LOCK(StatementHandle);
 	ret = EsSQLFreeStmt(StatementHandle, Option);
+	HND_UNLOCK(StatementHandle);
 	TRACE3(_OUT, "dpd", ret, StatementHandle, Option);
 	return ret;
 }
@@ -1173,30 +1227,42 @@ SQLRETURN  SQL_API SQLCloseCursor(SQLHSTMT StatementHandle)
 {
 	SQLRETURN ret;
 	TRACE1(_IN, "p", StatementHandle);
+	HND_LOCK(StatementHandle);
 	ret = EsSQLCloseCursor(StatementHandle);
-	TRACE2(_OUT, "dpd", ret, StatementHandle);
+	HND_UNLOCK(StatementHandle);
+	TRACE2(_OUT, "dp", ret, StatementHandle);
 	return ret;
 }
 
-#if WITH_EMPTY
-
 SQLRETURN  SQL_API SQLCancel(SQLHSTMT StatementHandle)
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE1(_IN, "p", StatementHandle);
+	HND_LOCK(StatementHandle);
+	ret = EsSQLCancel(StatementHandle);
+	HND_UNLOCK(StatementHandle);
+	TRACE2(_OUT, "dp", ret, StatementHandle);
+	return ret;
 }
 
 SQLRETURN  SQL_API SQLCancelHandle(SQLSMALLINT HandleType,
 	SQLHANDLE InputHandle)
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE2(_IN, "hp", HandleType, InputHandle);
+	HND_LOCK(InputHandle);
+	ret = EsSQLCancelHandle(HandleType, InputHandle);
+	HND_UNLOCK(InputHandle);
+	TRACE3(_IN, "dhp", ret, HandleType, InputHandle);
+	return ret;
 }
 
+#if WITH_EMPTY
 SQLRETURN  SQL_API SQLEndTran(SQLSMALLINT HandleType, SQLHANDLE Handle,
 	SQLSMALLINT CompletionType)
 {
 	RET_NOT_IMPLEMENTED;
 }
-
 #endif /* WITH_EMPTY */
 
 
@@ -1209,7 +1275,9 @@ SQLRETURN  SQL_API SQLDisconnect(SQLHDBC ConnectionHandle)
 {
 	SQLRETURN ret;
 	TRACE1(_IN, "p", ConnectionHandle);
+	HND_LOCK(ConnectionHandle);
 	ret = EsSQLDisconnect(ConnectionHandle);
+	HND_UNLOCK(ConnectionHandle);
 	TRACE2(_OUT, "dp", ret, ConnectionHandle);
 	return ret;
 }
@@ -1218,126 +1286,14 @@ SQLRETURN  SQL_API SQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 {
 	SQLRETURN ret;
 	TRACE2(_IN, "dp", HandleType, Handle);
+	if (! HND_TRYLOCK(Handle)) {
+		BUGH(Handle, "handle still locked while freeing attempt.");
+		return SQL_ERROR;
+	}
 	ret = EsSQLFreeHandle(HandleType, Handle);
 	TRACE3(_OUT, "ddp", ret, HandleType, Handle);
 	return ret;
 }
 
-
-#if 0
-// API
-
-SQLAllocHandle
-SQLConnect
-SQLDriverConnect
-SQLBrowseConnect
-
-SQLDataSources
-SQLDrivers
-SQLGetInfo
-SQLGetFunctions
-SQLGetTypeInfo
-
-SQLSetConnectAttr
-SQLGetConnectAttr
-SQLSetEnvAttr
-SQLGetEnvAttr
-SQLSetStmtAttr
-SQLGetStmtAttr
-
-SQLGetDescField
-SQLGetDescRec
-SQLSetDescField
-SQLSetDescRec
-SQLCopyDesc
-SQLPrepare
-SQLBindParameter
-SQLGetCursorName
-SQLSetCursorName
-SQLSetScrollOptions
-
-SQLExecute
-SQLExecDirect
-SQLNativeSql
-SQLDescribeParam
-SQLNumParams
-SQLParamData
-SQLPutData
-
-SQLRowCount
-SQLNumResultCols
-SQLDescribeCol
-SQLColAttribute
-SQLBindCol
-SQLFetch
-SQLFetchScroll
-SQLGetData
-SQLSetPos
-SQLBulkOperations
-SQLMoreResults
-SQLGetDiagField
-SQLGetDiagRec
-
-SQLColumnPrivileges
-SQLColumns
-SQLForeignKeys
-SQLPrimaryKeys
-SQLProcedureColumns
-SQLProcedures
-SQLSpecialColumns
-SQLStatistics
-SQLTablePrivileges
-SQLTables
-
-SQLFreeStmt
-SQLCloseCursor
-SQLCancel
-SQLCancelHandle
-SQLEndTran
-
-SQLDisconnect
-SQLFreeHandle
-#endif
-
-#if 0
-//ANSI / Unicode
-
-SQLBrowseConnect
-SQLColAttribute
-SQLColAttributes
-SQLColumnPrivileges
-SQLColumns
-SQLConnect
-SQLDataSources
-SQLDescribeCol
-SQLDriverConnect
-SQLDrivers
-SQLError
-SQLExecDirect
-SQLForeignKeys
-SQLGetConnectAttr
-SQLGetConnectOption
-SQLGetCursorName
-SQLGetDescField
-SQLGetDescRec
-SQLGetDiagField
-SQLGetDiagRec
-SQLGetInfo
-SQLGetStmtAttr
-SQLNativeSQL
-SQLPrepare
-SQLPrimaryKeys
-SQLProcedureColumns
-SQLProcedures
-SQLSetConnectAttr
-SQLSetConnectOption
-SQLSetCursorName
-SQLSetDescField
-SQLSetStmtAttr
-SQLSpecialColumns
-SQLStatistics
-SQLTablePrivileges
-SQLTables
-#endif
 
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */

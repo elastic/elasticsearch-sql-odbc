@@ -28,6 +28,8 @@ typedef struct struct_hheader { /* handle header */
 	SQLSMALLINT type;
 	/* diagnostic/state keeping */
 	esodbc_diag_st diag;
+	/* ODBC API multi-threading exclusive lock */
+	esodbc_mutex_lt mutex;
 	/* back reference to "parent" structure (in type hierarchy) */
 	union {
 		struct struct_env *env;
@@ -145,13 +147,10 @@ typedef struct struct_dbc {
 	size_t alen; /* size of abuff */
 	size_t apos; /* current write position in the abuff */
 	size_t amax; /* maximum length (bytes) that abuff can grow to */
+	esodbc_mutex_lt curl_mux; /* mutex for above 'networking' members */
 
 	/* window handler */
 	HWND hwin;
-	/* "the catalog is a database", "For a single-tier driver, the catalog
-	 * might be a directory" */
-	SQLWCHAR *catalog;
-	// TODO: statement list?
 
 	/* options */
 	SQLULEN metadata_id; // default: SQL_FALSE
@@ -435,12 +434,22 @@ SQLRETURN EsSQLSetDescRec(
 	_Inout_opt_ SQLLEN *Indicator);
 
 
+/*
+ * Macros to convert ODBC API generic handles into implementation types.
+ */
 #define ENVH(_h)	((esodbc_env_st *)(_h))
 #define DBCH(_h)	((esodbc_dbc_st *)(_h))
 #define STMH(_h)	((esodbc_stmt_st *)(_h))
 #define DSCH(_h)	((esodbc_desc_st *)(_h))
 /* this will only work if member stays first in handles (see struct decl). */
 #define HDRH(_h)	((esodbc_hhdr_st *)(_h))
+
+/*
+ * Locking macros for ODBC API calls.
+ */
+#define HND_LOCK(_h)	ESODBC_MUX_LOCK(&HDRH(_h)->mutex)
+#define HND_TRYLOCK(_h)	ESODBC_MUX_TRYLOCK(&HDRH(_h)->mutex)
+#define HND_UNLOCK(_h)	ESODBC_MUX_UNLOCK(&HDRH(_h)->mutex)
 
 
 /* wraper of RET_CDIAG, compatible with any defined handle */

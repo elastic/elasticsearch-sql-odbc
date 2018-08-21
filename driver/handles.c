@@ -51,6 +51,7 @@ static void init_hheader(esodbc_hhdr_st *hdr, SQLSMALLINT type, void *parent)
 {
 	hdr->type = type;
 	init_diagnostic(&hdr->diag);
+	ESODBC_MUX_INIT(&hdr->mutex);
 	hdr->parent = parent;
 }
 
@@ -262,6 +263,8 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			stmt->metadata_id = dbc->metadata_id;
 			stmt->sql2c_conversion = CONVERSION_UNCHECKED;
 
+			ESODBC_MUX_INIT(&dbc->curl_mux);
+
 			DBGH(dbc, "new Statement handle allocated @0x%p.", *OutputHandle);
 			break;
 
@@ -301,6 +304,7 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 
 SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 {
+	esodbc_dbc_st *dbc;
 	esodbc_stmt_st *stmt;
 	esodbc_desc_st *desc;
 
@@ -312,13 +316,13 @@ SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 	switch(HandleType) {
 		case SQL_HANDLE_ENV: /* Environment Handle */
 			// TODO: check if there are connections (_DBC)
-			free(Handle);
 			break;
 		case SQL_HANDLE_DBC: /* Connection Handle */
 			// TODO: remove from (potential) list?
+			dbc = DBCH(Handle);
 			/* app/DM should have SQLDisconnect'ed, but just in case  */
-			cleanup_dbc(DBCH(Handle));
-			free(Handle);
+			cleanup_dbc(dbc);
+			ESODBC_MUX_DEL(&dbc->curl_mux);
 			break;
 		case SQL_HANDLE_STMT:
 			// TODO: remove from (potential) list?
@@ -330,7 +334,6 @@ SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 			clear_desc(stmt->ird, FALSE);
 			clear_desc(stmt->apd, FALSE);
 			clear_desc(stmt->ipd, FALSE);
-			free(stmt);
 			break;
 
 		// FIXME:
@@ -354,6 +357,8 @@ SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 			return SQL_INVALID_HANDLE;
 	}
 
+	ESODBC_MUX_DEL(&HDRH(Handle)->mutex);
+	free(Handle);
 	return SQL_SUCCESS;
 }
 
@@ -477,7 +482,7 @@ SQLRETURN EsSQLSetEnvAttr(SQLHENV EnvironmentHandle,
 		case SQL_ATTR_CONNECTION_POOLING:
 		case SQL_ATTR_CP_MATCH:
 			RET_HDIAG(ENVH(EnvironmentHandle), SQL_STATE_HYC00,
-				"Connection pooling not yet supported", 0);
+				"Connection pooling not supported", 0);
 
 		case SQL_ATTR_ODBC_VERSION:
 			switch ((intptr_t)Value) {

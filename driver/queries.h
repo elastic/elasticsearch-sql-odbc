@@ -45,6 +45,8 @@ SQLRETURN EsSQLBulkOperations(
 	SQLSMALLINT         Operation);
 SQLRETURN EsSQLMoreResults(SQLHSTMT hstmt);
 SQLRETURN EsSQLCloseCursor(SQLHSTMT StatementHandle);
+SQLRETURN EsSQLCancel(SQLHSTMT StatementHandle);
+SQLRETURN EsSQLCancelHandle(SQLSMALLINT HandleType, SQLHANDLE InputHandle);
 SQLRETURN EsSQLNumResultCols(SQLHSTMT StatementHandle,
 	_Out_ SQLSMALLINT *ColumnCount);
 

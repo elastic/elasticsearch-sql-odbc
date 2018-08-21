@@ -1180,6 +1180,32 @@ SQLRETURN EsSQLCloseCursor(SQLHSTMT StatementHandle)
 	return EsSQLFreeStmt(StatementHandle, SQL_CLOSE);
 }
 
+SQLRETURN EsSQLCancel(SQLHSTMT StatementHandle)
+{
+	esodbc_stmt_st *stmt = STMH(StatementHandle);
+
+	/*
+	 * Use cases:
+	 * - "A function running asynchronously on the statement.": no async
+	 *   support.
+	 * - "A function on a statement that needs data." TODO: if data-at-exec.
+	 * - "A function running on the statement on another thread.": this could
+	 *   theoretically cancel an ongoing fetch/connect/etc. For now libcurl is
+	 *   left to timeout -- TODO: if swiching to "multi" API in libcurl.
+	 *   XXX: for this last case: stmt lock is being held here.
+	 */
+
+	DBGH(stmt, "canceling current statement operation -- NOOP.");
+	return SQL_SUCCESS;
+}
+
+SQLRETURN EsSQLCancelHandle(SQLSMALLINT HandleType, SQLHANDLE InputHandle)
+{
+	/* see EsSQLCancel() */
+	DBGH(InputHandle, "canceling current handle operation -- NOOP.");
+	return SQL_SUCCESS;
+}
+
 SQLRETURN EsSQLNumResultCols(SQLHSTMT StatementHandle,
 	_Out_ SQLSMALLINT *ColumnCount)
 {

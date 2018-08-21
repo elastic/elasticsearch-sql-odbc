@@ -32,11 +32,7 @@ int _esodbc_log_level = LOG_LEVEL_DISABLED;
 /* log file path -- process variable */
 static TCHAR *log_path = NULL;
 /* log file mutex -- process variable */
-static SRWLOCK log_mux = SRWLOCK_INIT;
-
-#define MUTEX_LOCK(_mux)	\
-	(WaitForSingleObject(_mux, INFINITE) == WAIT_OBJECT_0)
-#define MUTEX_UNLOCK(_mux)	ReleaseMutex(_mux)
+static esodbc_mutex_lt log_mux = ESODBC_MUX_SINIT;
 
 
 static inline HANDLE log_file_handle(BOOL open)
@@ -143,8 +139,8 @@ BOOL log_init()
 
 void log_cleanup()
 {
-	/* There is no need/function to destroy the SRWLOCK */
-	log_file_handle(/* close */FALSE);
+	log_file_handle(/*open?*/FALSE);
+	ESODBC_MUX_DEL(&log_mux);
 
 }
 
@@ -258,9 +254,9 @@ static inline void log_file(int level, int werrno, const char *func,
 	}
 	assert(pos <= sizeof(buff));
 
-	AcquireSRWLockExclusive(&log_mux);
+	ESODBC_MUX_LOCK(&log_mux);
 	log_file_write(buff, pos);
-	ReleaseSRWLockExclusive(&log_mux);
+	ESODBC_MUX_UNLOCK(&log_mux);
 }
 
 void _esodbc_log(int lvl, int werrno, const char *func,
