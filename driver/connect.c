@@ -1631,8 +1631,9 @@ SQLRETURN EsSQLGetConnectAttrW(
 				ERRH(dbc, "failed to get current catalog.");
 				RET_STATE(dbc->hdr.diag.state);
 			}
-			if (StringLengthPtr);
-			*StringLengthPtr = (SQLINTEGER)used;
+			if (StringLengthPtr) {
+				*StringLengthPtr = (SQLINTEGER)used;
+			}
 			break;
 
 		case SQL_ATTR_METADATA_ID:
