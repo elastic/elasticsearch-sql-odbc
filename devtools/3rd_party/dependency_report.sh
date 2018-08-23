@@ -30,8 +30,6 @@
 # those fields, and this script simply combines them into a single CSV file.
 # Because of this, the field order is important - in each per-component CSV
 # file the fields must be in the order shown above.
-#
-# Lifted from https://github.com/elastic/machine-learning-cpp
 
 OUTPUT_FILE=
 if [ "x$1" = "x--csv" ] ; then
