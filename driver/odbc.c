@@ -71,7 +71,7 @@ BOOL WINAPI DllMain(
 
 		// Perform any necessary cleanup.
 		case DLL_PROCESS_DETACH:
-			INFO("process %u dettaching.", GetCurrentProcessId());
+			INFO("process %u detaching.", GetCurrentProcessId());
 			driver_cleanup();
 			break;
 	}
