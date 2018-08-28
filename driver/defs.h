@@ -53,8 +53,7 @@
 #define ESODBC_PARAM_MARKER			"?"
 
 /* max # of active statements for a connection */
-/* TODO: review@alpha */
-#define ESODBC_MAX_CONCURRENT_ACTIVITIES	16
+#define ESODBC_MAX_CONCURRENT_ACTIVITIES	0
 /* maximum identifer length */
 /* TODO: review@alpha */
 /* match 'keyword' ES type length */

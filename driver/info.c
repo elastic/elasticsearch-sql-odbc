@@ -123,19 +123,29 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_SQL_SPEC_STRING),
 					BufferLength, StringLengthPtr);
 
+		case SQL_ASYNC_MODE:
+			DBGH(dbc, "requested: async mode (%lu).", SQL_AM_NONE);
+			*(SQLUINTEGER *)InfoValue = SQL_AM_NONE;
+			break;
+
 		/* "if the driver can execute functions asynchronously on the
 		 * connection handle" */
 		case SQL_ASYNC_DBC_FUNCTIONS:
-			/* TODO: review@alpha */
-			*(SQLUSMALLINT *)InfoValue = SQL_FALSE;
-			DBGH(dbc, "requested: support for async fuctions: no.");
+			DBGH(dbc, "requested: async DBC functions (no - %lu).",
+				SQL_ASYNC_DBC_NOT_CAPABLE);
+			*(SQLUINTEGER *)InfoValue = SQL_ASYNC_DBC_NOT_CAPABLE;
 			break;
 
 		/* "if the driver supports asynchronous notification" */
 		case SQL_ASYNC_NOTIFICATION:
-			// FIXME: review@alpha */
+			DBGH(dbc, "requested: async notification (no - %lu).",
+				SQL_ASYNC_NOTIFICATION_NOT_CAPABLE);
 			*(SQLUINTEGER *)InfoValue = SQL_ASYNC_NOTIFICATION_NOT_CAPABLE;
-			DBGH(dbc, "requested: support for async notifications: no.");
+			break;
+
+		case SQL_MAX_ASYNC_CONCURRENT_STATEMENTS:
+			DBGH(dbc, "requested: async concurrent statements (0).");
+			*(SQLUINTEGER *)InfoValue = 0;
 			break;
 
 		/* "the maximum number of active statements that the driver can
@@ -159,8 +169,6 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 
 		case SQL_GETDATA_EXTENSIONS:
 			DBGH(dbc, "requested: GetData extentions.");
-			// FIXME: review@alpha
-			// TODO: GetData review
 			*(SQLUINTEGER *)InfoValue = ESODBC_GETDATA_EXTENSIONS;
 			break;
 
@@ -735,9 +743,10 @@ SQLRETURN EsSQLGetDiagFieldW(
 			return write_wstr(&dummy, DiagInfoPtr, wstrp, BufferLength,
 					StringLengthPtr);
 
-		case SQL_DIAG_CONNECTION_NAME:
 		/* same as SQLGetInfo(SQL_DATA_SOURCE_NAME) */
-		case SQL_DIAG_SERVER_NAME: /* TODO: keep same as _CONNECTION_NAME? */
+		case SQL_DIAG_CONNECTION_NAME:
+		/* TODO: this must be the server name, not DSN. */
+		case SQL_DIAG_SERVER_NAME:
 			switch (HandleType) {
 				case SQL_HANDLE_DBC:
 					wstrp = &DBCH(Handle)->dsn;
@@ -912,7 +921,6 @@ SQLRETURN EsSQLGetFunctions(SQLHDBC ConnectionHandle,
 			}
 	}
 
-	// TODO: does this require connecting to the server?
 	return SQL_SUCCESS;
 }
 

@@ -120,6 +120,7 @@ typedef enum {
 	SQL_STATE_HY109,
 	SQL_STATE_HY110,
 	SQL_STATE_HY111,
+	SQL_STATE_HY114,
 	SQL_STATE_HYC00,
 	SQL_STATE_HYT00,
 	SQL_STATE_HYT01,
@@ -138,6 +139,7 @@ typedef enum {
 	SQL_STATE_IM013,
 	SQL_STATE_IM014,
 	SQL_STATE_IM015,
+	SQL_STATE_S1118,
 	SQL_STATE_MAX
 } esodbc_state_et;
 
@@ -379,6 +381,8 @@ static esodbc_errors_st esodbc_errors[] = {
 		SQL_ERROR},
 	{MK_WPTR("HY111"), MK_WPTR("Invalid bookmark value"), 
 		SQL_ERROR},
+	{MK_WPTR("HY114"), MK_WPTR("Driver does not support connection-level "
+		"asynchronous function execution"), SQL_ERROR},
 	{MK_WPTR("HYC00"), MK_WPTR("Optional feature not implemented"), 
 		SQL_ERROR},
 	{MK_WPTR("HYT00"), MK_WPTR("Timeout expired"), 
@@ -417,6 +421,8 @@ static esodbc_errors_st esodbc_errors[] = {
 		SQL_ERROR},
 	{MK_WPTR("IM015"), MK_WPTR("Corrupt file data source"), 
 		SQL_ERROR},
+	{MK_WPTR("S1118"), MK_WPTR("Driver does not support asynchronous "
+		"notification"), SQL_ERROR},
 };
 /*INDENT-ON*/
 

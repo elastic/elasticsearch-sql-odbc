@@ -51,6 +51,7 @@ static void init_hheader(esodbc_hhdr_st *hdr, SQLSMALLINT type, void *parent)
 {
 	hdr->type = type;
 	init_diagnostic(&hdr->diag);
+	ESODBC_MUX_INIT(&hdr->mutex);
 	hdr->parent = parent;
 }
 
@@ -225,7 +226,6 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			}
 			dbc->dsn.str = MK_WPTR(""); /* see explanation in cleanup_dbc() */
 			dbc->metadata_id = SQL_FALSE;
-			dbc->async_enable = SQL_ASYNC_ENABLE_OFF;
 			dbc->txn_isolation = ESODBC_DEF_TXN_ISOLATION;
 
 			/* rest of initialization done at connect time */
@@ -261,8 +261,9 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			 * Note: these attributes won't propagate at statement level when
 			 * set at connection level. */
 			stmt->metadata_id = dbc->metadata_id;
-			stmt->async_enable = dbc->async_enable;
 			stmt->sql2c_conversion = CONVERSION_UNCHECKED;
+
+			ESODBC_MUX_INIT(&dbc->curl_mux);
 
 			DBGH(dbc, "new Statement handle allocated @0x%p.", *OutputHandle);
 			break;
@@ -303,6 +304,7 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 
 SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 {
+	esodbc_dbc_st *dbc;
 	esodbc_stmt_st *stmt;
 	esodbc_desc_st *desc;
 
@@ -314,13 +316,13 @@ SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 	switch(HandleType) {
 		case SQL_HANDLE_ENV: /* Environment Handle */
 			// TODO: check if there are connections (_DBC)
-			free(Handle);
 			break;
 		case SQL_HANDLE_DBC: /* Connection Handle */
 			// TODO: remove from (potential) list?
+			dbc = DBCH(Handle);
 			/* app/DM should have SQLDisconnect'ed, but just in case  */
-			cleanup_dbc(DBCH(Handle));
-			free(Handle);
+			cleanup_dbc(dbc);
+			ESODBC_MUX_DEL(&dbc->curl_mux);
 			break;
 		case SQL_HANDLE_STMT:
 			// TODO: remove from (potential) list?
@@ -332,7 +334,6 @@ SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 			clear_desc(stmt->ird, FALSE);
 			clear_desc(stmt->apd, FALSE);
 			clear_desc(stmt->ipd, FALSE);
-			free(stmt);
 			break;
 
 		// FIXME:
@@ -356,6 +357,8 @@ SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 			return SQL_INVALID_HANDLE;
 	}
 
+	ESODBC_MUX_DEL(&HDRH(Handle)->mutex);
+	free(Handle);
 	return SQL_SUCCESS;
 }
 
@@ -479,7 +482,7 @@ SQLRETURN EsSQLSetEnvAttr(SQLHENV EnvironmentHandle,
 		case SQL_ATTR_CONNECTION_POOLING:
 		case SQL_ATTR_CP_MATCH:
 			RET_HDIAG(ENVH(EnvironmentHandle), SQL_STATE_HYC00,
-				"Connection pooling not yet supported", 0);
+				"Connection pooling not supported", 0);
 
 		case SQL_ATTR_ODBC_VERSION:
 			switch ((intptr_t)Value) {
@@ -767,10 +770,19 @@ SQLRETURN EsSQLSetStmtAttrW(
 			DBGH(stmt, "setting metadata_id to: %u", (SQLULEN)ValuePtr);
 			stmt->metadata_id = (SQLULEN)ValuePtr;
 			break;
+
 		case SQL_ATTR_ASYNC_ENABLE:
-			DBGH(stmt, "setting async_enable to: %u", (SQLULEN)ValuePtr);
-			stmt->async_enable = (SQLULEN)ValuePtr;
+			ERRH(stmt, "no support for async API (setting param: %llu)",
+					(SQLULEN)(uintptr_t)ValuePtr);
+			if ((SQLULEN)(uintptr_t)ValuePtr == SQL_ASYNC_ENABLE_ON) {
+				RET_HDIAGS(stmt, SQL_STATE_HYC00);
+			}
 			break;
+		case SQL_ATTR_ASYNC_STMT_EVENT:
+		// case SQL_ATTR_ASYNC_STMT_PCALLBACK:
+		// case SQL_ATTR_ASYNC_STMT_PCONTEXT:
+			ERRH(stmt, "no support for async API (attr: %ld)", Attribute);
+			RET_HDIAGS(stmt, SQL_STATE_S1118);
 
 		case SQL_ATTR_MAX_LENGTH:
 			ulen = (SQLULEN)ValuePtr;
@@ -834,8 +846,8 @@ SQLRETURN EsSQLGetStmtAttrW(
 			*(SQLULEN *)ValuePtr = stmt->metadata_id;
 			break;
 		case SQL_ATTR_ASYNC_ENABLE:
-			DBGH(stmt, "getting async_enable: %llu", stmt->async_enable);
-			*(SQLULEN *)ValuePtr = stmt->async_enable;
+			DBGH(stmt, "getting async mode: %llu", SQL_ASYNC_ENABLE_OFF);
+			*(SQLULEN *)ValuePtr = SQL_ASYNC_ENABLE_OFF;
 			break;
 		case SQL_ATTR_MAX_LENGTH:
 			DBGH(stmt, "getting max_length: %llu", stmt->max_length);

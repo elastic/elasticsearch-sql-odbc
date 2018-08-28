@@ -313,6 +313,8 @@ SQLRETURN post_json(esodbc_stmt_st *stmt, const cstr_st *u8body)
 
 	DBGH(stmt, "POSTing JSON [%zd] `" LCPDL "`.", u8body->cnt, LCSTR(u8body));
 
+	ESODBC_MUX_LOCK(&dbc->curl_mux);
+
 	if (! dbc->curl) {
 		init_curl(dbc);
 	}
@@ -370,6 +372,8 @@ SQLRETURN post_json(esodbc_stmt_st *stmt, const cstr_st *u8body)
 	DBGH(stmt, "libcurl: request succesfull, received code %ld and %zd bytes"
 		" back.", code, apos);
 
+	ESODBC_MUX_UNLOCK(&dbc->curl_mux);
+
 	if (code != 200) {
 		ERRH(stmt, "libcurl: non-200 HTTP response code %ld received.", code);
 		/* expect a 200 with body; everything else is failure (todo?)  */
@@ -387,6 +391,8 @@ err:
 		res != CURLE_OK ? curl_easy_strerror(res) : "<unspecified>", res);
 err_net: /* the error occured after the request hit hit the network */
 	cleanup_curl(dbc);
+	ESODBC_MUX_UNLOCK(&dbc->curl_mux);
+
 	if (abuff) {
 		free(abuff);
 		abuff = NULL;
@@ -594,7 +600,7 @@ void cleanup_dbc(esodbc_dbc_st *dbc)
 	} else {
 		assert(dbc->no_types == 0);
 	}
-	assert(dbc->abuff == NULL); /* reminder for when going multithreaded */
+	assert(dbc->abuff == NULL);
 	cleanup_curl(dbc);
 }
 
@@ -1575,10 +1581,26 @@ SQLRETURN EsSQLSetConnectAttrW(
 			DBGH(dbc, "setting metadata_id to %u.", (SQLULEN)Value);
 			dbc->metadata_id = (SQLULEN)Value;
 			break;
+
 		case SQL_ATTR_ASYNC_ENABLE:
-			DBGH(dbc, "setting async enable to %u.", (SQLULEN)Value);
-			dbc->async_enable = (SQLULEN)Value;
+			ERRH(dbc, "no support for async API (setting param: %llu)",
+				(SQLULEN)(uintptr_t)Value);
+			if ((SQLULEN)(uintptr_t)Value == SQL_ASYNC_ENABLE_ON) {
+				RET_HDIAGS(dbc, SQL_STATE_HYC00);
+			}
 			break;
+		case SQL_ATTR_ASYNC_DBC_FUNCTIONS_ENABLE:
+			ERRH(dbc, "no support for async API (setting param: %llu)",
+				(SQLULEN)(uintptr_t)Value);
+			if ((SQLULEN)(uintptr_t)Value == SQL_ASYNC_DBC_ENABLE_ON) {
+				RET_HDIAGS(dbc, SQL_STATE_HY114);
+			}
+			break;
+		case SQL_ATTR_ASYNC_DBC_EVENT:
+			// case SQL_ATTR_ASYNC_DBC_PCALLBACK:
+			// case SQL_ATTR_ASYNC_DBC_PCONTEXT:
+			ERRH(dbc, "no support for async API (attr: %ld)", Attribute);
+			RET_HDIAGS(dbc, SQL_STATE_S1118);
 
 		case SQL_ATTR_QUIET_MODE:
 			DBGH(dbc, "setting window handler to 0x%p.", Value);
@@ -1631,8 +1653,9 @@ SQLRETURN EsSQLGetConnectAttrW(
 				ERRH(dbc, "failed to get current catalog.");
 				RET_STATE(dbc->hdr.diag.state);
 			}
-			if (StringLengthPtr);
-			*StringLengthPtr = (SQLINTEGER)used;
+			if (StringLengthPtr) {
+				*StringLengthPtr = (SQLINTEGER)used;
+			}
 			break;
 
 		case SQL_ATTR_METADATA_ID:
@@ -1640,8 +1663,8 @@ SQLRETURN EsSQLGetConnectAttrW(
 			*(SQLULEN *)ValuePtr = dbc->metadata_id;
 			break;
 		case SQL_ATTR_ASYNC_ENABLE:
-			DBGH(dbc, "requested: async enable: %u.", dbc->async_enable);
-			*(SQLULEN *)ValuePtr = dbc->async_enable;
+			DBGH(dbc, "getting async mode: %llu", SQL_ASYNC_ENABLE_OFF);
+			*(SQLULEN *)ValuePtr = SQL_ASYNC_ENABLE_OFF;
 			break;
 
 		case SQL_ATTR_QUIET_MODE:
