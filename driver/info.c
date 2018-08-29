@@ -98,15 +98,197 @@ static SQLUSMALLINT esodbc_functions[] = {
 	*(((UWORD*) (pfExists)) + ((uwAPI) >> 4)) |= (1 << ((uwAPI) & 0x000F))
 #define SQL_API_ODBC2_ALL_FUNCTIONS_SIZE	100
 
+static SQLRETURN getinfo_driver(
+	BOOL *handled,
+	SQLHDBC ConnectionHandle,
+	SQLUSMALLINT InfoType,
+	_Out_writes_bytes_opt_(BufferLength) SQLPOINTER InfoValue,
+	SQLSMALLINT BufferLength,
+	_Out_opt_ SQLSMALLINT *StringLengthPtr)
+{
+	esodbc_dbc_st *dbc = DBCH(ConnectionHandle);
 
-// [0] x-p-es/sql/jdbc/src/main/java/org/elasticsearch/xpack/sql/jdbc/jdbc/JdbcDatabaseMetaData.java : DatabaseMetaData
-/*
- * """
- * The SQL_MAX_DRIVER_CONNECTIONS option in SQLGetInfo specifies how many
- * active connections a particular driver supports.
- * """
- */
-SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
+	*handled = TRUE;
+	switch(InfoType) {
+		case SQL_ACTIVE_ENVIRONMENTS:
+			DBGH(dbc, "requested: max active environments (0).");
+			*(SQLUSMALLINT *)InfoValue = 0;
+			return SQL_SUCCESS;
+		/* "if the driver can execute functions asynchronously on the
+		 * connection handle" */
+		case SQL_ASYNC_DBC_FUNCTIONS:
+			DBGH(dbc, "requested: async DBC functions (no - %lu).",
+				SQL_ASYNC_DBC_NOT_CAPABLE);
+			*(SQLUINTEGER *)InfoValue = SQL_ASYNC_DBC_NOT_CAPABLE;
+			return SQL_SUCCESS;
+		case SQL_ASYNC_MODE:
+			DBGH(dbc, "requested: async mode (%lu).", SQL_AM_NONE);
+			*(SQLUINTEGER *)InfoValue = SQL_AM_NONE;
+			return SQL_SUCCESS;
+		/* "if the driver supports asynchronous notification" */
+		case SQL_ASYNC_NOTIFICATION:
+			DBGH(dbc, "requested: async notification (no - %lu).",
+				SQL_ASYNC_NOTIFICATION_NOT_CAPABLE);
+			*(SQLUINTEGER *)InfoValue = SQL_ASYNC_NOTIFICATION_NOT_CAPABLE;
+			return SQL_SUCCESS;
+		case SQL_BATCH_ROW_COUNT:
+			DBGH(dbc, "requested: batch row count (rolled up).");
+			*(SQLUINTEGER *)InfoValue = SQL_BRC_ROLLED_UP;
+			return SQL_SUCCESS;
+		case SQL_BATCH_SUPPORT:
+			DBGH(dbc, "requested: batch support (0).");
+			*(SQLUINTEGER *)InfoValue = 0;
+			return SQL_SUCCESS;
+		case SQL_DATA_SOURCE_NAME:
+			DBGH(dbc, "requested: data source name: `" LWPDL "`.",
+				LWSTR(&dbc->dsn));
+			return write_wstr(dbc, InfoValue,
+					/* request may occur before connection */
+					dbc->dsn.str ? &dbc->dsn : &MK_WSTR(""),
+					BufferLength, StringLengthPtr);
+		case SQL_DRIVER_AWARE_POOLING_SUPPORTED:
+			DBGH(dbc, "requested: driver aware pooling (not capable).");
+			*(SQLUINTEGER *)InfoValue = SQL_DRIVER_AWARE_POOLING_NOT_CAPABLE;
+			return SQL_SUCCESS;
+		/*
+		 * DM-only:
+		case SQL_DRIVER_HDBC:
+		case SQL_DRIVER_HDESC:
+		case SQL_DRIVER_HENV:
+		case SQL_DRIVER_HLIB:
+		case SQL_DRIVER_HSTMT:
+		*/
+		case SQL_DRIVER_NAME:
+			DBGH(dbc, "requested: driver (file) name: %s.", DRIVER_NAME);
+			return write_wstr(dbc, InfoValue, &MK_WSTR(DRIVER_NAME),
+					BufferLength, StringLengthPtr);
+		/* Driver Information */
+		/* "what version of odbc a driver complies with" */
+		case SQL_DRIVER_ODBC_VER:
+			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_SQL_SPEC_STRING),
+					BufferLength, StringLengthPtr);
+		case SQL_DRIVER_VER:
+			DBGH(dbc, "requested: driver version (`%s`).", ESODBC_DRIVER_VER);
+			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_DRIVER_VER),
+					BufferLength, StringLengthPtr);
+		case SQL_DTC_TRANSITION_COST:
+			INFOH(dbc, "no connection pooling / DTC support.");
+			DBGH(dbc, "requested: DTC transition cost (0).");
+			*(SQLUINTEGER *)InfoValue = 0;
+			return SQL_SUCCESS;
+		/* what Operations are supported by SQLSetPos  */
+		// FIXME: review@alpha
+		case SQL_DYNAMIC_CURSOR_ATTRIBUTES1:
+		case SQL_DYNAMIC_CURSOR_ATTRIBUTES2:
+			DBGH(dbc, "requested cursor attributes %hu (0).", InfoType);
+			*(SQLUINTEGER *)InfoValue = SQL_CA1_POS_UPDATE;
+			return SQL_SUCCESS;
+		case SQL_FORWARD_ONLY_CURSOR_ATTRIBUTES1:
+			DBGH(dbc, "requested: fwd curs attrs1 (%lx).",
+				ESODBC_FORWARD_ONLY_CURSOR_ATTRIBUTES1);
+			*(SQLUINTEGER *)InfoValue = ESODBC_FORWARD_ONLY_CURSOR_ATTRIBUTES1;
+			return SQL_SUCCESS;
+		case SQL_FORWARD_ONLY_CURSOR_ATTRIBUTES2:
+			DBGH(dbc, "requested: fwd curs attrs1 (%lx).",
+				ESODBC_FORWARD_ONLY_CURSOR_ATTRIBUTES2);
+			*(SQLUINTEGER *)InfoValue = ESODBC_FORWARD_ONLY_CURSOR_ATTRIBUTES2;
+			return SQL_SUCCESS;
+		case SQL_FILE_USAGE:
+			/* JDBC[0]: usesLocalFilePerTable() */
+			DBGH(dbc, "requested: file usage: table.");
+			/* TODO: JDBC indicates true for file per table; howerver, this
+			 * can be apparently used to ask GUI user to ask 'file' or
+			 * 'table'; elastic uses index => files? */
+			*(SQLUSMALLINT *)InfoValue = SQL_FILE_TABLE;
+			return SQL_SUCCESS;
+		case SQL_GETDATA_EXTENSIONS:
+			DBGH(dbc, "requested: GetData extentions.");
+			*(SQLUINTEGER *)InfoValue = ESODBC_GETDATA_EXTENSIONS;
+			return SQL_SUCCESS;
+		case SQL_INFO_SCHEMA_VIEWS:
+			DBGH(dbc, "requested: schema views (0).");
+			WARNH(dbc, "schema not yet supported by data source.");
+			*(SQLUINTEGER *)InfoValue = 0;
+			return SQL_SUCCESS;
+		case SQL_KEYSET_CURSOR_ATTRIBUTES1:
+		case SQL_KEYSET_CURSOR_ATTRIBUTES2:
+			DBGH(dbc, "requested: keyset cursor attributes (0).");
+			*(SQLUINTEGER *)InfoValue = 0;
+			return SQL_SUCCESS;
+		case SQL_MAX_ASYNC_CONCURRENT_STATEMENTS:
+			DBGH(dbc, "requested: async concurrent statements (0).");
+			*(SQLUINTEGER *)InfoValue = 0;
+			return SQL_SUCCESS;
+		/* "the maximum number of active statements that the driver can
+		 * support for a connection" */
+		//case SQL_ACTIVE_STATEMENTS:
+		case SQL_MAX_CONCURRENT_ACTIVITIES:
+			*(SQLUSMALLINT *)InfoValue = 0;
+			DBGH(dbc, "requested: max concurrent activities (0).");
+			return SQL_SUCCESS;
+		case SQL_MAX_DRIVER_CONNECTIONS:
+			DBGH(dbc, "requested: max driver connections (0).");
+			*(SQLUINTEGER *)InfoValue = 0;
+			return SQL_SUCCESS;
+		case SQL_ODBC_INTERFACE_CONFORMANCE:
+			DBGH(dbc, "requested: ODBC interface conformance (%lu).",
+				ESODBC_ODBC_INTERFACE_CONFORMANCE);
+			*(SQLUINTEGER *)InfoValue = ESODBC_ODBC_INTERFACE_CONFORMANCE;
+			return SQL_SUCCESS;
+		// case SQL_ODBC_STANDARD_CLI_CONFORMANCE // undef'd:
+		// case SQL_ODBC_VER: DM-only
+		case SQL_PARAM_ARRAY_ROW_COUNTS:
+			DBGH(dbc, "requested: param array row counts (no batch).");
+			*(SQLUINTEGER *)InfoValue = SQL_PARC_NO_BATCH ;
+			return SQL_SUCCESS;
+		case SQL_PARAM_ARRAY_SELECTS:
+			DBGH(dbc, "requested: reselt set availability with parameterized "
+				"execution (%lu).", SQL_PAS_NO_SELECT);
+			*(SQLUINTEGER *)InfoValue = SQL_PAS_NO_SELECT;
+			return SQL_SUCCESS;
+#if (ODBCVER < 0x0400)
+		/* this is an ODBC 4.0, but Excel seems to asks for it anyways in
+		 * certain cases with a 3.80 driver */
+		case 180: /* = SQL_RETURN_ESCAPE_CLAUSE */
+#else
+		case SQL_RETURN_ESCAPE_CLAUSE:
+#endif /* SQL_RETURN_ESCAPE_CLAUSE */
+			/* actually an error, but po */
+			INFOH(dbc, "SQL_RETURN_ESCAPE_CLAUSE not supported.");
+			*(SQLUINTEGER *)InfoValue = 0; /* = SQL_RC_NONE */
+			return SQL_SUCCESS;
+		case SQL_ROW_UPDATES:
+			DBGH(dbc, "requested: row updates detection (N).");
+			WARNH(dbc, "no keyset-driven or mixed cursor support.");
+			return write_wstr(dbc, InfoValue, &MK_WSTR("N"),
+					BufferLength, StringLengthPtr);
+		case SQL_SEARCH_PATTERN_ESCAPE:
+			DBGH(dbc, "requested: escape character (`%s`).",
+				ESODBC_PATTERN_ESCAPE);
+			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_PATTERN_ESCAPE),
+					BufferLength, StringLengthPtr);
+		case SQL_SERVER_NAME:
+			DBGH(dbc, "requested: server name: `" LWPDL "`.",
+				LWSTR(&dbc->server));
+			return write_wstr(dbc, InfoValue,
+					/* request may occur before connection */
+					dbc->server.str ? &dbc->server : &MK_WSTR(""),
+					BufferLength, StringLengthPtr);
+		case SQL_STATIC_CURSOR_ATTRIBUTES1:
+		case SQL_STATIC_CURSOR_ATTRIBUTES2:
+			DBGH(dbc, "requested: static cursor attributes %hu (0).",
+				InfoType);
+			WARNH(dbc, "no static cursor support.");
+			*(SQLUINTEGER *)InfoValue = 0;
+			return SQL_SUCCESS;
+	}
+	*handled = FALSE;
+	return SQL_ERROR;
+}
+
+static SQLRETURN getinfo_dbms_product(
+	BOOL *handled,
+	SQLHDBC ConnectionHandle,
 	SQLUSMALLINT InfoType,
 	_Out_writes_bytes_opt_(BufferLength) SQLPOINTER InfoValue,
 	SQLSMALLINT BufferLength,
@@ -116,172 +298,8 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 	SQLINTEGER string_len;
 	SQLRETURN ret;
 
-	switch (InfoType) {
-		/* Driver Information */
-		/* "what version of odbc a driver complies with" */
-		case SQL_DRIVER_ODBC_VER:
-			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_SQL_SPEC_STRING),
-					BufferLength, StringLengthPtr);
-
-		case SQL_ASYNC_MODE:
-			DBGH(dbc, "requested: async mode (%lu).", SQL_AM_NONE);
-			*(SQLUINTEGER *)InfoValue = SQL_AM_NONE;
-			break;
-
-		/* "if the driver can execute functions asynchronously on the
-		 * connection handle" */
-		case SQL_ASYNC_DBC_FUNCTIONS:
-			DBGH(dbc, "requested: async DBC functions (no - %lu).",
-				SQL_ASYNC_DBC_NOT_CAPABLE);
-			*(SQLUINTEGER *)InfoValue = SQL_ASYNC_DBC_NOT_CAPABLE;
-			break;
-
-		/* "if the driver supports asynchronous notification" */
-		case SQL_ASYNC_NOTIFICATION:
-			DBGH(dbc, "requested: async notification (no - %lu).",
-				SQL_ASYNC_NOTIFICATION_NOT_CAPABLE);
-			*(SQLUINTEGER *)InfoValue = SQL_ASYNC_NOTIFICATION_NOT_CAPABLE;
-			break;
-
-		case SQL_MAX_ASYNC_CONCURRENT_STATEMENTS:
-			DBGH(dbc, "requested: async concurrent statements (0).");
-			*(SQLUINTEGER *)InfoValue = 0;
-			break;
-
-		/* "the maximum number of active statements that the driver can
-		 * support for a connection" */
-		//case SQL_ACTIVE_STATEMENTS:
-		case SQL_MAX_CONCURRENT_ACTIVITIES:
-			*(SQLUSMALLINT *)InfoValue = ESODBC_MAX_CONCURRENT_ACTIVITIES;
-			DBGH(dbc, "requested: max active statements per connection: %d.",
-				*(SQLUSMALLINT *)InfoValue);
-			break;
-
-		case SQL_CURSOR_COMMIT_BEHAVIOR:
-		case SQL_CURSOR_ROLLBACK_BEHAVIOR:
-			DBGH(dbc, "requested: cursor %s behavior.",
-				InfoType == SQL_CURSOR_COMMIT_BEHAVIOR ?
-				"commit" : "rollback");
-			/* assume this is the  of equivalent of
-			 * JDBC's HOLD_CURSORS_OVER_COMMIT */
-			*(SQLUSMALLINT *)InfoValue = SQL_CB_PRESERVE;
-			break;
-
-		case SQL_GETDATA_EXTENSIONS:
-			DBGH(dbc, "requested: GetData extentions.");
-			*(SQLUINTEGER *)InfoValue = ESODBC_GETDATA_EXTENSIONS;
-			break;
-
-		case SQL_DATA_SOURCE_NAME:
-			DBGH(dbc, "requested: data source name: `"LWPD"`.", dbc->dsn.str);
-			return write_wstr(dbc, InfoValue, &dbc->dsn, BufferLength,
-					StringLengthPtr);
-
-		case SQL_DRIVER_NAME:
-			DBGH(dbc, "requested: driver (file) name: %s.", DRIVER_NAME);
-			return write_wstr(dbc, InfoValue, &MK_WSTR(DRIVER_NAME),
-					BufferLength, StringLengthPtr);
-			break;
-
-		case SQL_DATA_SOURCE_READ_ONLY:
-			DBGH(dbc, "requested: if data source is read only (`%s`).",
-				ESODBC_DATA_SOURCE_READ_ONLY);
-			return write_wstr(dbc, InfoValue,
-					&MK_WSTR(ESODBC_DATA_SOURCE_READ_ONLY), BufferLength,
-					StringLengthPtr);
-
-		case SQL_SEARCH_PATTERN_ESCAPE:
-			DBGH(dbc, "requested: escape character (`%s`).",
-				ESODBC_PATTERN_ESCAPE);
-			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_PATTERN_ESCAPE),
-					BufferLength, StringLengthPtr);
-
-		case SQL_CORRELATION_NAME:
-			// JDBC[0]: supportsDifferentTableCorrelationNames()
-			DBGH(dbc, "requested: table correlation names (any).");
-			/* TODO: JDBC returns true for correlation, but false for
-			 * difference. How to signal that in ODBC?? (with no bit mask) */
-			*(SQLUSMALLINT *)InfoValue = SQL_CN_ANY;
-			break;
-
-		case SQL_NON_NULLABLE_COLUMNS:
-			/* JDBC[0]: supportsNonNullableColumns() */
-			DBGH(dbc, "requested: nullable columns (true).");
-			*(SQLUSMALLINT *)InfoValue = SQL_NNC_NULL;
-			break;
-
-		case SQL_CATALOG_NAME:
-			DBGH(dbc, "requested: catalog name support (`"
-				ESODBC_CATALOG_NAME "`).");
-			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_CATALOG_NAME),
-					BufferLength, StringLengthPtr);
-			break;
-
-		case SQL_CATALOG_NAME_SEPARATOR: /* SQL_QUALIFIER_NAME_SEPARATOR */
-			/* JDBC[0]: getCatalogSeparator() */
-			DBGH(dbc, "requested: catalogue separator (`%s`).",
-				ESODBC_CATALOG_SEPARATOR);
-			return write_wstr(dbc, InfoValue,
-					&MK_WSTR(ESODBC_CATALOG_SEPARATOR), BufferLength,
-					StringLengthPtr);
-
-		case SQL_CATALOG_LOCATION:
-			DBGH(dbc, "requested: catalogue location (`%d`).",
-				ESODBC_CATALOG_LOCATION);
-			*(SQLUSMALLINT *)InfoValue = ESODBC_CATALOG_LOCATION;
-			break;
-
-		case SQL_FILE_USAGE:
-			/* JDBC[0]: usesLocalFilePerTable() */
-			DBGH(dbc, "requested: file usage: table.");
-			/* TODO: JDBC indicates true for file per table; howerver, this
-			 * can be apparently used to ask GUI user to ask 'file' or
-			 * 'table'; elastic uses index => files? */
-			*(SQLUSMALLINT *)InfoValue = SQL_FILE_TABLE;
-			break;
-
-		case SQL_CATALOG_TERM: /* SQL_QUALIFIER_TERM */
-			/* JDBC[0]: getCatalogSeparator() */
-			DBGH(dbc, "requested: catalogue term (`%s`).", ESODBC_CATALOG_TERM);
-			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_CATALOG_TERM),
-					BufferLength, StringLengthPtr);
-
-		case SQL_MAX_SCHEMA_NAME_LEN: /* SQL_MAX_OWNER_NAME_LEN */
-			/* JDBC[0]: getMaxSchemaNameLength() */
-			DBGH(dbc, "requested: max schema len (%d).", ESODBC_MAX_SCHEMA_LEN);
-			*(SQLUSMALLINT *)InfoValue = ESODBC_MAX_SCHEMA_LEN;
-			break;
-
-		case SQL_IDENTIFIER_QUOTE_CHAR:
-			/* JDBC[0]: getIdentifierQuoteString() */
-			DBGH(dbc, "requested: quoting char (`%s`).", ESODBC_QUOTE_CHAR);
-			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_QUOTE_CHAR),
-					BufferLength, StringLengthPtr);
-
-		/* what Operations are supported by SQLSetPos  */
-		// FIXME: review@alpha
-		case SQL_DYNAMIC_CURSOR_ATTRIBUTES1:
-			DBGH(dbc, "requested cursor attributes 1.");
-			*(SQLUINTEGER *)InfoValue = SQL_CA1_POS_UPDATE;
-			break;
-		case SQL_FORWARD_ONLY_CURSOR_ATTRIBUTES1:
-			*(SQLUINTEGER *)InfoValue = 0;
-			break;
-		case SQL_KEYSET_CURSOR_ATTRIBUTES1:
-		case SQL_STATIC_CURSOR_ATTRIBUTES1:
-			/* "An SQL-92 Intermediate level–conformant driver will usually
-			 * return the SQL_CA1_NEXT, SQL_CA1_ABSOLUTE, and SQL_CA1_RELATIVE
-			 * options as supported, because the driver supports scrollable
-			 * cursors through the embedded SQL FETCH statement. " */
-			*(SQLUINTEGER *)InfoValue =
-				SQL_CA1_NEXT | SQL_CA1_ABSOLUTE | SQL_CA1_RELATIVE;
-			break;
-
-		case SQL_BOOKMARK_PERSISTENCE:
-			DBGH(dbc, "requested bookmark persistence (none).");
-			*(SQLUINTEGER *)InfoValue = 0; /* no support */
-			break;
-
+	*handled = TRUE;
+	switch(InfoType) {
 		case SQL_DATABASE_NAME:
 			DBGH(dbc, "requested database name.");
 			ret = EsSQLGetConnectAttrW(ConnectionHandle,
@@ -291,254 +309,475 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 				*StringLengthPtr = (SQLSMALLINT)string_len;
 			}
 			return ret;
-
-		case SQL_SCHEMA_TERM:
-			DBGH(dbc, "requested schema term (`%s`).", ESODBC_SCHEMA_TERM);
-			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_SCHEMA_TERM),
-					BufferLength, StringLengthPtr);
-
-		case SQL_TABLE_TERM:
-			DBGH(dbc, "requested table term (`%s`).", ESODBC_TABLE_TERM);
-			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_TABLE_TERM),
-					BufferLength, StringLengthPtr);
-
-		/* no procedures support */
-		case SQL_PROCEDURES:
-		case SQL_ACCESSIBLE_PROCEDURES:
-			DBGH(dbc, "requested: procedures support (`%s`).",
-				ESODBC_PROCEDURES);
-			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_PROCEDURES),
-					BufferLength, StringLengthPtr);
-		case SQL_MAX_PROCEDURE_NAME_LEN:
-			DBGH(dbc, "requested max procedure name len (0).");
-			*(SQLUSMALLINT *)InfoValue = 0; /* no support */
-			break;
-		case SQL_PROCEDURE_TERM:
-			DBGH(dbc, "requested: procedure term (``).");
-			return write_wstr(dbc, InfoValue, &MK_WSTR(""), BufferLength,
-					StringLengthPtr);
-
-		case SQL_TXN_ISOLATION_OPTION:
-			DBGH(dbc, "requested: transaction isolation options (SQL_TXN_*).");
-			/* see comment related to definition; TODO */
-			*(SQLUINTEGER *)InfoValue = ESODBC_DEF_TXN_ISOLATION;
-			break;
-
-		case SQL_SQL92_PREDICATES:
-			DBGH(dbc, "requested: SQL92 predicates (%lu).",
-				ESODBC_SQL92_PREDICATES);
-			*(SQLUINTEGER *)InfoValue = ESODBC_SQL92_PREDICATES;
-			break;
-
-		case SQL_SQL92_RELATIONAL_JOIN_OPERATORS:
-			DBGH(dbc, "requested: SQL92 relational joins operators (%lu).",
-				ESODBC_SQL92_RELATIONAL_JOIN_OPERATORS);
-			*(SQLUINTEGER *)InfoValue = ESODBC_SQL92_RELATIONAL_JOIN_OPERATORS;
-			break;
-
-		case SQL_OJ_CAPABILITIES: /* SQL_OUTER_JOIN_CAPABILITIES */
-			DBGH(dbc, "requested: outer joins capabilities (%lu).",
-				ESODBC_OJ_CAPABILITIES);
-			*(SQLUINTEGER *)InfoValue = ESODBC_OJ_CAPABILITIES;
-			break;
-
-		case SQL_SQL92_DATETIME_FUNCTIONS:
-			DBGH(dbc, "requested: SQL92 datetime functions (%lu).",
-				ESODBC_SQL92_DATETIME_FUNCTIONS);
-			*(SQLUINTEGER *)InfoValue = ESODBC_SQL92_DATETIME_FUNCTIONS;
-			break;
-
-		//case SQL_STRING_FUNCTIONS:
-		case SQL_SQL92_STRING_FUNCTIONS:
-			DBGH(dbc, "requested: SQL92 string functions (%lu).",
-				ESODBC_SQL92_STRING_FUNCTIONS);
-			*(SQLUINTEGER *)InfoValue = ESODBC_SQL92_STRING_FUNCTIONS;
-			break;
-
-		case SQL_SQL92_NUMERIC_VALUE_FUNCTIONS:
-			DBGH(dbc, "requested: SQL92 numeric value functions (%lu).",
-				ESODBC_SQL92_NUMERIC_VALUE_FUNCTIONS);
-			*(SQLUINTEGER *)InfoValue = ESODBC_SQL92_NUMERIC_VALUE_FUNCTIONS;
-			break;
-
-		case SQL_SQL92_VALUE_EXPRESSIONS:
-			DBGH(dbc, "requested: SQL92 value expressions (%lu).",
-				ODBC_SQL92_VALUE_EXPRESSIONS);
-			*(SQLUINTEGER *)InfoValue = ODBC_SQL92_VALUE_EXPRESSIONS;
-			break;
-
-		case SQL_CONVERT_FUNCTIONS:
-			DBGH(dbc, "requested: convert functions (%lu).",
-				ESODBC_CONVERT_FUNCTIONS);
-			*(SQLUINTEGER *)InfoValue = ESODBC_CONVERT_FUNCTIONS;
-			break;
-
-		case SQL_SYSTEM_FUNCTIONS:
-			DBGH(dbc, "requested: system functions (%lu).",
-				ESODBC_SYSTEM_FUNCTIONS);
-			*(SQLUINTEGER *)InfoValue = ESODBC_SYSTEM_FUNCTIONS;
-			break;
-
-		case SQL_DATETIME_LITERALS:
-			DBGH(dbc, "requested: SQL92 datetime literals (%lu).",
-				ESODBC_DATETIME_LITERALS);
-			*(SQLUINTEGER *)InfoValue = ESODBC_DATETIME_LITERALS;
-			break;
-
-		case SQL_TIMEDATE_DIFF_INTERVALS:
-			DBGH(dbc, "requested: timedate diff intervals (%lu).",
-				ESODBC_TIMEDATE_DIFF_INTERVALS);
-			*(SQLUINTEGER *)InfoValue = ESODBC_TIMEDATE_DIFF_INTERVALS;
-			break;
-
-		case SQL_TIMEDATE_ADD_INTERVALS:
-			DBGH(dbc, "requested: timedate add intervals (%lu).",
-				ESODBC_TIMEDATE_ADD_INTERVALS);
-			*(SQLUINTEGER *)InfoValue = ESODBC_TIMEDATE_ADD_INTERVALS;
-			break;
-
-		case SQL_TIMEDATE_FUNCTIONS:
-			DBGH(dbc, "requested: timedate functions (%lu).",
-				ESODBC_TIMEDATE_FUNCTIONS);
-			*(SQLUINTEGER *)InfoValue = ESODBC_TIMEDATE_FUNCTIONS;
-			break;
-
-		case SQL_NUMERIC_FUNCTIONS:
-			DBGH(dbc, "requested: numeric functions (%lu).",
-				ESODBC_NUMERIC_FUNCTIONS);
-			*(SQLUINTEGER *)InfoValue = ESODBC_NUMERIC_FUNCTIONS;
-			break;
-
-		case SQL_STRING_FUNCTIONS:
-			DBGH(dbc, "requested: string functions (%lu).",
-				ESODBC_STRING_FUNCTIONS);
-			*(SQLUINTEGER *)InfoValue = ESODBC_STRING_FUNCTIONS;
-			break;
-
-		case SQL_AGGREGATE_FUNCTIONS:
-			DBGH(dbc, "requested: aggregate functions (%lu).",
-				ESODBC_AGGREGATE_FUNCTIONS);
-			*(SQLUINTEGER *)InfoValue = ESODBC_AGGREGATE_FUNCTIONS;
-			break;
-
-		case SQL_SCHEMA_USAGE:
-			DBGH(dbc, "requested: schema usage (%lu).", ESODBC_SCHEMA_USAGE);
-			*(SQLUINTEGER *)InfoValue = ESODBC_SCHEMA_USAGE;
-			break;
-
-		case SQL_CATALOG_USAGE:
-			DBGH(dbc, "requested: catalog usage (%lu).", ESODBC_CATALOG_USAGE);
-			*(SQLUINTEGER *)InfoValue = ESODBC_CATALOG_USAGE;
-			break;
-
-		case SQL_QUOTED_IDENTIFIER_CASE:
-			DBGH(dbc, "requested: quoted identifier case (%lu).",
-				ESODBC_QUOTED_IDENTIFIER_CASE);
-			*(SQLUSMALLINT *)InfoValue = ESODBC_QUOTED_IDENTIFIER_CASE;
-			break;
-
-		case SQL_SPECIAL_CHARACTERS:
-			DBGH(dbc, "requested: special characters (`%s`).",
-				ESODBC_SPECIAL_CHARACTERS);
-			return write_wstr(dbc, InfoValue,
-					&MK_WSTR(ESODBC_SPECIAL_CHARACTERS), BufferLength,
-					StringLengthPtr);
-			break;
-
-		case SQL_MAX_IDENTIFIER_LEN:
-			DBGH(dbc, "requested: max identifier len (%u).",
-				ESODBC_MAX_IDENTIFIER_LEN);
-			*(SQLUSMALLINT *)InfoValue = ESODBC_MAX_IDENTIFIER_LEN;
-			break;
-
-		case SQL_COLUMN_ALIAS:
-			DBGH(dbc, "requested: column alias (`%s`).", ESODBC_COLUMN_ALIAS);
-			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_COLUMN_ALIAS),
-					BufferLength, StringLengthPtr);
-
-		case SQL_MAX_COLUMNS_IN_ORDER_BY:
-			DBGH(dbc, "requested: max columns in ORDER BY (%u).",
-				ESODBC_MAX_COLUMNS_IN_ORDER_BY);
-			*(SQLUSMALLINT *)InfoValue = ESODBC_MAX_COLUMNS_IN_ORDER_BY;
-			break;
-
-		case SQL_MAX_COLUMNS_IN_GROUP_BY:
-			DBGH(dbc, "requested: max columns in GROUP BY (%u).",
-				ESODBC_MAX_COLUMNS_IN_GROUP_BY);
-			*(SQLUSMALLINT *)InfoValue = ESODBC_MAX_COLUMNS_IN_GROUP_BY;
-			break;
-
-		case SQL_MAX_COLUMNS_IN_SELECT:
-			DBGH(dbc, "requested: max columns in SELECT (%u).",
-				ESODBC_MAX_COLUMNS_IN_SELECT);
-			*(SQLUSMALLINT *)InfoValue = ESODBC_MAX_COLUMNS_IN_SELECT;
-			break;
-
-		case SQL_ORDER_BY_COLUMNS_IN_SELECT:
-			DBGH(dbc, "requested: requirement for ORDER BY columns in SELECT "
-				"(%s).", ESODBC_ORDER_BY_COLUMNS_IN_SELECT);
-			return write_wstr(dbc, InfoValue,
-					&MK_WSTR(ESODBC_ORDER_BY_COLUMNS_IN_SELECT),
-					BufferLength, StringLengthPtr);
-
-		case SQL_GROUP_BY:
-			DBGH(dbc, "requested: requirement for GROUP BY (%u).",
-				ESODBC_GROUP_BY);
-			*(SQLUSMALLINT *)InfoValue = ESODBC_GROUP_BY;
-			break;
-
-		case SQL_CONCAT_NULL_BEHAVIOR:
-			DBGH(dbc, "requested: concat NULL behavior (%u).",
-				ESODBC_CONCAT_NULL_BEHAVIOR);
-			*(SQLUSMALLINT *)InfoValue = ESODBC_CONCAT_NULL_BEHAVIOR;
-			break;
-
-		case SQL_SQL_CONFORMANCE:
-			DBGH(dbc, "requested: SQL conformance (%lu).",
-				ESODBC_SQL_CONFORMANCE);
-			*(SQLUINTEGER *)InfoValue = ESODBC_SQL_CONFORMANCE;
-			break;
-
-		case SQL_ODBC_INTERFACE_CONFORMANCE:
-			DBGH(dbc, "requested: ODBC interface conformance (%lu).",
-				ESODBC_ODBC_INTERFACE_CONFORMANCE);
-			*(SQLUINTEGER *)InfoValue = ESODBC_ODBC_INTERFACE_CONFORMANCE;
-			break;
-
-		case SQL_DRIVER_VER:
-			DBGH(dbc, "requested: driver version (`%s`).", ESODBC_DRIVER_VER);
-			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_DRIVER_VER),
-					BufferLength, StringLengthPtr);
-
-		case SQL_DBMS_VER:
-			DBGH(dbc, "requested: DBMS version (`%s`).",
-				ESODBC_ELASTICSEARCH_VER);
-			return write_wstr(dbc, InfoValue,
-					&MK_WSTR(ESODBC_ELASTICSEARCH_VER), BufferLength,
-					StringLengthPtr);
-
 		case SQL_DBMS_NAME:
 			DBGH(dbc, "requested: DBMS name (`%s`).",
 				ESODBC_ELASTICSEARCH_NAME);
 			return write_wstr(dbc, InfoValue,
 					&MK_WSTR(ESODBC_ELASTICSEARCH_NAME), BufferLength,
 					StringLengthPtr);
+		// FIXME: get version from server
+		case SQL_DBMS_VER:
+			DBGH(dbc, "requested: DBMS version (`%s`).",
+				ESODBC_ELASTICSEARCH_VER);
+			return write_wstr(dbc, InfoValue,
+					&MK_WSTR(ESODBC_ELASTICSEARCH_VER), BufferLength,
+					StringLengthPtr);
+	}
+	*handled = FALSE;
+	return SQL_ERROR;
+}
 
+static SQLRETURN getinfo_data_source(
+	BOOL *handled,
+	SQLHDBC ConnectionHandle,
+	SQLUSMALLINT InfoType,
+	_Out_writes_bytes_opt_(BufferLength) SQLPOINTER InfoValue,
+	SQLSMALLINT BufferLength,
+	_Out_opt_ SQLSMALLINT *StringLengthPtr)
+{
+	esodbc_dbc_st *dbc = DBCH(ConnectionHandle);
+
+	*handled = TRUE;
+	switch(InfoType) {
+		case SQL_ACCESSIBLE_PROCEDURES:
+			DBGH(dbc, "requested: accessible procedures (N).");
+			return write_wstr(dbc, InfoValue, &MK_WSTR("N"),
+					BufferLength, StringLengthPtr);
+		case SQL_ACCESSIBLE_TABLES:
+			DBGH(dbc, "requested: accessible tables (`Y`).");
+			return write_wstr(dbc, InfoValue, &MK_WSTR("Y"),
+					BufferLength, StringLengthPtr);
+		// FIXME: review along with cursor review
+		case SQL_BOOKMARK_PERSISTENCE:
+			DBGH(dbc, "requested bookmark persistence (none).");
+			*(SQLUINTEGER *)InfoValue = 0; /* no support */
+			return SQL_SUCCESS;
+		case SQL_CATALOG_TERM: /* SQL_QUALIFIER_TERM */
+			/* JDBC[0]: getCatalogSeparator() */
+			DBGH(dbc, "requested: catalog term (`%s`).", ESODBC_CATALOG_TERM);
+			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_CATALOG_TERM),
+					BufferLength, StringLengthPtr);
+		// FIXME: review at alpha
+		case SQL_COLLATION_SEQ:
+			DBGH(dbc, "requested: collation seq (`UTF8`).");
+			return write_wstr(dbc, InfoValue, &MK_WSTR("UTF8"),
+					BufferLength, StringLengthPtr);
+		case SQL_CONCAT_NULL_BEHAVIOR:
+			DBGH(dbc, "requested: concat NULL behavior (%u).", SQL_CB_NULL);
+			*(SQLUSMALLINT *)InfoValue = SQL_CB_NULL;
+			return SQL_SUCCESS;
+		case SQL_CURSOR_COMMIT_BEHAVIOR:
+		case SQL_CURSOR_ROLLBACK_BEHAVIOR:
+			DBGH(dbc, "requested: cursor %s behavior.",
+				InfoType == SQL_CURSOR_COMMIT_BEHAVIOR ?
+				"commit" : "rollback");
+			/* assume this is the  of equivalent of
+			 * JDBC's HOLD_CURSORS_OVER_COMMIT */
+			*(SQLUSMALLINT *)InfoValue = SQL_CB_PRESERVE;
+			return SQL_SUCCESS;
+		case SQL_CURSOR_SENSITIVITY:
+			DBGH(dbc, "requested: cursor sensitivity (%u).", SQL_INSENSITIVE);
+			*(SQLUINTEGER *)InfoValue = SQL_INSENSITIVE;
+			return SQL_SUCCESS;
+		case SQL_DATA_SOURCE_READ_ONLY:
+			DBGH(dbc, "requested: if data source is read only (Y).");
+			return write_wstr(dbc, InfoValue, &MK_WSTR("Y"), BufferLength,
+					StringLengthPtr);
+		case SQL_DEFAULT_TXN_ISOLATION:
+			DBGH(dbc, "requested: def txn isolation (0).");
+			WARNH(dbc, "no support for transactions available.");
+			*(SQLUINTEGER *)InfoValue = 0;
+			return SQL_SUCCESS;
+		case SQL_DESCRIBE_PARAMETER:
+			DBGH(dbc, "requested: describe param (`N`).");
+			return write_wstr(dbc, InfoValue, &MK_WSTR("N"), BufferLength,
+					StringLengthPtr);
+		case SQL_MULT_RESULT_SETS:
+			DBGH(dbc, "requested: multiple result set support (N).");
+			return write_wstr(dbc, InfoValue, &MK_WSTR("N"), BufferLength,
+					StringLengthPtr);
+		case SQL_MULTIPLE_ACTIVE_TXN:
+			INFOH(dbc, "no transactions support.");
+			DBGH(dbc, "requested: multiple active transactions (`Y`).");
+			/* returning Y in the spirit of concurrency */
+			return write_wstr(dbc, InfoValue, &MK_WSTR("Y"), BufferLength,
+					StringLengthPtr);
+		case SQL_NEED_LONG_DATA_LEN:
+			DBGH(dbc, "requested: long data len (`N`).");
+			return write_wstr(dbc, InfoValue, &MK_WSTR("N"), BufferLength,
+					StringLengthPtr);
+		case SQL_NULL_COLLATION:
+			DBGH(dbc, "requested: null collation (%d).", SQL_NC_END);
+			*(SQLUSMALLINT *)InfoValue = SQL_NC_END;
+			return SQL_SUCCESS;
+		case SQL_PROCEDURE_TERM:
+			DBGH(dbc, "requested: procedure term (``).");
+			return write_wstr(dbc, InfoValue, &MK_WSTR(""), BufferLength,
+					StringLengthPtr);
+		case SQL_SCHEMA_TERM:
+			DBGH(dbc, "requested schema term (`%s`).", ESODBC_SCHEMA_TERM);
+			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_SCHEMA_TERM),
+					BufferLength, StringLengthPtr);
+		case SQL_SCROLL_OPTIONS:
+			DBGH(dbc, "requested: scroll options (%lu).", SQL_SO_FORWARD_ONLY);
+			*(SQLUINTEGER *)InfoValue = SQL_SO_FORWARD_ONLY;
+			return SQL_SUCCESS;
+		case SQL_TABLE_TERM:
+			DBGH(dbc, "requested table term (`%s`).", ESODBC_TABLE_TERM);
+			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_TABLE_TERM),
+					BufferLength, StringLengthPtr);
 		case SQL_TXN_CAPABLE: /* SQL_TRANSACTION_CAPABLE */
-			DBGH(dbc, "requested: transaction capable (%u).",
-				ESODBC_TXN_CAPABLE);
-			*(SQLUSMALLINT *)InfoValue = ESODBC_TXN_CAPABLE;
-			break;
+			DBGH(dbc, "requested: transaction capable (%u).", SQL_TC_NONE);
+			*(SQLUSMALLINT *)InfoValue = SQL_TC_NONE;
+			return SQL_SUCCESS;
+		case SQL_TXN_ISOLATION_OPTION:
+			WARNH(dbc, "transactions not supported.");
+			DBGH(dbc, "requested: transaction isolation options (0).");
+			*(SQLUINTEGER *)InfoValue = 0;
+			return SQL_SUCCESS;
+		case SQL_USER_NAME:
+			break; // TODO
+	}
+	*handled = FALSE;
+	return SQL_ERROR;
+}
 
+static SQLRETURN getinfo_sql(
+	BOOL *handled,
+	SQLHDBC ConnectionHandle,
+	SQLUSMALLINT InfoType,
+	_Out_writes_bytes_opt_(BufferLength) SQLPOINTER InfoValue,
+	SQLSMALLINT BufferLength,
+	_Out_opt_ SQLSMALLINT *StringLengthPtr)
+{
+	esodbc_dbc_st *dbc = DBCH(ConnectionHandle);
+
+	*handled = TRUE;
+	switch(InfoType) {
+		case SQL_AGGREGATE_FUNCTIONS:
+			DBGH(dbc, "requested: aggregate functions (%lu).",
+				ESODBC_AGGREGATE_FUNCTIONS);
+			*(SQLUINTEGER *)InfoValue = ESODBC_AGGREGATE_FUNCTIONS;
+			return SQL_SUCCESS;
+		case SQL_ALTER_DOMAIN:
+			DBGH(dbc, "requested: alter domain (0).");
+			*(SQLUINTEGER *)InfoValue = 0;
+			return SQL_SUCCESS;
+		// case SQL_ALTER_SCHEMA: // undef'd
+		case SQL_ALTER_TABLE:
+			DBGH(dbc, "requested: alter table (0).");
+			*(SQLUINTEGER *)InfoValue = 0;
+			return SQL_SUCCESS;
+		// case SQL_ANSI_SQL_DATETIME_LITERALS: // undef'd
+		case SQL_CATALOG_LOCATION:
+			DBGH(dbc, "requested: catalogue location (`%hu`).", SQL_CL_START);
+			*(SQLUSMALLINT *)InfoValue = SQL_CL_START;
+			return SQL_SUCCESS;
+		case SQL_CATALOG_NAME:
+			DBGH(dbc, "requested: catalog name support (Y).");
+			return write_wstr(dbc, InfoValue, &MK_WSTR("Y"),
+					BufferLength, StringLengthPtr);
+		case SQL_CATALOG_NAME_SEPARATOR: /* SQL_QUALIFIER_NAME_SEPARATOR */
+			/* JDBC[0]: getCatalogSeparator() */
+			DBGH(dbc, "requested: catalogue separator (`%s`).",
+				ESODBC_CATALOG_SEPARATOR);
+			return write_wstr(dbc, InfoValue,
+					&MK_WSTR(ESODBC_CATALOG_SEPARATOR), BufferLength,
+					StringLengthPtr);
+		case SQL_CATALOG_USAGE:
+			DBGH(dbc, "requested: catalog usage (%lu).", ESODBC_CATALOG_USAGE);
+			*(SQLUINTEGER *)InfoValue = ESODBC_CATALOG_USAGE;
+			return SQL_SUCCESS;
+		case SQL_COLUMN_ALIAS:
+			DBGH(dbc, "requested: column alias (Y).");
+			return write_wstr(dbc, InfoValue, &MK_WSTR("Y"),
+					BufferLength, StringLengthPtr);
+		case SQL_CORRELATION_NAME:
+			// JDBC[0]: supportsDifferentTableCorrelationNames()
+			DBGH(dbc, "requested: table correlation names (any).");
+			/* TODO: JDBC returns true for correlation, but false for
+			 * difference. How to signal that in ODBC?? (with no bit mask) */
+			*(SQLUSMALLINT *)InfoValue = SQL_CN_ANY;
+			return SQL_SUCCESS;
+		case SQL_CREATE_ASSERTION:
+		case SQL_CREATE_CHARACTER_SET:
+		case SQL_CREATE_COLLATION:
+		case SQL_CREATE_DOMAIN:
+		case SQL_CREATE_SCHEMA:
+		case SQL_CREATE_TABLE:
+		case SQL_CREATE_TRANSLATION:
+			DBGH(dbc, "requested: create statement: %hu (0).", InfoType);
+			*(SQLUINTEGER *)InfoValue = 0;
+			return SQL_SUCCESS;
+		case SQL_DATETIME_LITERALS:
+			DBGH(dbc, "requested: SQL92 datetime literals (%lu).",
+				ESODBC_DATETIME_LITERALS);
+			*(SQLUINTEGER *)InfoValue = ESODBC_DATETIME_LITERALS;
+			return SQL_SUCCESS;
+		case SQL_DDL_INDEX:
+			DBGH(dbc, "requested: index managment (0).");
+			*(SQLUINTEGER *)InfoValue = 0;
+			return SQL_SUCCESS;
+		case SQL_DROP_ASSERTION:
+		case SQL_DROP_CHARACTER_SET:
+		case SQL_DROP_COLLATION:
+		case SQL_DROP_DOMAIN:
+		case SQL_DROP_SCHEMA:
+		case SQL_DROP_TABLE:
+		case SQL_DROP_TRANSLATION:
+		case SQL_DROP_VIEW:
+			DBGH(dbc, "requested: drop statement: %hu (0).", InfoType);
+			*(SQLUINTEGER *)InfoValue = 0;
+			return SQL_SUCCESS;
+		case SQL_EXPRESSIONS_IN_ORDERBY:
+			DBGH(dbc, "requested: expressions in order by (0).");
+			return write_wstr(dbc, InfoValue, &MK_WSTR("Y"),
+					BufferLength, StringLengthPtr);
+		case SQL_GROUP_BY:
+			DBGH(dbc, "requested: requirement for GROUP BY (%u).",
+				SQL_GB_NO_RELATION);
+			*(SQLUSMALLINT *)InfoValue = SQL_GB_NO_RELATION;
+			return SQL_SUCCESS;
+		case SQL_IDENTIFIER_CASE:
+			DBGH(dbc, "requested: identifier case (%hu).", SQL_IC_MIXED );
+			*(SQLUSMALLINT *)InfoValue = SQL_IC_MIXED;
+			return SQL_SUCCESS;
+		case SQL_IDENTIFIER_QUOTE_CHAR:
+			/* JDBC[0]: getIdentifierQuoteString() */
+			DBGH(dbc, "requested: quoting char (`%s`).", ESODBC_QUOTE_CHAR);
+			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_QUOTE_CHAR),
+					BufferLength, StringLengthPtr);
+		case SQL_INDEX_KEYWORDS:
+			DBGH(dbc, "requested: identifier case (%hu).", SQL_IK_NONE);
+			*(SQLUSMALLINT *)InfoValue = SQL_IK_NONE;
+			return SQL_SUCCESS;
+		case SQL_INSERT_STATEMENT:
+			DBGH(dbc, "requested: insert support (0).");
+			*(SQLUINTEGER *)InfoValue = 0;
+			return SQL_SUCCESS;
+		case SQL_INTEGRITY:
+			DBGH(dbc, "requested: Integrity Enhancement Facility (N).");
+			return write_wstr(dbc, InfoValue, &MK_WSTR("N"),
+					BufferLength, StringLengthPtr);
+		case SQL_KEYWORDS:
+			break; // TODO
+		case SQL_LIKE_ESCAPE_CLAUSE:
+			DBGH(dbc, "requested: like escape clause (Y).");
+			return write_wstr(dbc, InfoValue, &MK_WSTR("Y"),
+					BufferLength, StringLengthPtr);
+		case SQL_NON_NULLABLE_COLUMNS:
+			/* JDBC[0]: supportsNonNullableColumns() */
+			DBGH(dbc, "requested: nullable columns (true).");
+			*(SQLUSMALLINT *)InfoValue = SQL_NNC_NULL;
+			return SQL_SUCCESS;
+		case SQL_SQL_CONFORMANCE:
+			DBGH(dbc, "requested: SQL conformance (%lu).",
+				ESODBC_SQL_CONFORMANCE);
+			*(SQLUINTEGER *)InfoValue = ESODBC_SQL_CONFORMANCE;
+			return SQL_SUCCESS;
+		case SQL_OJ_CAPABILITIES: /* SQL_OUTER_JOIN_CAPABILITIES */
+			DBGH(dbc, "requested: outer joins capabilities (0).");
+			*(SQLUINTEGER *)InfoValue = 0;
+			return SQL_SUCCESS;
+		case SQL_ORDER_BY_COLUMNS_IN_SELECT:
+			DBGH(dbc, "requested: order by columns in select (N).");
+			return write_wstr(dbc, InfoValue, &MK_WSTR("N"), BufferLength,
+					StringLengthPtr);
+		case SQL_OUTER_JOINS:
+			DBGH(dbc, "requested: outer join support (Y).");
+			return write_wstr(dbc, InfoValue, &MK_WSTR("Y"), BufferLength,
+					StringLengthPtr);
+		case SQL_PROCEDURES:
+			DBGH(dbc, "requested: procedures (N).");
+			return write_wstr(dbc, InfoValue, &MK_WSTR("N"),
+					BufferLength, StringLengthPtr);
+		case SQL_QUOTED_IDENTIFIER_CASE:
+			DBGH(dbc, "requested: quoted identifier case (%hu).",
+				SQL_IC_SENSITIVE);
+			*(SQLUSMALLINT *)InfoValue = SQL_IC_SENSITIVE;
+			return SQL_SUCCESS;
+		case SQL_SCHEMA_USAGE:
+			/* no schema support, but accepted (=currently ignored) by drv */
+			DBGH(dbc, "requested: schema usage (%lu).",
+				SQL_SU_PROCEDURE_INVOCATION);
+			*(SQLUINTEGER *)InfoValue = SQL_SU_PROCEDURE_INVOCATION;
+			return SQL_SUCCESS;
+		case SQL_SPECIAL_CHARACTERS:
+			DBGH(dbc, "requested: special characters (`%s`).",
+				ESODBC_SPECIAL_CHARACTERS);
+			return write_wstr(dbc, InfoValue,
+					&MK_WSTR(ESODBC_SPECIAL_CHARACTERS), BufferLength,
+					StringLengthPtr);
+		case SQL_SQL92_DATETIME_FUNCTIONS:
+			DBGH(dbc, "requested: SQL92 datetime functions (%lu).",
+				ESODBC_SQL92_DATETIME_FUNCTIONS);
+			*(SQLUINTEGER *)InfoValue = ESODBC_SQL92_DATETIME_FUNCTIONS;
+			return SQL_SUCCESS;
+		case SQL_SQL92_NUMERIC_VALUE_FUNCTIONS:
+			DBGH(dbc, "requested: SQL92 numeric value functions (%lu).",
+				ESODBC_SQL92_NUMERIC_VALUE_FUNCTIONS);
+			*(SQLUINTEGER *)InfoValue = ESODBC_SQL92_NUMERIC_VALUE_FUNCTIONS;
+			return SQL_SUCCESS;
+		case SQL_SQL92_PREDICATES:
+			DBGH(dbc, "requested: SQL92 predicates (%lu).",
+				ESODBC_SQL92_PREDICATES);
+			*(SQLUINTEGER *)InfoValue = ESODBC_SQL92_PREDICATES;
+			return SQL_SUCCESS;
+		case SQL_SQL92_RELATIONAL_JOIN_OPERATORS:
+			DBGH(dbc, "requested: SQL92 relational joins operators (%lu).",
+				ESODBC_SQL92_RELATIONAL_JOIN_OPERATORS);
+			*(SQLUINTEGER *)InfoValue = ESODBC_SQL92_RELATIONAL_JOIN_OPERATORS;
+			return SQL_SUCCESS;
+		//case SQL_STRING_FUNCTIONS:
+		case SQL_SQL92_STRING_FUNCTIONS:
+			DBGH(dbc, "requested: SQL92 string functions (%lu).",
+				ESODBC_SQL92_STRING_FUNCTIONS);
+			*(SQLUINTEGER *)InfoValue = ESODBC_SQL92_STRING_FUNCTIONS;
+			return SQL_SUCCESS;
+		case SQL_SQL92_VALUE_EXPRESSIONS:
+			DBGH(dbc, "requested: SQL92 value expressions (%lu).",
+				ODBC_SQL92_VALUE_EXPRESSIONS);
+			*(SQLUINTEGER *)InfoValue = ODBC_SQL92_VALUE_EXPRESSIONS;
+			return SQL_SUCCESS;
+		case SQL_SUBQUERIES:
+			DBGH(dbc, "requested: subqueries support (0).");
+			*(SQLUINTEGER *)InfoValue = 0;
+			return SQL_SUCCESS;
+		case SQL_UNION:
+			DBGH(dbc, "requested: union support (%lu).", SQL_U_UNION_ALL);
+			*(SQLUINTEGER *)InfoValue = SQL_U_UNION_ALL;
+			return SQL_SUCCESS;
+	}
+	*handled = FALSE;
+	return SQL_ERROR;
+}
+
+static SQLRETURN getinfo_sql_limits(
+	BOOL *handled,
+	SQLHDBC ConnectionHandle,
+	SQLUSMALLINT InfoType,
+	_Out_writes_bytes_opt_(BufferLength) SQLPOINTER InfoValue,
+	SQLSMALLINT BufferLength,
+	_Out_opt_ SQLSMALLINT *StringLengthPtr)
+{
+	esodbc_dbc_st *dbc = DBCH(ConnectionHandle);
+	size_t len;
+
+	*handled = TRUE;
+	/*INDENT-OFF*/
+	switch(InfoType) {
+		do {
+			/* spec (alphabetically) ordered */
+		case SQL_MAX_BINARY_LITERAL_LEN: len = sizeof(SQLUINTEGER); break;
+		case SQL_MAX_CATALOG_NAME_LEN: len = sizeof(SQLUSMALLINT); break;
+		case SQL_MAX_CHAR_LITERAL_LEN: len = sizeof(SQLUINTEGER); break;
+		case SQL_MAX_COLUMN_NAME_LEN: len = sizeof(SQLUSMALLINT); break;
+		case SQL_MAX_COLUMNS_IN_GROUP_BY: len = sizeof(SQLUSMALLINT); break;
+		case SQL_MAX_COLUMNS_IN_INDEX: len = sizeof(SQLUSMALLINT); break;
+		case SQL_MAX_COLUMNS_IN_ORDER_BY: len = sizeof(SQLUSMALLINT); break;
+		case SQL_MAX_COLUMNS_IN_SELECT: len = sizeof(SQLUSMALLINT); break;
+		case SQL_MAX_COLUMNS_IN_TABLE: len = sizeof(SQLUSMALLINT); break;
+		case SQL_MAX_CURSOR_NAME_LEN: len = sizeof(SQLUSMALLINT); break;
+		case SQL_MAX_IDENTIFIER_LEN:
+			DBGH(dbc, "requested: max identifier len (%u).",
+				ESODBC_MAX_IDENTIFIER_LEN);
+			*(SQLUSMALLINT *)InfoValue = ESODBC_MAX_IDENTIFIER_LEN;
+			return SQL_SUCCESS;
+		case SQL_MAX_INDEX_SIZE: len = sizeof(SQLUINTEGER); break;
+		case SQL_MAX_PROCEDURE_NAME_LEN: len = sizeof(SQLUSMALLINT); break;
+		case SQL_MAX_ROW_SIZE: len = sizeof(SQLUINTEGER); break;
+		case SQL_MAX_ROW_SIZE_INCLUDES_LONG:
+			DBGH(dbc, "requested: max row size includes longs (Y).");
+			return write_wstr(dbc, InfoValue, &MK_WSTR("Y"),
+					BufferLength, StringLengthPtr);
+		case SQL_MAX_SCHEMA_NAME_LEN: len = sizeof(SQLUSMALLINT); break;
+		case SQL_MAX_STATEMENT_LEN: len = sizeof(SQLUINTEGER); break;
+		case SQL_MAX_TABLE_NAME_LEN: len = sizeof(SQLUSMALLINT); break;
+		case SQL_MAX_TABLES_IN_SELECT: len = sizeof(SQLUSMALLINT); break;
+		case SQL_MAX_USER_NAME_LEN: len = sizeof(SQLUSMALLINT); break;
+		} while (0);
+			DBGH(dbc, "requested: max %hu (0).", InfoType);
+			memset(InfoValue, 0, len);
+			return SQL_SUCCESS;
+	}
+	/*INDENT-ON*/
+	*handled = FALSE;
+	return SQL_ERROR;
+}
+
+static SQLRETURN getinfo_scalars(
+	BOOL *handled,
+	SQLHDBC ConnectionHandle,
+	SQLUSMALLINT InfoType,
+	_Out_writes_bytes_opt_(BufferLength) SQLPOINTER InfoValue,
+	SQLSMALLINT BufferLength,
+	_Out_opt_ SQLSMALLINT *StringLengthPtr)
+{
+	esodbc_dbc_st *dbc = DBCH(ConnectionHandle);
+
+	*handled = TRUE;
+	switch(InfoType) {
+		case SQL_CONVERT_FUNCTIONS:
+			DBGH(dbc, "requested: convert functions (%lu).",
+				ESODBC_CONVERT_FUNCTIONS);
+			*(SQLUINTEGER *)InfoValue = ESODBC_CONVERT_FUNCTIONS;
+			return SQL_SUCCESS;
+		case SQL_NUMERIC_FUNCTIONS:
+			DBGH(dbc, "requested: numeric functions (%lu).",
+				ESODBC_NUMERIC_FUNCTIONS);
+			*(SQLUINTEGER *)InfoValue = ESODBC_NUMERIC_FUNCTIONS;
+			return SQL_SUCCESS;
+		case SQL_STRING_FUNCTIONS:
+			DBGH(dbc, "requested: string functions (%lu).",
+				ESODBC_STRING_FUNCTIONS);
+			*(SQLUINTEGER *)InfoValue = ESODBC_STRING_FUNCTIONS;
+			return SQL_SUCCESS;
+		case SQL_SYSTEM_FUNCTIONS:
+			DBGH(dbc, "requested: system functions (%lu).",
+				ESODBC_SYSTEM_FUNCTIONS);
+			*(SQLUINTEGER *)InfoValue = ESODBC_SYSTEM_FUNCTIONS;
+			return SQL_SUCCESS;
+		case SQL_TIMEDATE_ADD_INTERVALS:
+			DBGH(dbc, "requested: timedate add intervals (%lu).",
+				ESODBC_TIMEDATE_ADD_INTERVALS);
+			*(SQLUINTEGER *)InfoValue = ESODBC_TIMEDATE_ADD_INTERVALS;
+			return SQL_SUCCESS;
+		case SQL_TIMEDATE_DIFF_INTERVALS:
+			DBGH(dbc, "requested: timedate diff intervals (%lu).",
+				ESODBC_TIMEDATE_DIFF_INTERVALS);
+			*(SQLUINTEGER *)InfoValue = ESODBC_TIMEDATE_DIFF_INTERVALS;
+			return SQL_SUCCESS;
+		case SQL_TIMEDATE_FUNCTIONS:
+			DBGH(dbc, "requested: timedate functions (%lu).",
+				ESODBC_TIMEDATE_FUNCTIONS);
+			*(SQLUINTEGER *)InfoValue = ESODBC_TIMEDATE_FUNCTIONS;
+			return SQL_SUCCESS;
+	}
+	*handled = FALSE;
+	return SQL_ERROR;
+}
+
+static SQLRETURN getinfo_conversion(
+	BOOL *handled,
+	SQLHDBC ConnectionHandle,
+	SQLUSMALLINT InfoType,
+	_Out_writes_bytes_opt_(BufferLength) SQLPOINTER InfoValue,
+	SQLSMALLINT BufferLength,
+	_Out_opt_ SQLSMALLINT *StringLengthPtr)
+{
+	esodbc_dbc_st *dbc = DBCH(ConnectionHandle);
+
+	*handled = TRUE;
+	switch(InfoType) {
 		case SQL_CONVERT_BIGINT:
 		case SQL_CONVERT_BINARY:
 		case SQL_CONVERT_BIT:
-		case SQL_CONVERT_GUID:
 		case SQL_CONVERT_CHAR:
 		case SQL_CONVERT_DATE:
 		case SQL_CONVERT_DECIMAL:
 		case SQL_CONVERT_DOUBLE:
 		case SQL_CONVERT_FLOAT:
+		case SQL_CONVERT_GUID:
 		case SQL_CONVERT_INTEGER:
 		case SQL_CONVERT_INTERVAL_YEAR_MONTH:
 		case SQL_CONVERT_INTERVAL_DAY_TIME:
@@ -558,53 +797,77 @@ SQLRETURN EsSQLGetInfoW(SQLHDBC ConnectionHandle,
 			DBGH(dbc, "requested: convert data-type support (0).");
 			INFOH(dbc, "no CONVERT scalar function support.");
 			*(SQLUINTEGER *)InfoValue = 0;
-			break;
+			return SQL_SUCCESS;
+	}
+	*handled = FALSE;
+	return SQL_ERROR;
+}
 
-		case SQL_MULT_RESULT_SETS:
-			DBGH(dbc, "requested: multiple result set support (`"
-				ESODBC_MULT_RESULT_SETS "`).");
-			return write_wstr(dbc, InfoValue,
-					&MK_WSTR(ESODBC_MULT_RESULT_SETS), BufferLength,
-					StringLengthPtr);
 
-		case SQL_BATCH_SUPPORT:
-			DBGH(dbc, "requested: batch support (%d).", ESODBC_BATCH_SUPPORT);
-			*(SQLUINTEGER *)InfoValue = ESODBC_BATCH_SUPPORT;
-			break;
+// [0] x-p-es/sql/jdbc/src/main/java/org/elasticsearch/xpack/sql/jdbc/jdbc/JdbcDatabaseMetaData.java : DatabaseMetaData
+/*
+ * """
+ * The SQL_MAX_DRIVER_CONNECTIONS option in SQLGetInfo specifies how many
+ * active connections a particular driver supports.
+ * """
+ */
+SQLRETURN EsSQLGetInfoW(
+	SQLHDBC ConnectionHandle,
+	SQLUSMALLINT InfoType,
+	_Out_writes_bytes_opt_(BufferLength) SQLPOINTER InfoValue,
+	SQLSMALLINT BufferLength,
+	_Out_opt_ SQLSMALLINT *StringLengthPtr)
+{
+	esodbc_dbc_st *dbc = DBCH(ConnectionHandle);
+	BOOL handled;
+	SQLRETURN ret;
 
-		case SQL_PARAM_ARRAY_SELECTS:
-			DBGH(dbc, "requested: reselt set availability with parameterized "
-				"execution (%d).", ESODBC_PARAM_ARRAY_SELECTS);
-			*(SQLUINTEGER *)InfoValue = ESODBC_PARAM_ARRAY_SELECTS;
-			break;
-
-		case SQL_DTC_TRANSITION_COST:
-			INFOH(dbc, "no connection pooling / DTC support.");
-			DBGH(dbc, "requested: DTC transition cost (%d).",
-				ESODBC_DTC_TRANSITION_COST);
-			*(SQLUINTEGER *)InfoValue = ESODBC_DTC_TRANSITION_COST;
-			break;
-
-#if (ODBCVER < 0x0400)
-		/* this is an ODBC 4.0, but Excel seems to asks for it anyways in
-		 * certain cases with a 3.80 driver */
-		case 180: /* = SQL_RETURN_ESCAPE_CLAUSE */
-#else
-		case SQL_RETURN_ESCAPE_CLAUSE:
-#endif /* SQL_RETURN_ESCAPE_CLAUSE */
-			/* actually an error, but po */
-			INFOH(dbc, "SQL_RETURN_ESCAPE_CLAUSE not supported");
-			*(SQLUINTEGER *)InfoValue = 0; /* = SQL_RC_NONE */
-			break;
-
-		default:
-			BUGH(dbc, "unimplemented InfoType: %u.", InfoType); //FIXME
-			ERRH(dbc, "unknown InfoType: %u.", InfoType);
-			RET_HDIAGS(dbc, SQL_STATE_HYC00/*096?*/);
+	ret = getinfo_driver(&handled, ConnectionHandle, InfoType, InfoValue,
+			BufferLength, StringLengthPtr);
+	if (handled) {
+		return ret;
 	}
 
-	return SQL_SUCCESS;
+	ret = getinfo_dbms_product(&handled, ConnectionHandle, InfoType, InfoValue,
+			BufferLength, StringLengthPtr);
+	if (handled) {
+		return ret;
+	}
+
+	ret = getinfo_data_source(&handled, ConnectionHandle, InfoType, InfoValue,
+			BufferLength, StringLengthPtr);
+	if (handled) {
+		return ret;
+	}
+
+	ret = getinfo_sql(&handled, ConnectionHandle, InfoType, InfoValue,
+			BufferLength, StringLengthPtr);
+	if (handled) {
+		return ret;
+	}
+
+	ret = getinfo_sql_limits(&handled, ConnectionHandle, InfoType, InfoValue,
+			BufferLength, StringLengthPtr);
+	if (handled) {
+		return ret;
+	}
+
+	ret = getinfo_scalars(&handled, ConnectionHandle, InfoType, InfoValue,
+			BufferLength, StringLengthPtr);
+	if (handled) {
+		return ret;
+	}
+
+	ret = getinfo_conversion(&handled, ConnectionHandle, InfoType, InfoValue,
+			BufferLength, StringLengthPtr);
+	if (handled) {
+		return ret;
+	}
+
+	ERRH(dbc, "unknown InfoType: %u.", InfoType);
+	RET_HDIAGS(dbc, SQL_STATE_HY096);
 }
+
 
 /* TODO: see error.h: esodbc_errors definition note (2.x apps support) */
 /* Note: with SQL_DIAG_SQLSTATE DM provides a NULL StringLengthPtr */
@@ -617,7 +880,8 @@ SQLRETURN EsSQLGetDiagFieldW(
 	SQLSMALLINT BufferLength,
 	_Out_opt_ SQLSMALLINT *StringLengthPtr)
 {
-	esodbc_diag_st *diag;
+	esodbc_dbc_st *dbc;
+	esodbc_diag_st *diag, bak;
 	esodbc_env_st dummy;
 	SQLSMALLINT used;
 	size_t len;
@@ -743,28 +1007,33 @@ SQLRETURN EsSQLGetDiagFieldW(
 			return write_wstr(&dummy, DiagInfoPtr, wstrp, BufferLength,
 					StringLengthPtr);
 
-		/* same as SQLGetInfo(SQL_DATA_SOURCE_NAME) */
+		do {
 		case SQL_DIAG_CONNECTION_NAME:
-		/* TODO: this must be the server name, not DSN. */
 		case SQL_DIAG_SERVER_NAME:
 			switch (HandleType) {
 				case SQL_HANDLE_DBC:
-					wstrp = &DBCH(Handle)->dsn;
+					dbc = DBCH(Handle);
 					break;
 				case SQL_HANDLE_STMT:
-					wstrp = &STMH(Handle)->hdr.dbc->dsn;
+					dbc = STMH(Handle)->hdr.dbc;
 					break;
 				case SQL_HANDLE_DESC:
-					wstrp = &DSCH(Handle)->hdr.stmt->hdr.dbc->dsn;
+					dbc = DSCH(Handle)->hdr.stmt->hdr.dbc;
 					break;
 				default:
-					wstrp = &MK_WSTR("");
+					ERR("unknown handle type %hd, @0x%p.", HandleType, Handle);
+					return SQL_ERROR; // SQL_INVALID_HANDLE?
 			}
-			DBGH(Handle, "inquired connection name (`" LWPDL "`)",
-				LWSTR(wstrp));
-			return write_wstr(&dummy, DiagInfoPtr, wstrp, BufferLength,
-					StringLengthPtr);
-
+		} while (0);
+			/* save (and then restore) the diag state, since this call mustn't
+			 * change it */
+			bak = dbc->hdr.diag;
+			ret = EsSQLGetInfoW(dbc,
+					DiagIdentifier == SQL_DIAG_CONNECTION_NAME ?
+							SQL_DATA_SOURCE_NAME : SQL_SERVER_NAME,
+					DiagInfoPtr, BufferLength, StringLengthPtr);
+			dbc->hdr.diag = bak;
+			return ret;
 
 		case SQL_DIAG_MESSAGE_TEXT: //break;
 		case SQL_DIAG_NATIVE: //break;

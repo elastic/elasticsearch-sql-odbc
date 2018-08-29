@@ -45,33 +45,18 @@
 #define ESODBC_QUOTE_CHAR			"\""
 #define ESODBC_PATTERN_ESCAPE		"\\"
 #define ESODBC_CATALOG_SEPARATOR	":"
-#define ESODBC_CATALOG_LOCATION		SQL_CL_START /* TODO: 2x check! */
 #define ESODBC_CATALOG_TERM			"clusterName"
 #define ESODBC_TABLE_TERM			"type" // TODO: or table?
 #define ESODBC_SCHEMA_TERM			"schema"
-#define ESODBC_MAX_SCHEMA_LEN		0
 #define ESODBC_PARAM_MARKER			"?"
 
-/* max # of active statements for a connection */
-#define ESODBC_MAX_CONCURRENT_ACTIVITIES	0
 /* maximum identifer length */
 /* TODO: review@alpha */
 /* match 'keyword' ES type length */
 #define ESODBC_MAX_IDENTIFIER_LEN			256
-/* the following lifted/derived from ES/SQL's JdbcDatabaseMetaData.java */
-/* max columns in ORDER BY; 0 - no limit / unknown */
-#define ESODBC_MAX_COLUMNS_IN_ORDER_BY		0
-/* max columns in GROUP BY; 0 - no limit / unknown */
-#define ESODBC_MAX_COLUMNS_IN_GROUP_BY		0
-/* max columns in SELECT; 0 - no limit / unknown */
-#define ESODBC_MAX_COLUMNS_IN_SELECT		0
-/* "if the columns in the ORDER BY clause must be in the select list" */
-#define ESODBC_ORDER_BY_COLUMNS_IN_SELECT	"Y"
 /* "the relationship between the columns in the GROUP BY clause and the
  * nonaggregated columns in the select list" */
 #define ESODBC_GROUP_BY						SQL_GB_NO_RELATION
-/* "how the data source handles the concatenation of NULL [.] with non-NULL" */
-#define ESODBC_CONCAT_NULL_BEHAVIOR			SQL_CB_NULL
 
 /* 20 = len("18446744073709551616"), 1 << (sizeof(uint64_t) * 8bits) */
 #define ESODBC_PRECISION_UINT64			20
@@ -164,7 +149,7 @@
 
 /*
  *
- * Driver/Elasticsearch capabilities
+ * Driver/Elasticsearch capabilities (SQLGetInfo)
  *
  */
 
@@ -178,22 +163,7 @@
 #define ESODBC_ODBC_INTERFACE_CONFORMANCE		SQL_OIC_CORE
 #define ESODBC_GETDATA_EXTENSIONS				(0 | \
 	SQL_GD_ANY_COLUMN | SQL_GD_ANY_ORDER | SQL_GD_BOUND)
-/* Read-only queries supported only */
-#define ESODBC_DATA_SOURCE_READ_ONLY			"Y"
-/* no support for transactions */
-#define ESODBC_TXN_CAPABLE						SQL_TC_NONE
-/* if asked (should not happen, since TXN_CAPABLE is NONE), all transaction
- * levels advertised, since read only operations are supported and no
- * transactions; this would need to be updated if updating ones will be
- * introduced. */
-#define ESODBC_DEF_TXN_ISOLATION				(0 | \
-	SQL_TXN_READ_UNCOMMITTED | SQL_TXN_READ_COMMITTED | \
-	SQL_TXN_REPEATABLE_READ | SQL_TXN_SERIALIZABLE)
 
-/* no schema support, but accepted (=currently ignored) by driver */
-#define ESODBC_SCHEMA_USAGE						SQL_SU_PROCEDURE_INVOCATION
-/* the server supports catalog names */
-#define ESODBC_CATALOG_NAME						"Y"
 /*
  * Catalog support:
  * - supported in: DML STATEMENTS, ODBC PROCEDURE INVOCATION.
@@ -201,26 +171,22 @@
  */
 #define ESODBC_CATALOG_USAGE					(0 | \
 	SQL_CU_DML_STATEMENTS | SQL_CU_PROCEDURE_INVOCATION)
-/* identifiers are case sensitive */
-#define ESODBC_QUOTED_IDENTIFIER_CASE			SQL_IC_SENSITIVE
 /* what's allowed in an identifier name (eg. table, column, index) except
  * [a-zA-Z0-9_], accepted in a delimited specification -> all printable ASCII
  * (assuming ASCII is the limitation?? TODO ), 0x20-0x7E. */
 #define ESODBC_SPECIAL_CHARACTERS				" !\"#$%&'()*+,-./" /*[0-9]*/ \
 	";<=>?@" /*[A-Z]*/ "[\\]^" /*[_]*/ "`" /*[a-z]*/ "{|}~"
-/* is 'column AS name' accepted? */
-#define ESODBC_COLUMN_ALIAS						"Y"
-/* no procedures support */
-#define ESODBC_PROCEDURES						"N"
-/* no driver support for multiple result sets */
-#define ESODBC_MULT_RESULT_SETS					"N"
-/* no driver support for batching */
-#define ESODBC_BATCH_SUPPORT					0UL
-/* no driver support array of parameters */
-#define ESODBC_PARAM_ARRAY_SELECTS				SQL_PAS_NO_SELECT
-/* no connection pooling or distributed transactions */
-#define ESODBC_DTC_TRANSITION_COST				0
-
+/* SQLFetchScroll() and SQLSetPos() capabilities.
+ * TODO: NEXT, ABS, RELATIVE: pending SetPos()
+ * TODO: BULK_FETC: pending bookmarks */
+#define ESODBC_FORWARD_ONLY_CURSOR_ATTRIBUTES1	(0 | \
+	SQL_CA1_NEXT | SQL_CA1_ABSOLUTE | SQL_CA1_RELATIVE | \
+	SQL_CA1_LOCK_NO_CHANGE | \
+	SQL_CA1_POS_POSITION | \
+	SQL_CA1_BULK_FETCH_BY_BOOKMARK )
+#define ESODBC_FORWARD_ONLY_CURSOR_ATTRIBUTES2	(0 | \
+	SQL_CA2_READ_ONLY_CONCURRENCY | \
+	SQL_CA2_SIMULATE_NON_UNIQUE ) /* tho no update/delete supported */
 
 /*
  * SELECT predicates:
@@ -235,7 +201,6 @@
  * No JOIN support.
  */
 #define ESODBC_SQL92_RELATIONAL_JOIN_OPERATORS	0LU
-#define ESODBC_OJ_CAPABILITIES					0LU
 
 /*
  * String functions support:

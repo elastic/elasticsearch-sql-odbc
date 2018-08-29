@@ -50,7 +50,7 @@ SQLSMALLINT copy_current_catalog(esodbc_dbc_st *dbc, SQLWCHAR *dest,
 	SQLSMALLINT used = -1; /*failure*/
 	SQLLEN row_cnt;
 	SQLLEN ind_len = SQL_NULL_DATA;
-	SQLWCHAR buff[ESODBC_MAX_IDENTIFIER_LEN];
+	SQLWCHAR buff[ESODBC_MAX_IDENTIFIER_LEN + /*\0*/1];
 	wstr_st catalog;
 
 	if (! SQL_SUCCEEDED(EsSQLAllocHandle(SQL_HANDLE_STMT, dbc, &stmt))) {
@@ -100,6 +100,7 @@ SQLSMALLINT copy_current_catalog(esodbc_dbc_st *dbc, SQLWCHAR *dest,
 			catalog = (wstr_st) {
 				buff, ind_len
 			};
+			buff[ind_len] = L'\0'; /* write_wstr() expects the 0-term */
 			DBGH(dbc, "current catalog (first value returned): `" LWPDL "`.",
 				LWSTR(&catalog));
 		}
@@ -155,13 +156,18 @@ size_t quote_tokens(SQLWCHAR *src, size_t len, SQLWCHAR *dest)
 			default:
 				if (! copying) {
 					*pos ++ = L'\''; /* start a new token */
+					copying = TRUE;
 				}
-				copying = TRUE;
 		}
 		*pos ++ = src[i];
 	}
 	if (copying) {
 		*pos ++ = L'\''; /* end last token */
+	} else if (dest < pos && pos[-1] == L',') {
+		/* trim last char, if it's a comma: LibreOffice (6.1.0.3) sends the
+		 * table type string `VIEW,TABLE,%,` having the last `,` propagated to
+		 * EsSQL, which rejects the query */
+		pos --;
 	}
 	/* should not overrun */
 	assert(i < 2/*see typ_buf below*/ * ESODBC_MAX_IDENTIFIER_LEN);

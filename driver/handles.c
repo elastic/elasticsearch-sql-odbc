@@ -224,9 +224,7 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 				ERRNH(env, "failed to callocate connection handle.");
 				RET_HDIAGS(env, SQL_STATE_HY001);
 			}
-			dbc->dsn.str = MK_WPTR(""); /* see explanation in cleanup_dbc() */
 			dbc->metadata_id = SQL_FALSE;
-			dbc->txn_isolation = ESODBC_DEF_TXN_ISOLATION;
 
 			/* rest of initialization done at connect time */
 
@@ -802,14 +800,54 @@ SQLRETURN EsSQLSetStmtAttrW(
 			break;
 
 		case SQL_ATTR_QUERY_TIMEOUT:
-			DBGH(stmt, "setting query timeout to: %u", (SQLULEN)ValuePtr);
+			DBGH(stmt, "setting query timeout to: %u.", (SQLULEN)ValuePtr);
 			stmt->query_timeout = (SQLULEN)ValuePtr;
+			break;
+
+		case SQL_ATTR_CURSOR_TYPE:
+			DBGH(stmt, "setting cursor type: %llu.", (SQLULEN)ValuePtr);
+			if ((SQLULEN)ValuePtr != SQL_CURSOR_FORWARD_ONLY) {
+				WARNH(stmt, "requested cursor_type substituted with "
+						"forward-only (%llu).", SQL_CURSOR_FORWARD_ONLY);
+				RET_HDIAGS(stmt, SQL_STATE_01S02);
+			}
+			break;
+
+		case SQL_ATTR_NOSCAN:
+			DBGH(stmt, "setting escape seq scanning: %llu -- NOOP.",
+					(SQLULEN)ValuePtr);
+			/* nothing to do: the driver never scans the input, ESSQL processes
+			 * the escape sequences */
+			break;
+
+		case SQL_ATTR_CONCURRENCY:
+			DBGH(stmt, "setting concurrency: %llu.", (SQLULEN)ValuePtr);
+			if ((SQLULEN)ValuePtr != SQL_CONCUR_READ_ONLY) {
+				WARNH(stmt, "requested concurrency substituted with "
+						"read-only (%llu).", SQL_CONCUR_READ_ONLY);
+				RET_HDIAGS(stmt, SQL_STATE_01S02);
+			}
+			break;
+
+		case SQL_ATTR_MAX_ROWS:
+			DBGH(stmt, "setting max rows: %llu.", (SQLULEN)ValuePtr);
+			if ((SQLULEN)ValuePtr != 0) {
+				WARNH(stmt, "requested max_rows substituted with 0.");
+				RET_HDIAGS(stmt, SQL_STATE_01S02);
+			}
+			break;
+
+		case SQL_ATTR_CURSOR_SENSITIVITY:
+			DBGH(stmt, "setting cursor sensitivity: %llu.", (SQLULEN)ValuePtr);
+			if ((SQLULEN)ValuePtr != SQL_UNSPECIFIED) {
+				ERRH(stmt, "driver supports forward-only cursors.");
+				RET_HDIAGS(stmt, SQL_STATE_HYC00);
+			}
 			break;
 
 		default:
 			// FIXME
-			FIXME;
-			ERRH(stmt, "unknown Attribute: %d.", Attribute);
+			BUGH(stmt, "unknown Attribute: %d.", Attribute);
 			RET_HDIAGS(stmt, SQL_STATE_HY092);
 	}
 	/*INDENT-ON*/
@@ -897,6 +935,26 @@ SQLRETURN EsSQLGetStmtAttrW(
 		case SQL_ATTR_USE_BOOKMARKS:
 			DBGH(stmt, "getting use-bookmarks: %llu.", SQL_UB_OFF);
 			*(SQLULEN *)ValuePtr = SQL_UB_OFF;
+			break;
+
+		case SQL_ATTR_NOSCAN:
+			DBGH(stmt, "getting noscan: %llu.", SQL_NOSCAN_OFF);
+			*(SQLULEN *)ValuePtr = SQL_NOSCAN_OFF;
+			break;
+
+		case SQL_ATTR_CONCURRENCY:
+			DBGH(stmt, "getting concurrency: %llu.", SQL_CONCUR_READ_ONLY);
+			*(SQLULEN *)ValuePtr = SQL_CONCUR_READ_ONLY;
+			break;
+
+		case SQL_ATTR_MAX_ROWS:
+			DBGH(stmt, "getting max rows: 0.");
+			*(SQLULEN *)ValuePtr = 0;
+			break;
+
+		case SQL_ATTR_CURSOR_SENSITIVITY:
+			DBGH(stmt, "getting cursor sensitivity: %llu.", SQL_UNSPECIFIED);
+			*(SQLULEN *)ValuePtr = SQL_UNSPECIFIED;
 			break;
 
 		default:

@@ -473,7 +473,8 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	}
 	n = WCS2U8(urlw, cnt, dbc->url, n);
 	if (! n) {
-		ERRNH(dbc, "failed to U8 convert URL `" LWPDL "` [%d].",cnt, urlw, cnt);
+		ERRNH(dbc, "failed to U8 convert URL `" LWPDL "` [%d].",cnt, urlw,
+			cnt);
 		goto err;
 	}
 	dbc->url[n] = 0;
@@ -583,15 +584,16 @@ void cleanup_dbc(esodbc_dbc_st *dbc)
 		dbc->fetch.str = NULL;
 		dbc->fetch.slen = 0;
 	}
-	if (dbc->dsn.str && 0 < dbc->dsn.cnt) {
+	if (dbc->dsn.str) {
 		free(dbc->dsn.str);
 		dbc->dsn.str = NULL;
-	} else {
-		/* small hack: the API allows querying for a DSN also in the case a
-		 * connection actually fails to be established; in which case the
-		 * actual DSN value hasn't been allocated/copied. */
-		dbc->dsn.str = MK_WPTR("");
 		dbc->dsn.cnt = 0;
+		dbc->server.str = NULL; /* both values collocated in same segment */
+		dbc->server.cnt = 0;
+	} else {
+		assert(! dbc->dsn.cnt);
+		assert(! dbc->server.cnt);
+		assert(! dbc->server.str);
 	}
 	if (dbc->es_types) {
 		free(dbc->es_types);
@@ -1351,6 +1353,7 @@ SQLRETURN EsSQLDriverConnectW
 	BOOL disable_nonconn = FALSE;
 	BOOL prompt_user = TRUE;
 	int res;
+	size_t cnt;
 
 	init_dsn_attrs(&attrs);
 
@@ -1474,15 +1477,23 @@ SQLRETURN EsSQLDriverConnectW
 			"failed to load Elasticsearch/SQL types", 0);
 	}
 
-	/* save the original DSN for later inquiry by app */
-	dbc->dsn.str = malloc((orig_dsn.cnt + /*0*/1) * sizeof(SQLWCHAR));
+	/* save the original DSN and (new) server name for later inquiry by app */
+	cnt = orig_dsn.cnt + /*\0*/1;
+	cnt += attrs.server.cnt + /*\0*/1;
+	dbc->dsn.str = malloc(cnt * sizeof(SQLWCHAR)); /* alloc for both */
 	if (! dbc->dsn.str) {
 		ERRNH(dbc, "OOM for %zdB.", (orig_dsn.cnt + 1) * sizeof(SQLWCHAR));
 		RET_HDIAGS(dbc, SQL_STATE_HY001);
 	}
-	dbc->dsn.str[orig_dsn.cnt] = '\0';
+	/* copy DSN */
 	wcsncpy(dbc->dsn.str, orig_dsn.str, orig_dsn.cnt);
+	dbc->dsn.str[orig_dsn.cnt] = L'\0';
 	dbc->dsn.cnt = orig_dsn.cnt;
+	/* copy server name */
+	dbc->server.str = dbc->dsn.str + orig_dsn.cnt + /*\0*/1;
+	wcsncpy(dbc->server.str, attrs.server.str, attrs.server.cnt);
+	dbc->server.str[attrs.server.cnt] = L'\0';
+	dbc->server.cnt = attrs.server.cnt;
 
 	/* return the final connection string */
 	if (szConnStrOut || pcchConnStrOut) {
@@ -1608,14 +1619,19 @@ SQLRETURN EsSQLSetConnectAttrW(
 			break;
 
 		case SQL_ATTR_TXN_ISOLATION:
-			DBGH(dbc, "setting transaction isolation to: %u.",
+			DBGH(dbc, "attempt to set transaction isolation to: %u.",
 				(SQLUINTEGER)(uintptr_t)Value);
-			dbc->txn_isolation = (SQLUINTEGER)(uintptr_t)Value;
+			ERRH(dbc, "no support for transactions available.");
+			/* the driver advertises the data source as read-only, so no
+			 * transaction level setting should occur. If an app seems to rely
+			 * on it, we need to switch from ignoring the action to rejecting
+			 * it: */
+			//RET_HDIAGS(dbc, SQL_STATE_HYC00);
 			break;
 
 		default:
 			ERRH(dbc, "unknown Attribute: %d.", Attribute);
-			RET_HDIAGS(DBCH(ConnectionHandle), SQL_STATE_HY092);
+			RET_HDIAGS(dbc, SQL_STATE_HY092);
 	}
 
 	return SQL_SUCCESS;
@@ -1673,9 +1689,9 @@ SQLRETURN EsSQLGetConnectAttrW(
 			break;
 
 		case SQL_ATTR_TXN_ISOLATION:
-			DBGH(dbc, "requested: transaction isolation: %u.",
-				dbc->txn_isolation);
-			*(SQLUINTEGER *)ValuePtr = dbc->txn_isolation;
+			DBGH(dbc, "requested: transaction isolation (0).");
+			ERRH(dbc, "no support for transactions available.");
+			*(SQLUINTEGER *)ValuePtr = 0;
 			break;
 
 		case SQL_ATTR_ACCESS_MODE:
