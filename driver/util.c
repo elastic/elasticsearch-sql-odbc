@@ -448,7 +448,7 @@ size_t json_escape_overlapping(char *str, size_t inlen, size_t outlen)
  * EsSQLColAttributeW). */
 /*
  * Copy a WSTR back to application; typically with non-SQLFetch() calls.
- * The WSTR must not count the 0-tem.
+ * The WSTR must not count the 0-tem, but must include it.
  * The function checks against the correct size of available bytes, copies the
  * wstr according to avaialble space and indicates the available bytes to copy
  * back into provided buffer (if not NULL).
@@ -460,6 +460,7 @@ SQLRETURN write_wstr(SQLHANDLE hnd, SQLWCHAR *dest, wstr_st *src,
 
 	/* cnt must not count the 0-term (XXX: ever need to copy 0s?) */
 	assert(src->cnt <= 0 || src->str[src->cnt - 1]);
+	assert(src->cnt <= 0 || src->str[src->cnt] == 0);
 
 	DBGH(hnd, "copying %zd wchars (`" LWPDL "`) into buffer @0x%p, of %dB "
 		"len; out-len @0x%p.", src->cnt, LWSTR(src), dest, avail, usedp);

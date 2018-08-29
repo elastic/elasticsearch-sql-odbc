@@ -125,7 +125,8 @@ typedef struct elasticsearch_type {
 typedef struct struct_dbc {
 	esodbc_hhdr_st hdr;
 
-	wstr_st dsn; /* data source name */
+	wstr_st dsn; /* data source name SQLGetInfo(SQL_DATA_SOURCE_NAME) */
+	wstr_st server; /* ~ name; requested with SQLGetInfo(SQL_SERVER_NAME) */
 	char *url;
 	SQLUINTEGER timeout;
 	BOOL follow;
@@ -154,7 +155,6 @@ typedef struct struct_dbc {
 
 	/* options */
 	SQLULEN metadata_id; // default: SQL_FALSE
-	SQLUINTEGER txn_isolation; // default: SQL_TXN_*
 } esodbc_dbc_st;
 
 typedef struct desc_rec {
