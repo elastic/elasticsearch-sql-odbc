@@ -448,7 +448,7 @@ size_t json_escape_overlapping(char *str, size_t inlen, size_t outlen)
  * EsSQLColAttributeW). */
 /*
  * Copy a WSTR back to application; typically with non-SQLFetch() calls.
- * The WSTR must not count the 0-tem, but must include it.
+ * The WSTR must not count the 0-term, but must include it.
  * The function checks against the correct size of available bytes, copies the
  * wstr according to avaialble space and indicates the available bytes to copy
  * back into provided buffer (if not NULL).

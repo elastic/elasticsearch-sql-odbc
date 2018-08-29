@@ -807,8 +807,8 @@ SQLRETURN EsSQLSetStmtAttrW(
 		case SQL_ATTR_CURSOR_TYPE:
 			DBGH(stmt, "setting cursor type: %llu.", (SQLULEN)ValuePtr);
 			if ((SQLULEN)ValuePtr != SQL_CURSOR_FORWARD_ONLY) {
-				WARNH(stmt, "max rows force-changed to fwd-only (%llu).",
-						SQL_CURSOR_FORWARD_ONLY);
+				WARNH(stmt, "requested cursor_type substituted with "
+						"forward-only (%llu).", SQL_CURSOR_FORWARD_ONLY);
 				RET_HDIAGS(stmt, SQL_STATE_01S02);
 			}
 			break;
@@ -823,8 +823,8 @@ SQLRETURN EsSQLSetStmtAttrW(
 		case SQL_ATTR_CONCURRENCY:
 			DBGH(stmt, "setting concurrency: %llu.", (SQLULEN)ValuePtr);
 			if ((SQLULEN)ValuePtr != SQL_CONCUR_READ_ONLY) {
-				WARNH(stmt, "concurrency force-changed to read-only (%llu).",
-						SQL_CONCUR_READ_ONLY);
+				WARNH(stmt, "requested concurrency substituted with "
+						"read-only (%llu).", SQL_CONCUR_READ_ONLY);
 				RET_HDIAGS(stmt, SQL_STATE_01S02);
 			}
 			break;
@@ -832,7 +832,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 		case SQL_ATTR_MAX_ROWS:
 			DBGH(stmt, "setting max rows: %llu.", (SQLULEN)ValuePtr);
 			if ((SQLULEN)ValuePtr != 0) {
-				WARNH(stmt, "max rows force-changed to 0.");
+				WARNH(stmt, "requested max_rows substituted with 0.");
 				RET_HDIAGS(stmt, SQL_STATE_01S02);
 			}
 			break;

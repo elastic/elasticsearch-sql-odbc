@@ -473,7 +473,8 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	}
 	n = WCS2U8(urlw, cnt, dbc->url, n);
 	if (! n) {
-		ERRNH(dbc, "failed to U8 convert URL `"LWPDL"` [%d].",cnt, urlw, cnt);
+		ERRNH(dbc, "failed to U8 convert URL `" LWPDL "` [%d].",cnt, urlw,
+			cnt);
 		goto err;
 	}
 	dbc->url[n] = 0;
@@ -1621,6 +1622,10 @@ SQLRETURN EsSQLSetConnectAttrW(
 			DBGH(dbc, "attempt to set transaction isolation to: %u.",
 				(SQLUINTEGER)(uintptr_t)Value);
 			ERRH(dbc, "no support for transactions available.");
+			/* the driver advertises the data source as read-only, so no
+			 * transaction level setting should occur. If an app seems to rely
+			 * on it, we need to switch from ignoring the action to rejecting
+			 * it: */
 			//RET_HDIAGS(dbc, SQL_STATE_HYC00);
 			break;
 
