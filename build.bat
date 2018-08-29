@@ -74,12 +74,6 @@ if /i not [%ARG:setup=%] == [%ARG%] (
 )
 
 
-REM presence of 'fetch': invoke FETCH "function"
-if /i not [%ARG:fetch=%] == [%ARG%] (
-	call:FETCH
-)
-
-
 cd %BUILD_DIR%
 
 REM Presence of 'clearlogs': invoke CLEARLOGS "function"
@@ -104,6 +98,9 @@ REM absence of nobuild: invoke BUILD "function";
 REM 'all' and 'test' arguments presence checked inside the "function".
 if /i [%ARG:nobuild=%] == [%ARG%] (
 	call:BUILD
+	if ERRORLEVEL 1 (
+		goto END
+	)
 ) else (
 	echo Invoked with 'nobuild', building skipped.
 )
@@ -342,9 +339,15 @@ REM BUILD function: build various targets
 	if /i not [%ARG:tests=%] == [%ARG%] (
 		echo Building all the project (including tests^).
 		MSBuild ALL_BUILD.vcxproj %MSBUILD_ARGS%
+		if ERRORLEVEL 1 (
+			goto END
+		)
 	) else if /i not [%ARG:all=%] == [%ARG%] (
 		echo Building all the project.
 		MSBuild ALL_BUILD.vcxproj %MSBUILD_ARGS%
+		if ERRORLEVEL 1 (
+			goto END
+		)
 	) else if /i not [%ARG:suiteS=%] == [%ARG%] (
 		echo Building the test projects only.
 		for %%i in (test\test_*.vcxproj) do (
@@ -383,8 +386,10 @@ REM BUILD function: build various targets
 		echo Building the driver only.
 		REM file name expansion, cmd style...
 		for /f %%i in ("%DRIVER_BASE_NAME%*.vcxproj") do MSBuild %%~nxi %MSBUILD_ARGS%
-
-		if ERRORLEVEL 0 if /i not [%ARG:exports=%] == [%ARG%] (
+		if ERRORLEVEL 1 (
+			goto END
+		)
+		if /i not [%ARG:exports=%] == [%ARG%] (
 			dumpbin /exports %CFG_INTDIR%\%DRIVER_BASE_NAME%*.dll
 		)
 	)
