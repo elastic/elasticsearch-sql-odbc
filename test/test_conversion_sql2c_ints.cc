@@ -378,12 +378,7 @@ TEST_F(ConvertSQL2C_Ints, Long2BigInt_signed_min) {
 #undef SQL_VAL
 #undef SQL
 #define SQL_RAW LLONG_MIN
-//#define SQL_VAL STR(SQL_RAW)
-#ifdef _WIN64
 #define SQL_VAL "-9223372036854775808" // 0x8000000000000000
-#else /* _WIN64 */
-#define SQL_VAL "-2147483648"
-#endif /* _WIN64 */
 #define SQL "CAST(" SQL_VAL " AS INTEGER)"
 
   const char json_answer[] = "\
@@ -416,12 +411,7 @@ TEST_F(ConvertSQL2C_Ints, Long2UBigInt_signed_max) {
 #undef SQL_VAL
 #undef SQL
 #define SQL_RAW LLONG_MAX
-//#define SQL_VAL STR(SQL_RAW)
-#ifdef _WIN64
 #define SQL_VAL "9223372036854775807" // 0x7fffffffffffffff
-#else /* _WIN64 */
-#define SQL_VAL "2147483647"
-#endif /* _WIN64 */
 #define SQL "CAST(" SQL_VAL " AS INTEGER)"
 
   const char json_answer[] = "\
