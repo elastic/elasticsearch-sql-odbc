@@ -2001,15 +2001,15 @@ static esodbc_metatype_et sqltype_to_meta(SQLSMALLINT concise)
 		case SQL_INTERVAL_MINUTE_TO_SECOND:
 			return METATYPE_INTERVAL_WSEC;
 
-		case SQL_BIT:
-			return METATYPE_BIT;
-
 		case SQL_GUID:
 			return METATYPE_UID;
 
+		/* bool */
+		case SQL_BIT:
 		/* ES/SQL types */
 		case ESODBC_SQL_BOOLEAN:
-			return METATYPE_EXACT_NUMERIC;
+			return METATYPE_BIT;
+
 		case ESODBC_SQL_NULL:
 			return METATYPE_MAX;
 
@@ -2087,6 +2087,7 @@ static esodbc_metatype_et sqlctype_to_meta(SQLSMALLINT concise)
 		case SQL_C_INTERVAL_MINUTE_TO_SECOND:
 			return METATYPE_INTERVAL_WSEC;
 
+		/* boolean */
 		case SQL_C_BIT:
 			return METATYPE_BIT;
 
