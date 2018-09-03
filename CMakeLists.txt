@@ -9,11 +9,12 @@
 cmake_minimum_required(VERSION 3.1.0 FATAL_ERROR)
 
 set(DRIVER_BASE_NAME elasticodbc CACHE STRING
-	"The base name to give the driver")
+	"The base name of the driver")
 
 # driver's version
-set(DRV_VER_MAJOR 0)
-set(DRV_VER_MINOR 1)
+set(DRV_VERSION 7.0.0)
+set(VERSION_TAG $ENV{VERSION_TAG} CACHE STRING
+	"Extra string to append to the install directory name")
 
 # build a UNICODE driver? (the only supported way currently)
 set(IS_UNICODE 1)
@@ -25,17 +26,25 @@ if (${WIN32})
 		#set(CMAKE_GENERATOR_PLATFORM x64)
 		set(TARCH x64) # target arch
 		set(BARCH ) # bits architecture (64 is the default, silent)
+		set(PLATFORM win64)
 	else (${CMAKE_GENERATOR_PLATFORM} MATCHES x64)
 		set(TARCH x86)
 		set(BARCH 32)
+		set(PLATFORM win32)
 	endif (${CMAKE_GENERATOR_PLATFORM} MATCHES x64)
-	message("Building on Windows, ${TARCH}.")
+	message("Building for Windows, ${TARCH}.")
 else (${WIN32})
 	message(FATAL_ERROR "No support for current platform yet")
 endif (${WIN32})
 
+# activate version handling by the project
+cmake_policy(SET CMP0048 NEW)
 # explicit languages support (Cs are defaults)
-project(${DRIVER_BASE_NAME} CXX C)
+project(${DRIVER_BASE_NAME}
+	VERSION ${DRV_VERSION}
+	DESCRIPTION "ODBC Driver for Elasticsearch SQL"
+	HOMEPAGE_URL https://github.com/elastic/elasticsearch-sql-odbc
+	LANGUAGES CXX C)
 
 if (${IS_UNICODE})
 	set(ENCODING u) # Unicode
@@ -45,7 +54,7 @@ endif (${IS_UNICODE})
 
 # driver name
 # XXX: ANSI/Unicode/32/64
-set(DRV_NAME "${DRIVER_BASE_NAME}${DRV_VER_MAJOR}${ENCODING}${BARCH}")
+set(DRV_NAME "${DRIVER_BASE_NAME}${PROJECT_VERSION_MAJOR}${ENCODING}${BARCH}")
 
 # Turn on the ability to create folders to organize projects (.vcproj)
 # It creates "CMakePredefinedTargets" folder by default and adds CMake
@@ -94,9 +103,10 @@ if (${WIN32})
 	endif (${IS_UNICODE})
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_NAME=${DRV_NAME}")
 
-	# set the all identifiers
-	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_VER_MAJOR=${DRV_VER_MAJOR}")
-	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_VER_MINOR=${DRV_VER_MINOR}")
+	#
+	# set the version identifiers
+	#
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_VERSION=${DRV_VERSION}")
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_SRC_VER=${DRV_SRC_VER}")
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_ENCODING=${ENCODING}")
 	# ...including the build type indicator
@@ -118,10 +128,8 @@ else (${WIN32})
 endif (${WIN32})
 message("C flags: ${CMAKE_C_FLAGS} .")
 
+# driver's source dir
 set(DRV_SRC_DIR driver)
-set(DRV_LIB_DIR lib)
-message("Directories: source: '${DRV_SRC_DIR}', output: '${DRV_LIB_DIR}'.")
-
 aux_source_directory(${DRV_SRC_DIR} DRV_SRC)
 
 # generate Module definition file (symbols to export)
@@ -235,8 +243,32 @@ enable_testing()
 # ... and testing directory to build
 add_subdirectory(test)
 
-# add instalation project/target
-install(TARGETS ${DRV_NAME} DESTINATION ${DRV_LIB_DIR})
+set(INSTALL_DIR
+	${DRIVER_BASE_NAME}-${DRV_VERSION}${VERSION_TAG}-${PLATFORM}
+	# this must remain a STRING (i.e not PATH), otherwise CPACK won't work
+	CACHE STRING
+	"Directory to install the driver files into")
 
+## set(INSTALL_DIR elasticodbc-7-win64)
+message("Install target: ${INSTALL_DIR}.")
+# this will cause the 'install' to no longer depend on 'all', which avoids
+# building the tests, but this also means that the library must be built
+# before building the 'install' target.
+set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY TRUE)
+# add instalation project/target
+install(FILES
+	LICENSE.txt
+	# need to use FILE : https://public.kitware.com/Bug/view.php?id=14311
+	${LIBCURL_LD_PATH}/libcurl${CMAKE_SHARED_LIBRARY_SUFFIX}
+	DESTINATION ${INSTALL_DIR})
+install(TARGETS ${DRV_NAME}
+	DESTINATION ${INSTALL_DIR})
+
+set(CPACK_GENERATOR "ZIP")
+# don't build ALL (but see CMAKE_SKIP_INSTALL_ALL_DEPENDENCY comment)
+set(CMAKE_SKIP_PACKAGE_ALL_DEPENDENCY TRUE)
+set(CPACK_PACKAGE_FILE_NAME
+	${DRIVER_BASE_NAME}-${DRV_VERSION}${VERSION_TAG}-${PLATFORM})
+include(CPack)
 
 # vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 :
