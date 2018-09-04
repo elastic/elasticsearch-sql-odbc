@@ -4,7 +4,6 @@
 # you may not use this file except in compliance with the Elastic License.
 #
 
-# 2.8.6: to generate the _EXPORTS define
 # 3.1.0: CMAKE_GENERATOR_PLATFORM
 cmake_minimum_required(VERSION 3.1.0 FATAL_ERROR)
 
@@ -13,7 +12,7 @@ set(DRIVER_BASE_NAME elasticodbc CACHE STRING
 
 # driver's version
 set(DRV_VERSION 7.0.0)
-set(VERSION_TAG $ENV{VERSION_TAG} CACHE STRING
+set(VERSION_QUALIFIER $ENV{VERSION_QUALIFIER} CACHE STRING
 	"Extra string to append to the install directory name")
 
 # build a UNICODE driver? (the only supported way currently)
@@ -23,14 +22,13 @@ set(IS_UNICODE 1)
 
 if (${WIN32})
 	if (${CMAKE_GENERATOR_PLATFORM} MATCHES x64)
-		#set(CMAKE_GENERATOR_PLATFORM x64)
 		set(TARCH x64) # target arch
 		set(BARCH ) # bits architecture (64 is the default, silent)
-		set(PLATFORM win64)
+		set(PLAT_ARCH windows-x86_64)
 	else (${CMAKE_GENERATOR_PLATFORM} MATCHES x64)
 		set(TARCH x86)
 		set(BARCH 32)
-		set(PLATFORM win32)
+		set(PLAT_ARCH windows-x86)
 	endif (${CMAKE_GENERATOR_PLATFORM} MATCHES x64)
 	message("Building for Windows, ${TARCH}.")
 else (${WIN32})
@@ -244,7 +242,7 @@ enable_testing()
 add_subdirectory(test)
 
 set(INSTALL_DIR
-	${DRIVER_BASE_NAME}-${DRV_VERSION}${VERSION_TAG}-${PLATFORM}
+	${DRIVER_BASE_NAME}-${DRV_VERSION}${VERSION_QUALIFIER}-${PLAT_ARCH}
 	# this must remain a STRING (i.e not PATH), otherwise CPACK won't work
 	CACHE STRING
 	"Directory to install the driver files into")
@@ -268,7 +266,7 @@ set(CPACK_GENERATOR "ZIP")
 # don't build ALL (but see CMAKE_SKIP_INSTALL_ALL_DEPENDENCY comment)
 set(CMAKE_SKIP_PACKAGE_ALL_DEPENDENCY TRUE)
 set(CPACK_PACKAGE_FILE_NAME
-	${DRIVER_BASE_NAME}-${DRV_VERSION}${VERSION_TAG}-${PLATFORM})
+	${DRIVER_BASE_NAME}-${DRV_VERSION}${VERSION_QUALIFIER}-${PLAT_ARCH})
 include(CPack)
 
 # vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 :

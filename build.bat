@@ -387,7 +387,7 @@ REM BUILD function: build various targets
 			set CMAKE_ARGS=!CMAKE_ARGS! -DINSTALL_DIR=!INSTALL_DIR!
 		)
 		if not [!PACKAGE_VER!] == [] (
-			set CMAKE_ARGS=!CMAKE_ARGS! -DVERSION_TAG=!PACKAGE_VER!
+			set CMAKE_ARGS=!CMAKE_ARGS! -DVERSION_QUALIFIER=!PACKAGE_VER!
 		)
 
 		echo cmake params: !CMAKE_ARGS!
