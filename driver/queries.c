@@ -56,6 +56,7 @@ static void set_col_size(esodbc_rec_st *rec)
 		case METATYPE_UNKNOWN:
 			/* SYS TYPES call */
 			break;
+		case METATYPE_BIT:
 		case METATYPE_EXACT_NUMERIC:
 		case METATYPE_FLOAT_NUMERIC:
 			/* ignore, the .precision field is not used in IRDs, its value is
@@ -1334,7 +1335,7 @@ static esodbc_estype_st *match_es_type(esodbc_rec_st *arec,
 				irec->concise_type == SQL_TYPE_TIME);
 			return lookup_es_type(dbc, SQL_TYPE_TIMESTAMP, /*no prec*/0);
 		case METATYPE_BIT:
-			return lookup_es_type(dbc, ESODBC_SQL_BOOLEAN, /*no prec*/0);
+			return lookup_es_type(dbc, SQL_BIT, /*no prec*/0);
 		case METATYPE_UID:
 			return lookup_es_type(dbc, SQL_VARCHAR, /*no prec: TEXT*/0);
 
@@ -1591,6 +1592,7 @@ static SQLRETURN convert_param_val(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		case SQL_UNKNOWN_TYPE: /* NULL */
 			return c2sql_null(arec, irec, dest, len);
 
+		case SQL_BIT: /* BIT */
 		case ESODBC_SQL_BOOLEAN: /* BOOLEAN */
 			return c2sql_boolean(arec, irec, pos, dest, len);
 

@@ -872,8 +872,8 @@ static void set_display_size(esodbc_estype_st *es_type)
 			break;
 
 
-		case ESODBC_SQL_BOOLEAN:
-			es_type->display_size = /*'false'*/5;
+		case SQL_BIT:
+			es_type->display_size = /*'0/1'*/1;
 			break;
 
 		case ESODBC_SQL_NULL:
@@ -893,8 +893,6 @@ static void set_display_size(esodbc_estype_st *es_type)
 
 		case SQL_DECIMAL:
 		case SQL_NUMERIC:
-
-		case SQL_BIT:
 
 		case SQL_INTERVAL_MONTH:
 		case SQL_INTERVAL_YEAR:
@@ -1054,6 +1052,17 @@ static void *copy_types_rows(estype_row_st *type_row, SQLULEN rows_fetched,
 				LWSTR(&types[i].type_name));
 			return NULL;
 		}
+		DBG("ES type `" LWPDL "` resolved to C concise: %hd, SQL: %hd.",
+			LWSTR(&types[i].type_name), types[i].c_concise_type, sql_type);
+
+		/* BOOLEAN is used in catalog calls (like SYS TYPES / SQLGetTypeInfo),
+		 * and the data type is piped through to the app (just like with any
+		 * other statement), which causes issues, since it's a non-SQL type
+		 * => change it to SQL_BIT */
+		if (types[i].data_type == ESODBC_SQL_BOOLEAN) {
+			types[i].data_type = ESODBC_ES_TO_SQL_BOOLEAN;
+		}
+
 		/* .data_type is used in data conversions -> make sure the SQL type
 		 * derived from type's name is the same with type reported value */
 		if (sql_type != types[i].data_type) {

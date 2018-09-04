@@ -316,6 +316,7 @@ SQLULEN get_param_size(esodbc_rec_st *irec)
 		case METATYPE_INTERVAL_WOSEC:
 			return irec->length;
 
+		case METATYPE_BIT:
 		case METATYPE_EXACT_NUMERIC:
 			// TODO: make DEC, NUM a floating meta?
 			if (irec->concise_type != SQL_DECIMAL &&
