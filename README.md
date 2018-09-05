@@ -1,4 +1,4 @@
-# ODBC Driver for Elastic SQL
+# ODBC Driver for Elasticsearch SQL
 
 This is the ODBC driver for Elasticsearch's SQL plugin.
 The driver implements the Unicode version of the 3.80 API release.
