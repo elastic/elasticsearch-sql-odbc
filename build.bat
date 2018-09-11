@@ -45,14 +45,6 @@ if /i not [%ARG:help=%] == [%ARG%] (
 	goto END
 )
 
-REM presence of 'proper' or 'clean': invoke respective "functions"
-if /i not [%ARG:proper=%] == [%ARG%] (
-	call:PROPER
-	goto END
-) else if /i not [%ARG:clean=%] == [%ARG%] (
-	call:CLEAN
-)
-
 REM presence of 'setup': invoke SETUP "function"
 if /i not [%ARG:setup=%] == [%ARG%] (
 	call:SETUP
@@ -66,6 +58,14 @@ if /i not [%ARG:setup=%] == [%ARG%] (
 		echo.
 		goto END
 	)
+)
+
+REM presence of 'proper' or 'clean': invoke respective "functions"
+if /i not [%ARG:proper=%] == [%ARG%] (
+	call:PROPER
+	goto END
+) else if /i not [%ARG:clean=%] == [%ARG%] (
+	call:CLEAN
 )
 
 
