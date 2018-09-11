@@ -165,7 +165,7 @@ size_t ui64tot(uint64_t ui64, void *buff, BOOL wide);
  * _ubytes == 0), OR "0 if it does not succeed".
  */
 #define WCS2U8(_wstr, _wchars, _u8, _ubytes) \
-	WideCharToMultiByte(CP_UTF8, WC_NO_BEST_FIT_CHARS, \
+	WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, \
 		_wstr, _wchars, _u8, _ubytes, \
 		NULL, NULL)
 #define WCS2U8_BUFF_INSUFFICIENT \
