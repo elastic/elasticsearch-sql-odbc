@@ -195,7 +195,8 @@ REM function to check and set cmake binary (if installed)
 	) else (
 		set CMAKE=cmake.exe
 	)
-	echo Using CMAKE binary: %CMAKE%
+	echo|set /p="Using CMAKE binary: %CMAKE% : "
+	%CMAKE% --version | findstr /C:"version"
 
 	goto:eof
 
@@ -296,7 +297,7 @@ REM SETUP function: set-up the build environment
 			)
 			call "C:\Program Files (x86)\Microsoft Visual Studio\%RELEASE%\%%e\Common7\Tools\VsDevCmd.bat" -arch=!TARCH!
 			set EDITION=%%e
-			break
+			goto:eof
 		)
 	)
 	if [%EDITION%] == [] (
@@ -497,19 +498,6 @@ REM PACKAGE_DO function: generate deliverable package
 :PACKAGE_DO
 	echo Packaging the driver files.
 	MSBuild PACKAGE.vcxproj !MSBUILD_ARGS!
-
-	goto:eof
-
-REM COPY function: copy DLLs (libcurl, odbc) to the test "install" dir
-:COPY
-	echo Copying into test install folder %INSTALL_DIR%.
-	copy %BUILD_TYPE%\%DRIVER_BASE_NAME%*.dll %INSTALL_DIR%
-
-	REM Read LIBCURL_LD_PATH value from cmake's cache
-	for /f "tokens=2 delims==" %%i in ('%CMAKE% -L %BUILD_DIR% 2^>NUL ^| find "LIBCURL_LD_PATH"') do set LIBCURL_LD_PATH=%%i
-	REM change the slashes' direction
-	set LIBCURL_LD_PATH=%LIBCURL_LD_PATH:/=\%
-	copy %LIBCURL_LD_PATH%\libcurl.dll  %INSTALL_DIR%
 
 	goto:eof
 
