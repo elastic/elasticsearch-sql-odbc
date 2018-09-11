@@ -247,6 +247,7 @@ REM USAGE function: output a usage message
 	echo    nobuild   : skip project building (the default is to build^).
 	echo    genonly   : generate project/make files, but don't build anything.
 	echo    exports   : dump the exported symbols in the DLL after buildint it.
+	echo    depends   : dump the dependents libs of the build DLL.
 	echo    regadd    : register the driver into the registry;
 	echo                (needs Administrator privileges^).
 	echo    regdel    : deregister the driver from the registry;
@@ -413,6 +414,9 @@ REM BUILD function: build various targets
 			)
 			if /i not [%ARG:exports=%] == [%ARG%] (
 				dumpbin /exports %BUILD_TYPE%\%DRIVER_BASE_NAME%*.dll
+			)
+			if /i not [%ARG:depends=%] == [%ARG%] (
+				dumpbin /dependents %BUILD_TYPE%\%DRIVER_BASE_NAME%*.dll
 			)
 		)
 
