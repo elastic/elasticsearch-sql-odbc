@@ -40,18 +40,17 @@ cmake_policy(SET CMP0048 NEW)
 # explicit languages support (Cs are defaults)
 project(${DRIVER_BASE_NAME}
 	VERSION ${DRV_VERSION}
-	DESCRIPTION "ODBC Driver for Elasticsearch SQL"
-	HOMEPAGE_URL https://github.com/elastic/elasticsearch-sql-odbc
 	LANGUAGES CXX C)
 
 if (${IS_UNICODE})
 	set(ENCODING u) # Unicode
+	set(ENCODING_VERBOSE Unicode)
 else (${IS_UNICODE})
 	set(ENCODING a) # ANSI
+	set(ENCODING_VERBOSE ANSI) # ANSI
 endif (${IS_UNICODE})
 
-# driver name
-# XXX: ANSI/Unicode/32/64
+# driver name (ANSI/Unicode x 32/64)
 set(DRV_NAME "${DRIVER_BASE_NAME}${PROJECT_VERSION_MAJOR}${ENCODING}${BARCH}")
 
 # Turn on the ability to create folders to organize projects (.vcproj)
@@ -224,10 +223,14 @@ message("Driver source files: ${DRV_SRC} .")
 message("Driver include paths: " ${ODBC_INC} ${DRV_SRC_DIR}
 	${LIBCURL_INC_PATH} ${UJSON4C_INC} ${CTIMESTAMP_PATH_SRC})
 
+# generate resource file
+configure_file(${DRV_SRC_DIR}/driver.rc.cmake ${CMAKE_BINARY_DIR}/driver.rc)
+
 #
 # finally, set destination library
 #
-add_library(${DRV_NAME} SHARED ${DRV_SRC} ${CMAKE_BINARY_DIR}/${DRV_NAME}.def)
+add_library(${DRV_NAME} SHARED ${DRV_SRC} ${CMAKE_BINARY_DIR}/${DRV_NAME}.def
+	${CMAKE_BINARY_DIR}/driver.rc)
 #generate_export_header(${DRV_NAME})
 target_compile_definitions(${DRV_NAME} PRIVATE "DRIVER_BUILD")
 
@@ -247,7 +250,6 @@ set(INSTALL_DIR
 	CACHE STRING
 	"Directory to install the driver files into")
 
-## set(INSTALL_DIR elasticodbc-7-win64)
 message("Install target: ${INSTALL_DIR}.")
 # this will cause the 'install' to no longer depend on 'all', which avoids
 # building the tests, but this also means that the library must be built
@@ -255,11 +257,14 @@ message("Install target: ${INSTALL_DIR}.")
 set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY TRUE)
 # add instalation project/target
 install(FILES
-	LICENSE.txt
 	# need to use FILE : https://public.kitware.com/Bug/view.php?id=14311
 	${LIBCURL_LD_PATH}/libcurl${CMAKE_SHARED_LIBRARY_SUFFIX}
 	DESTINATION ${INSTALL_DIR})
 install(TARGETS ${DRV_NAME}
+	DESTINATION ${INSTALL_DIR})
+install(FILES
+	# the installer can render .rtf
+	LICENSE.txt RENAME LICENSE.rtf
 	DESTINATION ${INSTALL_DIR})
 
 set(CPACK_GENERATOR "ZIP")

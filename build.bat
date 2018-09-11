@@ -9,7 +9,7 @@ REM This is just a helper script for building the ODBC driver in development.
 setlocal EnableExtensions EnableDelayedExpansion
 cls
 
-set DRIVER_BASE_NAME=elasticodbc
+set DRIVER_BASE_NAME=esodbc
 
 set ARG="%*"
 set SRC_PATH=%~dp0
