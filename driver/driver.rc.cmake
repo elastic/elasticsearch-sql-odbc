@@ -18,7 +18,7 @@ LANGUAGE LANG_NEUTRAL, SUBLANG_DEFAULT
 // Icon
 //
 
-ELASTICSEARCH_SQL_ICON	BITMAP	DISCARDABLE	"..\essql.bmp"
+ELASTICSEARCH_SQL_ICON	ICON	DISCARDABLE	"..\essql.ico"
 
 
 /////////////////////////////////////////////////////////////////////////////
