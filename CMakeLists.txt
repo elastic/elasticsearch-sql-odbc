@@ -257,7 +257,7 @@ message("Install target: ${INSTALL_DIR}.")
 set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY TRUE)
 # add instalation project/target
 install(FILES
-	LICENSE.rtf
+	LICENSE.rtf LICENSE.txt
 	# need to use FILE : https://public.kitware.com/Bug/view.php?id=14311
 	${LIBCURL_LD_PATH}/libcurl${CMAKE_SHARED_LIBRARY_SUFFIX}
 	DESTINATION ${INSTALL_DIR})

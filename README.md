@@ -3,6 +3,13 @@
 This is the ODBC driver for Elasticsearch's SQL plugin.
 The driver implements the Unicode version of the 3.80 API release.
 
+## Elastic License Functionality
+
+The driver files in this repository are subject to the Elastic License. The
+full license can be found in [LICENSE.txt](LICENSE.txt). Usage requires a
+[subscription](https://www.elastic.co/subscriptions). Files that are not
+subject to the Elastic License are in the [libs](libs) directory.
+
 ## Supported platforms
 
 The current target platform is Microsoft Windows, past and including version 7.
