@@ -47,7 +47,7 @@ BEGIN
             VALUE "FileDescription", "ODBC @ENCODING_VERBOSE@ driver for Elasticsearch"
             VALUE "FileVersion", "@DRV_VERSION@"
             VALUE "InternalName", "@DRV_NAME@@CMAKE_SHARED_LIBRARY_SUFFIX@"
-            VALUE "LegalCopyright", "Copyright (C) perpetual, Elasticsearch B.V."
+            VALUE "LegalCopyright", "Copyright (C) Elasticsearch B.V."
             VALUE "OriginalFilename", "@DRV_NAME@@CMAKE_SHARED_LIBRARY_SUFFIX@"
             VALUE "ProductName", "Elasticsearch"
             VALUE "ProductVersion", "@DRV_VERSION@"
