@@ -257,14 +257,11 @@ message("Install target: ${INSTALL_DIR}.")
 set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY TRUE)
 # add instalation project/target
 install(FILES
+	LICENSE.rtf
 	# need to use FILE : https://public.kitware.com/Bug/view.php?id=14311
 	${LIBCURL_LD_PATH}/libcurl${CMAKE_SHARED_LIBRARY_SUFFIX}
 	DESTINATION ${INSTALL_DIR})
 install(TARGETS ${DRV_NAME}
-	DESTINATION ${INSTALL_DIR})
-install(FILES
-	# the installer can render .rtf
-	LICENSE.txt RENAME LICENSE.rtf
 	DESTINATION ${INSTALL_DIR})
 
 set(CPACK_GENERATOR "ZIP")
