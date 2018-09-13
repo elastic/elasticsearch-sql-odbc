@@ -503,4 +503,64 @@ SQLRETURN write_wstr(SQLHANDLE hnd, SQLWCHAR *dest, wstr_st *src,
 	return SQL_SUCCESS;
 }
 
+cstr_st TEST_API *wstr_to_utf8(wstr_st *src, cstr_st *dst)
+{
+	int len;
+	size_t cnt;
+	void *addr;
+	BOOL nts; /* is the \0 present and counted in source string? */
+
+	if (0 < src->cnt) {
+		nts = !src->str[src->cnt - 1];
+
+		/* eval the needed space for conversion */
+		len = WCS2U8(src->str, (int)src->cnt, NULL, 0);
+		if (! len) {
+			ERRN("failed to evaluate UTF-8 conversion space necessary for [%zu] "
+				"`" LWPDL "`.", src->cnt, LWSTR(src));
+			return NULL;
+		}
+	} else {
+		nts = FALSE;
+		len = 0;
+	}
+
+	assert(0 <= len);
+	/* explicitely allocate the \0 if not present&counted  */
+	cnt = len + /*0-term?*/!nts;
+	if (! dst) { /* if null destination, allocate that as well */
+		cnt += sizeof(cstr_st);
+	}
+
+	if (! (addr = malloc(cnt))) {
+		ERRN("OOM for size: %zuB.", cnt);
+		return NULL;
+	}
+	if (! dst) {
+		dst = (cstr_st *)addr;
+		dst->str = (uint8_t *)addr + sizeof(cstr_st);
+	} else {
+		dst->str = (SQLCHAR *)addr;
+	}
+
+	if (0 < src->cnt) {
+		/* convert the string */
+		len = WCS2U8(src->str, (int)src->cnt, dst->str, len);
+		if (! len) {
+			/* should not happen, since a first scan already happened */
+			ERRN("failed to UTF-8 convert `" LWPDL "`.", LWSTR(src));
+			free(addr);
+			return NULL;
+		}
+	}
+
+	if (! nts) {
+		dst->str[len] = 0;
+	}
+	dst->cnt = len;
+
+	return dst;
+}
+
+
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */

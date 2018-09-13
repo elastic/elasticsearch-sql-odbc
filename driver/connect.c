@@ -20,6 +20,7 @@
 /* HTTP headers default for every request */
 #define HTTP_ACCEPT_JSON		"Accept: application/json"
 #define HTTP_CONTENT_TYPE_JSON	"Content-Type: application/json; charset=utf-8"
+#define HTTP_TEST_JSON			"{\"query\": \"SELECT 0\"}"
 
 /* Elasticsearch/SQL data types */
 /* 4 */
@@ -225,11 +226,10 @@ static SQLRETURN init_curl(esodbc_dbc_st *dbc)
 #endif /* NDEBUG */
 
 	/* set URL to connect to */
-	res = curl_easy_setopt(curl, CURLOPT_URL, dbc->url);
+	res = curl_easy_setopt(curl, CURLOPT_URL, dbc->url.str);
 	if (res != CURLE_OK) {
-		ERRH(dbc, "libcurl: failed to set URL `%s`: %s (%d).", dbc->url,
+		ERRH(dbc, "libcurl: failed to set URL `%s`: %s (%d).", dbc->url.str,
 			curl_easy_strerror(res), res);
-		SET_HDIAG(dbc, SQL_STATE_HY000, "failed to init the transport", 0);
 		goto err;
 	}
 	/* always do POSTs (seconded by CURLOPT_POSTFIELDS) */
@@ -237,7 +237,6 @@ static SQLRETURN init_curl(esodbc_dbc_st *dbc)
 	if (res != CURLE_OK) {
 		ERRH(dbc, "libcurl: failed to set POST method: %s (%d).",
 			curl_easy_strerror(res), res);
-		SET_HDIAG(dbc, SQL_STATE_HY000, "failed to init the transport", 0);
 		goto err;
 	}
 
@@ -246,7 +245,6 @@ static SQLRETURN init_curl(esodbc_dbc_st *dbc)
 	if (res != CURLE_OK) {
 		ERRH(dbc, "libcurl: failed to set headers: %s (%d).",
 			curl_easy_strerror(res), res);
-		SET_HDIAG(dbc, SQL_STATE_HY000, "failed to init the transport", 0);
 		goto err;
 	}
 
@@ -255,8 +253,39 @@ static SQLRETURN init_curl(esodbc_dbc_st *dbc)
 	if (res != CURLE_OK) {
 		ERRH(dbc, "libcurl: failed to set redirection: %s (%d).",
 			curl_easy_strerror(res), res);
-		SET_HDIAG(dbc, SQL_STATE_HY000, "failed to init the transport", 0);
 		goto err;
+	}
+
+	if (dbc->uid.cnt) {
+		/* set the authentication methods:
+		 * "basic" is currently - 7.0.0 - the only supported method */
+		res = curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_ANY);
+		if (res != CURLE_OK) {
+			ERRH(dbc, "libcurl: failed to set HTTP auth methods: %s (%d).",
+				curl_easy_strerror(res), res);
+			goto err;
+		}
+		/* set the username */
+		res = curl_easy_setopt(curl, CURLOPT_USERNAME, dbc->uid.str);
+		if (res != CURLE_OK) {
+			ERRH(dbc, "libcurl: failed to set auth username: %s (%d).",
+				curl_easy_strerror(res), res);
+			goto err;
+		}
+		/* set the password */
+		if (dbc->pwd.cnt) {
+			res = curl_easy_setopt(curl, CURLOPT_PASSWORD, dbc->pwd.str);
+			if (res != CURLE_OK) {
+				ERRH(dbc, "libcurl: failed to set auth password: %s (%d).",
+					curl_easy_strerror(res), res);
+				goto err;
+			}
+		} else {
+			INFOH(dbc, "no password for username `" LCPDL "`.",
+				LCSTR(&dbc->uid));
+		}
+	} else {
+		INFOH(dbc, "no username provided: auth disabled.");
 	}
 
 	/* set the write call-back for answers */
@@ -264,7 +293,6 @@ static SQLRETURN init_curl(esodbc_dbc_st *dbc)
 	if (res != CURLE_OK) {
 		ERRH(dbc, "libcurl: failed to set write callback: %s (%d).",
 			curl_easy_strerror(res), res);
-		SET_HDIAG(dbc, SQL_STATE_HY000, "failed to init the transport", 0);
 		goto err;
 	}
 	/* ... and its argument */
@@ -272,7 +300,6 @@ static SQLRETURN init_curl(esodbc_dbc_st *dbc)
 	if (res != CURLE_OK) {
 		ERRH(dbc, "libcurl: failed to set callback argument: %s (%d).",
 			curl_easy_strerror(res), res);
-		SET_HDIAG(dbc, SQL_STATE_HY000, "failed to init the transport", 0);
 		goto err;
 	}
 
@@ -281,10 +308,9 @@ static SQLRETURN init_curl(esodbc_dbc_st *dbc)
 	return SQL_SUCCESS;
 
 err:
-	if (curl) {
-		curl_easy_cleanup(curl);
-	}
-	RET_STATE(dbc->hdr.diag.state);
+	assert(curl);
+	curl_easy_cleanup(curl);
+	RET_HDIAG(dbc, SQL_STATE_HY000, "failed to init the transport", 0);
 }
 
 static void cleanup_curl(esodbc_dbc_st *dbc)
@@ -297,6 +323,67 @@ static void cleanup_curl(esodbc_dbc_st *dbc)
 	dbc->curl = NULL;
 }
 
+static CURLcode dbc_execute(esodbc_dbc_st *dbc, long *code, cstr_st *resp)
+{
+	CURLcode res;
+
+	assert(dbc->abuff == NULL);
+
+	/* execute the request */
+	res = curl_easy_perform(dbc->curl);
+
+	/* copy answer references */
+	resp->str = dbc->abuff;
+	resp->cnt = dbc->apos;
+
+	/* clear call-back members for next call */
+	dbc->abuff = NULL;
+	dbc->apos = 0;
+	dbc->alen = 0;
+
+	if (res != CURLE_OK) {
+		return res;
+	}
+	res = curl_easy_getinfo(dbc->curl, CURLINFO_RESPONSE_CODE, code);
+	if (res != CURLE_OK) {
+		return res;
+	}
+
+	DBGH(dbc, "libcurl: request answered, received code %ld and %zd bytes"
+		" back.", *code, resp->cnt);
+
+	return CURLE_OK;
+}
+
+static CURLcode dbc_prepare_post(esodbc_dbc_st *dbc, SQLULEN tout,
+	const cstr_st *u8body)
+{
+	CURLcode res;
+
+	if (0 < tout) {
+		DBGH(dbc, "libcurl: setting timeout: %ld.", tout);
+		res = curl_easy_setopt(dbc->curl, CURLOPT_TIMEOUT, tout);
+		if (res != CURLE_OK) {
+			return res;
+		}
+	}
+
+	/* len of the body */
+	DBGH(dbc, "libcurl: setting post fieldsize: %ld.", u8body->cnt);
+	res = curl_easy_setopt(dbc->curl, CURLOPT_POSTFIELDSIZE, u8body->cnt);
+	if (res != CURLE_OK) {
+		return res;
+	}
+	/* body itself */
+	DBGH(dbc, "libcurl: setting post fields to `" LCPDL "`.", LCSTR(u8body));
+	res = curl_easy_setopt(dbc->curl, CURLOPT_POSTFIELDS, u8body->str);
+	if (res != CURLE_OK) {
+		return res;
+	}
+
+	return CURLE_OK;
+}
+
 /*
  * Sends a POST request with the given JSON object body.
  */
@@ -306,10 +393,11 @@ SQLRETURN post_json(esodbc_stmt_st *stmt, const cstr_st *u8body)
 	// long avail /*size of the answer buffer */)
 	CURLcode res = CURLE_OK;
 	esodbc_dbc_st *dbc = stmt->hdr.dbc;
-	char *abuff = NULL;
-	size_t apos;
 	SQLULEN tout;
 	long code;
+	cstr_st resp = (cstr_st) {
+		NULL, 0
+	};
 
 	DBGH(stmt, "POSTing JSON [%zd] `" LCPDL "`.", u8body->cnt, LCSTR(u8body));
 
@@ -322,114 +410,86 @@ SQLRETURN post_json(esodbc_stmt_st *stmt, const cstr_st *u8body)
 	/* set timeout as maximum between connection and statement value */
 	tout = dbc->timeout < stmt->query_timeout ? stmt->query_timeout :
 		dbc->timeout;
-	if (0 < tout) {
-		res = curl_easy_setopt(dbc->curl, CURLOPT_TIMEOUT, tout);
-		if (res != CURLE_OK) {
-			goto err;
-		} else {
-			DBGH(stmt, "libcurl: set curl 0x%p timeout to %ld.", dbc->curl,
-				tout);
-		}
-	}
 
-	/* len of the body */
-	res = curl_easy_setopt(dbc->curl, CURLOPT_POSTFIELDSIZE, u8body->cnt);
+	res = dbc_prepare_post(dbc, tout, u8body);
 	if (res != CURLE_OK) {
 		goto err;
+	}
+
+	res = dbc_execute(dbc, &code, &resp);
+	if (res != CURLE_OK) {
+		goto err;
+	}
+
+	/* expect a 200 with body; everything else is failure */
+	if (code == 200 && resp.cnt) {
+		ESODBC_MUX_UNLOCK(&dbc->curl_mux);
+
+		assert(resp.str);
+		return attach_answer(stmt, resp.str, resp.cnt);
 	} else {
-		DBGH(stmt, "libcurl: set curl 0x%p post fieldsize to %ld.",
-			dbc->curl, u8body->cnt);
-	}
-	/* body itself */
-	res = curl_easy_setopt(dbc->curl, CURLOPT_POSTFIELDS, u8body->str);
-	if (res != CURLE_OK) {
-		goto err;
-	} else {
-		DBGH(stmt, "libcurl: set curl 0x%p post fields to `" LCPDL "`.",
-			dbc->curl, LCSTR(u8body));
-	}
+		cleanup_curl(dbc);
+		ESODBC_MUX_UNLOCK(&dbc->curl_mux);
 
-	assert(dbc->abuff == NULL);
-
-	/* execute the request */
-	res = curl_easy_perform(dbc->curl);
-
-	abuff = dbc->abuff;
-	apos = dbc->apos;
-
-	/* clear call-back members for next call */
-	dbc->abuff = NULL;
-	dbc->apos = 0;
-	dbc->alen = 0;
-
-	if (res != CURLE_OK) {
-		goto err;
-	}
-	res = curl_easy_getinfo(dbc->curl, CURLINFO_RESPONSE_CODE, &code);
-	if (res != CURLE_OK) {
-		goto err;
-	}
-	DBGH(stmt, "libcurl: request succesfull, received code %ld and %zd bytes"
-		" back.", code, apos);
-
-	ESODBC_MUX_UNLOCK(&dbc->curl_mux);
-
-	if (code != 200) {
-		ERRH(stmt, "libcurl: non-200 HTTP response code %ld received.", code);
-		/* expect a 200 with body; everything else is failure (todo?)  */
-		if (400 <= code) {
-			return attach_error(stmt, abuff, apos);
+		ERRH(stmt, "libcurl: answer code: %ld, answer lenght: %zd "
+			"(non 200 HTTP response with body).", code, resp.cnt);
+		if (resp.cnt) {
+			assert(resp.str);
+			return attach_error(stmt, resp.str, resp.cnt);
 		}
-		goto err_net;
+		goto err_net; /* skip unlocking */
 	}
-
-	return attach_answer(stmt, abuff, apos);
 
 err:
 	ERRH(stmt, "libcurl: request failed (timeout:%llu, body:`" LCPDL "`) "
 		"failed: '%s' (%d).", tout, LCSTR(u8body),
 		res != CURLE_OK ? curl_easy_strerror(res) : "<unspecified>", res);
-err_net: /* the error occured after the request hit hit the network */
 	cleanup_curl(dbc);
 	ESODBC_MUX_UNLOCK(&dbc->curl_mux);
 
-	if (abuff) {
-		free(abuff);
-		abuff = NULL;
-		/* if buffer had been set, the error occured in _perform() */
+err_net: /* error occured after network xfer; lock is freed */
+	if (resp.str) {
+		free(resp.str);
+		resp.str = NULL;
+		/* if buffer had been set, the error occured at/after _perform() */
 		RET_HDIAG(stmt, SQL_STATE_08S01, "data transfer failure", res);
 	}
 	RET_HDIAG(stmt, SQL_STATE_HY000, "failed to init transport", res);
 }
 
-static SQLRETURN test_connect(CURL *curl)
+static SQLRETURN test_connect(esodbc_dbc_st *dbc)
 {
 	CURLcode res;
+	long code = -1;
+	cstr_st u8body = MK_CSTR(HTTP_TEST_JSON);
+	cstr_st resp = (cstr_st) {
+		NULL, 0
+	};
 
-	/* we only one to connect */
-	res = curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 1L);
+	res = dbc_prepare_post(dbc, dbc->timeout, &u8body);
 	if (res != CURLE_OK) {
-		ERR("libcurl: failed to set connect_only: %s (%d).",
-			curl_easy_strerror(res), res);
-		return SQL_ERROR;
+		goto err;
 	}
 
-	res = curl_easy_perform(curl);
-	if (res != CURLE_OK) {
-		ERR("libcurl: failed connect: %s (%d).",
-			curl_easy_strerror(res), res);
-		return SQL_ERROR;
+	res = dbc_execute(dbc, &code, &resp);
+	if (res != CURLE_OK || code != 200) {
+		goto err;
 	}
 
-	res = curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 0L);
-	if (res != CURLE_OK) {
-		ERR("libcurl: failed to unset connect_only: %s (%d).",
-			curl_easy_strerror(res), res);
-		return SQL_ERROR;
-	}
-
-	DBG("successfully connected to server.");
+	DBGH(dbc, "test connection succesful.");
 	return SQL_SUCCESS;
+
+err:
+	ERRH(dbc, "libcurl: test connection failed: %s (%d).",
+		curl_easy_strerror(res), res);
+	if (0 < code) {
+		ERRH(dbc, "libcurl: test connection code: %ld.", code);
+	}
+	if (resp.cnt) {
+		ERRH(dbc, "libcurl: test connection answer: `" LCPDL "`.",
+			LCSTR(&resp));
+	}
+	return SQL_ERROR;
 }
 
 /*
@@ -438,17 +498,20 @@ static SQLRETURN test_connect(CURL *curl)
 static SQLRETURN process_config(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 {
 	esodbc_state_et state = SQL_STATE_HY000;
-	int n, cnt;
-	SQLWCHAR urlw[ESODBC_MAX_URL_LEN];
+	int cnt;
 	BOOL secure;
 	long long timeout, max_body_size, max_fetch_size;
+	SQLWCHAR buff_url[ESODBC_MAX_URL_LEN];
+	wstr_st url = (wstr_st) {
+		buff_url, /*will be init'ed later*/0
+	};
 
 	/*
-	 * build connection URL
+	 * URL of the cluster
 	 */
 	secure = wstr2bool(&attrs->secure);
 	INFOH(dbc, "connect secure: %s.", secure ? "true" : "false");
-	cnt = swprintf(urlw, sizeof(urlw)/sizeof(urlw[0]),
+	cnt = swprintf(url.str, sizeof(buff_url)/sizeof(*buff_url),
 			L"http" WPFCP_DESC "://" WPFWP_LDESC ":" WPFWP_LDESC
 			ELASTIC_SQL_PATH, secure ? "s" : "", LWSTR(&attrs->server),
 			LWSTR(&attrs->port));
@@ -457,31 +520,34 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 			"port: `" LWPDL "` [%zd].", LWSTR(&attrs->server),
 			LWSTR(&attrs->port));
 		goto err;
+	} else {
+		url.cnt = (size_t)cnt;
 	}
-	/* length of URL converted to U8 */
-	n = WCS2U8(urlw, cnt, NULL, 0);
-	if (! n) {
-		ERRNH(dbc, "failed to estimate U8 conversion space necessary for `"
-			LWPDL " [%d]`.", cnt, urlw, cnt);
+	if (! wstr_to_utf8(&url, &dbc->url)) {
+		ERRNH(dbc, "failed to convert URL `" LWPDL "` to UTF8.", LWSTR(&url));
 		goto err;
 	}
-	dbc->url = malloc(n + /*0-term*/1);
-	if (! dbc->url) {
-		ERRNH(dbc, "OOM for size: %dB.", n);
-		state = SQL_STATE_HY001;
-		goto err;
-	}
-	n = WCS2U8(urlw, cnt, dbc->url, n);
-	if (! n) {
-		ERRNH(dbc, "failed to U8 convert URL `" LWPDL "` [%d].",cnt, urlw,
-			cnt);
-		goto err;
-	}
-	dbc->url[n] = 0;
-	/* URL should be 0-term'd, as printed by swprintf */
-	INFOH(dbc, "connection URL: `%s`.", dbc->url);
+	INFOH(dbc, "connection URL: `%s`.", dbc->url.str);
 
-	/* follow param for liburl */
+	/*
+	 * credentials
+	 */
+	if (attrs->uid.cnt) {
+		if (! wstr_to_utf8(&attrs->uid, &dbc->uid)) {
+			ERRH(dbc, "failed to convert username [%zd] `" LWPDL "` to UTF8.",
+				attrs->uid.cnt, LWSTR(&attrs->uid));
+			goto err;
+		}
+		if (attrs->pwd.cnt) {
+			if (! wstr_to_utf8(&attrs->pwd, &dbc->pwd)) {
+				ERRH(dbc, "failed to convert username [%zd] `" LWPDL "` to "
+					"UTF8.", attrs->pwd.cnt, LWSTR(&attrs->pwd));
+				goto err;
+			}
+		}
+	}
+
+	/* "follow location" param for liburl */
 	dbc->follow = wstr2bool(&attrs->follow);
 	INFOH(dbc, "follow: %s.", dbc->follow ? "true" : "false");
 
@@ -575,9 +641,20 @@ err:
 /* release all resources, except the handler itself */
 void cleanup_dbc(esodbc_dbc_st *dbc)
 {
-	if (dbc->url) {
-		free(dbc->url);
-		dbc->url = NULL;
+	if (dbc->url.str) {
+		free(dbc->url.str);
+		dbc->url.str = NULL;
+		dbc->url.cnt = 0;
+	}
+	if (dbc->uid.str) {
+		free(dbc->uid.str);
+		dbc->uid.str = NULL;
+		dbc->uid.cnt = 0;
+	}
+	if (dbc->pwd.str) {
+		free(dbc->pwd.str);
+		dbc->pwd.str = NULL;
+		dbc->pwd.cnt = 0;
 	}
 	if (dbc->fetch.str) {
 		free(dbc->fetch.str);
@@ -626,15 +703,18 @@ static SQLRETURN do_connect(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 		return ret;
 	}
 
-	/* perform a connection test, to fail quickly if wrong server/port AND
-	 * populate the DNS cache; this won't guarantee succesful post'ing, tho! */
-	ret = test_connect(dbc->curl);
+	/* perform a connection test, to fail quickly if wrong params AND
+	 * populate the DNS cache */
+	ret = test_connect(dbc);
 	/* still ok if fails */
-	curl_easy_getinfo(dbc->curl, CURLINFO_EFFECTIVE_URL, &url);
+	if (curl_easy_getinfo(dbc->curl, CURLINFO_EFFECTIVE_URL, &url) !=
+		CURLE_OK) {
+		url = "";
+	}
 	if (! SQL_SUCCEEDED(ret)) {
-		ERRH(dbc, "test connection to URL %s failed!", url);
+		ERRH(dbc, "test connection to URL `%s` failed!", url);
 		cleanup_curl(dbc);
-		RET_HDIAG(dbc, SQL_STATE_HYT01, "connection test failed", 0);
+		RET_HDIAGS(dbc, SQL_STATE_08001);
 	} else {
 		DBGH(dbc, "test connection to URL %s OK.", url);
 	}
@@ -1630,7 +1710,7 @@ SQLRETURN EsSQLSetConnectAttrW(
 		case SQL_ATTR_TXN_ISOLATION:
 			DBGH(dbc, "attempt to set transaction isolation to: %u.",
 				(SQLUINTEGER)(uintptr_t)Value);
-			ERRH(dbc, "no support for transactions available.");
+			WARNH(dbc, "no support for transactions available.");
 			/* the driver advertises the data source as read-only, so no
 			 * transaction level setting should occur. If an app seems to rely
 			 * on it, we need to switch from ignoring the action to rejecting

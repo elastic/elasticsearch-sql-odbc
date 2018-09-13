@@ -240,6 +240,18 @@ SQLRETURN write_wstr(SQLHANDLE hnd, SQLWCHAR *dest, wstr_st *src,
 	SQLSMALLINT /*B*/avail, SQLSMALLINT /*B*/*usedp);
 
 /*
+ * Converts a wide string to a UTF-8 MB, allocating the necessary space.
+ * The \0 is allocated and written, even if not present in source string, but
+ * only counted in output string if counted in input one.
+ * If 'dst' is null, the destination is also going to be allocate (collated
+ * with the string). The caller only needs to free the allocated chunk
+ * (returned pointer or dst->str).
+ * Returns NULL on error.
+ */
+//cstr_st* TEST_API wstr_to_utf8(wstr_st *src, cstr_st *dst);
+cstr_st TEST_API *wstr_to_utf8(wstr_st *src, cstr_st *dst);
+
+/*
  * Printing aids.
  */
 

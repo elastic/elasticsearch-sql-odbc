@@ -127,7 +127,9 @@ typedef struct struct_dbc {
 
 	wstr_st dsn; /* data source name SQLGetInfo(SQL_DATA_SOURCE_NAME) */
 	wstr_st server; /* ~ name; requested with SQLGetInfo(SQL_SERVER_NAME) */
-	char *url;
+	cstr_st url;
+	cstr_st uid;
+	cstr_st pwd;
 	SQLUINTEGER timeout;
 	BOOL follow;
 	struct {

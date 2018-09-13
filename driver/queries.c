@@ -407,39 +407,18 @@ SQLRETURN TEST_API attach_sql(esodbc_stmt_st *stmt,
 	const SQLWCHAR *sql, /* SQL text statement */
 	size_t sqlcnt /* count of chars of 'sql' */)
 {
-	char *u8;
-	int len;
+	wstr_st sqlw = (wstr_st) {
+		(SQLWCHAR *)sql, sqlcnt
+	};
 
-	DBGH(stmt, "attaching SQL `" LWPDL "` (%zd).", sqlcnt, sql, sqlcnt);
-
-	len = WCS2U8(sql, (int)sqlcnt, NULL, 0);
-	if (len <= 0) {
-		ERRNH(stmt, "failed to UCS2/UTF8 convert SQL `" LWPDL "` (%zd).",
-			sqlcnt, sql, sqlcnt);
-		RET_HDIAG(stmt, SQL_STATE_HY000, "UCS2/UTF8 conversion failure", 0);
-	}
-	DBGH(stmt, "wide char SQL `" LWPDL "`[%zd] converts to UTF8 on %d "
-		"octets.", sqlcnt, sql, sqlcnt, len);
-
-	u8 = malloc(len);
-	if (! u8) {
-		ERRNH(stmt, "failed to alloc %dB.", len);
-		RET_HDIAGS(stmt, SQL_STATE_HY001);
-	}
-
-	len = WCS2U8(sql, (int)sqlcnt, u8, len);
-	if (len <= 0) { /* can it happen? it's just succeded above */
-		ERRNH(stmt, "failed to UCS2/UTF8 convert SQL `" LWPDL "` (%zd).",
-			sqlcnt, sql, sqlcnt);
-		free(u8);
-		RET_HDIAG(stmt, SQL_STATE_HY000, "UCS2/UTF8 conversion failure(2)", 0);
-	}
+	DBGH(stmt, "attaching SQL [%zd] `" LWPDL "`.", sqlcnt, LWSTR(&sqlw));
 
 	assert(! stmt->u8sql.str);
-	stmt->u8sql.str = u8;
-	stmt->u8sql.cnt = (size_t)len;
-
-	DBGH(stmt, "attached SQL `%.*s` (%zd).", len, u8, len);
+	if (! wstr_to_utf8(&sqlw, &stmt->u8sql)) {
+		ERRNH(stmt, "conversion UCS2->UTF8 of SQL [%zu] `" LWPDL "` failed.",
+			sqlcnt, LWSTR(&sqlw));
+		RET_HDIAG(stmt, SQL_STATE_HY000, "UCS2/UTF8 conversion failure", 0);
+	}
 
 	return SQL_SUCCESS;
 }
