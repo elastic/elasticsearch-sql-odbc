@@ -9,7 +9,7 @@ REM This is just a helper script for building the ODBC driver in development.
 setlocal EnableExtensions EnableDelayedExpansion
 cls
 
-set DRIVER_BASE_NAME=elasticodbc
+set DRIVER_BASE_NAME=esodbc
 
 set ARG="%*"
 set SRC_PATH=%~dp0
@@ -45,14 +45,6 @@ if /i not [%ARG:help=%] == [%ARG%] (
 	goto END
 )
 
-REM presence of 'proper' or 'clean': invoke respective "functions"
-if /i not [%ARG:proper=%] == [%ARG%] (
-	call:PROPER
-	goto END
-) else if /i not [%ARG:clean=%] == [%ARG%] (
-	call:CLEAN
-)
-
 REM presence of 'setup': invoke SETUP "function"
 if /i not [%ARG:setup=%] == [%ARG%] (
 	call:SETUP
@@ -66,6 +58,14 @@ if /i not [%ARG:setup=%] == [%ARG%] (
 		echo.
 		goto END
 	)
+)
+
+REM presence of 'proper' or 'clean': invoke respective "functions"
+if /i not [%ARG:proper=%] == [%ARG%] (
+	call:PROPER
+	goto END
+) else if /i not [%ARG:clean=%] == [%ARG%] (
+	call:CLEAN
 )
 
 
@@ -195,7 +195,8 @@ REM function to check and set cmake binary (if installed)
 	) else (
 		set CMAKE=cmake.exe
 	)
-	echo Using CMAKE binary: %CMAKE%
+	echo|set /p="Using CMAKE binary: %CMAKE% : "
+	%CMAKE% --version | findstr /C:"version"
 
 	goto:eof
 
@@ -247,6 +248,7 @@ REM USAGE function: output a usage message
 	echo    nobuild   : skip project building (the default is to build^).
 	echo    genonly   : generate project/make files, but don't build anything.
 	echo    exports   : dump the exported symbols in the DLL after buildint it.
+	echo    depends   : dump the dependents libs of the build DLL.
 	echo    regadd    : register the driver into the registry;
 	echo                (needs Administrator privileges^).
 	echo    regdel    : deregister the driver from the registry;
@@ -295,7 +297,7 @@ REM SETUP function: set-up the build environment
 			)
 			call "C:\Program Files (x86)\Microsoft Visual Studio\%RELEASE%\%%e\Common7\Tools\VsDevCmd.bat" -arch=!TARCH!
 			set EDITION=%%e
-			break
+			goto:eof
 		)
 	)
 	if [%EDITION%] == [] (
@@ -414,6 +416,9 @@ REM BUILD function: build various targets
 			if /i not [%ARG:exports=%] == [%ARG%] (
 				dumpbin /exports %BUILD_TYPE%\%DRIVER_BASE_NAME%*.dll
 			)
+			if /i not [%ARG:depends=%] == [%ARG%] (
+				dumpbin /dependents %BUILD_TYPE%\%DRIVER_BASE_NAME%*.dll
+			)
 		)
 
 		if /i not [%ARG:suiteS=%] == [%ARG%] (
@@ -493,19 +498,6 @@ REM PACKAGE_DO function: generate deliverable package
 :PACKAGE_DO
 	echo Packaging the driver files.
 	MSBuild PACKAGE.vcxproj !MSBUILD_ARGS!
-
-	goto:eof
-
-REM COPY function: copy DLLs (libcurl, odbc) to the test "install" dir
-:COPY
-	echo Copying into test install folder %INSTALL_DIR%.
-	copy %BUILD_TYPE%\%DRIVER_BASE_NAME%*.dll %INSTALL_DIR%
-
-	REM Read LIBCURL_LD_PATH value from cmake's cache
-	for /f "tokens=2 delims==" %%i in ('%CMAKE% -L %BUILD_DIR% 2^>NUL ^| find "LIBCURL_LD_PATH"') do set LIBCURL_LD_PATH=%%i
-	REM change the slashes' direction
-	set LIBCURL_LD_PATH=%LIBCURL_LD_PATH:/=\%
-	copy %LIBCURL_LD_PATH%\libcurl.dll  %INSTALL_DIR%
 
 	goto:eof
 

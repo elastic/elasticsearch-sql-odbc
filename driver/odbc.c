@@ -498,7 +498,7 @@ SQLRETURN SQL_API SQLPrepareW
 	HND_LOCK(hstmt);
 	ret = EsSQLPrepareW(hstmt, szSqlStr, cchSqlStr);
 	HND_UNLOCK(hstmt);
-	TRACE4(_OUT, "dpWd", ret, hstmt, szSqlStr, cchSqlStr);
+	TRACE4(_OUT, "dppd", ret, hstmt, szSqlStr, cchSqlStr);
 	return ret;
 }
 

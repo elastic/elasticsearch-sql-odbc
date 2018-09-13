@@ -89,11 +89,6 @@ BOOL SQL_API ConfigDriverW(
 	WORD   *pcbMsgOut)
 {
 	BOOL ret = FALSE;
-#	define _DSN_END_MARKER	"\\"
-	SQLWCHAR *sample_dsn = MK_WPTR("DSN="
-			ESODBC_DSN_SAMPLE_NAME
-			_DSN_END_MARKER);
-	SQLWCHAR *pos;
 
 	TRACE7(_IN, "phWWpht", hwndParent, fRequest, lpszDriver, lpszArgs,
 		lpszMsg, cbMsgMax, pcbMsgOut);
@@ -103,15 +98,6 @@ BOOL SQL_API ConfigDriverW(
 			ret = add_subkey_values(lpszDriver);
 			if (! ret) {
 				SQLPostInstallerError(ODBC_ERROR_REQUEST_FAILED, NULL);
-			}
-			/* add the 2nd \0 to have a 00-list */
-			pos = wcschr(sample_dsn, _DSN_END_MARKER[0]);
-			assert(pos);
-			*pos = _MK_WPTR('\0');
-			/* add a sample DSN */
-			if (! ConfigDSNW(NULL, ODBC_ADD_DSN, lpszDriver, sample_dsn)) {
-				WARN("failed to provision a sample DSN.");
-				/* no further error indication though, install succeedes */
 			}
 			break;
 		case ODBC_REMOVE_DRIVER:
