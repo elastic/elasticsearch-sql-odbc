@@ -72,9 +72,15 @@ typedef struct cstr {
 } cstr_st;
 
 /*
- * Copy converted strings from SQLWCHAR to char, for ANSI strings.
+ * Converts a wchar_t string to a C string for ASCII characters.
+ * 'dst' should be at least as character-long as 'src', if 'src' is
+ * 0-terminated, OR one character longer otherwise (for the 0-term).
+ * 'dst' will always be 0-term'd.
+ * Returns negative if conversion fails, OR number of converted wchars,
+ * including/plus the 0-term.
  */
-int ansi_w2c(const SQLWCHAR *src, char *dst, size_t chars);
+int TEST_API ascii_w2c(SQLWCHAR *src, SQLCHAR *dst, size_t chars);
+int TEST_API ascii_c2w(SQLCHAR *src, SQLWCHAR *dst, size_t chars);
 /*
  * Compare two SQLWCHAR object, case INsensitive.
  */

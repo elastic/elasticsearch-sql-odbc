@@ -24,6 +24,7 @@
 #define ESODBC_DSN_SERVER			"Server"
 #define ESODBC_DSN_PORT				"Port"
 #define ESODBC_DSN_SECURE			"Secure"
+#define ESODBC_DSN_CA_PATH			"CAPath"
 #define ESODBC_DSN_TIMEOUT			"Timeout"
 #define ESODBC_DSN_FOLLOW			"Follow"
 #define ESODBC_DSN_CATALOG			"Catalog"
@@ -45,6 +46,7 @@ typedef struct {
 	wstr_st server;
 	wstr_st port;
 	wstr_st secure;
+	wstr_st ca_path;
 	wstr_st timeout;
 	wstr_st follow;
 	wstr_st catalog;
@@ -53,7 +55,7 @@ typedef struct {
 	wstr_st max_body_size;
 	wstr_st trace_file;
 	wstr_st trace_level;
-#define ESODBC_DSN_ATTRS_COUNT	18
+#define ESODBC_DSN_ATTRS_COUNT	19
 	SQLWCHAR buff[ESODBC_DSN_ATTRS_COUNT * ESODBC_DSN_MAX_ATTR_LEN];
 } esodbc_dsn_attrs_st;
 

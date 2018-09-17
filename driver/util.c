@@ -255,15 +255,14 @@ void trim_ws(cstr_st *cstr)
 }
 
 /*
- * Converts a wchar_t string to a C string for ANSI characters.
+ * Converts a wchar_t string to a C string for ASCII characters.
  * 'dst' should be at least as character-long as 'src', if 'src' is
  * 0-terminated, OR one character longer otherwise (for the 0-term).
  * 'dst' will always be 0-term'd.
  * Returns negative if conversion fails, OR number of converted wchars,
  * including/plus the 0-term.
- *
  */
-int ansi_w2c(const SQLWCHAR *src, char *dst, size_t chars)
+int TEST_API ascii_w2c(SQLWCHAR *src, SQLCHAR *dst, size_t chars)
 {
 	size_t i = 0;
 
@@ -273,15 +272,41 @@ int ansi_w2c(const SQLWCHAR *src, char *dst, size_t chars)
 	assert(chars < INT_MAX);
 
 	do {
-		if (CHAR_MAX < src[i]) {
+		if (SCHAR_MAX < src[i]) {
 			return -((int)i + 1);
 		}
-		dst[i] = (char)src[i];
-	} while (src[i] && (++i < chars));
+		dst[i] = (SQLCHAR)src[i];
+	} while ((src[i] != L'\0') && (++i < chars));
 
 	if (chars <= i) { /* equiv to: (src[i] != 0) */
 		/* loop stopped b/c of length -> src is not 0-term'd */
 		dst[i] = 0; /* chars + 1 <= [dst] */
+	}
+	return (int)i + 1;
+}
+
+/*
+ * This is the inverse of ascii_w2c().
+ */
+int TEST_API ascii_c2w(SQLCHAR *src, SQLWCHAR *dst, size_t chars)
+{
+	size_t i = 0;
+
+	if (chars < 1) {
+		return -1;
+	}
+	assert(chars < INT_MAX);
+
+	do {
+		if (src[i] < 0) {
+			return -((int)i + 1);
+		}
+		dst[i] = (SQLWCHAR)src[i];
+	} while ((src[i] != '\0') && (++i < chars));
+
+	if (chars <= i) { /* equiv to: (src[i] != 0) */
+		/* loop stopped b/c of length -> src is not 0-term'd */
+		dst[i] = L'\0'; /* chars + 1 <= [dst] */
 	}
 	return (int)i + 1;
 }

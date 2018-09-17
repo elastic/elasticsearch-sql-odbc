@@ -1362,7 +1362,7 @@ static SQLRETURN wstr_to_wstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 static BOOL xstr_to_timestamp_struct(xstr_st *xstr, TIMESTAMP_STRUCT *tss,
 	cstr_st *ts_buff)
 {
-	/* need the 0-term in the buff, since ansi_w2c will write it */
+	/* need the 0-term in the buff, since ascii_w2c will write it */
 	char buff[sizeof(ESODBC_ISO8601_TEMPLATE)/*+\0*/];
 	cstr_st ts_str, *ts_ptr;
 	timestamp_t tsp;
@@ -1385,7 +1385,7 @@ static BOOL xstr_to_timestamp_struct(xstr_st *xstr, TIMESTAMP_STRUCT *tss,
 		}
 		/* convert the W-string to C-string; also, copy it directly into out
 		 * ts_buff, if given (thus saving one extra copying) */
-		ts_ptr->cnt = ansi_w2c(xstr->w.str, ts_ptr->str, xstr->w.cnt) - 1;
+		ts_ptr->cnt = ascii_w2c(xstr->w.str, ts_ptr->str, xstr->w.cnt) - 1;
 	} else {
 		DBG("converting ISO 8601 `" LCPDL "` to timestamp.", LCSTR(&xstr->c));
 		if (sizeof(ESODBC_ISO8601_TEMPLATE) - 1 < xstr->c.cnt) {
@@ -1445,7 +1445,7 @@ static BOOL parse_timedate(xstr_st *xstr, TIMESTAMP_STRUCT *tss,
 	/* W-strings will eventually require convertion to C-string for TS
 	 * conversion => do it now to simplify string analysis */
 	if (xstr->wide) {
-		td.cnt = ansi_w2c(xstr->w.str, w2c, xstr->w.cnt) - 1;
+		td.cnt = ascii_w2c(xstr->w.str, w2c, xstr->w.cnt) - 1;
 		td.str = w2c;
 	} else {
 		td = xstr->c;
@@ -2233,7 +2233,7 @@ static SQLRETURN string_to_number(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	/* copy values from app's buffer directly */
 	if (wide) { /* need a conversion to ANSI */
 		*len = xstr.w.cnt;
-		ret = ansi_w2c((SQLWCHAR *)data_ptr, dest, *len);
+		ret = ascii_w2c((SQLWCHAR *)data_ptr, dest, *len);
 		assert(0 < ret); /* it converted to a float already */
 	} else {
 		*len = xstr.c.cnt;

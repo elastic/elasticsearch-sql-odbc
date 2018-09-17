@@ -105,6 +105,32 @@ TEST_F(Util, wstr_to_utf8_no_nts) {
 	free(dst.str);
 }
 
+TEST_F(Util, ascii_c2w2c)
+{
+#undef SRC_STR
+#define SRC_STR	"abcd"
+	SQLCHAR *test = (SQLCHAR *)SRC_STR;
+	SQLWCHAR wbuff[2 * sizeof(SRC_STR)] = {(SQLWCHAR)-1};
+	SQLCHAR cbuff[2 * sizeof(SRC_STR)] = {(SQLCHAR)-1};
+	int c2w, w2c;
+
+	c2w = ascii_c2w(test, wbuff, sizeof(wbuff)/sizeof(*wbuff));
+	w2c = ascii_w2c(wbuff, cbuff, sizeof(cbuff));
+	ASSERT_EQ(c2w, w2c);
+	ASSERT_STREQ((char *)test, (char *)cbuff);
+}
+
+TEST_F(Util, ascii_c2w_add_0term)
+{
+#undef SRC_STR
+#define SRC_STR	"abcd"
+	SQLCHAR *test = (SQLCHAR *)SRC_STR;
+	SQLWCHAR wbuff[sizeof(SRC_STR)] = {(SQLWCHAR)-1};
+	SQLWCHAR *wtest = MK_WPTR(SRC_STR);
+
+	ASSERT_EQ(ascii_c2w(test, wbuff, sizeof(SRC_STR) - 1), sizeof(SRC_STR));
+	ASSERT_STREQ((wchar_t *)wbuff, (wchar_t *)wtest);
+}
 
 } // test namespace
 

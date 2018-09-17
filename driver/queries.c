@@ -310,19 +310,17 @@ SQLRETURN TEST_API attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 	return SQL_SUCCESS;
 }
 
-/*
- * Parse an error and push it as statement diagnostic.
- */
-SQLRETURN TEST_API attach_error(esodbc_stmt_st *stmt, char *buff, size_t blen)
+/* parse the error as SQL pluggin generated error */
+static BOOL attach_sql_error(SQLHANDLE hnd, cstr_st *body)
 {
+	BOOL ret;
 	UJObject obj, o_status, o_error, o_type, o_reason;
 	const wchar_t *wtype, *wreason;
 	size_t tlen, rlen, left;
-	wchar_t wbuf[sizeof(((esodbc_diag_st *)NULL)->text) /
-								sizeof(*((esodbc_diag_st *)NULL)->text)];
-	size_t wbuflen = sizeof(wbuf)/sizeof(*wbuf);
+	wchar_t wbuf[SQL_MAX_MESSAGE_LENGTH];
+	size_t wbuflen;
 	int n;
-	void *state = NULL;
+	void *state;
 	const wchar_t *outer_keys[] = {
 		MK_WPTR(JSON_ANSWER_ERROR),
 		MK_WPTR(JSON_ANSWER_STATUS)
@@ -332,28 +330,24 @@ SQLRETURN TEST_API attach_error(esodbc_stmt_st *stmt, char *buff, size_t blen)
 		MK_WPTR(JSON_ANSWER_ERR_REASON)
 	};
 
-	INFOH(stmt, "REST request failed with `%.*s` (%zd).", blen, buff, blen);
+	ret = FALSE;
+	state = NULL;
 
 	/* parse the entire JSON answer */
-	obj = UJDecode(buff, blen, NULL, &state);
+	obj = UJDecode(body->str, body->cnt, NULL, &state);
 	if (! obj) {
-		ERRH(stmt, "failed to decode JSON answer (`%.*s`): %s.",
-			blen, buff, state ? UJGetError(state) : "<none>");
-		SET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
+		INFOH(hnd, "answer not JSON (%s).",
+			state ? UJGetError(state) : "<none>");
 		goto end;
 	}
 	/* extract the status and error object */
 	if (UJObjectUnpack(obj, 2, "ON", outer_keys, &o_error, &o_status) < 2) {
-		ERRH(stmt, "failed to unpack JSON answer (`%.*s`): %s.",
-			blen, buff, UJGetError(state));
-		SET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
+		INFOH(hnd, "JSON answer not a SQL error (%s).", UJGetError(state));
 		goto end;
 	}
 	/* unpack error object */
 	if (UJObjectUnpack(o_error, 2, "SS", err_keys, &o_type, &o_reason) < 2) {
-		ERRH(stmt, "failed to unpack error object (`%.*s`): %s.",
-			blen, buff, UJGetError(state));
-		SET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
+		INFOH(hnd, "failed to unpack error object (%s).", UJGetError(state));
 		goto end;
 	}
 
@@ -361,7 +355,7 @@ SQLRETURN TEST_API attach_error(esodbc_stmt_st *stmt, char *buff, size_t blen)
 	wreason = UJReadString(o_reason, &rlen);
 	/* these return empty string in case of mismatch */
 	assert(wtype && wreason);
-	DBGH(stmt, "server failures: type: [%zd] `" LWPDL "`, reason: [%zd] `"
+	DBGH(hnd, "server failures: type: [%zd] `" LWPDL "`, reason: [%zd] `"
 		LWPDL "`, status: %d.", tlen, tlen, wtype, rlen, rlen, wreason,
 		UJNumericInt(o_status));
 
@@ -370,6 +364,7 @@ SQLRETURN TEST_API attach_error(esodbc_stmt_st *stmt, char *buff, size_t blen)
 	n = swprintf(NULL, 0, MK_WPTR("%.*s: %.*s"), (int)tlen, wtype, (int)rlen,
 			wreason);
 	if (0 < n) {
+		wbuflen = sizeof(wbuf)/sizeof(*wbuf);
 		wbuflen -= /* ": " */2 + /*\0*/1;
 		tlen = wbuflen < tlen ? wbuflen : tlen;
 		left = wbuflen - tlen;
@@ -379,25 +374,48 @@ SQLRETURN TEST_API attach_error(esodbc_stmt_st *stmt, char *buff, size_t blen)
 		n = swprintf(wbuf, wbuflen, MK_WPTR("%.*s: %.*s"), (int)tlen, wtype,
 				(int)rlen, wreason);
 	}
-	if (n < 0) {
-		ERRNH(stmt, "failed to print error message from server.");
-		assert(sizeof(MSG_INV_SRV_ANS) < sizeof(wbuf));
-		memcpy(wbuf, MK_WPTR(MSG_INV_SRV_ANS),
-			sizeof(MSG_INV_SRV_ANS)*sizeof(SQLWCHAR));
+	if (n <= 0) {
+		wbuf[0] = L'\0';
 	}
 
-	post_diagnostic(&stmt->hdr.diag, SQL_STATE_HY000, wbuf,
+	post_diagnostic(&HDRH(hnd)->diag, SQL_STATE_HY000, wbuf,
 		UJNumericInt(o_status));
+	ret = TRUE;
 
 end:
 	if (state) {
 		UJFree(state);
 	}
-	if (buff) {
-		free(buff);
+
+	return ret;
+}
+
+/*
+ * Parse an error and push it as statement diagnostic.
+ */
+SQLRETURN TEST_API attach_error(SQLHANDLE hnd, cstr_st *body, int code)
+{
+	char buff[SQL_MAX_MESSAGE_LENGTH];
+	size_t to_copy;
+
+	ERRH(hnd, "POST failure %d body: len: %zu, content: `%.*s`.", code,
+		body->cnt, LCSTR(body));
+
+	if (body->cnt) {
+		/* try read it as ES/SQL error */
+		if (! attach_sql_error(hnd, body)) {
+			/* if not an ES/SQL failure, attach it as-is (plus \0) */
+			to_copy = sizeof(buff) <= body->cnt ? sizeof(buff) - 1 : body->cnt;
+			memcpy(buff, body->str, to_copy);
+			buff[to_copy] = '\0';
+
+			post_c_diagnostic(&HDRH(hnd)->diag, SQL_STATE_08S01, buff, code);
+		}
+
+		RET_STATE(HDRH(hnd)->diag.state);
 	}
 
-	RET_STATE(stmt->hdr.diag.state);
+	return post_diagnostic(&HDRH(hnd)->diag, SQL_STATE_08S01, NULL, code);
 }
 
 /*

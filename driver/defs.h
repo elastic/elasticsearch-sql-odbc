@@ -136,8 +136,8 @@
 #define ESODBC_DEF_SERVER			"127.0.0.1"
 /* Elasticsearch'es default port */
 #define ESODBC_DEF_PORT				"9200"
-/* default security (TLS) setting */
-#define ESODBC_DEF_SECURE			"no"
+/* default security setting: use SSL */
+#define ESODBC_DEF_SECURE			"1"
 /* default global request timeout (0: no timeout) */
 #define ESODBC_DEF_TIMEOUT			"0"
 /* don't follow redirection from the server  */
