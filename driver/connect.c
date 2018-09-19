@@ -301,7 +301,7 @@ static SQLRETURN dbc_curl_init(esodbc_dbc_st *dbc)
 				ERRH(dbc, "libcurl: failed to enable host check.");
 				goto err;
 			}
-			/* verify the revokation chain? */
+			/* verify the revocation chain? */
 			res = curl_easy_setopt(curl, CURLOPT_SSL_OPTIONS,
 					ESODBC_SEC_CHECK_REVOKE <= dbc->secure ?
 					0L : CURLSSLOPT_NO_REVOKE);
@@ -316,10 +316,8 @@ static SQLRETURN dbc_curl_init(esodbc_dbc_st *dbc)
 	if (dbc->uid.cnt) {
 		/* set the authentication methods:
 		 * "basic" is currently - 7.0.0 - the only supported method */
-		res = curl_easy_setopt(curl, CURLOPT_HTTPAUTH,
-				/* libcurl (7.61.0) won't pick Basic auth over SSL when
-				 * _ANY is used. -- ??? XXX */
-				dbc->secure ? CURLAUTH_BASIC : CURLAUTH_ANY);
+		/* Note: libcurl (7.61.0) won't pick Basic auth over SSL with _ANY */
+		res = curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
 		if (res != CURLE_OK) {
 			ERRH(dbc, "libcurl: failed to set HTTP auth methods.");
 			goto err;
@@ -616,7 +614,7 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	}
 	if (secure < ESODBC_SEC_NONE || ESODBC_SEC_MAX <= secure) {
 		ERRH(dbc, "invalid secure param `" LWPDL "` (not within %d - %d).",
-			LWSTR(&attrs->secure), ESODBC_SEC_NONE, ESODBC_SEC_CHECK_HOST);
+			LWSTR(&attrs->secure), ESODBC_SEC_NONE, ESODBC_SEC_MAX - 1);
 		goto err;
 	} else {
 		dbc->secure = (long)secure;
