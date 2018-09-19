@@ -336,8 +336,9 @@ static SQLRETURN dbc_curl_init(esodbc_dbc_st *dbc)
 				goto err;
 			}
 		} else {
-			INFOH(dbc, "no password for username `" LCPDL "`.",
-				LCSTR(&dbc->uid));
+			/* not an error per se, but make it always visible */
+			ERRH(dbc, "no password provided for username `" LCPDL "`! "
+				"Intended?", LCSTR(&dbc->uid));
 		}
 		if (dbc->follow) {
 			/* restrict sharing credentials to first contacted host? */
