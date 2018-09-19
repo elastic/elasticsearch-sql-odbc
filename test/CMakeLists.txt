@@ -75,23 +75,22 @@ file(TO_NATIVE_PATH ${CMAKE_BINARY_DIR}/test/${CMAKE_CFG_INTDIR}/
 file(TO_NATIVE_PATH ${GTEST_INSTALL_PREFIX} GTEST_NATIVE_PREFIX)
 # - existing Release googletest libs built along the project (vs. OS provided)
 file(TO_NATIVE_PATH ${GTEST_LD_PATH}/gtestd${CMAKE_STATIC_LIBRARY_SUFFIX}
-	GTEST_REL_LIB)
+	GTEST_LIBD)
 file(TO_NATIVE_PATH ${GTEST_LD_PATH}/gtest_maind${CMAKE_STATIC_LIBRARY_SUFFIX}
-	GTEST_REL_MAIN_LIB)
-# - target googletest lib, no matter the build config
-file(TO_NATIVE_PATH ${GTEST_LIB} GTEST_NATIVE_LIB)
-file(TO_NATIVE_PATH ${GTEST_MAIN_LIB} GTEST_NATIVE_MAIN_LIB)
+	GTEST_MAIND)
 
 add_custom_target(install_shared
 	# dir's otherwise created only later on test target execution
 	COMMAND if not exist ${DST_PATH_DLL} mkdir ${DST_PATH_DLL}
-	COMMAND copy ${SRC_PATH_ESODBC_DLL} ${DST_PATH_DLL}
-	COMMAND copy ${SRC_PATH_CURL_DLL} ${DST_PATH_DLL}
+	COMMAND xcopy /E /Y ${SRC_PATH_ESODBC_DLL} ${DST_PATH_DLL}
+	COMMAND xcopy /E /Y ${SRC_PATH_CURL_DLL} ${DST_PATH_DLL}
 	# gtest->gtestd hack
-	COMMAND if exist ${GTEST_NATIVE_PREFIX} if exist ${GTEST_REL_LIB}
-		copy ${GTEST_REL_LIB} ${GTEST_NATIVE_LIB}
-	COMMAND if exist ${GTEST_NATIVE_PREFIX} if exist ${GTEST_REL_MAIN_LIB}
-	copy ${GTEST_REL_MAIN_LIB} ${GTEST_NATIVE_MAIN_LIB}
+	# if googletest just built (i.e. not OS'es) AND the -d version exists
+	COMMAND if exist ${GTEST_NATIVE_PREFIX} if exist ${GTEST_LIBD}
+		cd ${GTEST_LD_PATH} && copy gtestd${CMAKE_STATIC_LIBRARY_SUFFIX} gtest${CMAKE_STATIC_LIBRARY_SUFFIX}
+	# (same checks as above)
+	COMMAND if exist ${GTEST_NATIVE_PREFIX} if exist ${GTEST_MAIND}
+		cd ${GTEST_LD_PATH} && copy gtest_maind${CMAKE_STATIC_LIBRARY_SUFFIX} gtest_main${CMAKE_STATIC_LIBRARY_SUFFIX}
 	)
 
 foreach (TSRC ${TEST_CASES})
