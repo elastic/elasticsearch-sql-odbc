@@ -221,3 +221,4 @@ TEST_F(ConvertC2SQL_Boolean, Binary2Boolean_fail_22003)
 
 } // test namespace
 
+/* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */

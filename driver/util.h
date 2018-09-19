@@ -72,9 +72,15 @@ typedef struct cstr {
 } cstr_st;
 
 /*
- * Copy converted strings from SQLWCHAR to char, for ANSI strings.
+ * Converts a wchar_t string to a C string for ASCII characters.
+ * 'dst' should be at least as character-long as 'src', if 'src' is
+ * 0-terminated, OR one character longer otherwise (for the 0-term).
+ * 'dst' will always be 0-term'd.
+ * Returns negative if conversion fails, OR number of converted wchars,
+ * including/plus the 0-term.
  */
-int ansi_w2c(const SQLWCHAR *src, char *dst, size_t chars);
+int TEST_API ascii_w2c(SQLWCHAR *src, SQLCHAR *dst, size_t chars);
+int TEST_API ascii_c2w(SQLCHAR *src, SQLWCHAR *dst, size_t chars);
 /*
  * Compare two SQLWCHAR object, case INsensitive.
  */
@@ -238,6 +244,18 @@ size_t json_escape_overlapping(char *str, size_t inlen, size_t outlen);
  */
 SQLRETURN write_wstr(SQLHANDLE hnd, SQLWCHAR *dest, wstr_st *src,
 	SQLSMALLINT /*B*/avail, SQLSMALLINT /*B*/*usedp);
+
+/*
+ * Converts a wide string to a UTF-8 MB, allocating the necessary space.
+ * The \0 is allocated and written, even if not present in source string, but
+ * only counted in output string if counted in input one.
+ * If 'dst' is null, the destination is also going to be allocate (collated
+ * with the string). The caller only needs to free the allocated chunk
+ * (returned pointer or dst->str).
+ * Returns NULL on error.
+ */
+//cstr_st* TEST_API wstr_to_utf8(wstr_st *src, cstr_st *dst);
+cstr_st TEST_API *wstr_to_utf8(wstr_st *src, cstr_st *dst);
 
 /*
  * Printing aids.

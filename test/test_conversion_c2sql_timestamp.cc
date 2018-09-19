@@ -279,3 +279,4 @@ TEST_F(ConvertC2SQL_Timestamp, Time2Timestamp_unimplemented_HYC00)
 
 } // test namespace
 
+/* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */

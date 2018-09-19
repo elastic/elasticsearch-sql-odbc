@@ -127,7 +127,18 @@ typedef struct struct_dbc {
 
 	wstr_st dsn; /* data source name SQLGetInfo(SQL_DATA_SOURCE_NAME) */
 	wstr_st server; /* ~ name; requested with SQLGetInfo(SQL_SERVER_NAME) */
-	char *url;
+	cstr_st url;
+	enum {
+		ESODBC_SEC_NONE = 0,
+		ESODBC_SEC_USE_SSL,
+		ESODBC_SEC_CHECK_CA,
+		ESODBC_SEC_CHECK_HOST,
+		ESODBC_SEC_CHECK_REVOKE,
+		ESODBC_SEC_MAX /* meta */
+	} secure;
+	cstr_st ca_path;
+	cstr_st uid;
+	cstr_st pwd;
 	SQLUINTEGER timeout;
 	BOOL follow;
 	struct {
@@ -144,6 +155,8 @@ typedef struct struct_dbc {
 	SQLINTEGER max_varchar_size;
 
 	CURL *curl; /* cURL handle */
+	CURLcode curl_err;
+	char curl_err_buff[CURL_ERROR_SIZE];
 	char *abuff; /* buffer holding the answer */
 	size_t alen; /* size of abuff */
 	size_t apos; /* current write position in the abuff */

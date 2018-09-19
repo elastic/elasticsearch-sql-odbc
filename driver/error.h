@@ -445,6 +445,8 @@ typedef struct {
 void init_diagnostic(esodbc_diag_st *dest);
 SQLRETURN post_diagnostic(esodbc_diag_st *dest, esodbc_state_et state,
 	SQLWCHAR *text, SQLINTEGER code);
+SQLRETURN post_c_diagnostic(esodbc_diag_st *dest, esodbc_state_et state,
+	SQLCHAR *text, SQLINTEGER code);
 /* post state into the diagnostic and return state's return code */
 #define RET_DIAG(_d/*est*/, _s/*tate*/, _t/*ext*/, _c/*ode*/) \
 	return post_diagnostic(_d, _s, _t, _c)

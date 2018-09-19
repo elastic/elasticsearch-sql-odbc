@@ -239,3 +239,4 @@ TEST_F(ConversionCompatibility, ConvCompat)
 
 } // test namespace
 
+/* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */

@@ -255,15 +255,14 @@ void trim_ws(cstr_st *cstr)
 }
 
 /*
- * Converts a wchar_t string to a C string for ANSI characters.
+ * Converts a wchar_t string to a C string for ASCII characters.
  * 'dst' should be at least as character-long as 'src', if 'src' is
  * 0-terminated, OR one character longer otherwise (for the 0-term).
  * 'dst' will always be 0-term'd.
  * Returns negative if conversion fails, OR number of converted wchars,
  * including/plus the 0-term.
- *
  */
-int ansi_w2c(const SQLWCHAR *src, char *dst, size_t chars)
+int TEST_API ascii_w2c(SQLWCHAR *src, SQLCHAR *dst, size_t chars)
 {
 	size_t i = 0;
 
@@ -273,15 +272,41 @@ int ansi_w2c(const SQLWCHAR *src, char *dst, size_t chars)
 	assert(chars < INT_MAX);
 
 	do {
-		if (CHAR_MAX < src[i]) {
+		if (SCHAR_MAX < src[i]) {
 			return -((int)i + 1);
 		}
-		dst[i] = (char)src[i];
-	} while (src[i] && (++i < chars));
+		dst[i] = (SQLCHAR)src[i];
+	} while ((src[i] != L'\0') && (++i < chars));
 
 	if (chars <= i) { /* equiv to: (src[i] != 0) */
 		/* loop stopped b/c of length -> src is not 0-term'd */
 		dst[i] = 0; /* chars + 1 <= [dst] */
+	}
+	return (int)i + 1;
+}
+
+/*
+ * This is the inverse of ascii_w2c().
+ */
+int TEST_API ascii_c2w(SQLCHAR *src, SQLWCHAR *dst, size_t chars)
+{
+	size_t i = 0;
+
+	if (chars < 1) {
+		return -1;
+	}
+	assert(chars < INT_MAX);
+
+	do {
+		if (src[i] < 0) {
+			return -((int)i + 1);
+		}
+		dst[i] = (SQLWCHAR)src[i];
+	} while ((src[i] != '\0') && (++i < chars));
+
+	if (chars <= i) { /* equiv to: (src[i] != 0) */
+		/* loop stopped b/c of length -> src is not 0-term'd */
+		dst[i] = L'\0'; /* chars + 1 <= [dst] */
 	}
 	return (int)i + 1;
 }
@@ -502,5 +527,65 @@ SQLRETURN write_wstr(SQLHANDLE hnd, SQLWCHAR *dest, wstr_st *src,
 
 	return SQL_SUCCESS;
 }
+
+cstr_st TEST_API *wstr_to_utf8(wstr_st *src, cstr_st *dst)
+{
+	int len;
+	size_t cnt;
+	void *addr;
+	BOOL nts; /* is the \0 present and counted in source string? */
+
+	if (0 < src->cnt) {
+		nts = !src->str[src->cnt - 1];
+
+		/* eval the needed space for conversion */
+		len = WCS2U8(src->str, (int)src->cnt, NULL, 0);
+		if (! len) {
+			ERRN("failed to evaluate UTF-8 conversion space necessary for [%zu] "
+				"`" LWPDL "`.", src->cnt, LWSTR(src));
+			return NULL;
+		}
+	} else {
+		nts = FALSE;
+		len = 0;
+	}
+
+	assert(0 <= len);
+	/* explicitely allocate the \0 if not present&counted  */
+	cnt = len + /*0-term?*/!nts;
+	if (! dst) { /* if null destination, allocate that as well */
+		cnt += sizeof(cstr_st);
+	}
+
+	if (! (addr = malloc(cnt))) {
+		ERRN("OOM for size: %zuB.", cnt);
+		return NULL;
+	}
+	if (! dst) {
+		dst = (cstr_st *)addr;
+		dst->str = (uint8_t *)addr + sizeof(cstr_st);
+	} else {
+		dst->str = (SQLCHAR *)addr;
+	}
+
+	if (0 < src->cnt) {
+		/* convert the string */
+		len = WCS2U8(src->str, (int)src->cnt, dst->str, len);
+		if (! len) {
+			/* should not happen, since a first scan already happened */
+			ERRN("failed to UTF-8 convert `" LWPDL "`.", LWSTR(src));
+			free(addr);
+			return NULL;
+		}
+	}
+
+	if (! nts) {
+		dst->str[len] = 0;
+	}
+	dst->cnt = len;
+
+	return dst;
+}
+
 
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */
