@@ -885,6 +885,7 @@ SQLRETURN EsSQLGetDiagFieldW(
 	esodbc_env_st dummy;
 	SQLSMALLINT used;
 	size_t len;
+	void *srcptr;
 	wstr_st *wstrp, wstr;
 	SQLRETURN ret;
 
@@ -1035,11 +1036,37 @@ SQLRETURN EsSQLGetDiagFieldW(
 			dbc->hdr.diag = bak;
 			return ret;
 
-		case SQL_DIAG_MESSAGE_TEXT: //break;
-		case SQL_DIAG_NATIVE: //break;
-		case SQL_DIAG_COLUMN_NUMBER: //break;
-		case SQL_DIAG_ROW_NUMBER: //break;
-			FIXME; // FIXME
+		case SQL_DIAG_MESSAGE_TEXT:
+			wstr.str = diag->text;
+			wstr.cnt = diag->text_len;
+			return write_wstr(Handle, DiagInfoPtr, &wstr,
+					BufferLength * sizeof(*diag->text), StringLengthPtr);
+
+		do {
+		case SQL_DIAG_NATIVE:
+			len = sizeof(diag->native_code);
+			srcptr = &diag->native_code;
+			break;
+		case SQL_DIAG_COLUMN_NUMBER:
+			len = sizeof(diag->column_number);
+			srcptr = &diag->column_number;
+			break;
+		case SQL_DIAG_ROW_NUMBER:
+			len = sizeof(diag->row_number);
+			srcptr = &diag->row_number;
+			break;
+		} while (0);
+			if (BufferLength != SQL_IS_POINTER) {
+				WARNH(Handle, "BufferLength param not indicating a ptr type.");
+			}
+			if (! DiagInfoPtr) {
+				ERRH(Handle, "integer diagnostic field %hd asked for, but "
+						"NULL destination provided.");
+				RET_HDIAGS(Handle, SQL_STATE_HY009);
+			} else {
+				memcpy(DiagInfoPtr, srcptr, len);
+			}
+			return SQL_SUCCESS;
 
 		case SQL_DIAG_SQLSTATE:
 			if (diag->state == SQL_STATE_00000) {
@@ -1143,7 +1170,7 @@ SQLRETURN EsSQLGetDiagRecW
 	}
 
 	wstr.str = diag->text;
-	wstr.cnt = wcslen(wstr.str);
+	wstr.cnt = diag->text_len;
 	*HDRH(&dummy) = *HDRH(Handle); /* need a valid hhdr struct */
 	ret = write_wstr(&dummy, MessageText, &wstr,
 			BufferLength * sizeof(*MessageText), &used);

@@ -821,7 +821,7 @@ void cleanup_dbc(esodbc_dbc_st *dbc)
 	cleanup_curl(dbc);
 }
 
-static SQLRETURN do_connect(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
+SQLRETURN do_connect(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 {
 	SQLRETURN ret;
 
@@ -1540,6 +1540,36 @@ end:
 	return ret;
 }
 
+static int receive_dsn_cb(void *arg, const wchar_t *list00,
+	wchar_t *err_out, size_t eo_max, unsigned int flags)
+{
+	esodbc_dsn_attrs_st *attrs = (esodbc_dsn_attrs_st *)arg;
+
+	TRACE;
+	assert(arg);
+
+	if (! list00) {
+		ERR("invalid NULL 00-list received.");
+		return ESODBC_DSN_ISNULL_ERROR;
+	}
+
+#if 0
+	if (! parse_00_list(&attrs, (SQLWCHAR *)list00)) {
+#else
+	if (! parse_connection_string(attrs, (SQLWCHAR *)list00,
+			(SQLSMALLINT)wcslen(list00))) {
+#endif
+		ERR("failed to parse received 00-list.");
+		return ESODBC_DSN_INVALID_ERROR;
+	}
+
+	//
+	// TODO: validate attrs vals FIXME
+	//
+
+	return 0;
+}
+
 SQLRETURN EsSQLDriverConnectW
 (
 	SQLHDBC             hdbc,
@@ -1570,9 +1600,9 @@ SQLRETURN EsSQLDriverConnectW
 	esodbc_dsn_attrs_st attrs;
 	SQLWCHAR buff_dsn[ESODBC_DSN_MAX_ATTR_LEN];
 	wstr_st orig_dsn = {buff_dsn, 0};
-	BOOL disable_nonconn = FALSE;
+	BOOL disable_nonconn = TRUE; /* disable non-conn controls by default */
 	BOOL prompt_user = TRUE;
-	int res;
+	long res;
 	size_t cnt;
 
 	init_dsn_attrs(&attrs);
@@ -1655,6 +1685,8 @@ SQLRETURN EsSQLDriverConnectW
 			break;
 
 		case SQL_DRIVER_COMPLETE_REQUIRED:
+			/* disable non-connection controls, as per the standard (even if
+			 * changing the above default). */
 			disable_nonconn = TRUE;
 		/* no break */
 		case SQL_DRIVER_COMPLETE:
@@ -1663,8 +1695,8 @@ SQLRETURN EsSQLDriverConnectW
 		/* no break; */
 		case SQL_DRIVER_PROMPT: /* prompt user first, then try connect */
 			do {
-				res = prompt_user ?
-					prompt_user_config(hdbc, &attrs, FALSE) : 1;
+				res = prompt_user ? prompt_user_config(hwnd, disable_nonconn,
+						&attrs, &receive_dsn_cb) : /*need just > 0*/1;
 				if (res < 0) {
 					ERRH(dbc, "user interaction failed.");
 					RET_HDIAGS(dbc, SQL_STATE_IM008);
@@ -1721,11 +1753,13 @@ SQLRETURN EsSQLDriverConnectW
 		res = assign_dsn_attr(&attrs, &MK_WSTR(ESODBC_DSN_DSN), &orig_dsn,
 				/*overwrite?*/TRUE);
 		assert(0 < res);
-		if (! write_connection_string(&attrs, szConnStrOut, cchConnStrOutMax,
-				pcchConnStrOut)) {
+		res = write_connection_string(&attrs, szConnStrOut, cchConnStrOutMax);
+		if (res < 0) {
 			ERRH(dbc, "failed to build output connection string.");
 			RET_HDIAG(dbc, SQL_STATE_HY000, "failed to build connection "
 				"string", 0);
+		} else if (pcchConnStrOut) {
+			*pcchConnStrOut = (SQLSMALLINT)res;
 		}
 	}
 

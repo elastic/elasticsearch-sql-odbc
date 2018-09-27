@@ -9,13 +9,15 @@
 
 #include "dsn.h"
 #include "log.h"
+#include "connect.h"
+#include "info.h"
 
 #define ODBC_REG_SUBKEY_PATH	"SOFTWARE\\ODBC\\ODBC.INI"
 #define REG_HKLM				"HKEY_LOCAL_MACHINE"
 #define REG_HKCU				"HKEY_CURRENT_USER"
 
 
-void init_dsn_attrs(esodbc_dsn_attrs_st *attrs)
+void TEST_API init_dsn_attrs(esodbc_dsn_attrs_st *attrs)
 {
 	size_t i;
 	wstr_st *wstr;
@@ -272,7 +274,7 @@ static SQLWCHAR *parse_separator(SQLWCHAR **pos, SQLWCHAR *end)
  *  * `{` and `}` allowed within {}
  *  * brances need to be returned to out-str;
  */
-BOOL parse_connection_string(esodbc_dsn_attrs_st *attrs,
+BOOL TEST_API parse_connection_string(esodbc_dsn_attrs_st *attrs,
 	SQLWCHAR *szConnStrIn, SQLSMALLINT cchConnStrIn)
 {
 
@@ -302,7 +304,8 @@ BOOL parse_connection_string(esodbc_dsn_attrs_st *attrs,
 		}
 
 		if (! skip_ws(&pos, end, FALSE)) {
-			return FALSE;
+			continue; /* empty values are acceptable */
+			//return FALSE;
 		}
 
 		if (! parse_token(TRUE, &pos, end, &value)) {
@@ -323,7 +326,7 @@ BOOL parse_connection_string(esodbc_dsn_attrs_st *attrs,
 	return TRUE;
 }
 
-BOOL parse_00_list(esodbc_dsn_attrs_st *attrs, SQLWCHAR *list00)
+BOOL TEST_API parse_00_list(esodbc_dsn_attrs_st *attrs, SQLWCHAR *list00)
 {
 	SQLWCHAR *pos;
 	size_t cnt;
@@ -343,6 +346,97 @@ BOOL parse_00_list(esodbc_dsn_attrs_st *attrs, SQLWCHAR *list00)
 	return TRUE;
 }
 
+static inline BOOL needs_braces(wstr_st *token)
+{
+	size_t i;
+
+	for (i = 0; i < token->cnt; i ++) {
+		switch(token->str[i]) {
+			case ' ':
+			case '\t':
+			case '\r':
+			case '\n':
+			case '=':
+			case ';':
+				return TRUE;
+		}
+	}
+	return FALSE;
+}
+
+long TEST_API write_00_list(esodbc_dsn_attrs_st *attrs,
+	SQLWCHAR *list00, size_t cnt00)
+{
+	struct {
+		wstr_st *kw;
+		wstr_st *val;
+	} *iter, map[] = {
+		{&MK_WSTR(ESODBC_DSN_DRIVER), &attrs->driver},
+		{&MK_WSTR(ESODBC_DSN_DESCRIPTION), &attrs->description},
+		{&MK_WSTR(ESODBC_DSN_DSN), &attrs->dsn},
+		{&MK_WSTR(ESODBC_DSN_PWD), &attrs->pwd},
+		{&MK_WSTR(ESODBC_DSN_UID), &attrs->uid},
+		{&MK_WSTR(ESODBC_DSN_SAVEFILE), &attrs->savefile},
+		{&MK_WSTR(ESODBC_DSN_FILEDSN), &attrs->filedsn},
+		{&MK_WSTR(ESODBC_DSN_SERVER), &attrs->server},
+		{&MK_WSTR(ESODBC_DSN_PORT), &attrs->port},
+		{&MK_WSTR(ESODBC_DSN_SECURE), &attrs->secure},
+		{&MK_WSTR(ESODBC_DSN_CA_PATH), &attrs->ca_path},
+		{&MK_WSTR(ESODBC_DSN_TIMEOUT), &attrs->timeout},
+		{&MK_WSTR(ESODBC_DSN_FOLLOW), &attrs->follow},
+		{&MK_WSTR(ESODBC_DSN_CATALOG), &attrs->catalog},
+		{&MK_WSTR(ESODBC_DSN_PACKING), &attrs->packing},
+		{&MK_WSTR(ESODBC_DSN_MAX_FETCH_SIZE), &attrs->max_fetch_size},
+		{&MK_WSTR(ESODBC_DSN_MAX_BODY_SIZE_MB), &attrs->max_body_size},
+		{&MK_WSTR(ESODBC_DSN_TRACE_FILE), &attrs->trace_file},
+		{&MK_WSTR(ESODBC_DSN_TRACE_LEVEL), &attrs->trace_level},
+		{NULL, NULL}
+	};
+	size_t pos;
+	BOOL add_braces;
+
+	/* check that the esodbc_dsn_attrs_st stays in sync with the above */
+	assert(sizeof(map)/sizeof(*iter) - /* {NULL,NULL} terminator */1 ==
+		ESODBC_DSN_ATTRS_COUNT);
+
+
+	for (iter = &map[0], pos = 0; iter->val; iter ++) {
+		if (! iter->val->cnt) {
+			continue;
+		}
+		/* the braces aren't really needed in a doubly-null-terminated list,
+		 * but would make a conversion to a "normal" (`;` or `|` separated)
+		 * connection string easy */
+		add_braces = needs_braces(iter->val);
+		if (cnt00 - /*final \0*/1 < pos + iter->kw->cnt + /*`=`*/1 +
+			(add_braces ? 2 : 0) + iter->val->cnt) {
+			ERR("not enough room in destination buffer.");
+			return -1;
+		}
+		/* copy keyword */
+		memcpy(list00 + pos, iter->kw->str, iter->kw->cnt * sizeof(*list00));
+		pos += iter->kw->cnt;
+		/* copy attribute value separator (`=`) and brace if needed */
+		list00[pos ++] = L'=';
+		if (add_braces) {
+			list00[pos ++] = L'{';
+		}
+		/* copy value */
+		memcpy(list00 + pos, iter->val->str, iter->val->cnt * sizeof(*list00));
+		pos += iter->val->cnt;
+		/* close any open brace */
+		if (add_braces) {
+			list00[pos ++] = L'}';
+		}
+		/* close current attribute */
+		list00[pos ++] = L'\0';
+	}
+	assert(pos < cnt00);
+	list00[pos ++] = L'\0';
+
+	return (long)pos;
+}
+
 static void log_installer_err()
 {
 	DWORD ecode;
@@ -352,8 +446,42 @@ static void log_installer_err()
 
 	while (SQL_SUCCEEDED(SQLInstallerError(++ i, &ecode, buff,
 				sizeof(buff)/sizeof(buff[0]), &msg_len))) {
-		ERR("#%i: errcode=%d: " LWPDL ".", i, ecode, msg_len, buff);
+		ERR("#%i: errcode=%d: " LWPDL ".", i, ecode,
+			msg_len/sizeof(*buff), buff);
 	}
+}
+
+size_t copy_installer_errors(wchar_t *err_buff, size_t eb_max)
+{
+	DWORD ecode;
+	SQLWCHAR buff[SQL_MAX_MESSAGE_LENGTH];
+	WORD msg_len;
+	int i, res;
+	size_t pos;
+
+	i = 0;
+	pos = 0;
+	while (SQL_SUCCEEDED(SQLInstallerError(++ i, &ecode, buff,
+				sizeof(buff)/sizeof(buff[0]), &msg_len))) {
+		msg_len /= sizeof(*buff);
+
+		assert(pos <= eb_max);
+		res = swprintf(err_buff + pos, eb_max - pos, L"%.*s (%d).\n",
+				msg_len, buff, ecode);
+		if (res < 0) {
+			ERR("failed to copy: #%i: `" LWPDL "` (%d).", i, msg_len, buff,
+				ecode);
+			/* allow execution to continue, though */
+		} else {
+			pos += (size_t)res;
+			if (res < msg_len) {
+				WARN("reached error buffer end (%zd) before copying all "
+					"errors.", eb_max);
+				break;
+			}
+		}
+	}
+	return pos;
 }
 
 /*
@@ -503,6 +631,8 @@ BOOL write_system_dsn(esodbc_dsn_attrs_st *attrs, BOOL create_new)
 				".INI.", LWSTR(&attrs->dsn), LWSTR(&attrs->driver));
 			return FALSE;
 		}
+	} else {
+		assert(0 < system_dsn_exists(&attrs->dsn));
 	}
 
 	for (iter = &map[0]; iter->kw; iter ++) {
@@ -522,28 +652,9 @@ BOOL write_system_dsn(esodbc_dsn_attrs_st *attrs, BOOL create_new)
 	return TRUE;
 }
 
-static inline BOOL needs_braces(wstr_st *token)
-{
-	size_t i;
-
-	for (i = 0; i < token->cnt; i ++) {
-		switch(token->str[i]) {
-			case ' ':
-			case '\t':
-			case '\r':
-			case '\n':
-			case '=':
-			case ';':
-				return TRUE;
-		}
-	}
-	return FALSE;
-}
-
 /* build a connection string to be written in the DSN files */
-BOOL write_connection_string(esodbc_dsn_attrs_st *attrs,
-	SQLWCHAR *szConnStrOut, SQLSMALLINT cchConnStrOutMax,
-	SQLSMALLINT *pcchConnStrOut)
+long TEST_API write_connection_string(esodbc_dsn_attrs_st *attrs,
+	SQLWCHAR *szConnStrOut, SQLSMALLINT cchConnStrOutMax)
 {
 	int n, braces;
 	size_t pos;
@@ -553,7 +664,7 @@ BOOL write_connection_string(esodbc_dsn_attrs_st *attrs,
 		char *kw;
 	} *iter, map[] = {
 		{&attrs->driver, ESODBC_DSN_DRIVER},
-		/* Description */
+		{&attrs->description, ESODBC_DSN_DESCRIPTION},
 		{&attrs->dsn, ESODBC_DSN_DSN},
 		{&attrs->pwd, ESODBC_DSN_PWD},
 		{&attrs->uid, ESODBC_DSN_UID},
@@ -598,23 +709,22 @@ BOOL write_connection_string(esodbc_dsn_attrs_st *attrs,
 					ERRN("failed to outprint connection string (space "
 						"left: %d; needed: %d).", cchConnStrOutMax - pos,
 						iter->val->cnt);
-					return FALSE;
+					return -1;
 				} else {
 					pos += n;
 				}
 			} else {
 				/* simply increment the counter, since the untruncated length
-				 * need to be returned to the app */
+				 * needs to be returned to the app */
 				pos += iter->val->cnt + braces;
 			}
 		}
 	}
 
-	*pcchConnStrOut = (SQLSMALLINT)pos;
-
 	DBG("Output connection string: `" LWPD "`; out len: %d.",
 		szConnStrOut, pos);
-	return TRUE;
+	assert(pos < LONG_MAX);
+	return (long)pos;
 }
 
 BOOL assign_dsn_defaults(esodbc_dsn_attrs_st *attrs)
@@ -792,60 +902,73 @@ end:
 #error "unsupported platform" /* TODO */
 #endif /* defined(_WIN32) || defined (WIN32) */
 
-
-// asks user for the config data
-// returns:
-// . negative: on failure
-// . 0: user canceled
-// . positive: user provided input
-int prompt_user_config(HWND hwndParent, esodbc_dsn_attrs_st *attrs,
-	/* disable non-connect-related controls? */
-	BOOL disable_nonconn)
+static int test_connect(void *arg, const wchar_t *list00,
+	wchar_t *err_out, size_t eo_max, unsigned int _)
 {
-	static int attempts = 0;
+	esodbc_dsn_attrs_st attrs;
+	esodbc_dbc_st dbc;
+	SQLRETURN res, r;
 
-	if (! hwndParent) {
-		INFO("no window handler provided -- configuration skipped.");
-		return 1;
+	assert(! arg); /* change santinel */
+	if (! list00) {
+		ERR("invalid NULL 00-list received.");
+		return ESODBC_DSN_ISNULL_ERROR;
 	}
-	TRACE;
 
-	if (assign_dsn_attr(attrs, &MK_WSTR(ESODBC_DSN_DSN),
-			&MK_WSTR("My Elasticsearch ODBC DSN"), FALSE) <= 0) {
-		//&MK_WSTR("My Elasticsearch ODBC DSN"), TRUE, TRUE) <= 0) {
-		return -1;
-	}
-#if 1
-	if (assign_dsn_attr(attrs, &MK_WSTR(ESODBC_DSN_TRACE_LEVEL),
-			&MK_WSTR("INFO"), FALSE) <= 0) {
-		return -1;
-	}
+	init_dsn_attrs(&attrs);
+#if 0
+	if (! parse_00_list(&attrs, (SQLWCHAR *)list00)) {
+#else
+	if (! parse_connection_string(&attrs, (SQLWCHAR *)list00,
+			(SQLSMALLINT)wcslen(list00))) {
 #endif
-	if (1 < attempts ++) {
-		/* prevent infinite loops */
-		return 0;
+		ERR("failed to parse received 00-list.");
+		return ESODBC_DSN_INVALID_ERROR;
 	}
 
-	if (SQL_MAX_DSN_LENGTH < attrs->dsn.cnt) {
-		ERR("DSN name longer than max (%d).", SQL_MAX_DSN_LENGTH);
+	init_dbc(&dbc, NULL);
+	res = do_connect(&dbc, &attrs);
+	if (! SQL_SUCCEEDED(res)) {
+		r = EsSQLGetDiagFieldW(SQL_HANDLE_DBC, &dbc, /*rec#*/1,
+				SQL_DIAG_MESSAGE_TEXT, err_out, (SQLSMALLINT)eo_max,
+				/*written len*/NULL/*err_out is 0-term'd*/);
+		/* function should not fail with given params. */
+		assert(SQL_SUCCEEDED(r));
+		return ESODBC_DSN_GENERIC_ERROR;
 	}
 
-	return 1;
+	return 0;
 }
 
-// asks user if we should overwrite the existing DSN
-// returns:
-// . negative on failure
-// . 0 on false
-// . positive on true
-int prompt_user_overwrite(HWND hwndParent, wstr_st *dsn)
+/*
+ * Return:
+ *  < 0: error
+ *  ==0: user cancels
+ *  > 0: success
+ */
+int prompt_user_config(HWND hwnd, BOOL on_conn, esodbc_dsn_attrs_st *attrs,
+	driver_callback_ft save_cb)
 {
-	if (! hwndParent) {
-		INFO("no window handler provided -- forcing overwrite.");
-		return 1;
+	int ret;
+	wchar_t list00[sizeof(attrs->buff)/sizeof(*attrs->buff)];
+
+#if 0
+	if (write_00_list(attrs, (SQLWCHAR *)list00,
+			sizeof(list00)/sizeof(*list00)) <= 0) {
+#else
+	if (write_connection_string(attrs, (SQLWCHAR *)list00,
+			sizeof(list00)/sizeof(*list00)) <= 0) {
+#endif
+		ERR("failed to serialize attributes into a 00-list.");
+		return FALSE;
 	}
-	TRACE;
-	return 1;
+
+	ret = EsOdbcDsnEdit(hwnd, on_conn, list00, &test_connect, NULL,
+			save_cb, attrs);
+	if (ret < 0) {
+		ERR("failed to bring up the GUI; code:%d.", ret);
+	}
+	return ret;
 }
 
 
