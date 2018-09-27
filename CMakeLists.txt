@@ -267,6 +267,8 @@ message("Driver include paths: " ${ODBC_INC} ${DRV_SRC_DIR}
 # generate resource file
 configure_file(${DRV_SRC_DIR}/driver.rc.cmake ${CMAKE_BINARY_DIR}/driver.rc)
 
+link_directories(C:\\Users\\bpi\\AppData\\Local\\Temp\\esodbc)
+
 #
 # finally, set destination library
 #
@@ -276,10 +278,11 @@ add_library(${DRV_NAME} SHARED ${DRV_SRC} ${CMAKE_BINARY_DIR}/${DRV_NAME}.def
 target_compile_definitions(${DRV_NAME} PRIVATE "DRIVER_BUILD")
 
 include_directories(${ODBC_INC} ${DRV_SRC_DIR} ${LIBCURL_INC_PATH}
-	${UJSON4C_INC} ${CTIMESTAMP_PATH_SRC})
+	${UJSON4C_INC} ${CTIMESTAMP_PATH_SRC}
+	C:\\Users\\bpi\\RnD\\elastic\\misc\\EsOdbcDsn\\EsOdbcDsnBinding)
 
 target_link_libraries(${DRV_NAME} odbccp32 legacy_stdio_definitions libcurl
-	${LIBCURL_WIN_LIBS})
+	${LIBCURL_WIN_LIBS} esdsnbnd)
 
 # add testing project/target
 enable_testing()

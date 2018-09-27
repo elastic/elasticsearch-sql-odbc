@@ -358,6 +358,8 @@ SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count);
 esodbc_rec_st *get_record(esodbc_desc_st *desc, SQLSMALLINT rec_no, BOOL grow);
 void dump_record(esodbc_rec_st *rec);
 
+void init_dbc(esodbc_dbc_st *dbc, SQLHANDLE InputHandle);
+
 esodbc_desc_st *getdata_set_ard(esodbc_stmt_st *stmt, esodbc_desc_st *gd_ard,
 	SQLUSMALLINT colno, esodbc_rec_st *recs, SQLUSMALLINT count);
 void getdata_reset_ard(esodbc_stmt_st *stmt, esodbc_desc_st *ard,
@@ -467,10 +469,10 @@ SQLRETURN EsSQLSetDescRec(
 
 /* wraper of RET_CDIAG, compatible with any defined handle */
 #define RET_HDIAG(_hp/*handle ptr*/, _s/*tate*/, _t/*char text*/, _c/*ode*/) \
-	RET_CDIAG(&(_hp)->hdr.diag, _s, _t, _c)
+	RET_CDIAG(&HDRH(_hp)->diag, _s, _t, _c)
 /* similar to RET_HDIAG, but only post the state */
 #define RET_HDIAGS(_hp/*handle ptr*/, _s/*tate*/) \
-	RET_DIAG(&(_hp)->hdr.diag, _s, NULL, 0)
+	RET_DIAG(&HDRH(_hp)->diag, _s, NULL, 0)
 /* copy the diagnostics from one handle to the other */
 #define HDIAG_COPY(_s, _d)	(_d)->hdr.diag = (_s)->hdr.diag
 /* set a diagnostic to a(ny) handle */
