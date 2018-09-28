@@ -11,6 +11,7 @@
 #include "log.h"
 #include "info.h"
 #include "dsn.h"
+#include "connect.h"
 
 #define VAL_NAME_APILEVEL	"APILevel"
 #define VAL_NAME_CONNECTFN	"ConnectFunctions"
@@ -122,6 +123,7 @@ static int save_dsn_cb(void *arg, const wchar_t *list00,
 	size_t cnt;
 	int res;
 	esodbc_dsn_attrs_st attrs;
+	esodbc_dbc_st dbc;
 	BOOL create_new, remove_old = FALSE;
 	esodbc_dsn_attrs_st *old_attrs = (esodbc_dsn_attrs_st *)arg;
 	wstr_st old_dsn = old_attrs->dsn;
@@ -132,19 +134,29 @@ static int save_dsn_cb(void *arg, const wchar_t *list00,
 	}
 
 	init_dsn_attrs(&attrs);
-#if 0
+#ifdef ESODBC_DSN_API_WITH_00_LIST
 	if (! parse_00_list(&attrs, (SQLWCHAR *)list00)) {
 #else
 	if (! parse_connection_string(&attrs, (SQLWCHAR *)list00,
 			(SQLSMALLINT)wcslen(list00))) {
-#endif
+#endif /* ESODBC_DSN_API_WITH_00_LIST */
 		ERR("failed to parse received 00-list.");
 		return ESODBC_DSN_INVALID_ERROR;
 	}
 
-	//
-	// TODO: validate attrs vals FIXME
-	//
+	/* 
+	 * validate the DSN set 
+	 */
+	if (! (attrs.dsn.cnt & attrs.server.cnt)) {
+		ERR("DSN name (" LWPDL ") and server address (" LWPDL ") must not be"
+				" empty.", LWSTR(&attrs.dsn), LWSTR(&attrs.server));
+		return ESODBC_DSN_INVALID_ERROR;
+	}
+	init_dbc(&dbc, NULL);
+	if (! SQL_SUCCEEDED(config_dbc(&dbc, &attrs))) {
+		ERR("test DBC configuration failed.");
+		return ESODBC_DSN_INVALID_ERROR;
+	}
 
 	/* is it a brand new DSN name or has the DSN name changed? */
 	DBG("old DSN: `" LWPDL "`, new DSN: `" LWPDL "`.",
@@ -178,7 +190,8 @@ static int save_dsn_cb(void *arg, const wchar_t *list00,
 		goto err;
 	}
 
-	/* only remove old if new is succesfully created */
+	/* only remove old if new is succesfully created (even though the
+	 * documentation says otherwise). */
 	if (remove_old) {
 		assert(old_dsn.cnt);
 		if (! SQLRemoveDSNFromIniW(old_dsn.str)) {

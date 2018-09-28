@@ -17,6 +17,7 @@ void connect_cleanup();
 SQLRETURN post_json(esodbc_stmt_st *stmt, const cstr_st *u8body);
 void cleanup_dbc(esodbc_dbc_st *dbc);
 SQLRETURN do_connect(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs);
+SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs);
 
 
 SQLRETURN EsSQLDriverConnectW

@@ -305,7 +305,6 @@ BOOL TEST_API parse_connection_string(esodbc_dsn_attrs_st *attrs,
 
 		if (! skip_ws(&pos, end, FALSE)) {
 			continue; /* empty values are acceptable */
-			//return FALSE;
 		}
 
 		if (! parse_token(TRUE, &pos, end, &value)) {
@@ -475,7 +474,7 @@ size_t copy_installer_errors(wchar_t *err_buff, size_t eb_max)
 		} else {
 			pos += (size_t)res;
 			if (res < msg_len) {
-				WARN("reached error buffer end (%zd) before copying all "
+				WARN("reached error buffer end (%zu) before copying all "
 					"errors.", eb_max);
 				break;
 			}
@@ -512,13 +511,10 @@ int system_dsn_exists(wstr_st *dsn)
  * Reads the system entries for a DSN given into a doubly null-terminated
  * attributes list.
  *
- * The defaults are always filled in.
- *
- * The list - as received by ConfigDSN() - seems to only contain the 'DSN'
- * keyword, though the documentation mentions a full list. However, if a full
- * is provided, the values are going to be taken into account, but possibly
- * overwritten by registry entries (which theoretically should be the same
- * anyways).
+ * The list - as received by ConfigDSN() - only contains the 'DSN' keyword,
+ * though it could contain other attributes too. These are going to be taken
+ * into account, but possibly overwritten by registry entries (which
+ * theoretically should be the same anyways).
  */
 BOOL load_system_dsn(esodbc_dsn_attrs_st *attrs, SQLWCHAR *list00)
 {
@@ -583,10 +579,9 @@ BOOL load_system_dsn(esodbc_dsn_attrs_st *attrs, SQLWCHAR *list00)
 		}
 	}
 
-	if (! assign_dsn_defaults(attrs)) {
-		ERR("OOM assigning defaults");
-		return FALSE;
-	}
+	/* Provide the user no defaults atp. (i.e. start from empty config). The
+	 * GUI will provide some defaults (ex. 9200) and config is validated
+	 * before saving. => no assign_dsn_defaults(attrs); */
 
 	return TRUE;
 }
@@ -727,60 +722,44 @@ long TEST_API write_connection_string(esodbc_dsn_attrs_st *attrs,
 	return (long)pos;
 }
 
-BOOL assign_dsn_defaults(esodbc_dsn_attrs_st *attrs)
+/* assign defaults where not assigned and applicable */
+void assign_dsn_defaults(esodbc_dsn_attrs_st *attrs)
 {
-	/* assign defaults where not assigned and applicable */
-	if (assign_dsn_attr(attrs,
-			&MK_WSTR(ESODBC_DSN_SERVER), &MK_WSTR(ESODBC_DEF_SERVER),
-			/*overwrite?*/FALSE) < 0) {
-		return FALSE;
-	}
-	if (assign_dsn_attr(attrs,
-			&MK_WSTR(ESODBC_DSN_PORT), &MK_WSTR(ESODBC_DEF_PORT),
-			/*overwrite?*/FALSE) < 0) {
-		return FALSE;
-	}
-	if (assign_dsn_attr(attrs,
-			&MK_WSTR(ESODBC_DSN_SECURE), &MK_WSTR(ESODBC_DEF_SECURE),
-			/*overwrite?*/FALSE) < 0) {
-		return FALSE;
-	}
-	if (assign_dsn_attr(attrs,
-			&MK_WSTR(ESODBC_DSN_TIMEOUT), &MK_WSTR(ESODBC_DEF_TIMEOUT),
-			/*overwrite?*/FALSE) < 0) {
-		return FALSE;
-	}
-	if (assign_dsn_attr(attrs,
-			&MK_WSTR(ESODBC_DSN_FOLLOW), &MK_WSTR(ESODBC_DEF_FOLLOW),
-			/*overwrite?*/FALSE) < 0) {
-		return FALSE;
-	}
+	int res = 0;
 
-	if (assign_dsn_attr(attrs,
+	res |= assign_dsn_attr(attrs,
+			&MK_WSTR(ESODBC_DSN_SERVER), &MK_WSTR(ESODBC_DEF_SERVER),
+			/*overwrite?*/FALSE);
+	res |= assign_dsn_attr(attrs,
+			&MK_WSTR(ESODBC_DSN_PORT), &MK_WSTR(ESODBC_DEF_PORT),
+			/*overwrite?*/FALSE);
+	res |= assign_dsn_attr(attrs,
+			&MK_WSTR(ESODBC_DSN_SECURE), &MK_WSTR(ESODBC_DEF_SECURE),
+			/*overwrite?*/FALSE);
+	res |= assign_dsn_attr(attrs,
+			&MK_WSTR(ESODBC_DSN_TIMEOUT), &MK_WSTR(ESODBC_DEF_TIMEOUT),
+			/*overwrite?*/FALSE);
+	res |= assign_dsn_attr(attrs,
+			&MK_WSTR(ESODBC_DSN_FOLLOW), &MK_WSTR(ESODBC_DEF_FOLLOW),
+			/*overwrite?*/FALSE);
+
+	res |= assign_dsn_attr(attrs,
 			&MK_WSTR(ESODBC_DSN_PACKING), &MK_WSTR(ESODBC_DEF_PACKING),
-			/*overwrite?*/FALSE) < 0) {
-		return FALSE;
-	}
-	if (assign_dsn_attr(attrs,
+			/*overwrite?*/FALSE);
+	res |= assign_dsn_attr(attrs,
 			&MK_WSTR(ESODBC_DSN_MAX_FETCH_SIZE),
 			&MK_WSTR(ESODBC_DEF_FETCH_SIZE),
-			/*overwrite?*/FALSE) < 0) {
-		return FALSE;
-	}
-	if (assign_dsn_attr(attrs, &MK_WSTR(ESODBC_DSN_MAX_BODY_SIZE_MB),
+			/*overwrite?*/FALSE);
+	res |= assign_dsn_attr(attrs, &MK_WSTR(ESODBC_DSN_MAX_BODY_SIZE_MB),
 			&MK_WSTR(ESODBC_DEF_MAX_BODY_SIZE_MB),
-			/*overwrite?*/FALSE) < 0) {
-		return FALSE;
-	}
+			/*overwrite?*/FALSE);
 
 	/* default: no trace file */
-	if (assign_dsn_attr(attrs,
+	res |= assign_dsn_attr(attrs,
 			&MK_WSTR(ESODBC_DSN_TRACE_LEVEL), &MK_WSTR(ESODBC_DEF_TRACE_LEVEL),
-			/*overwrite?*/FALSE) < 0) {
-		return FALSE;
-	}
+			/*overwrite?*/FALSE);
 
-	return TRUE;
+	assert(0 <= res);
 }
 
 
@@ -907,7 +886,8 @@ static int test_connect(void *arg, const wchar_t *list00,
 {
 	esodbc_dsn_attrs_st attrs;
 	esodbc_dbc_st dbc;
-	SQLRETURN res, r;
+	SQLRETURN res;
+	int ret;
 
 	assert(! arg); /* change santinel */
 	if (! list00) {
@@ -916,12 +896,12 @@ static int test_connect(void *arg, const wchar_t *list00,
 	}
 
 	init_dsn_attrs(&attrs);
-#if 0
+#ifdef ESODBC_DSN_API_WITH_00_LIST
 	if (! parse_00_list(&attrs, (SQLWCHAR *)list00)) {
 #else
 	if (! parse_connection_string(&attrs, (SQLWCHAR *)list00,
 			(SQLSMALLINT)wcslen(list00))) {
-#endif
+#endif /* ESODBC_DSN_API_WITH_00_LIST */
 		ERR("failed to parse received 00-list.");
 		return ESODBC_DSN_INVALID_ERROR;
 	}
@@ -929,15 +909,18 @@ static int test_connect(void *arg, const wchar_t *list00,
 	init_dbc(&dbc, NULL);
 	res = do_connect(&dbc, &attrs);
 	if (! SQL_SUCCEEDED(res)) {
-		r = EsSQLGetDiagFieldW(SQL_HANDLE_DBC, &dbc, /*rec#*/1,
+		res = EsSQLGetDiagFieldW(SQL_HANDLE_DBC, &dbc, /*rec#*/1,
 				SQL_DIAG_MESSAGE_TEXT, err_out, (SQLSMALLINT)eo_max,
 				/*written len*/NULL/*err_out is 0-term'd*/);
 		/* function should not fail with given params. */
-		assert(SQL_SUCCEEDED(r));
-		return ESODBC_DSN_GENERIC_ERROR;
+		assert(SQL_SUCCEEDED(res));
+		ret = ESODBC_DSN_GENERIC_ERROR;
+	} else {
+		ret = 0;
 	}
 
-	return 0;
+	cleanup_dbc(&dbc);
+	return ret;
 }
 
 /*

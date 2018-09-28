@@ -61,7 +61,7 @@ typedef struct {
 } esodbc_dsn_attrs_st;
 
 void TEST_API init_dsn_attrs(esodbc_dsn_attrs_st *attrs);
-BOOL assign_dsn_defaults(esodbc_dsn_attrs_st *attrs);
+void assign_dsn_defaults(esodbc_dsn_attrs_st *attrs);
 BOOL assign_dsn_attr(esodbc_dsn_attrs_st *attrs,
 	wstr_st *keyword, wstr_st *value, BOOL overwrite);
 
@@ -82,6 +82,10 @@ long TEST_API write_connection_string(esodbc_dsn_attrs_st *attrs,
 size_t copy_installer_errors(wchar_t *err_buff, size_t eb_max);
 int prompt_user_config(HWND hwnd, BOOL on_conn, esodbc_dsn_attrs_st *attrs,
 	driver_callback_ft save_cb);
+
+/* enable 00-list format (vs. connection string, `;`/`|`-separated) at the
+ * interface with the GUI API */
+//#define ESODBC_DSN_API_WITH_00_LIST
 
 #endif /* __DSN_H__ */
 

@@ -597,7 +597,7 @@ static SQLRETURN test_connect(esodbc_dbc_st *dbc)
 /*
  * init dbc from configured attributes
  */
-static SQLRETURN process_config(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
+SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 {
 	esodbc_state_et state = SQL_STATE_HY000;
 	int cnt;
@@ -755,7 +755,7 @@ static SQLRETURN process_config(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	return SQL_SUCCESS;
 err:
 	if (state == SQL_STATE_HY000) {
-		RET_HDIAG(dbc, state, "invalid configuration parameter", 0);
+		RET_HDIAG(dbc, state, "invalid configuration parameters", 0);
 	}
 	RET_HDIAGS(dbc, state);
 }
@@ -829,7 +829,7 @@ SQLRETURN do_connect(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	cleanup_dbc(dbc);
 
 	/* set the DBC params based on given attributes (but no validation atp) */
-	ret = process_config(dbc, attrs);
+	ret = config_dbc(dbc, attrs);
 	if (! SQL_SUCCEEDED(ret)) {
 		return ret;
 	}
@@ -1544,6 +1544,9 @@ static int receive_dsn_cb(void *arg, const wchar_t *list00,
 	wchar_t *err_out, size_t eo_max, unsigned int flags)
 {
 	esodbc_dsn_attrs_st *attrs = (esodbc_dsn_attrs_st *)arg;
+	esodbc_dbc_st dbc;
+	SQLRETURN res;
+	int ret;
 
 	TRACE;
 	assert(arg);
@@ -1553,21 +1556,34 @@ static int receive_dsn_cb(void *arg, const wchar_t *list00,
 		return ESODBC_DSN_ISNULL_ERROR;
 	}
 
-#if 0
+#ifdef ESODBC_DSN_API_WITH_00_LIST
 	if (! parse_00_list(&attrs, (SQLWCHAR *)list00)) {
 #else
 	if (! parse_connection_string(attrs, (SQLWCHAR *)list00,
 			(SQLSMALLINT)wcslen(list00))) {
-#endif
+#endif /* ESODBC_DSN_API_WITH_00_LIST */
 		ERR("failed to parse received 00-list.");
 		return ESODBC_DSN_INVALID_ERROR;
 	}
 
-	//
-	// TODO: validate attrs vals FIXME
-	//
+	/* try configure and connect here, to be able to report an error back to
+	 * the user right away: otherwise, the connection will fail later in
+	 * SQLDriverConnect loop, but with no indication as to why. */
+	init_dbc(&dbc, NULL);
+	res = do_connect(&dbc, attrs);
+	if (! SQL_SUCCEEDED(res)) {
+		res = EsSQLGetDiagFieldW(SQL_HANDLE_DBC, &dbc, /*rec#*/1,
+				SQL_DIAG_MESSAGE_TEXT, err_out, (SQLSMALLINT)eo_max,
+				/*written len*/NULL/*err_out is 0-term'd*/);
+		/* function should not fail with given params. */
+		assert(SQL_SUCCEEDED(res));
+		ret = ESODBC_DSN_GENERIC_ERROR;
+	} else {
+		ret = 0;
+	}
 
-	return 0;
+	cleanup_dbc(&dbc);
+	return ret;
 }
 
 SQLRETURN EsSQLDriverConnectW
