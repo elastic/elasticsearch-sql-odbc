@@ -109,6 +109,15 @@ BOOL connect_init()
 		ERR("libcurl: failed to initialize: '%s' (%d).",
 			curl_easy_strerror(code), code);
 		return FALSE;
+	} else {
+		/* if libcurl is loaded, log main attributes (most relevant for dynamic
+		 * loading). */
+		curl_version_info_data *curl_info = curl_version_info(CURLVERSION_NOW);
+		assert(curl_info);
+		/* these are available from "age" 0. */
+		INFO("Using libcurl version: %s, features: 0x%x, SSL ver.: %s.",
+				curl_info->version, curl_info->features,
+				curl_info->ssl_version ? curl_info->ssl_version : "NONE");
 	}
 
 	http_headers = curl_slist_append(http_headers, HTTP_ACCEPT_JSON);
@@ -310,6 +319,13 @@ static SQLRETURN dbc_curl_init(esodbc_dbc_st *dbc)
 				goto err;
 			}
 		}
+
+		/*
+		 * TODO expose: CURLOPT_SSLVERSION, CURLOPT_SSLCERTTYPE
+		 * CURLOPT_SSL_ENABLE_ALPN, CURLOPT_SSL_ENABLE_NPN,
+		 * (CURLOPT_SSL_FALSESTART), CURLOPT_SSL_VERIFYSTATUS,
+		 * CURLOPT_PROXY_*
+		 */
 	}
 
 	/* set authentication parameters */

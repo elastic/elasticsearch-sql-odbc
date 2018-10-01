@@ -123,7 +123,6 @@ if (${WIN32})
 else (${WIN32})
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
 endif (${WIN32})
-message("C flags: ${CMAKE_C_FLAGS} .")
 
 # driver's source dir
 set(DRV_SRC_DIR driver)
@@ -176,49 +175,91 @@ aux_source_directory(${CTIMESTAMP_PATH_SRC}/ DRV_SRC)
 #
 set(LIBCURL_PATH_SRC ${CMAKE_SOURCE_DIR}/libs/curl CACHE PATH
 	"Lib curl source path")
+set(LIBCURL_BUILD_TYPE debug CACHE STRING
+	"Lib curl build type: debug (default) or release")
+set(LIBCURL_LINK_MODE static CACHE STRING
+	"Lib curl linking mode: static (default) or dll")
+
+if (${LIBCURL_BUILD_TYPE} MATCHES debug)
+	set(LIBCURL_DEBUG_ENABLED yes)
+	set(LIBCURL_BUILD_SUFFIX _debug)
+else (${LIBCURL_BUILD_TYPE} MATCHES debug)
+	set(LIBCURL_DEBUG_ENABLED no)
+	# empty LIBCURL_BUILD_SUFFIX
+endif (${LIBCURL_BUILD_TYPE} MATCHES debug)
+
 set(LIBCURL_LD_PATH
 	# Curl "installs" the .dll and .lib in different directories -> use the
 	# build dir to find both files in same directory instead of installing.
 	# Curl's win build root directory is not configurable.
 	# The path built below is only constant for the subtree tag (current:
-	# 7.61.0) and it's default nmake options (only with: IPv6, SSPI, WinSSL).
-	${LIBCURL_PATH_SRC}/builds/libcurl-vc-${TARCH}-release-dll-ipv6-sspi-winssl-obj-lib/
+	# 7.61.0) and default/below nmake options (only with: IPv6, SSPI, WinSSL).
+	${LIBCURL_PATH_SRC}/builds/libcurl-vc-${TARCH}-${LIBCURL_BUILD_TYPE}-${LIBCURL_LINK_MODE}-ipv6-sspi-winssl-obj-lib/
 	CACHE PATH "Lib curl load library path")
 set(LIBCURL_INC_PATH ${LIBCURL_PATH_SRC}/include CACHE PATH
 	"Lib curl include path")
+
+# Build libcurl.
+# Note: this happens at config time as a pre-requisite, for now. This might
+# be changed to a build target later (possibly as a CMake subproject).
 if (NOT IS_DIRECTORY ${LIBCURL_LD_PATH})
-	# Note: building libcurl happens at config time (as a pre-requisite), for
-	# now. This might be changed to a build target later.
-	# TODO: add non-WiN32 building.
 	execute_process(COMMAND buildconf.bat
+		RESULT_VARIABLE CMD_RETURN
 		WORKING_DIRECTORY "${LIBCURL_PATH_SRC}"
 		)
 	if (NOT ${CMD_RETURN})
-		execute_process(COMMAND nmake /f Makefile.vc mode=dll MACHINE=${TARCH}
+		execute_process(COMMAND
+			nmake /f Makefile.vc mode=${LIBCURL_LINK_MODE} MACHINE=${TARCH}
+			ENABLE_WINSSL=yes ENABLE_IDN=yes ENABLE_IPV6=yes ENABLE_SSPI=yes
+			# build type needs to be synchronized (to link in the same CRT)
+			DEBUG=${LIBCURL_DEBUG_ENABLED}
+			# This "sneaks in" a define to disable all other protocols than
+			# HTTP in libcurl. There's currently (7.61.1) no way of doing this
+			# on Windows, without patching library's code/makefiles (or using
+			# currently still "poorly maintained" CMake generation).
+			# Ideally, one would use ${CMAKE_CXX_COMPILER} here. However,
+			# curl's makefile simply expects a 'cl.exe' available in the PATH.
+			"CC=cl.exe /DHTTP_ONLY"
+			RESULT_VARIABLE CMD_RETURN
 			WORKING_DIRECTORY "${LIBCURL_PATH_SRC}/winbuild"
 			)
 	endif (NOT ${CMD_RETURN})
 	if (${CMD_RETURN})
-		message(FATAL_ERROR "Building libcurl failed:")
+		message(FATAL_ERROR "Building libcurl failed.")
 	endif (${CMD_RETURN})
 endif(NOT IS_DIRECTORY ${LIBCURL_LD_PATH})
+
 # add libcurl as dependency
-add_library(libcurl SHARED IMPORTED)
 if (${WIN32})
-	set_property(TARGET libcurl PROPERTY IMPORTED_LOCATION
-		${LIBCURL_LD_PATH}/libcurl${CMAKE_SHARED_LIBRARY_SUFFIX})
-	set_property(TARGET libcurl PROPERTY IMPORTED_IMPLIB
-		${LIBCURL_LD_PATH}/libcurl${CMAKE_STATIC_LIBRARY_SUFFIX})
+	if (${LIBCURL_LINK_MODE} MATCHES dll)
+		add_library(libcurl SHARED IMPORTED)
+		set_property(TARGET libcurl PROPERTY IMPORTED_LOCATION
+			${LIBCURL_LD_PATH}/libcurl${LIBCURL_BUILD_SUFFIX}${CMAKE_SHARED_LIBRARY_SUFFIX})
+		set_property(TARGET libcurl PROPERTY IMPORTED_IMPLIB
+			${LIBCURL_LD_PATH}/libcurl${LIBCURL_BUILD_SUFFIX}${CMAKE_IMPORT_LIBRARY_SUFFIX})
+		# empty LIBCURL_WIN_LIBS
+	else (${LIBCURL_LINK_MODE} MATCHES dll)
+		add_library(libcurl STATIC IMPORTED)
+		set_property(TARGET libcurl PROPERTY IMPORTED_LOCATION
+			${LIBCURL_LD_PATH}/libcurl_a${LIBCURL_BUILD_SUFFIX}${CMAKE_STATIC_LIBRARY_SUFFIX})
+		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DCURL_STATICLIB")
+		# Libraries that libcurl/WinSSL links against.
+		# Removed: wldap32 advapi32 gdi32 user32 (wth current config unused)
+		set(LIBCURL_WIN_LIBS ws2_32 crypt32 normaliz)
+	endif (${LIBCURL_LINK_MODE} MATCHES dll)
 else (${WIN32})
 	set_property(TARGET libcurl PROPERTY IMPORTED_LOCATION
 		${LIBCURL_LD_PATH}/libcurl${CMAKE_SHARED_LIBRARY_SUFFIX})
 endif (${WIN32})
 
 add_custom_target(curlclean
-	COMMAND nmake /f Makefile.vc mode=dll clean
-	WORKING_DIRECTORY "${LIBCURL_PATH_SRC}/winbuild"
+	COMMAND nmake /f Makefile.vc mode=${LIBCURL_LINK_MODE} clean
+	COMMAND ../buildconf.bat -clean
+		WORKING_DIRECTORY "${LIBCURL_PATH_SRC}/winbuild"
 	)
 
+
+message("C flags: ${CMAKE_C_FLAGS} .")
 message("Driver source files: ${DRV_SRC} .")
 message("Driver include paths: " ${ODBC_INC} ${DRV_SRC_DIR}
 	${LIBCURL_INC_PATH} ${UJSON4C_INC} ${CTIMESTAMP_PATH_SRC})
@@ -237,7 +278,8 @@ target_compile_definitions(${DRV_NAME} PRIVATE "DRIVER_BUILD")
 include_directories(${ODBC_INC} ${DRV_SRC_DIR} ${LIBCURL_INC_PATH}
 	${UJSON4C_INC} ${CTIMESTAMP_PATH_SRC})
 
-target_link_libraries(${DRV_NAME} odbccp32 legacy_stdio_definitions libcurl)
+target_link_libraries(${DRV_NAME} odbccp32 legacy_stdio_definitions libcurl
+	${LIBCURL_WIN_LIBS})
 
 # add testing project/target
 enable_testing()
@@ -258,9 +300,13 @@ set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY TRUE)
 # add instalation project/target
 install(FILES
 	LICENSE.rtf LICENSE.txt
-	# need to use FILE : https://public.kitware.com/Bug/view.php?id=14311
-	${LIBCURL_LD_PATH}/libcurl${CMAKE_SHARED_LIBRARY_SUFFIX}
 	DESTINATION ${INSTALL_DIR})
+if (${LIBCURL_LINK_MODE} MATCHES dll)
+install(FILES
+	# need to use FILE : https://public.kitware.com/Bug/view.php?id=14311
+	${LIBCURL_LD_PATH}/libcurl${LIBCURL_BUILD_SUFFIX}${CMAKE_SHARED_LIBRARY_SUFFIX}
+	DESTINATION ${INSTALL_DIR})
+endif (${LIBCURL_LINK_MODE} MATCHES dll)
 install(TARGETS ${DRV_NAME}
 	DESTINATION ${INSTALL_DIR})
 
