@@ -59,10 +59,14 @@ message("Test cases: ${TEST_CASES}")
 set(EXTRA_SRC connected_dbc.cc)
 
 # copy DLLs linked (later) against, so that test exes can load them
-file(TO_NATIVE_PATH ${CMAKE_BINARY_DIR}/${CMAKE_CFG_INTDIR}/${DRV_NAME}${CMAKE_SHARED_LIBRARY_SUFFIX}
+file(TO_NATIVE_PATH
+	${CMAKE_BINARY_DIR}/${CMAKE_CFG_INTDIR}/${DRV_NAME}${CMAKE_SHARED_LIBRARY_SUFFIX}
 	SRC_PATH_ESODBC_DLL)
-file(TO_NATIVE_PATH ${LIBCURL_LD_PATH}/libcurl${CMAKE_SHARED_LIBRARY_SUFFIX}
-	SRC_PATH_CURL_DLL)
+if (${LIBCURL_LINK_MODE} MATCHES dll)
+	file(TO_NATIVE_PATH
+		${LIBCURL_LD_PATH}/libcurl${CMAKE_SHARED_LIBRARY_SUFFIX}
+		SRC_PATH_CURL_DLL)
+endif (${LIBCURL_LINK_MODE} MATCHES dll)
 file(TO_NATIVE_PATH ${CMAKE_BINARY_DIR}/test/${CMAKE_CFG_INTDIR}/
 	DST_PATH_DLL)
 
@@ -83,7 +87,7 @@ add_custom_target(install_shared
 	# dir's otherwise created only later on test target execution
 	COMMAND if not exist ${DST_PATH_DLL} mkdir ${DST_PATH_DLL}
 	COMMAND xcopy /E /Y ${SRC_PATH_ESODBC_DLL} ${DST_PATH_DLL}
-	COMMAND xcopy /E /Y ${SRC_PATH_CURL_DLL} ${DST_PATH_DLL}
+	COMMAND if exist ${SRC_PATH_CURL_DLL} xcopy /E /Y ${SRC_PATH_CURL_DLL} ${DST_PATH_DLL}
 	# gtest->gtestd hack
 	# if googletest just built (i.e. not OS'es) AND the -d version exists
 	COMMAND if exist ${GTEST_NATIVE_PREFIX} if exist ${GTEST_LIBD}
