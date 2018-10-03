@@ -54,7 +54,7 @@ include_directories(${CMAKE_SOURCE_DIR}/test ${GTEST_INC_PATH})
 # find all test case source files
 file(GLOB TEST_CASES LIST_DIRECTORIES false
 	RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} test_*.cc)
-message("Test cases: ${TEST_CASES}")
+message("Driver test cases: ${TEST_CASES}")
 
 set(EXTRA_SRC connected_dbc.cc)
 

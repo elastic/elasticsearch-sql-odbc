@@ -21,15 +21,16 @@ set(IS_UNICODE 1)
 #include(GenerateExportHeader)
 
 if (${WIN32})
-	if (${CMAKE_GENERATOR_PLATFORM} MATCHES x64)
+	# or: CMAKE_SIZEOF_VOID_P EQUAL 8
+	if (${CMAKE_GENERATOR_PLATFORM} MATCHES [Xx]64)
 		set(TARCH x64) # target arch
 		set(BARCH ) # bits architecture (64 is the default, silent)
 		set(PLAT_ARCH windows-x86_64)
-	else (${CMAKE_GENERATOR_PLATFORM} MATCHES x64)
+	else (${CMAKE_GENERATOR_PLATFORM} MATCHES [Xx]64)
 		set(TARCH x86)
 		set(BARCH 32)
 		set(PLAT_ARCH windows-x86)
-	endif (${CMAKE_GENERATOR_PLATFORM} MATCHES x64)
+	endif (${CMAKE_GENERATOR_PLATFORM} MATCHES [Xx]64)
 	message("Building for Windows, ${TARCH}.")
 else (${WIN32})
 	message(FATAL_ERROR "No support for current platform yet")
@@ -175,18 +176,20 @@ aux_source_directory(${CTIMESTAMP_PATH_SRC}/ DRV_SRC)
 #
 set(LIBCURL_PATH_SRC ${CMAKE_SOURCE_DIR}/libs/curl CACHE PATH
 	"Lib curl source path")
-set(LIBCURL_BUILD_TYPE debug CACHE STRING
-	"Lib curl build type: debug (default) or release")
 set(LIBCURL_LINK_MODE static CACHE STRING
 	"Lib curl linking mode: static (default) or dll")
+set(LIBCURL_BUILD_TYPE debug CACHE STRING
+	"Lib curl build type: debug (default) or release")
 
-if (${LIBCURL_BUILD_TYPE} MATCHES debug)
+if (${LIBCURL_BUILD_TYPE} MATCHES [Dd][Ee][Bb][Uu][Gg])
 	set(LIBCURL_DEBUG_ENABLED yes)
+	set(LIBCURL_BUILD_TYPE debug)
 	set(LIBCURL_BUILD_SUFFIX _debug)
-else (${LIBCURL_BUILD_TYPE} MATCHES debug)
+else (${LIBCURL_BUILD_TYPE} MATCHES [Dd][Ee][Bb][Uu][Gg])
 	set(LIBCURL_DEBUG_ENABLED no)
+	set(LIBCURL_BUILD_TYPE release)
 	# empty LIBCURL_BUILD_SUFFIX
-endif (${LIBCURL_BUILD_TYPE} MATCHES debug)
+endif (${LIBCURL_BUILD_TYPE} MATCHES [Dd][Ee][Bb][Uu][Gg])
 
 set(LIBCURL_LD_PATH
 	# Curl "installs" the .dll and .lib in different directories -> use the
@@ -201,7 +204,12 @@ set(LIBCURL_INC_PATH ${LIBCURL_PATH_SRC}/include CACHE PATH
 
 # Build libcurl.
 # Note: this happens at config time as a pre-requisite, for now. This might
-# be changed to a build target later (possibly as a CMake subproject).
+# be changed to a build target later (possibly as a CMake subproject: re-link
+# only if out-of-date, skip building the .exe, allow disabling non-HTTP
+# protos, || build, setting output destination).
+# Building as a pre-requisite has however the disadvantage of making the
+# entire build "single-config", since the build type (rel/dbg) is decided at
+# CMake-generation, not along the MSBuild invocation.
 if (NOT IS_DIRECTORY ${LIBCURL_LD_PATH})
 	execute_process(COMMAND buildconf.bat
 		RESULT_VARIABLE CMD_RETURN
@@ -231,14 +239,14 @@ endif(NOT IS_DIRECTORY ${LIBCURL_LD_PATH})
 
 # add libcurl as dependency
 if (${WIN32})
-	if (${LIBCURL_LINK_MODE} MATCHES dll)
+	if (${LIBCURL_LINK_MODE} MATCHES [Dd][Ll][Ll])
 		add_library(libcurl SHARED IMPORTED)
 		set_property(TARGET libcurl PROPERTY IMPORTED_LOCATION
 			${LIBCURL_LD_PATH}/libcurl${LIBCURL_BUILD_SUFFIX}${CMAKE_SHARED_LIBRARY_SUFFIX})
 		set_property(TARGET libcurl PROPERTY IMPORTED_IMPLIB
 			${LIBCURL_LD_PATH}/libcurl${LIBCURL_BUILD_SUFFIX}${CMAKE_IMPORT_LIBRARY_SUFFIX})
 		# empty LIBCURL_WIN_LIBS
-	else (${LIBCURL_LINK_MODE} MATCHES dll)
+	else (${LIBCURL_LINK_MODE} MATCHES [Dd][Ll][Ll])
 		add_library(libcurl STATIC IMPORTED)
 		set_property(TARGET libcurl PROPERTY IMPORTED_LOCATION
 			${LIBCURL_LD_PATH}/libcurl_a${LIBCURL_BUILD_SUFFIX}${CMAKE_STATIC_LIBRARY_SUFFIX})
@@ -246,7 +254,7 @@ if (${WIN32})
 		# Libraries that libcurl/WinSSL links against.
 		# Removed: wldap32 advapi32 gdi32 user32 (wth current config unused)
 		set(LIBCURL_WIN_LIBS ws2_32 crypt32 normaliz)
-	endif (${LIBCURL_LINK_MODE} MATCHES dll)
+	endif (${LIBCURL_LINK_MODE} MATCHES [Dd][Ll][Ll])
 else (${WIN32})
 	set_property(TARGET libcurl PROPERTY IMPORTED_LOCATION
 		${LIBCURL_LD_PATH}/libcurl${CMAKE_SHARED_LIBRARY_SUFFIX})
@@ -258,44 +266,58 @@ add_custom_target(curlclean
 		WORKING_DIRECTORY "${LIBCURL_PATH_SRC}/winbuild"
 	)
 
+#
+# DSN Config GUI
+#
+set(DSNBND_LIB_BIN_DIR_BASE ${CMAKE_BINARY_DIR}/dsneditor-${TARCH})
+set(DSNEDITOR_INC_PATH ${CMAKE_SOURCE_DIR}/dsneditor/EsOdbcDsnBinding/)
+add_custom_target(dsneditor
+	COMMAND MSBuild ${CMAKE_SOURCE_DIR}/dsneditor/EsOdbcDsnBinding/EsOdbcDsnBinding.vcxproj
+		# place all the build items (by- & products) into a single dir
+		/p:OutputPath=${DSNBND_LIB_BIN_DIR_BASE}-$<CONFIG>/
+		/p:IntermediateOutputPath=${DSNBND_LIB_BIN_DIR_BASE}-$<CONFIG>/
+		/p:OutDir=${DSNBND_LIB_BIN_DIR_BASE}-$<CONFIG>/
+		/p:IntDir=${DSNBND_LIB_BIN_DIR_BASE}-$<CONFIG>/
+		/p:Configuration=$<CONFIG>
+		 /p:Platform=${TARCH} # make it explicit, for x-arch builds
+	WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+	COMMENT "Building the DSN editor libraries.")
 
-message("C flags: ${CMAKE_C_FLAGS} .")
-message("Driver source files: ${DRV_SRC} .")
-message("Driver include paths: " ${ODBC_INC} ${DRV_SRC_DIR}
-	${LIBCURL_INC_PATH} ${UJSON4C_INC} ${CTIMESTAMP_PATH_SRC})
-
-# generate resource file
-configure_file(${DRV_SRC_DIR}/driver.rc.cmake ${CMAKE_BINARY_DIR}/driver.rc)
-
-link_directories(C:\\Users\\bpi\\AppData\\Local\\Temp\\esodbc)
 
 #
 # finally, set destination library
 #
+# generate resource file
+configure_file(${DRV_SRC_DIR}/driver.rc.cmake ${CMAKE_BINARY_DIR}/driver.rc)
 add_library(${DRV_NAME} SHARED ${DRV_SRC} ${CMAKE_BINARY_DIR}/${DRV_NAME}.def
 	${CMAKE_BINARY_DIR}/driver.rc)
 #generate_export_header(${DRV_NAME})
 target_compile_definitions(${DRV_NAME} PRIVATE "DRIVER_BUILD")
-
+add_dependencies(${DRV_NAME} dsneditor)
 include_directories(${ODBC_INC} ${DRV_SRC_DIR} ${LIBCURL_INC_PATH}
-	${UJSON4C_INC} ${CTIMESTAMP_PATH_SRC}
-	C:\\Users\\bpi\\RnD\\elastic\\misc\\EsOdbcDsn\\EsOdbcDsnBinding)
+	${UJSON4C_INC} ${CTIMESTAMP_PATH_SRC} ${DSNEDITOR_INC_PATH})
+target_link_libraries(${DRV_NAME} odbccp32 legacy_stdio_definitions
+	${DSNBND_LIB_BIN_DIR_BASE}-$<CONFIG>/esdsnbnd${CMAKE_IMPORT_LIBRARY_SUFFIX}
+	libcurl ${LIBCURL_WIN_LIBS})
 
-target_link_libraries(${DRV_NAME} odbccp32 legacy_stdio_definitions libcurl
-	${LIBCURL_WIN_LIBS} esdsnbnd)
 
-# add testing project/target
+#
+# Set up the testing project/target
+#
 enable_testing()
 # ... and testing directory to build
 add_subdirectory(test)
 
+
+#
+# Set up the instalation
+#
 set(INSTALL_DIR
 	${DRIVER_BASE_NAME}-${DRV_VERSION}${VERSION_QUALIFIER}-${PLAT_ARCH}
 	# this must remain a STRING (i.e not PATH), otherwise CPACK won't work
 	CACHE STRING
 	"Directory to install the driver files into")
 
-message("Install target: ${INSTALL_DIR}.")
 # this will cause the 'install' to no longer depend on 'all', which avoids
 # building the tests, but this also means that the library must be built
 # before building the 'install' target.
@@ -304,20 +326,46 @@ set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY TRUE)
 install(FILES
 	LICENSE.rtf LICENSE.txt
 	DESTINATION ${INSTALL_DIR})
-if (${LIBCURL_LINK_MODE} MATCHES dll)
+# add libcurl if build dynamically
+if (${LIBCURL_LINK_MODE} MATCHES [Dd][Ll][Ll])
 install(FILES
 	# need to use FILE : https://public.kitware.com/Bug/view.php?id=14311
 	${LIBCURL_LD_PATH}/libcurl${LIBCURL_BUILD_SUFFIX}${CMAKE_SHARED_LIBRARY_SUFFIX}
 	DESTINATION ${INSTALL_DIR})
-endif (${LIBCURL_LINK_MODE} MATCHES dll)
+endif (${LIBCURL_LINK_MODE} MATCHES [Dd][Ll][Ll])
+# add editor DLLs
+install(FILES
+	${DSNBND_LIB_BIN_DIR_BASE}-$<CONFIG>/esdsnedt.dll
+	${DSNBND_LIB_BIN_DIR_BASE}-$<CONFIG>/esdsnbnd.dll
+	DESTINATION ${INSTALL_DIR})
 install(TARGETS ${DRV_NAME}
 	DESTINATION ${INSTALL_DIR})
 
+#
+# Set up the packaing
+#
 set(CPACK_GENERATOR "ZIP")
 # don't build ALL (but see CMAKE_SKIP_INSTALL_ALL_DEPENDENCY comment)
 set(CMAKE_SKIP_PACKAGE_ALL_DEPENDENCY TRUE)
 set(CPACK_PACKAGE_FILE_NAME
 	${DRIVER_BASE_NAME}-${DRV_VERSION}${VERSION_QUALIFIER}-${PLAT_ARCH})
 include(CPack)
+
+
+#
+# Generation summary
+#
+message("  ***** <Generation summary>")
+message("Driver source files: ${DRV_SRC}")
+message("Driver compile flags: ${CMAKE_C_FLAGS}")
+message("Driver include paths: ${ODBC_INC} ${DRV_SRC_DIR}"
+	"${LIBCURL_INC_PATH} ${UJSON4C_INC} ${CTIMESTAMP_PATH_SRC}"
+	"${DSNEDITOR_INC_PATH}")
+# there's no var for this
+message("Driver link libraries: odbccp32 legacy_stdio_definitions esdsnbnd"
+	"libcurl ${LIBCURL_WIN_LIBS}")
+message("Driver install target: ${INSTALL_DIR}.")
+message("Driver packaging target: ${CPACK_PACKAGE_FILE_NAME}.")
+message("   ***** </Generation summary>")
 
 # vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 :
