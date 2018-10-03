@@ -116,8 +116,8 @@ BOOL connect_init()
 		assert(curl_info);
 		/* these are available from "age" 0. */
 		INFO("Using libcurl version: %s, features: 0x%x, SSL ver.: %s.",
-				curl_info->version, curl_info->features,
-				curl_info->ssl_version ? curl_info->ssl_version : "NONE");
+			curl_info->version, curl_info->features,
+			curl_info->ssl_version ? curl_info->ssl_version : "NONE");
 	}
 
 	http_headers = curl_slist_append(http_headers, HTTP_ACCEPT_JSON);
@@ -1556,7 +1556,7 @@ end:
 	return ret;
 }
 
-static int receive_dsn_cb(void *arg, const wchar_t *list00,
+static int receive_dsn_cb(void *arg, const wchar_t *dsn_str,
 	wchar_t *err_out, size_t eo_max, unsigned int flags)
 {
 	esodbc_dsn_attrs_st *attrs = (esodbc_dsn_attrs_st *)arg;
@@ -1567,19 +1567,32 @@ static int receive_dsn_cb(void *arg, const wchar_t *list00,
 	TRACE;
 	assert(arg);
 
-	if (! list00) {
-		ERR("invalid NULL 00-list received.");
+	if (! dsn_str) {
+		ERR("invalid NULL DSN string received.");
 		return ESODBC_DSN_ISNULL_ERROR;
+	} else {
+		DBG("received DSN string: `" LWPD "`.", dsn_str);
 	}
 
 #ifdef ESODBC_DSN_API_WITH_00_LIST
-	if (! parse_00_list(&attrs, (SQLWCHAR *)list00)) {
+	if (! parse_00_list(attrs, (SQLWCHAR *)dsn_str)) {
 #else
-	if (! parse_connection_string(attrs, (SQLWCHAR *)list00,
-			(SQLSMALLINT)wcslen(list00))) {
+	if (! parse_connection_string(attrs, (SQLWCHAR *)dsn_str,
+			(SQLSMALLINT)wcslen(dsn_str))) {
 #endif /* ESODBC_DSN_API_WITH_00_LIST */
-		ERR("failed to parse received 00-list.");
+		ERR("failed to parse received DSN string.");
 		return ESODBC_DSN_INVALID_ERROR;
+	}
+	/*
+	 * validate the DSN set
+	 */
+	if (! (attrs->dsn.cnt & attrs->server.cnt)) {
+		ERR("DSN name (" LWPDL ") and server address (" LWPDL ") cannot be"
+			" empty.", LWSTR(&attrs->dsn), LWSTR(&attrs->server));
+		return ESODBC_DSN_INVALID_ERROR;
+	} else {
+		/* fill in whatever's missing */
+		assign_dsn_defaults(attrs);
 	}
 
 	/* try configure and connect here, to be able to report an error back to

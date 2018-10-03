@@ -462,10 +462,15 @@ size_t copy_installer_errors(wchar_t *err_buff, size_t eb_max)
 	pos = 0;
 	while (SQL_SUCCEEDED(SQLInstallerError(++ i, &ecode, buff,
 				sizeof(buff)/sizeof(buff[0]), &msg_len))) {
-		msg_len /= sizeof(*buff);
+		/* Note: msg_len is actually count of chars, current doc is wrong */
+		/* if message is larger than buffer, the untruncated size is returned*/
+		if (sizeof(buff)/sizeof(buff[0]) <= msg_len) {
+			msg_len = sizeof(buff)/sizeof(buff[0]) ;
+		}
 
 		assert(pos <= eb_max);
-		res = swprintf(err_buff + pos, eb_max - pos, L"%.*s (%d).\n",
+		DBG("error #%d: " LWPD " [%d].", i, buff, msg_len);
+		res = swprintf(err_buff + pos, eb_max - pos, L"%.*s. (code: %d)\n",
 				msg_len, buff, ecode);
 		if (res < 0) {
 			ERR("failed to copy: #%i: `" LWPDL "` (%d).", i, msg_len, buff,
@@ -473,7 +478,7 @@ size_t copy_installer_errors(wchar_t *err_buff, size_t eb_max)
 			/* allow execution to continue, though */
 		} else {
 			pos += (size_t)res;
-			if (res < msg_len) {
+			if (pos <= msg_len) {
 				WARN("reached error buffer end (%zu) before copying all "
 					"errors.", eb_max);
 				break;
@@ -881,7 +886,7 @@ end:
 #error "unsupported platform" /* TODO */
 #endif /* defined(_WIN32) || defined (WIN32) */
 
-static int test_connect(void *arg, const wchar_t *list00,
+static int test_connect(void *arg, const wchar_t *dsn_str,
 	wchar_t *err_out, size_t eo_max, unsigned int _)
 {
 	esodbc_dsn_attrs_st attrs;
@@ -890,21 +895,25 @@ static int test_connect(void *arg, const wchar_t *list00,
 	int ret;
 
 	assert(! arg); /* change santinel */
-	if (! list00) {
-		ERR("invalid NULL 00-list received.");
+	if (! dsn_str) {
+		ERR("invalid NULL DSN string received.");
 		return ESODBC_DSN_ISNULL_ERROR;
+	} else {
+		DBG("received DSN string: `" LWPD "`.", dsn_str);
 	}
 
 	init_dsn_attrs(&attrs);
 #ifdef ESODBC_DSN_API_WITH_00_LIST
-	if (! parse_00_list(&attrs, (SQLWCHAR *)list00)) {
+	if (! parse_00_list(&attrs, (SQLWCHAR *)dsn_str)) {
 #else
-	if (! parse_connection_string(&attrs, (SQLWCHAR *)list00,
-			(SQLSMALLINT)wcslen(list00))) {
+	if (! parse_connection_string(&attrs, (SQLWCHAR *)dsn_str,
+			(SQLSMALLINT)wcslen(dsn_str))) {
 #endif /* ESODBC_DSN_API_WITH_00_LIST */
-		ERR("failed to parse received 00-list.");
+		ERR("failed to parse received DSN string.");
 		return ESODBC_DSN_INVALID_ERROR;
 	}
+	/* fill in whatever's missing */
+	assign_dsn_defaults(&attrs);
 
 	init_dbc(&dbc, NULL);
 	res = do_connect(&dbc, &attrs);
@@ -933,20 +942,20 @@ int prompt_user_config(HWND hwnd, BOOL on_conn, esodbc_dsn_attrs_st *attrs,
 	driver_callback_ft save_cb)
 {
 	int ret;
-	wchar_t list00[sizeof(attrs->buff)/sizeof(*attrs->buff)];
+	wchar_t dsn_str[sizeof(attrs->buff)/sizeof(*attrs->buff)];
 
 #if 0
-	if (write_00_list(attrs, (SQLWCHAR *)list00,
-			sizeof(list00)/sizeof(*list00)) <= 0) {
+	if (write_00_list(attrs, (SQLWCHAR *)dsn_str,
+			sizeof(dsn_str)/sizeof(*dsn_str)) <= 0) {
 #else
-	if (write_connection_string(attrs, (SQLWCHAR *)list00,
-			sizeof(list00)/sizeof(*list00)) <= 0) {
+	if (write_connection_string(attrs, (SQLWCHAR *)dsn_str,
+			sizeof(dsn_str)/sizeof(*dsn_str)) <= 0) {
 #endif
-		ERR("failed to serialize attributes into a 00-list.");
+		ERR("failed to serialize attributes into a DSN string.");
 		return FALSE;
 	}
 
-	ret = EsOdbcDsnEdit(hwnd, on_conn, list00, &test_connect, NULL,
+	ret = EsOdbcDsnEdit(hwnd, on_conn, dsn_str, &test_connect, NULL,
 			save_cb, attrs);
 	if (ret < 0) {
 		ERR("failed to bring up the GUI; code:%d.", ret);

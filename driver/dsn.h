@@ -83,8 +83,8 @@ size_t copy_installer_errors(wchar_t *err_buff, size_t eb_max);
 int prompt_user_config(HWND hwnd, BOOL on_conn, esodbc_dsn_attrs_st *attrs,
 	driver_callback_ft save_cb);
 
-/* enable 00-list format (vs. connection string, `;`/`|`-separated) at the
- * interface with the GUI API */
+/* Uncomment to enable 00-list format (vs. connection string,
+ * `;`/`|`-separated) at the interface with the GUI API */
 //#define ESODBC_DSN_API_WITH_00_LIST
 
 #endif /* __DSN_H__ */

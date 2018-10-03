@@ -117,7 +117,7 @@ end:
 #	undef _DSN_END_MARKER
 }
 
-static int save_dsn_cb(void *arg, const wchar_t *list00,
+static int save_dsn_cb(void *arg, const wchar_t *dsn_str,
 	wchar_t *err_out, size_t eo_max, unsigned int flags)
 {
 	size_t cnt;
@@ -128,30 +128,35 @@ static int save_dsn_cb(void *arg, const wchar_t *list00,
 	esodbc_dsn_attrs_st *old_attrs = (esodbc_dsn_attrs_st *)arg;
 	wstr_st old_dsn = old_attrs->dsn;
 
-	if (! list00) {
-		ERR("invalid NULL 00-list received.");
+	if (! dsn_str) {
+		ERR("invalid NULL DSN string received.");
 		return ESODBC_DSN_ISNULL_ERROR;
+	} else {
+		DBG("received DSN string: `" LWPD "`.", dsn_str);
 	}
 
 	init_dsn_attrs(&attrs);
 #ifdef ESODBC_DSN_API_WITH_00_LIST
-	if (! parse_00_list(&attrs, (SQLWCHAR *)list00)) {
+	if (! parse_00_list(&attrs, (SQLWCHAR *)dsn_str)) {
 #else
-	if (! parse_connection_string(&attrs, (SQLWCHAR *)list00,
-			(SQLSMALLINT)wcslen(list00))) {
+	if (! parse_connection_string(&attrs, (SQLWCHAR *)dsn_str,
+			(SQLSMALLINT)wcslen(dsn_str))) {
 #endif /* ESODBC_DSN_API_WITH_00_LIST */
-		ERR("failed to parse received 00-list.");
+		ERR("failed to parse received DSN string.");
 		return ESODBC_DSN_INVALID_ERROR;
 	}
-
-	/* 
-	 * validate the DSN set 
+	/*
+	 * validate the DSN set
 	 */
 	if (! (attrs.dsn.cnt & attrs.server.cnt)) {
-		ERR("DSN name (" LWPDL ") and server address (" LWPDL ") must not be"
-				" empty.", LWSTR(&attrs.dsn), LWSTR(&attrs.server));
+		ERR("DSN name (" LWPDL ") and server address (" LWPDL ") cannot be"
+			" empty.", LWSTR(&attrs.dsn), LWSTR(&attrs.server));
 		return ESODBC_DSN_INVALID_ERROR;
+	} else {
+		/* fill in whatever's missing */
+		assign_dsn_defaults(&attrs);
 	}
+
 	init_dbc(&dbc, NULL);
 	if (! SQL_SUCCEEDED(config_dbc(&dbc, &attrs))) {
 		ERR("test DBC configuration failed.");
