@@ -67,6 +67,9 @@ if (${LIBCURL_LINK_MODE} MATCHES dll)
 		${LIBCURL_LD_PATH}/libcurl${CMAKE_SHARED_LIBRARY_SUFFIX}
 		SRC_PATH_CURL_DLL)
 endif (${LIBCURL_LINK_MODE} MATCHES dll)
+file(TO_NATIVE_PATH
+	${DSNBND_LIB_BIN_DIR_BASE}-$<CONFIG>/*${CMAKE_SHARED_LIBRARY_SUFFIX}
+	SRC_PATH_DSNBND_DLL)
 file(TO_NATIVE_PATH ${CMAKE_BINARY_DIR}/test/${CMAKE_CFG_INTDIR}/
 	DST_PATH_DLL)
 
@@ -86,15 +89,21 @@ file(TO_NATIVE_PATH ${GTEST_LD_PATH}/gtest_maind${CMAKE_STATIC_LIBRARY_SUFFIX}
 add_custom_target(install_shared
 	# dir's otherwise created only later on test target execution
 	COMMAND if not exist ${DST_PATH_DLL} mkdir ${DST_PATH_DLL}
-	COMMAND xcopy /E /Y ${SRC_PATH_ESODBC_DLL} ${DST_PATH_DLL}
-	COMMAND if exist ${SRC_PATH_CURL_DLL} xcopy /E /Y ${SRC_PATH_CURL_DLL} ${DST_PATH_DLL}
+	COMMAND xcopy /E/Y/F ${SRC_PATH_ESODBC_DLL} ${DST_PATH_DLL}
+	COMMAND if exist ${SRC_PATH_CURL_DLL}
+		xcopy /E/Y/F ${SRC_PATH_CURL_DLL} ${DST_PATH_DLL}
+	COMMAND xcopy /E/Y/F ${SRC_PATH_DSNBND_DLL} ${DST_PATH_DLL}
 	# gtest->gtestd hack
 	# if googletest just built (i.e. not OS'es) AND the -d version exists
 	COMMAND if exist ${GTEST_NATIVE_PREFIX} if exist ${GTEST_LIBD}
-		cd ${GTEST_LD_PATH} && copy gtestd${CMAKE_STATIC_LIBRARY_SUFFIX} gtest${CMAKE_STATIC_LIBRARY_SUFFIX}
+		cd ${GTEST_LD_PATH} &&
+		copy /Y gtestd${CMAKE_STATIC_LIBRARY_SUFFIX}
+			gtest${CMAKE_STATIC_LIBRARY_SUFFIX}
 	# (same checks as above)
 	COMMAND if exist ${GTEST_NATIVE_PREFIX} if exist ${GTEST_MAIND}
-		cd ${GTEST_LD_PATH} && copy gtest_maind${CMAKE_STATIC_LIBRARY_SUFFIX} gtest_main${CMAKE_STATIC_LIBRARY_SUFFIX}
+		cd ${GTEST_LD_PATH} &&
+			copy /Y gtest_maind${CMAKE_STATIC_LIBRARY_SUFFIX}
+				gtest_main${CMAKE_STATIC_LIBRARY_SUFFIX}
 	)
 
 foreach (TSRC ${TEST_CASES})
