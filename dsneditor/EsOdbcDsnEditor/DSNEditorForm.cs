@@ -16,6 +16,8 @@ namespace EsOdbcDsnEditor
 
     public partial class DsnEditorForm : Form
     {
+        private const int ESODBC_DSN_EXISTS_ERROR = -1;
+
         private DriverCallbackDelegate testConnection;
         private DriverCallbackDelegate saveDsn;
 
@@ -32,7 +34,6 @@ namespace EsOdbcDsnEditor
             AcceptButton = saveButton;
             CancelButton = cancelButton;
 
-			// Save the delegates
             testConnection = connectionTest;
             saveDsn = dsnSave;
 
@@ -40,36 +41,36 @@ namespace EsOdbcDsnEditor
             // Otherwise it's a DSN editing, so it's going to be a "Save".
             saveButton.Text = onConnect ? "Connect" : "Save";
 
-			// Parse the connection string using the builder
+            // Parse DSN
             Builder.ConnectionString = dsn;
 
-			// Basic Panel
-            textName.Text = Builder.ContainsKey("dsn") ? Builder["dsn"].ToString() : string.Empty;
-            textDescription.Text = Builder.ContainsKey("description") ? Builder["description"].ToString() : string.Empty;
-            textUsername.Text = Builder.ContainsKey("uid") ? Builder["uid"].ToString() : string.Empty;
-            textPassword.Text = Builder.ContainsKey("pwd") ? Builder["pwd"].ToString() : string.Empty;
-            textHostname.Text = Builder.ContainsKey("server") ? Builder["server"].ToString() : "localhost";
-            numericUpDownPort.Text = Builder.ContainsKey("port") ? Builder["port"].ToString() : "9200";
-            
-			// Security Panel
+            // Basic Panel
+            textName.Text = Builder.ContainsKey("dsn") ? StripBraces(Builder["dsn"].ToString()) : string.Empty;
+            textDescription.Text = Builder.ContainsKey("description") ? StripBraces(Builder["description"].ToString()) : string.Empty;
+            textUsername.Text = Builder.ContainsKey("uid") ? StripBraces(Builder["uid"].ToString()) : string.Empty;
+            textPassword.Text = Builder.ContainsKey("pwd") ? StripBraces(Builder["pwd"].ToString()) : string.Empty;
+            textHostname.Text = Builder.ContainsKey("server") ? StripBraces(Builder["server"].ToString()) : string.Empty;
+            numericUpDownPort.Text = Builder.ContainsKey("port") ? StripBraces(Builder["port"].ToString()) : string.Empty;
+
+            // Security Panel
+            radioEnabledNoValidation.Checked = true; // Default setting
+            textCertificatePath.Text = Builder.ContainsKey("capath") ? StripBraces(Builder["capath"].ToString()) : string.Empty;
+
             if (Builder.ContainsKey("secure"))
             {
-                var val = Convert.ToInt32(Builder["secure"]);
-                switch(val)
-                {
-                    case 0: radioButtonDisabled.Checked = true; break;
-                    case 1: radioEnabledNoValidation.Checked = true; break;
-                    case 2: radioEnabledNoHostname.Checked = true; break;
-                    case 3: radioEnabledHostname.Checked = true; break;
-                    case 4: radioEnabledFull.Checked = true; break;
+                var result = int.TryParse(Builder["secure"].ToString(), out int val);
+                if (result)
+                { 
+                    switch(val)
+                    {
+                        case 0: radioButtonDisabled.Checked = true; break;
+                        case 1: radioEnabledNoValidation.Checked = true; break;
+                        case 2: radioEnabledNoHostname.Checked = true; break;
+                        case 3: radioEnabledHostname.Checked = true; break;
+                        case 4: radioEnabledFull.Checked = true; break;
+                    }
                 }
             }
-            else
-            {
-                radioEnabledNoValidation.Checked = true;
-            }
-
-            textCertificatePath.Text = Builder.ContainsKey("capath") ? Builder["capath"].ToString() : string.Empty;
         }
 
         /// <summary>
@@ -78,17 +79,37 @@ namespace EsOdbcDsnEditor
         /// </summary>
         private void SaveButton_Click(object sender, EventArgs e)
         {
+            SaveDsn(false);
+        }
+
+        private void SaveDsn(bool allowOverwrites)
+        {
             var errorMessage = string.Empty;
 
             var dsnResult = RebuildAndValidateDsn();
             if (!dsnResult) return;
 
             var dsn = Builder.ToString();
+            var flag = allowOverwrites ? 1u : 0;
 
-            int result = saveDsn(dsn, ref errorMessage, 0);
-            if (result >= 0)
+            int result = saveDsn(dsn, ref errorMessage, flag);
+            if (result >= 0 || (allowOverwrites
+                                && result == ESODBC_DSN_EXISTS_ERROR))
             {
                 Close();
+                return;
+            }
+
+            // Specific handling for prompting the user if overwriting
+            if (allowOverwrites == false
+                && result == ESODBC_DSN_EXISTS_ERROR)
+            {
+                var dialogResult = MessageBox.Show("The DSN already exists, are you sure you wish to overwrite it?", "Overwrite", MessageBoxButtons.YesNo);
+                if (dialogResult == DialogResult.Yes)
+                {
+                    SaveDsn(true);
+                }
+
                 return;
             }
 
@@ -153,7 +174,7 @@ namespace EsOdbcDsnEditor
 
         private bool RebuildAndValidateDsn()
         {
-			// Basic Panel
+            // Basic Panel
             if (!string.IsNullOrEmpty(textName.Text)) Builder["dsn"] = textName.Text;
             if (!string.IsNullOrEmpty(textDescription.Text)) Builder["description"] = textDescription.Text;
             if (!string.IsNullOrEmpty(textUsername.Text)) Builder["uid"] = textUsername.Text;
@@ -161,7 +182,7 @@ namespace EsOdbcDsnEditor
             if (!string.IsNullOrEmpty(textHostname.Text)) Builder["server"] = textHostname.Text;
             if (!string.IsNullOrEmpty(numericUpDownPort.Text)) Builder["port"] = numericUpDownPort.Text;
 
-			// Security Panel
+            // Security Panel
             if (radioButtonDisabled.Checked) Builder["secure"] = 0;
             if (radioEnabledNoValidation.Checked) Builder["secure"] = 1;
             if (radioEnabledNoHostname.Checked) Builder["secure"] = 2;
@@ -179,6 +200,7 @@ namespace EsOdbcDsnEditor
 
         private bool ValidateCertificateFile(string file)
         {
+            // Simple validation
             if (File.Exists(file) && File.ReadAllBytes(file).Length > 0)
             {
                 return true;
@@ -186,6 +208,15 @@ namespace EsOdbcDsnEditor
 
             MessageBox.Show("Certificate file invalid", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return false;
+        }
+
+        private static string StripBraces(string input)
+        {
+            if (input.StartsWith("{") && input.EndsWith("}"))
+            {
+                return input.Substring(1, input.Length - 2);
+            }
+            return input;
         }
     }
 }
