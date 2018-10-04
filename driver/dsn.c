@@ -661,29 +661,33 @@ long TEST_API write_connection_string(esodbc_dsn_attrs_st *attrs,
 	wchar_t *format;
 	struct {
 		wstr_st *val;
-		char *kw;
+		wstr_st *kw;
 	} *iter, map[] = {
-		{&attrs->driver, ESODBC_DSN_DRIVER},
-		{&attrs->description, ESODBC_DSN_DESCRIPTION},
-		{&attrs->dsn, ESODBC_DSN_DSN},
-		{&attrs->pwd, ESODBC_DSN_PWD},
-		{&attrs->uid, ESODBC_DSN_UID},
-		{&attrs->savefile, ESODBC_DSN_SAVEFILE},
-		{&attrs->filedsn, ESODBC_DSN_FILEDSN},
-		{&attrs->server, ESODBC_DSN_SERVER},
-		{&attrs->port, ESODBC_DSN_PORT},
-		{&attrs->secure, ESODBC_DSN_SECURE},
-		{&attrs->ca_path, ESODBC_DSN_CA_PATH},
-		{&attrs->timeout, ESODBC_DSN_TIMEOUT},
-		{&attrs->follow, ESODBC_DSN_FOLLOW},
-		{&attrs->catalog, ESODBC_DSN_CATALOG},
-		{&attrs->packing, ESODBC_DSN_PACKING},
-		{&attrs->max_fetch_size, ESODBC_DSN_MAX_FETCH_SIZE},
-		{&attrs->max_body_size, ESODBC_DSN_MAX_BODY_SIZE_MB},
-		{&attrs->trace_file, ESODBC_DSN_TRACE_FILE},
-		{&attrs->trace_level, ESODBC_DSN_TRACE_LEVEL},
+		{&attrs->driver, &MK_WSTR(ESODBC_DSN_DRIVER)},
+		{&attrs->description, &MK_WSTR(ESODBC_DSN_DESCRIPTION)},
+		{&attrs->dsn, &MK_WSTR(ESODBC_DSN_DSN)},
+		{&attrs->pwd, &MK_WSTR(ESODBC_DSN_PWD)},
+		{&attrs->uid, &MK_WSTR(ESODBC_DSN_UID)},
+		{&attrs->savefile, &MK_WSTR(ESODBC_DSN_SAVEFILE)},
+		{&attrs->filedsn, &MK_WSTR(ESODBC_DSN_FILEDSN)},
+		{&attrs->server, &MK_WSTR(ESODBC_DSN_SERVER)},
+		{&attrs->port, &MK_WSTR(ESODBC_DSN_PORT)},
+		{&attrs->secure, &MK_WSTR(ESODBC_DSN_SECURE)},
+		{&attrs->ca_path, &MK_WSTR(ESODBC_DSN_CA_PATH)},
+		{&attrs->timeout, &MK_WSTR(ESODBC_DSN_TIMEOUT)},
+		{&attrs->follow, &MK_WSTR(ESODBC_DSN_FOLLOW)},
+		{&attrs->catalog, &MK_WSTR(ESODBC_DSN_CATALOG)},
+		{&attrs->packing, &MK_WSTR(ESODBC_DSN_PACKING)},
+		{&attrs->max_fetch_size, &MK_WSTR(ESODBC_DSN_MAX_FETCH_SIZE)},
+		{&attrs->max_body_size, &MK_WSTR(ESODBC_DSN_MAX_BODY_SIZE_MB)},
+		{&attrs->trace_file, &MK_WSTR(ESODBC_DSN_TRACE_FILE)},
+		{&attrs->trace_level, &MK_WSTR(ESODBC_DSN_TRACE_LEVEL)},
 		{NULL, NULL}
 	};
+
+	/* check that the esodbc_dsn_attrs_st stays in sync with the above */
+	assert(sizeof(map)/sizeof(*iter) - /* {NULL,NULL} terminator */1 ==
+		ESODBC_DSN_ATTRS_COUNT);
 
 	for (iter = &map[0], pos = 0; iter->val; iter ++) {
 		if (iter->val->cnt) {
@@ -699,12 +703,12 @@ long TEST_API write_connection_string(esodbc_dsn_attrs_st *attrs,
 					continue;
 				}
 				if (braces) {
-					format = WPFCP_DESC "={" WPFWP_LDESC "};";
+					format = WPFWP_LDESC "={" WPFWP_LDESC "};";
 				} else {
-					format = WPFCP_DESC "=" WPFWP_LDESC ";";
+					format = WPFWP_LDESC "=" WPFWP_LDESC ";";
 				}
 				n = swprintf(szConnStrOut + pos, cchConnStrOutMax - pos,
-						format, iter->kw, LWSTR(iter->val));
+						format, LWSTR(iter->kw), LWSTR(iter->val));
 				if (n < 0) {
 					ERRN("failed to outprint connection string (space "
 						"left: %d; needed: %d).", cchConnStrOutMax - pos,
@@ -716,7 +720,8 @@ long TEST_API write_connection_string(esodbc_dsn_attrs_st *attrs,
 			} else {
 				/* simply increment the counter, since the untruncated length
 				 * needs to be returned to the app */
-				pos += iter->val->cnt + braces;
+				pos += iter->kw->cnt + /*`=`*/1 +
+					iter->val->cnt + braces + /*`;`*/1;
 			}
 		}
 	}
