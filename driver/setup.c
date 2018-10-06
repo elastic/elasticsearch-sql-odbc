@@ -123,80 +123,84 @@ static int save_dsn_cb(void *arg, const wchar_t *dsn_str,
 	size_t cnt;
 	int res;
 	esodbc_dsn_attrs_st attrs;
-	esodbc_dbc_st dbc;
-	BOOL create_new, remove_old = FALSE;
+	BOOL remove_old;
 	esodbc_dsn_attrs_st *old_attrs = (esodbc_dsn_attrs_st *)arg;
 	wstr_st old_dsn = old_attrs->dsn;
 
-	if (! dsn_str) {
-		ERR("invalid NULL DSN string received.");
-		return ESODBC_DSN_ISNULL_ERROR;
-	} else {
-		DBG("received DSN string: `" LWPD "`.", dsn_str);
-	}
-
 	init_dsn_attrs(&attrs);
-#ifdef ESODBC_DSN_API_WITH_00_LIST
-	if (! parse_00_list(&attrs, (SQLWCHAR *)dsn_str)) {
-#else
-	if (! parse_connection_string(&attrs, (SQLWCHAR *)dsn_str,
-			(SQLSMALLINT)wcslen(dsn_str))) {
-#endif /* ESODBC_DSN_API_WITH_00_LIST */
-		ERR("failed to parse received DSN string.");
-		return ESODBC_DSN_INVALID_ERROR;
-	}
-	/*
-	 * validate the DSN set
-	 */
-	if (! (attrs.dsn.cnt & attrs.server.cnt)) {
-		ERR("DSN name (" LWPDL ") and server address (" LWPDL ") cannot be"
-			" empty.", LWSTR(&attrs.dsn), LWSTR(&attrs.server));
-		return ESODBC_DSN_INVALID_ERROR;
-	} else {
-		/* fill in whatever's missing */
-		assign_dsn_defaults(&attrs);
+	res = validate_dsn(&attrs, dsn_str, err_out, eo_max, /*connect?*/FALSE);
+	if (res < 0) {
+		return res;
 	}
 
-	init_dbc(&dbc, NULL);
-	if (! SQL_SUCCEEDED(config_dbc(&dbc, &attrs))) {
-		ERR("test DBC configuration failed.");
-		return ESODBC_DSN_INVALID_ERROR;
-	}
+	/* There are the following cases possible:
+	 * - new DSN, name not yet used;
+	 * - new DSN, name already used;
+	 * - old DSN renamed to a name not yet used;
+	 * - old DSN renamed to a name already used */
 
 	/* is it a brand new DSN name or has the DSN name changed? */
-	DBG("old DSN: `" LWPDL "`, new DSN: `" LWPDL "`.",
+	DBG("old DSN name: `" LWPDL "`, new DSN name: `" LWPDL "`.",
 		LWSTR(&old_dsn), LWSTR(&attrs.dsn));
-	if ((! old_dsn.cnt) || (! EQ_CASE_WSTR(&old_dsn, &attrs.dsn))) {
-		/* check if target DSN (new or old) already exists */
+	if (! EQ_CASE_WSTR(&old_dsn, &attrs.dsn)) { /* new DSN or name changed */
+		/* check if DSN name already exists */
 		res = system_dsn_exists(&attrs.dsn);
 		if (res < 0) {
 			cnt = copy_installer_errors(err_out, eo_max);
 			ERR("failed to check if DSN `" LWPDL "` already exists: "
 				LWPDL ".", LWSTR(&attrs.dsn), cnt, err_out);
-			goto err;
-		} else if (res) {
+			return ESODBC_DSN_GENERIC_ERROR;
+		} else if (res) { /* name already in use */
 			DBG("overwrite confirmed? %s!", flags & ESODBC_DSN_OVERWRITE_FLAG
 				? "yes" : "no");
 			if (! (flags & ESODBC_DSN_OVERWRITE_FLAG)) {
 				return ESODBC_DSN_EXISTS_ERROR;
+			} else {
+				/* need to delete old entry now to make sure no attribute set
+				 * in old one persists in new one */
+				if (! SQLRemoveDSNFromIniW(attrs.dsn.str)) {
+					cnt = copy_installer_errors(err_out, eo_max);
+					ERR("failed to remove old DSN with same name` " LWPDL "`:"
+						" " LWPDL ".", LWSTR(&old_dsn), cnt, err_out);
+				} else {
+					DBG("removed DSN to be overwritten.");
+				}
+			}
+		} else { /* name not yet used  */
+			/* new DSN to be added: check name validity */
+			if (! SQLValidDSNW(attrs.dsn.str)) {
+				SQLPostInstallerError(ODBC_ERROR_INVALID_DSN, NULL);
+				ERR("invalid DSN value `" LWPDL "`.", LWSTR(&attrs.dsn));
+				return ESODBC_DSN_NAME_INVALID_ERROR;
+			} else {
+				INFO("creating new DSN `" LWPDL "` for driver ` " LWPDL " `.",
+					LWSTR(&attrs.dsn), LWSTR(&attrs.driver));
 			}
 		}
-		/* if an old DSN exists, delete it */
+		/* create new entry for the new DSN */
+		if (! SQLWriteDSNToIniW(attrs.dsn.str, attrs.driver.str)) {
+			ERR("failed to add DSN `" LWPDL "` for driver ` " LWPDL " ` to "
+				".INI.", LWSTR(&attrs.dsn), LWSTR(&attrs.driver));
+			cnt = copy_installer_errors(err_out, eo_max);
+			return ESODBC_DSN_GENERIC_ERROR;
+		}
+
+		/* if an old DSN exists, it'll need to be deleted */
 		remove_old = !!old_dsn.cnt;
-		create_new = TRUE;
+		/* a new entry is created, force writing all new values */
+		old_attrs = NULL;
 	} else {
-		create_new = FALSE;
+		remove_old = FALSE;
 	}
 
-	/* create or update the DSN */
-	if (! write_system_dsn(&attrs, create_new)) {
+	/* update/create the DSN with user values */
+	if (! write_system_dsn(&attrs, old_attrs)) {
 		cnt = copy_installer_errors(err_out, eo_max);
 		ERR("failed to add DSN to the system: " LWPDL ".", cnt, err_out);
-		goto err;
+		return ESODBC_DSN_GENERIC_ERROR;
 	}
 
-	/* only remove old if new is succesfully created (even though the
-	 * documentation says otherwise). */
+	/* only remove old if new is succesfully created */
 	if (remove_old) {
 		assert(old_dsn.cnt);
 		if (! SQLRemoveDSNFromIniW(old_dsn.str)) {
@@ -209,9 +213,6 @@ static int save_dsn_cb(void *arg, const wchar_t *dsn_str,
 	}
 
 	return 0;
-err:
-	SQLPostInstallerError(ODBC_ERROR_REQUEST_FAILED, NULL);
-	return ESODBC_DSN_GENERIC_ERROR;
 }
 
 
@@ -239,7 +240,7 @@ BOOL SQL_API ConfigDSNW(
 	};
 
 	/* If there's a DSN in reveived attributes, load the config from the
-	 * registry. Otherwise, populate a new config with defaults. */
+	 * registry. */
 	if (! load_system_dsn(&attrs, (SQLWCHAR *)lpszAttributes)) {
 		ERR("failed to load system DSN for driver ` " LWPD " ` and "
 			"attributes `" LWPDL "`.", LWSTR(&driver), lpszAttributes);

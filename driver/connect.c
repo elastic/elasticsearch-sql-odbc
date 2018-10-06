@@ -773,6 +773,7 @@ err:
 	if (state == SQL_STATE_HY000) {
 		RET_HDIAG(dbc, state, "invalid configuration parameters", 0);
 	}
+	cleanup_dbc(dbc); /* release allocated resources before the failure */
 	RET_HDIAGS(dbc, state);
 }
 
@@ -1559,60 +1560,14 @@ end:
 static int receive_dsn_cb(void *arg, const wchar_t *dsn_str,
 	wchar_t *err_out, size_t eo_max, unsigned int flags)
 {
-	esodbc_dsn_attrs_st *attrs = (esodbc_dsn_attrs_st *)arg;
-	esodbc_dbc_st dbc;
-	SQLRETURN res;
-	int ret;
-
-	TRACE;
 	assert(arg);
-
-	if (! dsn_str) {
-		ERR("invalid NULL DSN string received.");
-		return ESODBC_DSN_ISNULL_ERROR;
-	} else {
-		DBG("received DSN string: `" LWPD "`.", dsn_str);
-	}
-
-#ifdef ESODBC_DSN_API_WITH_00_LIST
-	if (! parse_00_list(attrs, (SQLWCHAR *)dsn_str)) {
-#else
-	if (! parse_connection_string(attrs, (SQLWCHAR *)dsn_str,
-			(SQLSMALLINT)wcslen(dsn_str))) {
-#endif /* ESODBC_DSN_API_WITH_00_LIST */
-		ERR("failed to parse received DSN string.");
-		return ESODBC_DSN_INVALID_ERROR;
-	}
-	/*
-	 * validate the DSN set
-	 */
-	if (! (attrs->dsn.cnt & attrs->server.cnt)) {
-		ERR("DSN name (" LWPDL ") and server address (" LWPDL ") cannot be"
-			" empty.", LWSTR(&attrs->dsn), LWSTR(&attrs->server));
-		return ESODBC_DSN_INVALID_ERROR;
-	} else {
-		/* fill in whatever's missing */
-		assign_dsn_defaults(attrs);
-	}
-
-	/* try configure and connect here, to be able to report an error back to
-	 * the user right away: otherwise, the connection will fail later in
-	 * SQLDriverConnect loop, but with no indication as to why. */
-	init_dbc(&dbc, NULL);
-	res = do_connect(&dbc, attrs);
-	if (! SQL_SUCCEEDED(res)) {
-		res = EsSQLGetDiagFieldW(SQL_HANDLE_DBC, &dbc, /*rec#*/1,
-				SQL_DIAG_MESSAGE_TEXT, err_out, (SQLSMALLINT)eo_max,
-				/*written len*/NULL/*err_out is 0-term'd*/);
-		/* function should not fail with given params. */
-		assert(SQL_SUCCEEDED(res));
-		ret = ESODBC_DSN_GENERIC_ERROR;
-	} else {
-		ret = 0;
-	}
-
-	cleanup_dbc(&dbc);
-	return ret;
+	/* The function parses the DSN string into the received attrs, which
+	 * remains assigned past the callback scope */
+	return validate_dsn((esodbc_dsn_attrs_st *)arg, dsn_str, err_out, eo_max,
+			/* Try connect here, to be able to report an error back to the
+			 * user right away: otherwise, the connection will fail later in
+			 * SQLDriverConnect loop, but with no indication as to why. */
+			/*connect?*/TRUE);
 }
 
 SQLRETURN EsSQLDriverConnectW
@@ -1743,10 +1698,11 @@ SQLRETURN EsSQLDriverConnectW
 				res = prompt_user ? prompt_user_config(hwnd, disable_nonconn,
 						&attrs, &receive_dsn_cb) : /*need just > 0*/1;
 				if (res < 0) {
-					ERRH(dbc, "user interaction failed.");
+					ERRH(dbc, "user GUI interaction failed.");
 					RET_HDIAGS(dbc, SQL_STATE_IM008);
 				} else if (! res) {
 					/* user canceled */
+					DBGH(dbc, "user canceled the GUI interaction.");
 					return SQL_NO_DATA;
 				}
 				/* promt user on next iteration */

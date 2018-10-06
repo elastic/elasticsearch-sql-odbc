@@ -591,63 +591,116 @@ BOOL load_system_dsn(esodbc_dsn_attrs_st *attrs, SQLWCHAR *list00)
 	return TRUE;
 }
 
-BOOL write_system_dsn(esodbc_dsn_attrs_st *attrs, BOOL create_new)
+BOOL write_system_dsn(esodbc_dsn_attrs_st *new_attrs,
+	esodbc_dsn_attrs_st *old_attrs)
 {
 	struct {
 		wstr_st *kw;
-		wstr_st *val;
+		wstr_st *new;
+		wstr_st *old;
 	} *iter, map[] = {
 		/* Driver */
-		{&MK_WSTR(ESODBC_DSN_DESCRIPTION), &attrs->description},
+		{
+			&MK_WSTR(ESODBC_DSN_DESCRIPTION), &new_attrs->description,
+			old_attrs ? &old_attrs->description : NULL
+		},
 		/* DSN */
-		{&MK_WSTR(ESODBC_DSN_PWD), &attrs->pwd},
-		{&MK_WSTR(ESODBC_DSN_UID), &attrs->uid},
+		{
+			&MK_WSTR(ESODBC_DSN_PWD), &new_attrs->pwd,
+			old_attrs ? &old_attrs->pwd : NULL
+		},
+		{
+			&MK_WSTR(ESODBC_DSN_UID), &new_attrs->uid,
+			old_attrs ? &old_attrs->uid : NULL
+		},
 		/* SAVEILE */
 		/* FILEDSN */
-		{&MK_WSTR(ESODBC_DSN_SERVER), &attrs->server},
-		{&MK_WSTR(ESODBC_DSN_PORT), &attrs->port},
-		{&MK_WSTR(ESODBC_DSN_SECURE), &attrs->secure},
-		{&MK_WSTR(ESODBC_DSN_CA_PATH), &attrs->ca_path},
-		{&MK_WSTR(ESODBC_DSN_TIMEOUT), &attrs->timeout},
-		{&MK_WSTR(ESODBC_DSN_FOLLOW), &attrs->follow},
-		{&MK_WSTR(ESODBC_DSN_CATALOG), &attrs->catalog},
-		{&MK_WSTR(ESODBC_DSN_PACKING), &attrs->packing},
-		{&MK_WSTR(ESODBC_DSN_MAX_FETCH_SIZE), &attrs->max_fetch_size},
-		{&MK_WSTR(ESODBC_DSN_MAX_BODY_SIZE_MB), &attrs->max_body_size},
-		{&MK_WSTR(ESODBC_DSN_TRACE_FILE), &attrs->trace_file},
-		{&MK_WSTR(ESODBC_DSN_TRACE_LEVEL), &attrs->trace_level},
-		{NULL, NULL}
+		{
+			&MK_WSTR(ESODBC_DSN_SERVER), &new_attrs->server,
+			old_attrs ? &old_attrs->server : NULL
+		},
+		{
+			&MK_WSTR(ESODBC_DSN_PORT), &new_attrs->port,
+			old_attrs ? &old_attrs->port : NULL
+		},
+		{
+			&MK_WSTR(ESODBC_DSN_SECURE), &new_attrs->secure,
+			old_attrs ? &old_attrs->secure : NULL
+		},
+		{
+			&MK_WSTR(ESODBC_DSN_CA_PATH), &new_attrs->ca_path,
+			old_attrs ? &old_attrs->ca_path : NULL
+		},
+		{
+			&MK_WSTR(ESODBC_DSN_TIMEOUT), &new_attrs->timeout,
+			old_attrs ? &old_attrs->timeout : NULL
+		},
+		{
+			&MK_WSTR(ESODBC_DSN_FOLLOW), &new_attrs->follow,
+			old_attrs ? &old_attrs->follow : NULL
+		},
+		{
+			&MK_WSTR(ESODBC_DSN_CATALOG), &new_attrs->catalog,
+			old_attrs ? &old_attrs->catalog : NULL
+		},
+		{
+			&MK_WSTR(ESODBC_DSN_PACKING), &new_attrs->packing,
+			old_attrs ? &old_attrs->packing : NULL
+		},
+		{
+			&MK_WSTR(ESODBC_DSN_MAX_FETCH_SIZE), &new_attrs->max_fetch_size,
+			old_attrs ? &old_attrs->max_fetch_size : NULL
+		},
+		{
+			&MK_WSTR(ESODBC_DSN_MAX_BODY_SIZE_MB), &new_attrs->max_body_size,
+			old_attrs ? &old_attrs->max_body_size : NULL
+		},
+		{
+			&MK_WSTR(ESODBC_DSN_TRACE_FILE), &new_attrs->trace_file,
+			old_attrs ? &old_attrs->trace_file : NULL
+		},
+		{
+			&MK_WSTR(ESODBC_DSN_TRACE_LEVEL), &new_attrs->trace_level,
+			old_attrs ? &old_attrs->trace_level : NULL
+		},
+		{NULL, NULL, NULL}
 	};
 
-	if (create_new) {
-		if (! SQLValidDSNW(attrs->dsn.str)) {
-			ERR("invalid DSN value `" LWPDL "`.", LWSTR(&attrs->dsn));
-			return FALSE;
-		}
-		INFO("creating new DSN `" LWPDL "` for driver ` " LWPDL " `.",
-			LWSTR(&attrs->dsn), LWSTR(&attrs->driver));
-		if (! SQLWriteDSNToIniW(attrs->dsn.str, attrs->driver.str)) {
-			ERR("failed to add DSN `" LWPDL "` for driver ` " LWPDL " ` to "
-				".INI.", LWSTR(&attrs->dsn), LWSTR(&attrs->driver));
-			return FALSE;
-		}
-	} else {
-		assert(0 < system_dsn_exists(&attrs->dsn));
-	}
+	/* check that the esodbc_dsn_attrs_st stays in sync with the above */
+	assert(sizeof(map)/sizeof(*iter) /* {NULL,NULL, NULL} terminator */-1
+		/*Driver,DSN,SAVEFILE,FILEDSN*/-4 == ESODBC_DSN_ATTRS_COUNT);
 
 	for (iter = &map[0]; iter->kw; iter ++) {
-		if (! iter->val->cnt) {
-			DBG("value `" LWPDL "` not provisioned.", LWSTR(iter->kw));
-			continue;
+		if (iter->old) {
+			if (EQ_WSTR(iter->new, iter->old)) {
+				DBG("DSN `" LWPDL "` attribute " LWPDL " maintained "
+					"value `" LWPDL "`.", LWSTR(&new_attrs->dsn),
+					LWSTR(iter->kw), LWSTR(iter->new));
+				continue;
+			}
+			if (! SQLWritePrivateProfileStringW(new_attrs->dsn.str,
+					iter->kw->str,
+					/* "If this argument is NULL, the key pointed to by the
+					 * lpszEntry argument is deleted." */
+					iter->new->cnt ? iter->new->str : NULL,
+					MK_WPTR(SUBKEY_ODBC))) {
+				ERR("failed to write key `" LWPDL "` with value `" LWPDL "`.",
+					LWSTR(iter->kw), LWSTR(iter->new));
+				return FALSE;
+			}
+			INFO("DSN `" LWPDL "` attribute " LWPDL " set to `" LWPDL "`%s.",
+				LWSTR(&new_attrs->dsn), LWSTR(iter->kw), LWSTR(iter->new),
+				iter->new->cnt ? "" : " (deleted)");
+		} else if (iter->new->cnt) {
+			if (! SQLWritePrivateProfileStringW(new_attrs->dsn.str,
+					iter->kw->str, iter->new->str, MK_WPTR(SUBKEY_ODBC))) {
+				ERR("failed to write key `" LWPDL "` with value `" LWPDL "`.",
+					LWSTR(iter->kw), LWSTR(iter->new));
+				return FALSE;
+			}
+			INFO("DSN `" LWPDL "` attribute " LWPDL " set to `" LWPDL "`.",
+				LWSTR(&new_attrs->dsn), LWSTR(iter->kw), LWSTR(iter->new));
 		}
-		if (! SQLWritePrivateProfileStringW(attrs->dsn.str,
-				iter->kw->str, iter->val->str, MK_WPTR(SUBKEY_ODBC))) {
-			ERR("failed to write key `" LWPDL "` with value `" LWPDL "`.",
-				LWSTR(iter->kw), LWSTR(iter->val));
-			return FALSE;
-		}
-		DBG("key `" LWPDL "` with value `" LWPDL "` written to " SUBKEY_ODBC
-			".", LWSTR(iter->kw), LWSTR(iter->val));
 	}
 	return TRUE;
 }
@@ -890,6 +943,74 @@ end:
 #else /* defined(_WIN32) || defined (WIN32) */
 #error "unsupported platform" /* TODO */
 #endif /* defined(_WIN32) || defined (WIN32) */
+
+int validate_dsn(esodbc_dsn_attrs_st *attrs, const wchar_t *dsn_str,
+	wchar_t *err_out, size_t eo_max, BOOL try_connect)
+{
+	int ret;
+	esodbc_dbc_st dbc;
+
+	if (! dsn_str) {
+		ERR("invalid NULL DSN string received.");
+		return ESODBC_DSN_ISNULL_ERROR;
+	} else {
+#ifdef ESODBC_DSN_API_WITH_00_LIST
+		/* this won't be "complete" if using 00-list */
+		DBG("received DSN string starting with: `" LWPD "`.", dsn_str);
+#else /* ESODBC_DSN_API_WITH_00_LIST */
+		DBG("received DSN string: `" LWPD "`.", dsn_str);
+#endif /* ESODBC_DSN_API_WITH_00_LIST */
+	}
+
+#ifdef ESODBC_DSN_API_WITH_00_LIST
+	if (! parse_00_list(attrs, (SQLWCHAR *)dsn_str)) {
+#else
+	if (! parse_connection_string(attrs, (SQLWCHAR *)dsn_str, SQL_NTS)) {
+#endif /* ESODBC_DSN_API_WITH_00_LIST */
+		ERR("failed to parse received DSN string.");
+		return ESODBC_DSN_INVALID_ERROR;
+	}
+
+	/*
+	 * validate the DSN set
+	 */
+	if (! (attrs->dsn.cnt && attrs->server.cnt)) {
+		ERR("DSN name (" LWPDL ") and server address (" LWPDL ") cannot be"
+			" empty strings.", LWSTR(&attrs->dsn), LWSTR(&attrs->server));
+		return ESODBC_DSN_INVALID_ERROR;
+	} else {
+		/* fill in whatever's missing */
+		assign_dsn_defaults(attrs);
+	}
+
+	init_dbc(&dbc, NULL);
+	if (try_connect) {
+		ret = do_connect(&dbc, attrs);
+		if (! SQL_SUCCEEDED(ret)) {
+			ret = EsSQLGetDiagFieldW(SQL_HANDLE_DBC, &dbc, /*rec#*/1,
+					SQL_DIAG_MESSAGE_TEXT, err_out, (SQLSMALLINT)eo_max,
+					/*written len*/NULL/*err_out is 0-term'd*/);
+			/* function should not fail with given params. */
+			assert(SQL_SUCCEEDED(ret));
+			ERR("test DBC connection failed: " LWPD ".", err_out);
+			ret = ESODBC_DSN_GENERIC_ERROR;
+		} else {
+			ret = ESODBC_DSN_NO_ERROR; // 0
+		}
+	} else {
+		init_dbc(&dbc, NULL);
+		ret = config_dbc(&dbc, attrs);
+		if (! SQL_SUCCEEDED(ret)) {
+			ERR("test DBC configuration failed.");
+			ret = ESODBC_DSN_INVALID_ERROR;
+		} else {
+			ret = ESODBC_DSN_NO_ERROR; // 0
+		}
+	}
+	cleanup_dbc(&dbc);
+	return ret;
+
+}
 
 static int test_connect(void *arg, const wchar_t *dsn_str,
 	wchar_t *err_out, size_t eo_max, unsigned int _)
