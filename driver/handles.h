@@ -477,7 +477,7 @@ SQLRETURN EsSQLSetDescRec(
 #define HDIAG_COPY(_s, _d)	(_d)->hdr.diag = (_s)->hdr.diag
 /* set a diagnostic to a(ny) handle */
 #define SET_HDIAG(_hp/*handle ptr*/, _s/*tate*/, _t/*char text*/, _c/*ode*/) \
-	post_diagnostic(&(_hp)->hdr.diag, _s, MK_WPTR(_t), _c)
+	post_diagnostic(&HDRH(_hp)->diag, _s, MK_WPTR(_t), _c)
 
 /* return the code associated with the given state (and debug-log) */
 #define RET_STATE(_s)	\

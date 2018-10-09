@@ -359,8 +359,9 @@ static BOOL attach_sql_error(SQLHANDLE hnd, cstr_st *body)
 		LWPDL "`, status: %d.", tlen, tlen, wtype, rlen, rlen, wreason,
 		UJNumericInt(o_status));
 
-	/* swprintf will fail if formated string would overrun the buffer size (as
-	 * opposed to write up to its limit) => find out the limit first.*/
+	/* swprintf will always append the 0-term, but fail if formated string
+	 * would overrun the buffer size (in an equivocal way: overrun <?> encoding
+	 * error) => find out the limit first. */
 	n = swprintf(NULL, 0, MK_WPTR("%.*s: %.*s"), (int)tlen, wtype, (int)rlen,
 			wreason);
 	if (0 < n) {

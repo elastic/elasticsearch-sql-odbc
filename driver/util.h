@@ -79,8 +79,8 @@ typedef struct cstr {
  * Returns negative if conversion fails, OR number of converted wchars,
  * including/plus the 0-term.
  */
-int TEST_API ascii_w2c(SQLWCHAR *src, SQLCHAR *dst, size_t chars);
-int TEST_API ascii_c2w(SQLCHAR *src, SQLWCHAR *dst, size_t chars);
+int TEST_API ascii_w2c(const SQLWCHAR *src, SQLCHAR *dst, size_t chars);
+int TEST_API ascii_c2w(const SQLCHAR *src, SQLWCHAR *dst, size_t chars);
 /*
  * Compare two SQLWCHAR object, case INsensitive.
  */

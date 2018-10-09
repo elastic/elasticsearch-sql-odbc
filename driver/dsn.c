@@ -667,8 +667,8 @@ BOOL write_system_dsn(esodbc_dsn_attrs_st *new_attrs,
 	};
 
 	/* check that the esodbc_dsn_attrs_st stays in sync with the above */
-	assert(sizeof(map)/sizeof(*iter) /* {NULL,NULL, NULL} terminator */-1
-		/*Driver,DSN,SAVEFILE,FILEDSN*/-4 == ESODBC_DSN_ATTRS_COUNT);
+	assert(sizeof(map)/sizeof(map[0]) /* {NULL,NULL, NULL} terminator */- 1
+		/*Driver,DSN,SAVEFILE,FILEDSN*/+ 4 == ESODBC_DSN_ATTRS_COUNT);
 
 	for (iter = &map[0]; iter->kw; iter ++) {
 		if (iter->old) {
@@ -741,46 +741,38 @@ long TEST_API write_connection_string(esodbc_dsn_attrs_st *attrs,
 	/* check that the esodbc_dsn_attrs_st stays in sync with the above */
 	assert(sizeof(map)/sizeof(*iter) - /* {NULL,NULL} terminator */1 ==
 		ESODBC_DSN_ATTRS_COUNT);
+	assert(0 <= cchConnStrOutMax);
 
 	for (iter = &map[0], pos = 0; iter->val; iter ++) {
 		if (iter->val->cnt) {
 			braces = needs_braces(iter->val) ? 2 : 0;
 			if (cchConnStrOutMax && szConnStrOut) {
-				/* swprintf will fail if formated string would overrun the
-				 * buffer size */
-				if (cchConnStrOutMax - pos < iter->val->cnt + braces) {
-					/* indicate that we've reached buffer limits: only account
-					 * for how long the string would be */
-					cchConnStrOutMax = 0;
-					pos += iter->val->cnt + braces;
-					continue;
+				/* is there still room in the buffer? */
+				if ((SQLSMALLINT)pos < cchConnStrOutMax) {
+					if (braces) {
+						format = WPFWP_LDESC "={" WPFWP_LDESC "};";
+					} else {
+						format = WPFWP_LDESC "=" WPFWP_LDESC ";";
+					}
+					n = swprintf(szConnStrOut + pos, cchConnStrOutMax - pos,
+							format, LWSTR(iter->kw), LWSTR(iter->val));
+					if (n < 0) {
+						ERRN("failed to outprint connection string (keyword: "
+							LWPDL ", room: %hd, position: %zu).",
+							LWSTR(iter->kw), cchConnStrOutMax, pos);
+						return -1;
+					}
 				}
-				if (braces) {
-					format = WPFWP_LDESC "={" WPFWP_LDESC "};";
-				} else {
-					format = WPFWP_LDESC "=" WPFWP_LDESC ";";
-				}
-				n = swprintf(szConnStrOut + pos, cchConnStrOutMax - pos,
-						format, LWSTR(iter->kw), LWSTR(iter->val));
-				if (n < 0) {
-					ERRN("failed to outprint connection string (space "
-						"left: %d; needed: %d).", cchConnStrOutMax - pos,
-						iter->val->cnt);
-					return -1;
-				} else {
-					pos += n;
-				}
-			} else {
-				/* simply increment the counter, since the untruncated length
-				 * needs to be returned to the app */
-				pos += iter->kw->cnt + /*`=`*/1 +
-					iter->val->cnt + braces + /*`;`*/1;
 			}
+			/* update the write position with what would be written (not what
+			 * has been), since the untruncated length needs to always be
+			 * returned to the app */
+			pos += iter->kw->cnt + /*`=`*/1 +
+				iter->val->cnt + braces + /*`;`*/1;
 		}
 	}
 
-	DBG("Output connection string: `" LWPD "`; out len: %d.",
-		szConnStrOut, pos);
+	DBG("new connection string: `" LWPD "`; out len: %zu.", szConnStrOut, pos);
 	assert(pos < LONG_MAX);
 	return (long)pos;
 }
@@ -945,117 +937,74 @@ end:
 #endif /* defined(_WIN32) || defined (WIN32) */
 
 int validate_dsn(esodbc_dsn_attrs_st *attrs, const wchar_t *dsn_str,
-	wchar_t *err_out, size_t eo_max, BOOL try_connect)
+	wchar_t *err_out, size_t eo_max, BOOL on_connect)
 {
 	int ret;
 	esodbc_dbc_st dbc;
 
 	if (! dsn_str) {
 		ERR("invalid NULL DSN string received.");
+		/* internal error, no user-relevant message */
 		return ESODBC_DSN_ISNULL_ERROR;
-	} else {
-#ifdef ESODBC_DSN_API_WITH_00_LIST
-		/* this won't be "complete" if using 00-list */
-		DBG("received DSN string starting with: `" LWPD "`.", dsn_str);
-#else /* ESODBC_DSN_API_WITH_00_LIST */
-		DBG("received DSN string: `" LWPD "`.", dsn_str);
-#endif /* ESODBC_DSN_API_WITH_00_LIST */
 	}
-
 #ifdef ESODBC_DSN_API_WITH_00_LIST
+	/* this won't be "complete" if using 00-list */
+	DBG("received DSN string starting with: `" LWPD "`.", dsn_str);
 	if (! parse_00_list(attrs, (SQLWCHAR *)dsn_str)) {
 #else
+	DBG("received DSN string: `" LWPD "`.", dsn_str);
 	if (! parse_connection_string(attrs, (SQLWCHAR *)dsn_str, SQL_NTS)) {
 #endif /* ESODBC_DSN_API_WITH_00_LIST */
 		ERR("failed to parse received DSN string.");
+		swprintf(err_out, eo_max, L"DSN string parsing error.");
 		return ESODBC_DSN_INVALID_ERROR;
 	}
 
 	/*
-	 * validate the DSN set
+	 * check on the minimum DSN set requirements
 	 */
-	if (! (attrs->dsn.cnt && attrs->server.cnt)) {
-		ERR("DSN name (" LWPDL ") and server address (" LWPDL ") cannot be"
-			" empty strings.", LWSTR(&attrs->dsn), LWSTR(&attrs->server));
+	if (! attrs->server.cnt) {
+		ERR("received empty server name");
+		swprintf(err_out, eo_max, L"Server hostname cannot be empty.");
 		return ESODBC_DSN_INVALID_ERROR;
-	} else {
-		/* fill in whatever's missing */
-		assign_dsn_defaults(attrs);
 	}
+	if (!on_connect && !attrs->dsn.cnt) {
+		ERR("received empty DSN name");
+		swprintf(err_out, eo_max, L"DSN name cannot be empty.");
+		return ESODBC_DSN_INVALID_ERROR;
+	}
+
+	/* fill in whatever's missing */
+	assign_dsn_defaults(attrs);
 
 	init_dbc(&dbc, NULL);
-	if (try_connect) {
-		ret = do_connect(&dbc, attrs);
-		if (! SQL_SUCCEEDED(ret)) {
-			ret = EsSQLGetDiagFieldW(SQL_HANDLE_DBC, &dbc, /*rec#*/1,
-					SQL_DIAG_MESSAGE_TEXT, err_out, (SQLSMALLINT)eo_max,
-					/*written len*/NULL/*err_out is 0-term'd*/);
-			/* function should not fail with given params. */
-			assert(SQL_SUCCEEDED(ret));
-			ERR("test DBC connection failed: " LWPD ".", err_out);
-			ret = ESODBC_DSN_GENERIC_ERROR;
-		} else {
-			ret = ESODBC_DSN_NO_ERROR; // 0
-		}
+	ret = on_connect ? do_connect(&dbc, attrs) : config_dbc(&dbc, attrs);
+
+	if (! SQL_SUCCEEDED(ret)) {
+		ret = EsSQLGetDiagFieldW(SQL_HANDLE_DBC, &dbc, /*rec#*/1,
+				SQL_DIAG_MESSAGE_TEXT, err_out, (SQLSMALLINT)eo_max,
+				/*written len*/NULL/*err_out is 0-term'd*/);
+		/* function should not fail with given params. */
+		assert(SQL_SUCCEEDED(ret));
+		ERR("test DBC %s failed: " LWPD ".",
+			on_connect ? "connection" : "configuration", err_out);
+		ret = ESODBC_DSN_GENERIC_ERROR;
 	} else {
-		init_dbc(&dbc, NULL);
-		ret = config_dbc(&dbc, attrs);
-		if (! SQL_SUCCEEDED(ret)) {
-			ERR("test DBC configuration failed.");
-			ret = ESODBC_DSN_INVALID_ERROR;
-		} else {
-			ret = ESODBC_DSN_NO_ERROR; // 0
-		}
+		ret = ESODBC_DSN_NO_ERROR; // 0
 	}
+
 	cleanup_dbc(&dbc);
 	return ret;
-
 }
 
 static int test_connect(void *arg, const wchar_t *dsn_str,
 	wchar_t *err_out, size_t eo_max, unsigned int _)
 {
 	esodbc_dsn_attrs_st attrs;
-	esodbc_dbc_st dbc;
-	SQLRETURN res;
-	int ret;
 
 	assert(! arg); /* change santinel */
-	if (! dsn_str) {
-		ERR("invalid NULL DSN string received.");
-		return ESODBC_DSN_ISNULL_ERROR;
-	} else {
-		DBG("received DSN string: `" LWPD "`.", dsn_str);
-	}
-
 	init_dsn_attrs(&attrs);
-#ifdef ESODBC_DSN_API_WITH_00_LIST
-	if (! parse_00_list(&attrs, (SQLWCHAR *)dsn_str)) {
-#else
-	if (! parse_connection_string(&attrs, (SQLWCHAR *)dsn_str,
-			(SQLSMALLINT)wcslen(dsn_str))) {
-#endif /* ESODBC_DSN_API_WITH_00_LIST */
-		ERR("failed to parse received DSN string.");
-		return ESODBC_DSN_INVALID_ERROR;
-	}
-	/* fill in whatever's missing */
-	assign_dsn_defaults(&attrs);
-
-	init_dbc(&dbc, NULL);
-	res = do_connect(&dbc, &attrs);
-	if (! SQL_SUCCEEDED(res)) {
-		res = EsSQLGetDiagFieldW(SQL_HANDLE_DBC, &dbc, /*rec#*/1,
-				SQL_DIAG_MESSAGE_TEXT, err_out, (SQLSMALLINT)eo_max,
-				/*written len*/NULL/*err_out is 0-term'd*/);
-		/* function should not fail with given params. */
-		assert(SQL_SUCCEEDED(res));
-		ret = ESODBC_DSN_GENERIC_ERROR;
-	} else {
-		ret = 0;
-	}
-
-	cleanup_dbc(&dbc);
-	return ret;
+	return validate_dsn(&attrs, dsn_str, err_out, eo_max, /*on conn*/TRUE);
 }
 
 /*

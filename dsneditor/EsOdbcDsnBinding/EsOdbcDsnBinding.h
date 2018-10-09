@@ -5,7 +5,7 @@
 
 /* flag passed to callback to indicate that an overwrite of existing DSN
  * is desired by user. */
-#define ESODBC_DSN_OVERWRITE_FLAG	(1<<0)
+#define ESODBC_DSN_OVERWRITE_FLAG				(1<<0)
 
 #define ESODBC_DSN_NO_ERROR							0
 /* Code returned by callback to signal that given DSN name already exists. */

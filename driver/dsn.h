@@ -74,7 +74,7 @@ long TEST_API write_00_list(esodbc_dsn_attrs_st *attrs,
 BOOL read_system_info(esodbc_dsn_attrs_st *attrs);
 int system_dsn_exists(wstr_st *dsn);
 BOOL load_system_dsn(esodbc_dsn_attrs_st *attrs, SQLWCHAR *list00);
-BOOL write_system_dsn(esodbc_dsn_attrs_st *new, esodbc_dsn_attrs_st *old);
+BOOL write_system_dsn(esodbc_dsn_attrs_st *crr, esodbc_dsn_attrs_st *old);
 
 BOOL TEST_API parse_connection_string(esodbc_dsn_attrs_st *attrs,
 	SQLWCHAR *szConnStrIn, SQLSMALLINT cchConnStrIn);

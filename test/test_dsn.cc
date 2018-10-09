@@ -87,7 +87,8 @@ TEST_F(Dsn, parse_write_connection_string) {
 	init_dsn_attrs(&attrs);
 	ASSERT_TRUE(parse_connection_string(&attrs, src.str,
 				(SQLSMALLINT)src.cnt));
-	written = write_connection_string(&attrs, dst, sizeof(dst)/sizeof(*dst));
+	written = write_connection_string(&attrs, dst,
+			(SQLSMALLINT)sizeof(dst)/sizeof(*dst));
 	ASSERT_TRUE(0 < written);
 
 	ASSERT_TRUE(memcmp(src.str, dst, written) == 0);
@@ -125,7 +126,8 @@ TEST_F(Dsn, write_connection_string_null_str_out) {
 	init_dsn_attrs(&attrs);
 	ASSERT_TRUE(parse_connection_string(&attrs, src.str,
 				(SQLSMALLINT)src.cnt));
-	written = write_connection_string(&attrs, dst, sizeof(dst)/sizeof(*dst));
+	written = write_connection_string(&attrs, dst,
+			(SQLSMALLINT)sizeof(dst)/sizeof(*dst));
 	ASSERT_TRUE(0 < written);
 	counted = write_connection_string(&attrs, NULL, 0);
 	ASSERT_EQ(written, counted);

@@ -18,7 +18,7 @@ void init_diagnostic(esodbc_diag_st *dest)
 
 /* TODO: must the diagnostic be "cleared" after a succesful invokation?? */
 SQLRETURN post_diagnostic(esodbc_diag_st *dest, esodbc_state_et state,
-	SQLWCHAR *text, SQLINTEGER code)
+	const SQLWCHAR *text, SQLINTEGER code)
 {
 	size_t pos, tcnt, ebufsz;
 
@@ -53,7 +53,7 @@ SQLRETURN post_diagnostic(esodbc_diag_st *dest, esodbc_state_et state,
 }
 
 SQLRETURN post_c_diagnostic(esodbc_diag_st *dest, esodbc_state_et state,
-	SQLCHAR *text, SQLINTEGER code)
+	const SQLCHAR *text, SQLINTEGER code)
 {
 	SQLWCHAR wtext[sizeof(dest->text)/sizeof(*dest->text)], *ptr;
 	if (text) {

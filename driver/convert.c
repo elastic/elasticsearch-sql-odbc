@@ -2599,7 +2599,7 @@ static SQLRETURN convert_ts_to_timestamp(esodbc_stmt_st *stmt,
 			tss->hour, tss->minute, tss->second, tss->fraction);
 	if (cnt < 0) {
 		ERRH(stmt, "failed printing timestamp struct: %s.", strerror(errno));
-		SET_HDIAG(stmt, SQL_STATE_HY000, "C runtime error", 0);
+		RET_HDIAG(stmt, SQL_STATE_HY000, "C runtime error", 0);
 	}
 	*len = cnt;
 
