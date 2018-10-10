@@ -110,9 +110,24 @@ SQLRETURN SQL_API SQLConnectW
 	SQLSMALLINT         cchAuthStr
 )
 {
-	RET_NOT_IMPLEMENTED(hdbc);
+#ifndef NDEBUG /* don't print the PWD */
+	const char *fmt_in = "pWhWhWh";
+	const char *fmt_out = "dpWhWhWh";
+#else /* NDEBUG */
+	const char *fmt_in = "pWhWhph";
+	const char *fmt_out = "dpWhWhph";
+#endif /* NDEBUG */
+	SQLRETURN ret;
+	TRACE7(_IN, hdbc, fmt_in, hdbc, szDSN, cchDSN, szUID, cchUID,
+		szAuthStr, cchAuthStr);
+	HND_LOCK(hdbc);
+	ret = EsSQLConnectW(hdbc, szDSN, cchDSN, szUID, cchUID,
+			szAuthStr, cchAuthStr);
+	HND_UNLOCK(hdbc);
+	TRACE8(_OUT, hdbc, fmt_out, ret, hdbc, szDSN, cchDSN, szUID, cchUID,
+		szAuthStr, cchAuthStr);
+	return ret;
 }
-
 
 SQLRETURN SQL_API SQLDriverConnectW
 (
@@ -147,7 +162,6 @@ SQLRETURN SQL_API SQLDriverConnectW
 		szConnStrOut, cchConnStrOutMax, pcchConnStrOut, fDriverCompletion);
 	return ret;
 }
-
 
 SQLRETURN SQL_API SQLBrowseConnectW
 (
