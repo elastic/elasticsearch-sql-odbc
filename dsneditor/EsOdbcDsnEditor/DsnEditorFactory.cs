@@ -9,6 +9,7 @@ namespace EsOdbcDsnEditor
 {
     public static class DsnEditorFactory
     {
+        [STAThread]
         public static int DsnEditor(
             bool onConnect,
             string dsnIn,

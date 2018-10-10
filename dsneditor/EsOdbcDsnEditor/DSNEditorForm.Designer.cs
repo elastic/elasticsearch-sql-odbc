@@ -35,8 +35,8 @@
             this.header = new System.Windows.Forms.PictureBox();
             this.certificatePathButton = new System.Windows.Forms.Button();
             this.textCertificatePath = new System.Windows.Forms.TextBox();
-            this.label1 = new System.Windows.Forms.Label();
-            this.groupBox1 = new System.Windows.Forms.GroupBox();
+            this.labelCertificatePath = new System.Windows.Forms.Label();
+            this.groupSSL = new System.Windows.Forms.GroupBox();
             this.radioEnabledFull = new System.Windows.Forms.RadioButton();
             this.radioEnabledHostname = new System.Windows.Forms.RadioButton();
             this.radioEnabledNoHostname = new System.Windows.Forms.RadioButton();
@@ -52,18 +52,26 @@
             this.labelHostname = new System.Windows.Forms.Label();
             this.certificateFileDialog = new System.Windows.Forms.OpenFileDialog();
             this.tabConfiguration = new System.Windows.Forms.TabControl();
-            this.tabBasic = new System.Windows.Forms.TabPage();
+            this.pageBasic = new System.Windows.Forms.TabPage();
             this.textDescription = new System.Windows.Forms.TextBox();
-            this.label2 = new System.Windows.Forms.Label();
+            this.labelDescription = new System.Windows.Forms.Label();
             this.textName = new System.Windows.Forms.TextBox();
             this.labelName = new System.Windows.Forms.Label();
-            this.tabPage2 = new System.Windows.Forms.TabPage();
+            this.pageSecurity = new System.Windows.Forms.TabPage();
+            this.pageLogging = new System.Windows.Forms.TabPage();
+            this.comboLogLevel = new System.Windows.Forms.ComboBox();
+            this.labelLogLevel = new System.Windows.Forms.Label();
+            this.logDirectoryPathButton = new System.Windows.Forms.Button();
+            this.textLogDirectoryPath = new System.Windows.Forms.TextBox();
+            this.labelLogDirectory = new System.Windows.Forms.Label();
+            this.folderLogDirectoryDialog = new System.Windows.Forms.FolderBrowserDialog();
             ((System.ComponentModel.ISupportInitialize)(this.header)).BeginInit();
-            this.groupBox1.SuspendLayout();
+            this.groupSSL.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDownPort)).BeginInit();
             this.tabConfiguration.SuspendLayout();
-            this.tabBasic.SuspendLayout();
-            this.tabPage2.SuspendLayout();
+            this.pageBasic.SuspendLayout();
+            this.pageSecurity.SuspendLayout();
+            this.pageLogging.SuspendLayout();
             this.SuspendLayout();
             // 
             // saveButton
@@ -130,30 +138,30 @@
             this.textCertificatePath.Size = new System.Drawing.Size(440, 26);
             this.textCertificatePath.TabIndex = 14;
             // 
-            // label1
+            // labelCertificatePath
             // 
-            this.label1.AutoSize = true;
-            this.label1.Location = new System.Drawing.Point(18, 265);
-            this.label1.Name = "label1";
-            this.label1.Size = new System.Drawing.Size(114, 20);
-            this.label1.TabIndex = 11;
-            this.label1.Text = "Certificate File:";
+            this.labelCertificatePath.AutoSize = true;
+            this.labelCertificatePath.Location = new System.Drawing.Point(18, 265);
+            this.labelCertificatePath.Name = "labelCertificatePath";
+            this.labelCertificatePath.Size = new System.Drawing.Size(114, 20);
+            this.labelCertificatePath.TabIndex = 11;
+            this.labelCertificatePath.Text = "Certificate File:";
             // 
-            // groupBox1
+            // groupSSL
             // 
-            this.groupBox1.Controls.Add(this.radioEnabledFull);
-            this.groupBox1.Controls.Add(this.radioEnabledHostname);
-            this.groupBox1.Controls.Add(this.radioEnabledNoHostname);
-            this.groupBox1.Controls.Add(this.radioEnabledNoValidation);
-            this.groupBox1.Controls.Add(this.radioButtonDisabled);
-            this.groupBox1.Location = new System.Drawing.Point(18, 20);
-            this.groupBox1.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
-            this.groupBox1.Name = "groupBox1";
-            this.groupBox1.Padding = new System.Windows.Forms.Padding(3, 4, 3, 4);
-            this.groupBox1.Size = new System.Drawing.Size(684, 220);
-            this.groupBox1.TabIndex = 10;
-            this.groupBox1.TabStop = false;
-            this.groupBox1.Text = "Secure Sockets Layer (SSL):";
+            this.groupSSL.Controls.Add(this.radioEnabledFull);
+            this.groupSSL.Controls.Add(this.radioEnabledHostname);
+            this.groupSSL.Controls.Add(this.radioEnabledNoHostname);
+            this.groupSSL.Controls.Add(this.radioEnabledNoValidation);
+            this.groupSSL.Controls.Add(this.radioButtonDisabled);
+            this.groupSSL.Location = new System.Drawing.Point(18, 20);
+            this.groupSSL.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
+            this.groupSSL.Name = "groupSSL";
+            this.groupSSL.Padding = new System.Windows.Forms.Padding(3, 4, 3, 4);
+            this.groupSSL.Size = new System.Drawing.Size(684, 220);
+            this.groupSSL.TabIndex = 10;
+            this.groupSSL.TabStop = false;
+            this.groupSSL.Text = "Secure Sockets Layer (SSL):";
             // 
             // radioEnabledFull
             // 
@@ -232,13 +240,14 @@
             0,
             0,
             0});
-            this.numericUpDownPort.ValueChanged += new System.EventHandler(this.numericUpDownPort_ValueChanged);
+            this.numericUpDownPort.ValueChanged += new System.EventHandler(this.NumericUpDownPort_ValueChanged);
             // 
             // textPassword
             // 
             this.textPassword.Location = new System.Drawing.Point(126, 405);
             this.textPassword.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.textPassword.Name = "textPassword";
+            this.textPassword.PasswordChar = '*';
             this.textPassword.Size = new System.Drawing.Size(257, 26);
             this.textPassword.TabIndex = 7;
             // 
@@ -275,7 +284,7 @@
             this.textHostname.Name = "textHostname";
             this.textHostname.Size = new System.Drawing.Size(569, 26);
             this.textHostname.TabIndex = 4;
-            this.textHostname.TextChanged += new System.EventHandler(this.textHostname_TextChanged);
+            this.textHostname.TextChanged += new System.EventHandler(this.TextHostname_TextChanged);
             // 
             // labelPort
             // 
@@ -301,8 +310,9 @@
             // 
             // tabConfiguration
             // 
-            this.tabConfiguration.Controls.Add(this.tabBasic);
-            this.tabConfiguration.Controls.Add(this.tabPage2);
+            this.tabConfiguration.Controls.Add(this.pageBasic);
+            this.tabConfiguration.Controls.Add(this.pageSecurity);
+            this.tabConfiguration.Controls.Add(this.pageLogging);
             this.tabConfiguration.Location = new System.Drawing.Point(18, 92);
             this.tabConfiguration.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
             this.tabConfiguration.Name = "tabConfiguration";
@@ -310,28 +320,28 @@
             this.tabConfiguration.Size = new System.Drawing.Size(729, 575);
             this.tabConfiguration.TabIndex = 8;
             // 
-            // tabBasic
+            // pageBasic
             // 
-            this.tabBasic.Controls.Add(this.textDescription);
-            this.tabBasic.Controls.Add(this.label2);
-            this.tabBasic.Controls.Add(this.textName);
-            this.tabBasic.Controls.Add(this.labelName);
-            this.tabBasic.Controls.Add(this.textHostname);
-            this.tabBasic.Controls.Add(this.labelHostname);
-            this.tabBasic.Controls.Add(this.labelPort);
-            this.tabBasic.Controls.Add(this.labelUsername);
-            this.tabBasic.Controls.Add(this.textUsername);
-            this.tabBasic.Controls.Add(this.numericUpDownPort);
-            this.tabBasic.Controls.Add(this.labelPassword);
-            this.tabBasic.Controls.Add(this.textPassword);
-            this.tabBasic.Location = new System.Drawing.Point(4, 29);
-            this.tabBasic.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
-            this.tabBasic.Name = "tabBasic";
-            this.tabBasic.Padding = new System.Windows.Forms.Padding(3, 4, 3, 4);
-            this.tabBasic.Size = new System.Drawing.Size(721, 542);
-            this.tabBasic.TabIndex = 0;
-            this.tabBasic.Text = "Basic";
-            this.tabBasic.UseVisualStyleBackColor = true;
+            this.pageBasic.Controls.Add(this.textDescription);
+            this.pageBasic.Controls.Add(this.labelDescription);
+            this.pageBasic.Controls.Add(this.textName);
+            this.pageBasic.Controls.Add(this.labelName);
+            this.pageBasic.Controls.Add(this.textHostname);
+            this.pageBasic.Controls.Add(this.labelHostname);
+            this.pageBasic.Controls.Add(this.labelPort);
+            this.pageBasic.Controls.Add(this.labelUsername);
+            this.pageBasic.Controls.Add(this.textUsername);
+            this.pageBasic.Controls.Add(this.numericUpDownPort);
+            this.pageBasic.Controls.Add(this.labelPassword);
+            this.pageBasic.Controls.Add(this.textPassword);
+            this.pageBasic.Location = new System.Drawing.Point(4, 29);
+            this.pageBasic.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
+            this.pageBasic.Name = "pageBasic";
+            this.pageBasic.Padding = new System.Windows.Forms.Padding(3, 4, 3, 4);
+            this.pageBasic.Size = new System.Drawing.Size(721, 542);
+            this.pageBasic.TabIndex = 0;
+            this.pageBasic.Text = "Basic";
+            this.pageBasic.UseVisualStyleBackColor = true;
             // 
             // textDescription
             // 
@@ -342,14 +352,14 @@
             this.textDescription.Size = new System.Drawing.Size(569, 164);
             this.textDescription.TabIndex = 3;
             // 
-            // label2
+            // labelDescription
             // 
-            this.label2.AutoSize = true;
-            this.label2.Location = new System.Drawing.Point(18, 74);
-            this.label2.Name = "label2";
-            this.label2.Size = new System.Drawing.Size(93, 20);
-            this.label2.TabIndex = 10;
-            this.label2.Text = "Description:";
+            this.labelDescription.AutoSize = true;
+            this.labelDescription.Location = new System.Drawing.Point(18, 74);
+            this.labelDescription.Name = "labelDescription";
+            this.labelDescription.Size = new System.Drawing.Size(93, 20);
+            this.labelDescription.TabIndex = 10;
+            this.labelDescription.Text = "Description:";
             // 
             // textName
             // 
@@ -358,7 +368,7 @@
             this.textName.Name = "textName";
             this.textName.Size = new System.Drawing.Size(569, 26);
             this.textName.TabIndex = 2;
-            this.textName.TextChanged += new System.EventHandler(this.textName_TextChanged);
+            this.textName.TextChanged += new System.EventHandler(this.TextName_TextChanged);
             // 
             // labelName
             // 
@@ -369,20 +379,86 @@
             this.labelName.TabIndex = 8;
             this.labelName.Text = "Name:";
             // 
-            // tabPage2
+            // pageSecurity
             // 
-            this.tabPage2.Controls.Add(this.certificatePathButton);
-            this.tabPage2.Controls.Add(this.groupBox1);
-            this.tabPage2.Controls.Add(this.textCertificatePath);
-            this.tabPage2.Controls.Add(this.label1);
-            this.tabPage2.Location = new System.Drawing.Point(4, 29);
-            this.tabPage2.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
-            this.tabPage2.Name = "tabPage2";
-            this.tabPage2.Padding = new System.Windows.Forms.Padding(3, 4, 3, 4);
-            this.tabPage2.Size = new System.Drawing.Size(721, 542);
-            this.tabPage2.TabIndex = 1;
-            this.tabPage2.Text = "Security";
-            this.tabPage2.UseVisualStyleBackColor = true;
+            this.pageSecurity.Controls.Add(this.certificatePathButton);
+            this.pageSecurity.Controls.Add(this.groupSSL);
+            this.pageSecurity.Controls.Add(this.textCertificatePath);
+            this.pageSecurity.Controls.Add(this.labelCertificatePath);
+            this.pageSecurity.Location = new System.Drawing.Point(4, 29);
+            this.pageSecurity.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
+            this.pageSecurity.Name = "pageSecurity";
+            this.pageSecurity.Padding = new System.Windows.Forms.Padding(3, 4, 3, 4);
+            this.pageSecurity.Size = new System.Drawing.Size(721, 542);
+            this.pageSecurity.TabIndex = 1;
+            this.pageSecurity.Text = "Security";
+            this.pageSecurity.UseVisualStyleBackColor = true;
+            // 
+            // pageLogging
+            // 
+            this.pageLogging.Controls.Add(this.comboLogLevel);
+            this.pageLogging.Controls.Add(this.labelLogLevel);
+            this.pageLogging.Controls.Add(this.logDirectoryPathButton);
+            this.pageLogging.Controls.Add(this.textLogDirectoryPath);
+            this.pageLogging.Controls.Add(this.labelLogDirectory);
+            this.pageLogging.Location = new System.Drawing.Point(4, 29);
+            this.pageLogging.Name = "pageLogging";
+            this.pageLogging.Padding = new System.Windows.Forms.Padding(3);
+            this.pageLogging.Size = new System.Drawing.Size(721, 542);
+            this.pageLogging.TabIndex = 2;
+            this.pageLogging.Text = "Logging";
+            this.pageLogging.UseVisualStyleBackColor = true;
+            // 
+            // comboLogLevel
+            // 
+            this.comboLogLevel.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this.comboLogLevel.FormattingEnabled = true;
+            this.comboLogLevel.Items.AddRange(new object[] {
+            "DEBUG",
+            "INFO",
+            "WARN",
+            "ERROR"});
+            this.comboLogLevel.Location = new System.Drawing.Point(139, 72);
+            this.comboLogLevel.Name = "comboLogLevel";
+            this.comboLogLevel.Size = new System.Drawing.Size(121, 28);
+            this.comboLogLevel.TabIndex = 21;
+            // 
+            // labelLogLevel
+            // 
+            this.labelLogLevel.AutoSize = true;
+            this.labelLogLevel.Location = new System.Drawing.Point(18, 75);
+            this.labelLogLevel.Name = "labelLogLevel";
+            this.labelLogLevel.Size = new System.Drawing.Size(81, 20);
+            this.labelLogLevel.TabIndex = 20;
+            this.labelLogLevel.Text = "Log Level:";
+            // 
+            // logDirectoryPathButton
+            // 
+            this.logDirectoryPathButton.Location = new System.Drawing.Point(592, 18);
+            this.logDirectoryPathButton.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
+            this.logDirectoryPathButton.Name = "logDirectoryPathButton";
+            this.logDirectoryPathButton.Size = new System.Drawing.Size(112, 35);
+            this.logDirectoryPathButton.TabIndex = 18;
+            this.logDirectoryPathButton.Text = "Browse...";
+            this.logDirectoryPathButton.UseVisualStyleBackColor = true;
+            this.logDirectoryPathButton.Click += new System.EventHandler(this.LogDirectoryPathButton_Click);
+            // 
+            // textLogDirectoryPath
+            // 
+            this.textLogDirectoryPath.Location = new System.Drawing.Point(139, 20);
+            this.textLogDirectoryPath.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
+            this.textLogDirectoryPath.Name = "textLogDirectoryPath";
+            this.textLogDirectoryPath.Size = new System.Drawing.Size(440, 26);
+            this.textLogDirectoryPath.TabIndex = 17;
+            // 
+            // labelLogDirectory
+            // 
+            this.labelLogDirectory.AutoSize = true;
+            this.labelLogDirectory.Location = new System.Drawing.Point(18, 26);
+            this.labelLogDirectory.Name = "labelLogDirectory";
+            this.labelLogDirectory.Size = new System.Drawing.Size(107, 20);
+            this.labelLogDirectory.TabIndex = 16;
+            this.labelLogDirectory.Text = "Log Directory:";
             // 
             // DsnEditorForm
             // 
@@ -403,14 +479,16 @@
             this.SizeGripStyle = System.Windows.Forms.SizeGripStyle.Hide;
             this.Text = "Elasticsearch ODBC DSN Configuration";
             ((System.ComponentModel.ISupportInitialize)(this.header)).EndInit();
-            this.groupBox1.ResumeLayout(false);
-            this.groupBox1.PerformLayout();
+            this.groupSSL.ResumeLayout(false);
+            this.groupSSL.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDownPort)).EndInit();
             this.tabConfiguration.ResumeLayout(false);
-            this.tabBasic.ResumeLayout(false);
-            this.tabBasic.PerformLayout();
-            this.tabPage2.ResumeLayout(false);
-            this.tabPage2.PerformLayout();
+            this.pageBasic.ResumeLayout(false);
+            this.pageBasic.PerformLayout();
+            this.pageSecurity.ResumeLayout(false);
+            this.pageSecurity.PerformLayout();
+            this.pageLogging.ResumeLayout(false);
+            this.pageLogging.PerformLayout();
             this.ResumeLayout(false);
 
         }
@@ -429,22 +507,29 @@
         private System.Windows.Forms.Label labelUsername;
         private System.Windows.Forms.NumericUpDown numericUpDownPort;
         private System.Windows.Forms.RadioButton radioButtonDisabled;
-        private System.Windows.Forms.GroupBox groupBox1;
+        private System.Windows.Forms.GroupBox groupSSL;
         private System.Windows.Forms.RadioButton radioEnabledFull;
         private System.Windows.Forms.RadioButton radioEnabledHostname;
         private System.Windows.Forms.RadioButton radioEnabledNoHostname;
         private System.Windows.Forms.RadioButton radioEnabledNoValidation;
         private System.Windows.Forms.Button certificatePathButton;
         private System.Windows.Forms.TextBox textCertificatePath;
-        private System.Windows.Forms.Label label1;
+        private System.Windows.Forms.Label labelCertificatePath;
         private System.Windows.Forms.OpenFileDialog certificateFileDialog;
         private System.Windows.Forms.TabControl tabConfiguration;
-        private System.Windows.Forms.TabPage tabBasic;
-        private System.Windows.Forms.TabPage tabPage2;
+        private System.Windows.Forms.TabPage pageBasic;
+        private System.Windows.Forms.TabPage pageSecurity;
         private System.Windows.Forms.TextBox textDescription;
-        private System.Windows.Forms.Label label2;
+        private System.Windows.Forms.Label labelDescription;
         private System.Windows.Forms.TextBox textName;
         private System.Windows.Forms.Label labelName;
+        private System.Windows.Forms.TabPage pageLogging;
+        private System.Windows.Forms.Label labelLogLevel;
+        private System.Windows.Forms.Button logDirectoryPathButton;
+        private System.Windows.Forms.TextBox textLogDirectoryPath;
+        private System.Windows.Forms.Label labelLogDirectory;
+        private System.Windows.Forms.FolderBrowserDialog folderLogDirectoryDialog;
+        private System.Windows.Forms.ComboBox comboLogLevel;
     }
 }
 

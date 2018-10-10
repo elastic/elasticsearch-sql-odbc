@@ -31,44 +31,39 @@ namespace EsOdbcDsnEditor
             DriverCallbackDelegate connectionTest,
             DriverCallbackDelegate dsnSave)
         {
-            this.isConnecting = onConnect;
-
             InitializeComponent();
 
             AcceptButton = saveButton;
             CancelButton = cancelButton;
+
+            isConnecting = onConnect;
             testConnection = connectionTest;
             saveDsn = dsnSave;
 
             // If connecting then disable some user inputs
             if (isConnecting)
             {
-                textName.ReadOnly = true;
-                textName.Enabled = false;
-
-                textDescription.ReadOnly = true;
-                textDescription.Enabled = false;
+                textName.ReadOnly = textDescription.ReadOnly = true;
+                textName.Enabled = textDescription.Enabled = false;
             }
 
-            // If this is a call serving a connect request, call the button "Connect".
-            // Otherwise it's a DSN editing, so it's going to be a "Save".
+            // If this is a call serving a connect request, call the button "Connect", otherwise it's a DSN editing, so it's going to be a "Save".
             saveButton.Text = onConnect ? "Connect" : "Save";
 
             // Parse DSN
             Builder.ConnectionString = dsn;
 
             // Basic Panel
-            textName.Text = Builder.ContainsKey("dsn") ? StripBraces(Builder["dsn"].ToString()) : string.Empty;
-            textDescription.Text = Builder.ContainsKey("description") ? StripBraces(Builder["description"].ToString()) : string.Empty;
-            textUsername.Text = Builder.ContainsKey("uid") ? StripBraces(Builder["uid"].ToString()) : string.Empty;
-            textPassword.Text = Builder.ContainsKey("pwd") ? StripBraces(Builder["pwd"].ToString()) : string.Empty;
-            textHostname.Text = Builder.ContainsKey("server") ? StripBraces(Builder["server"].ToString()) : string.Empty;
-            numericUpDownPort.Text = Builder.ContainsKey("port") ? StripBraces(Builder["port"].ToString()) : string.Empty;
+            textName.Text = Builder.ContainsKey("dsn") ? Builder["dsn"].ToString().StripBraces() : string.Empty;
+            textDescription.Text = Builder.ContainsKey("description") ? Builder["description"].ToString().StripBraces() : string.Empty;
+            textUsername.Text = Builder.ContainsKey("uid") ? Builder["uid"].ToString().StripBraces() : string.Empty;
+            textPassword.Text = Builder.ContainsKey("pwd") ? Builder["pwd"].ToString().StripBraces() : string.Empty;
+            textHostname.Text = Builder.ContainsKey("server") ? Builder["server"].ToString().StripBraces() : string.Empty;
+            numericUpDownPort.Text = Builder.ContainsKey("port") ? Builder["port"].ToString().StripBraces() : string.Empty;
 
             // Security Panel
+            textCertificatePath.Text = Builder.ContainsKey("capath") ? Builder["capath"].ToString().StripBraces() : string.Empty;
             radioEnabledNoValidation.Checked = true; // Default setting
-            textCertificatePath.Text = Builder.ContainsKey("capath") ? StripBraces(Builder["capath"].ToString()) : string.Empty;
-
             if (Builder.ContainsKey("secure"))
             {
                 var result = int.TryParse(Builder["secure"].ToString(), out int val);
@@ -85,6 +80,20 @@ namespace EsOdbcDsnEditor
                 }
             }
 
+            // Logging Panel
+            textLogDirectoryPath.Text = Builder.ContainsKey("tracefile") ? Builder["tracefile"].ToString().StripBraces() : string.Empty;
+            comboLogLevel.Text = "DEBUG"; // Default setting
+            if (Builder.ContainsKey("tracelevel"))
+            {
+                switch (Builder["tracelevel"].ToString().ToUpperInvariant())
+                {
+                    case "DEBUG": comboLogLevel.Text = "DEBUG"; break;
+                    case "INFO": comboLogLevel.Text = "INFO"; break;
+                    case "WARN": comboLogLevel.Text = "WARN"; break;
+                    case "ERROR": comboLogLevel.Text = "ERROR"; break;
+                }
+            }
+
             // Set initial state of action buttons.
             EnableDisableActionButtons();
         }
@@ -98,7 +107,7 @@ namespace EsOdbcDsnEditor
             SaveDsn(false);
         }
 
-        private void SaveDsn(bool allowOverwrites)
+        private void SaveDsn(bool forceOverwrite)
         {
             var errorMessage = string.Empty;
 
@@ -106,18 +115,18 @@ namespace EsOdbcDsnEditor
             if (!dsnResult) return;
 
             var dsn = Builder.ToString();
-            var flag = allowOverwrites ? 1u : 0;
+            var flag = forceOverwrite ? 1u : 0;
 
             int result = saveDsn(dsn, ref errorMessage, flag);
-            if (result >= 0 || (allowOverwrites
+            if (result >= 0 || (forceOverwrite
                                 && result == ESODBC_DSN_EXISTS_ERROR))
             {
                 Close();
                 return;
             }
 
-            // Specific handling for prompting the user if overwriting
-            if (allowOverwrites == false
+            // Specific handling for prompting the user if result is an overwrite action
+            if (forceOverwrite == false
                 && result == ESODBC_DSN_EXISTS_ERROR)
             {
                 var dialogResult = MessageBox.Show("The DSN already exists, are you sure you wish to overwrite it?", "Overwrite", MessageBoxButtons.YesNo);
@@ -167,21 +176,6 @@ namespace EsOdbcDsnEditor
             }
         }
 
-        private void CancelButton_Click(object sender, EventArgs e)
-        {
-            Close();
-        }
-
-        private void CertificatePathButton_Click(object sender, EventArgs e)
-        {
-            var result = certificateFileDialog.ShowDialog();
-            if (result == DialogResult.OK)
-            {
-                string file = certificateFileDialog.FileName;
-                ValidateCertificateFile(file);
-            }
-        }
-
         private bool RebuildAndValidateDsn()
         {
             // Basic Panel
@@ -193,26 +187,75 @@ namespace EsOdbcDsnEditor
             Builder["port"] = numericUpDownPort.Text;
 
             // Security Panel
+            Builder["capath"] = textCertificatePath.Text;
             if (radioButtonDisabled.Checked) Builder["secure"] = 0;
             if (radioEnabledNoValidation.Checked) Builder["secure"] = 1;
             if (radioEnabledNoHostname.Checked) Builder["secure"] = 2;
             if (radioEnabledHostname.Checked) Builder["secure"] = 3;
             if (radioEnabledFull.Checked) Builder["secure"] = 4;
 
-            Builder["capath"] = textCertificatePath.Text;
+            // Logging Panel
+            Builder["tracefile"] = textLogDirectoryPath.Text;
+            Builder["tracelevel"] = comboLogLevel.Text;
+
+            // Validations
+            var certificateFileOK = true;
+            var logDirectoryOK = true;
 
             if (!string.IsNullOrEmpty(textCertificatePath.Text))
             {
-                return ValidateCertificateFile(textCertificatePath.Text);
+                certificateFileOK = ValidateCertificateFile(textCertificatePath.Text);
             }
 
-            return true;
+            if (!string.IsNullOrEmpty(textLogDirectoryPath.Text))
+            {
+                logDirectoryOK = ValidateLogFolderPath(textLogDirectoryPath.Text);
+            }
+
+            return certificateFileOK && logDirectoryOK;
+        }
+        
+        private void LogDirectoryPathButton_Click(object sender, EventArgs e)
+        {
+            var result = folderLogDirectoryDialog.ShowDialog();
+            if (result == DialogResult.OK)
+            {
+                string path = folderLogDirectoryDialog.SelectedPath;
+                if (ValidateLogFolderPath(path))
+                {
+                    textLogDirectoryPath.Text = path;
+                }
+            }
+        }
+
+        private bool ValidateLogFolderPath(string path)
+        {
+            if (string.IsNullOrEmpty(path) || Directory.Exists(path))
+            {
+                return true;
+            }
+
+            MessageBox.Show("Log directory invalid", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return false;
+        }
+
+        private void CertificatePathButton_Click(object sender, EventArgs e)
+        {
+            var result = certificateFileDialog.ShowDialog();
+            if (result == DialogResult.OK)
+            {
+                string file = certificateFileDialog.FileName;
+                if (ValidateCertificateFile(file))
+                {
+                    textCertificatePath.Text = file;
+                }
+            }
         }
 
         private bool ValidateCertificateFile(string file)
         {
-            // Simple validation
-            if (File.Exists(file) && File.ReadAllBytes(file).Length > 0)
+            if (string.IsNullOrEmpty(file)
+                || (File.Exists(file) && File.ReadAllBytes(file).Length > 0))
             {
                 return true;
             }
@@ -221,17 +264,17 @@ namespace EsOdbcDsnEditor
             return false;
         }
 
-        private static string StripBraces(string input)
+        private void TextName_TextChanged(object sender, EventArgs e)
         {
-            if (input.StartsWith("{") && input.EndsWith("}"))
-            {
-                return input.Substring(1, input.Length - 2);
-            }
-
-            return input;
+            EnableDisableActionButtons();
         }
 
-        private void textName_TextChanged(object sender, EventArgs e)
+        private void TextHostname_TextChanged(object sender, EventArgs e)
+        {
+            EnableDisableActionButtons();
+        }
+
+        private void NumericUpDownPort_ValueChanged(object sender, EventArgs e)
         {
             EnableDisableActionButtons();
         }
@@ -243,14 +286,9 @@ namespace EsOdbcDsnEditor
             testButton.Enabled = string.IsNullOrEmpty(textHostname.Text) == false;
         }
 
-        private void textHostname_TextChanged(object sender, EventArgs e)
+        private void CancelButton_Click(object sender, EventArgs e)
         {
-            EnableDisableActionButtons();
-        }
-
-        private void numericUpDownPort_ValueChanged(object sender, EventArgs e)
-        {
-            EnableDisableActionButtons();
+            Close();
         }
     }
 }
