@@ -5,17 +5,19 @@
 
 /* flag passed to callback to indicate that an overwrite of existing DSN
  * is desired by user. */
-#define ESODBC_DSN_OVERWRITE_FLAG	(1<<0)
+#define ESODBC_DSN_OVERWRITE_FLAG				(1<<0)
 
-#define ESODBC_DSN_NO_ERROR			0
+#define ESODBC_DSN_NO_ERROR							0
 /* Code returned by callback to signal that given DSN name already exists. */
-#define ESODBC_DSN_EXISTS_ERROR		-1
+#define ESODBC_DSN_EXISTS_ERROR					-1
 /* The receivd DSN string (connection/00-list) is NULL. */
-#define ESODBC_DSN_ISNULL_ERROR		-2
-/* The receivd DSN string (connection/00-list) couldn't be parsed. */
-#define ESODBC_DSN_INVALID_ERROR	-3
+#define ESODBC_DSN_ISNULL_ERROR					-2
+/* The receivd DSN string couldn't be parsed. */
+#define ESODBC_DSN_INVALID_ERROR				-3
+/* The receivd DSN name is invalid. */
+#define ESODBC_DSN_NAME_INVALID_ERROR		-4
 /* Non charachteristic (system?) error. */
-#define ESODBC_DSN_GENERIC_ERROR	-127
+#define ESODBC_DSN_GENERIC_ERROR				-127
 
 /* 
  * Callback into the driver definition.

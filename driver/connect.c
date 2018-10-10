@@ -481,9 +481,8 @@ static BOOL dbc_curl_prepare(esodbc_dbc_st *dbc, SQLULEN tout,
 	if (0 < tout) {
 		dbc->curl_err = curl_easy_setopt(dbc->curl, CURLOPT_TIMEOUT, tout);
 		if (dbc->curl_err != CURLE_OK) {
-			ERRH(dbc, "libcurl: failed to set timeout=%ld: %s (%d).", tout,
-				curl_easy_strerror(dbc->curl_err), dbc->curl_err);
-			return FALSE;
+			ERRH(dbc, "libcurl: failed to set timeout=%ld.", tout);
+			goto err;
 		}
 	}
 
@@ -509,6 +508,42 @@ err:
 	ERRH(dbc, "libcurl: failure code %d, message: %s.", dbc->curl_err,
 		curl_easy_strerror(dbc->curl_err));
 	return FALSE;
+}
+
+/* post cURL error message: include CURLOPT_ERRORBUFFER if available */
+static void dbc_curl_post_diag(esodbc_dbc_st *dbc)
+{
+	SQLWCHAR buff[SQL_MAX_MESSAGE_LENGTH] = {1};
+	SQLWCHAR *fmt;
+	int n;
+
+	assert(dbc->curl_err != CURLE_OK);
+
+	/* in some cases ([::1]:0) this buffer will be empty, even though cURL
+	 * returns an error code */
+	if (dbc->curl_err_buff[0]) {
+		fmt = WPFCP_DESC " (code:%d; " WPFCP_DESC ").";
+	} else {
+		fmt = WPFCP_DESC " (code:%d).";
+	}
+
+	n = swprintf(buff, sizeof(buff)/sizeof(*buff), fmt,
+			curl_easy_strerror(dbc->curl_err), dbc->curl_err,
+			/* this param is present even if there's no spec for it in fmt */
+			dbc->curl_err_buff);
+	/* if printing succeeded, OR failed, but buff is 0-term'd => OK */
+	if (n < 0 && !buff[sizeof(buff)/sizeof(*buff) - 1]) {
+		/* else: swprintf will fail if formatted string would overrun the
+		 * available buffer room, but 0-terminate it; if that's the case.
+		 * retry, skipping formatting. */
+		ERRH(dbc, "formatting error message failed; skipping formatting.");
+		post_c_diagnostic(&HDRH(dbc)->diag, SQL_STATE_08S01,
+			curl_easy_strerror(dbc->curl_err), dbc->curl_err);
+	} else {
+		ERRH(dbc, "libcurl failure message: " LWPD ".", buff);
+		post_diagnostic(&HDRH(dbc)->diag, SQL_STATE_08S01, buff,
+			dbc->curl_err);
+	}
 }
 
 /*
@@ -553,9 +588,7 @@ SQLRETURN post_json(esodbc_stmt_st *stmt, const cstr_st *u8body)
 			}
 		}
 	} else {
-		assert (dbc->curl_err != CURLE_OK);
-		post_c_diagnostic(&stmt->hdr.diag, SQL_STATE_HY000, dbc->curl_err_buff,
-			dbc->curl_err);
+		dbc_curl_post_diag(dbc);
 		code = -1; /* make sure that curl's error will surface */
 	}
 	/* something went wrong */
@@ -586,8 +619,7 @@ static SQLRETURN test_connect(esodbc_dbc_st *dbc)
 
 	if (! (dbc_curl_prepare(dbc, dbc->timeout, &u8body) &&
 			dbc_curl_perform(dbc, &code, &resp))) {
-		post_c_diagnostic(&dbc->hdr.diag, SQL_STATE_HY000, dbc->curl_err_buff,
-			dbc->curl_err);
+		dbc_curl_post_diag(dbc);
 		cleanup_curl(dbc);
 		code = -1; /* make sure that curl's error will surface */
 	}
@@ -615,8 +647,8 @@ static SQLRETURN test_connect(esodbc_dbc_st *dbc)
  */
 SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 {
-	esodbc_state_et state = SQL_STATE_HY000;
-	int cnt;
+	SQLRETURN ret;
+	int cnt, ipv6;
 	SQLBIGINT secure;
 	long long timeout, max_body_size, max_fetch_size;
 	SQLWCHAR buff_url[ESODBC_MAX_URL_LEN];
@@ -627,11 +659,14 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	if (! str2bigint(&attrs->secure, /*wide?*/TRUE, &secure)) {
 		ERRH(dbc, "failed to read secure param `" LWPDL "`.",
 			LWSTR(&attrs->secure));
+		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "security setting number "
+				"conversion failure", 0);
 		goto err;
 	}
 	if (secure < ESODBC_SEC_NONE || ESODBC_SEC_MAX <= secure) {
 		ERRH(dbc, "invalid secure param `" LWPDL "` (not within %d - %d).",
 			LWSTR(&attrs->secure), ESODBC_SEC_NONE, ESODBC_SEC_MAX - 1);
+		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "invalid security setting", 0);
 		goto err;
 	} else {
 		dbc->secure = (long)secure;
@@ -642,6 +677,8 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 		if (! wstr_to_utf8(&attrs->ca_path, &dbc->ca_path)) {
 			ERRNH(dbc, "failed to convert CA path `" LWPDL "` to UTF8.",
 				LWSTR(&attrs->ca_path));
+			ret = SET_HDIAG(dbc, SQL_STATE_HY000, "reading the CA file path "
+					"failed", 0);
 			goto err;
 		}
 		INFOH(dbc, "CA path: `%s`.", dbc->ca_path.str);
@@ -650,20 +687,30 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	/*
 	 * URL of the cluster
 	 */
+	/* Note: libcurl won't check hostname validity, it'll just try to resolve
+	 * whatever it receives, if it can parse the URL */
+	ipv6 = wcsnstr(attrs->server.str, attrs->server.cnt, L':') != NULL;
 	cnt = swprintf(url.str, sizeof(buff_url)/sizeof(*buff_url),
-			L"http" WPFCP_DESC "://" WPFWP_LDESC ":" WPFWP_LDESC
-			ELASTIC_SQL_PATH, secure ? "s" : "", LWSTR(&attrs->server),
+			L"http" WPFCP_DESC "://"
+			WPFCP_DESC WPFWP_LDESC WPFCP_DESC ":" WPFWP_LDESC
+			ELASTIC_SQL_PATH,
+			secure ? "s" : "",
+			ipv6 ? "[" : "", LWSTR(&attrs->server), ipv6 ? "]" : "",
 			LWSTR(&attrs->port));
 	if (cnt < 0) {
 		ERRNH(dbc, "failed to print URL out of server: `" LWPDL "` [%zd], "
 			"port: `" LWPDL "` [%zd].", LWSTR(&attrs->server),
 			LWSTR(&attrs->port));
+		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "assembling server's URL failed",
+				0);
 		goto err;
 	} else {
 		url.cnt = (size_t)cnt;
 	}
 	if (! wstr_to_utf8(&url, &dbc->url)) {
 		ERRNH(dbc, "failed to convert URL `" LWPDL "` to UTF8.", LWSTR(&url));
+		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "server URL's UTF8 conversion "
+				"failed", 0);
 		goto err;
 	}
 	INFOH(dbc, "connection URL: `%s`.", dbc->url.str);
@@ -675,12 +722,16 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 		if (! wstr_to_utf8(&attrs->uid, &dbc->uid)) {
 			ERRH(dbc, "failed to convert username [%zd] `" LWPDL "` to UTF8.",
 				attrs->uid.cnt, LWSTR(&attrs->uid));
+			ret = SET_HDIAG(dbc, SQL_STATE_HY000, "username UTF8 conversion "
+					"failed", 0);
 			goto err;
 		}
 		if (attrs->pwd.cnt) {
 			if (! wstr_to_utf8(&attrs->pwd, &dbc->pwd)) {
-				ERRH(dbc, "failed to convert username [%zd] `" LWPDL "` to "
-					"UTF8.", attrs->pwd.cnt, LWSTR(&attrs->pwd));
+				ERRH(dbc, "failed to convert password [%zd] (-not shown-) to "
+					"UTF8.", attrs->pwd.cnt);
+				ret = SET_HDIAG(dbc, SQL_STATE_HY000, "password UTF8 "
+						"conversion failed", 0);
 				goto err;
 			}
 		}
@@ -696,6 +747,8 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	if (! str2bigint(&attrs->timeout, /*wide?*/TRUE, (SQLBIGINT *)&timeout)) {
 		ERRH(dbc, "failed to convert `" LWPDL "` [%zu] to big int.",
 			LWSTR(&attrs->timeout), attrs->timeout.cnt);
+		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "timeout setting number "
+				"conversion failure", 0);
 		goto err;
 	}
 	if (timeout < 0) {
@@ -710,13 +763,17 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	 */
 	if (! str2bigint(&attrs->max_body_size, /*wide?*/TRUE,
 			(SQLBIGINT *)&max_body_size)) {
-		ERRH(dbc, "failed to convert `" LWPDL "` [%zu] to long long.",
+		ERRH(dbc, "failed to convert max body size `" LWPDL "` [%zu] to LL.",
 			LWSTR(&attrs->max_body_size), attrs->max_body_size.cnt);
+		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "max body size setting number "
+				"conversion failure", 0);
 		goto err;
 	}
 	if (max_body_size < 0) {
 		ERRH(dbc, "'%s' setting can't be negative (%ld).",
 			ESODBC_DSN_MAX_BODY_SIZE_MB, max_body_size);
+		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "invalid max body size setting "
+				"(negative)", 0);
 		goto err;
 	} else {
 		dbc->amax = (size_t)max_body_size * 1024 * 1024;
@@ -728,13 +785,17 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	 */
 	if (! str2bigint(&attrs->max_fetch_size, /*wide?*/TRUE,
 			(SQLBIGINT *)&max_fetch_size)) {
-		ERRH(dbc, "failed to convert `" LWPDL "` [%zu] to long long.",
+		ERRH(dbc, "failed to convert max fetch size `" LWPDL "` [%zu] to LL.",
 			LWSTR(&attrs->max_fetch_size), attrs->max_fetch_size.cnt);
+		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "max fetch size setting number "
+				"conversion failure", 0);
 		goto err;
 	}
 	if (max_fetch_size < 0) {
 		ERRH(dbc, "'%s' setting can't be negative (%ld).",
 			ESODBC_DSN_MAX_FETCH_SIZE, max_fetch_size);
+		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "invalid max fetch size setting "
+				"(negative)", 0);
 		goto err;
 	} else {
 		dbc->fetch.max = (size_t)max_fetch_size;
@@ -764,16 +825,17 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	} else {
 		ERRH(dbc, "unknown packing encoding '" LWPDL "'.",
 			LWSTR(&attrs->packing));
+		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "invalid packing encoding "
+				"setting", 0);
 		goto err;
 	}
 	INFOH(dbc, "pack JSON: %s.", dbc->pack_json ? "true" : "false");
 
 	return SQL_SUCCESS;
 err:
-	if (state == SQL_STATE_HY000) {
-		RET_HDIAG(dbc, state, "invalid configuration parameters", 0);
-	}
-	RET_HDIAGS(dbc, state);
+	/* release allocated resources before the failure; not the diag, tho */
+	cleanup_dbc(dbc);
+	RET_STATE(dbc->hdr.diag.state);
 }
 
 
@@ -1559,60 +1621,14 @@ end:
 static int receive_dsn_cb(void *arg, const wchar_t *dsn_str,
 	wchar_t *err_out, size_t eo_max, unsigned int flags)
 {
-	esodbc_dsn_attrs_st *attrs = (esodbc_dsn_attrs_st *)arg;
-	esodbc_dbc_st dbc;
-	SQLRETURN res;
-	int ret;
-
-	TRACE;
 	assert(arg);
-
-	if (! dsn_str) {
-		ERR("invalid NULL DSN string received.");
-		return ESODBC_DSN_ISNULL_ERROR;
-	} else {
-		DBG("received DSN string: `" LWPD "`.", dsn_str);
-	}
-
-#ifdef ESODBC_DSN_API_WITH_00_LIST
-	if (! parse_00_list(attrs, (SQLWCHAR *)dsn_str)) {
-#else
-	if (! parse_connection_string(attrs, (SQLWCHAR *)dsn_str,
-			(SQLSMALLINT)wcslen(dsn_str))) {
-#endif /* ESODBC_DSN_API_WITH_00_LIST */
-		ERR("failed to parse received DSN string.");
-		return ESODBC_DSN_INVALID_ERROR;
-	}
-	/*
-	 * validate the DSN set
-	 */
-	if (! (attrs->dsn.cnt & attrs->server.cnt)) {
-		ERR("DSN name (" LWPDL ") and server address (" LWPDL ") cannot be"
-			" empty.", LWSTR(&attrs->dsn), LWSTR(&attrs->server));
-		return ESODBC_DSN_INVALID_ERROR;
-	} else {
-		/* fill in whatever's missing */
-		assign_dsn_defaults(attrs);
-	}
-
-	/* try configure and connect here, to be able to report an error back to
-	 * the user right away: otherwise, the connection will fail later in
-	 * SQLDriverConnect loop, but with no indication as to why. */
-	init_dbc(&dbc, NULL);
-	res = do_connect(&dbc, attrs);
-	if (! SQL_SUCCEEDED(res)) {
-		res = EsSQLGetDiagFieldW(SQL_HANDLE_DBC, &dbc, /*rec#*/1,
-				SQL_DIAG_MESSAGE_TEXT, err_out, (SQLSMALLINT)eo_max,
-				/*written len*/NULL/*err_out is 0-term'd*/);
-		/* function should not fail with given params. */
-		assert(SQL_SUCCEEDED(res));
-		ret = ESODBC_DSN_GENERIC_ERROR;
-	} else {
-		ret = 0;
-	}
-
-	cleanup_dbc(&dbc);
-	return ret;
+	/* The function parses the DSN string into the received attrs, which
+	 * remains assigned past the callback scope */
+	return validate_dsn((esodbc_dsn_attrs_st *)arg, dsn_str, err_out, eo_max,
+			/* Try connect here, to be able to report an error back to the
+			 * user right away: otherwise, the connection will fail later in
+			 * SQLDriverConnect loop, but with no indication as to why. */
+			/*connect?*/TRUE);
 }
 
 SQLRETURN EsSQLDriverConnectW
@@ -1743,10 +1759,11 @@ SQLRETURN EsSQLDriverConnectW
 				res = prompt_user ? prompt_user_config(hwnd, disable_nonconn,
 						&attrs, &receive_dsn_cb) : /*need just > 0*/1;
 				if (res < 0) {
-					ERRH(dbc, "user interaction failed.");
+					ERRH(dbc, "user GUI interaction failed.");
 					RET_HDIAGS(dbc, SQL_STATE_IM008);
 				} else if (! res) {
 					/* user canceled */
+					DBGH(dbc, "user canceled the GUI interaction.");
 					return SQL_NO_DATA;
 				}
 				/* promt user on next iteration */

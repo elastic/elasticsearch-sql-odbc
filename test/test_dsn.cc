@@ -87,10 +87,50 @@ TEST_F(Dsn, parse_write_connection_string) {
 	init_dsn_attrs(&attrs);
 	ASSERT_TRUE(parse_connection_string(&attrs, src.str,
 				(SQLSMALLINT)src.cnt));
-	written = write_connection_string(&attrs, dst, sizeof(dst)/sizeof(*dst));
+	written = write_connection_string(&attrs, dst,
+			(SQLSMALLINT)sizeof(dst)/sizeof(*dst));
 	ASSERT_TRUE(0 < written);
 
 	ASSERT_TRUE(memcmp(src.str, dst, written) == 0);
+}
+
+TEST_F(Dsn, write_connection_string_null_str_out) {
+#undef SRC_STR
+#define SRC_STR	\
+		"Driver={Elasticsearch Driver};" \
+		"Description={Some description};" \
+		"DSN=Data_Source_Name;" \
+		"PWD=password;" \
+		"UID=user_id;" \
+		"SAVEFILE=C:\\Temp\\Data_Source_Name.dsn;" \
+		"FILEDSN=C:\\Temp\\Data_Source_Name.dsn;" \
+		"Server=::1;" \
+		"Port=9200;" \
+		"Secure=4;" \
+		"CAPath=C:\\Temp\\Data_Source_Name.pem;" \
+		"Timeout=;" \
+		"Follow=;" \
+		"Catalog=;" \
+		"Packing=JSON;" \
+		"MaxFetchSize=10000;" \
+		"MaxBodySizeMB=100;" \
+		"TraceFile=C:\\Temp\\Data_Source_Name.log;" \
+		"TraceLevel=DEBUG;"
+
+
+	esodbc_dsn_attrs_st attrs;
+	wstr_st src = WSTR_INIT(SRC_STR);
+	SQLWCHAR dst[2 * sizeof(attrs.buff)/sizeof(*attrs.buff)];
+	long written, counted;
+
+	init_dsn_attrs(&attrs);
+	ASSERT_TRUE(parse_connection_string(&attrs, src.str,
+				(SQLSMALLINT)src.cnt));
+	written = write_connection_string(&attrs, dst,
+			(SQLSMALLINT)sizeof(dst)/sizeof(*dst));
+	ASSERT_TRUE(0 < written);
+	counted = write_connection_string(&attrs, NULL, 0);
+	ASSERT_EQ(written, counted);
 }
 
 

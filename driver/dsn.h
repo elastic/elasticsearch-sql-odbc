@@ -69,10 +69,12 @@ BOOL TEST_API parse_00_list(esodbc_dsn_attrs_st *attrs, SQLWCHAR *list00);
 long TEST_API write_00_list(esodbc_dsn_attrs_st *attrs,
 	SQLWCHAR *list00, size_t cnt00);
 
+/* "system" from "system information" (cf. SQLDriverConnect), not as
+ * in User/System DSN */
 BOOL read_system_info(esodbc_dsn_attrs_st *attrs);
 int system_dsn_exists(wstr_st *dsn);
 BOOL load_system_dsn(esodbc_dsn_attrs_st *attrs, SQLWCHAR *list00);
-BOOL write_system_dsn(esodbc_dsn_attrs_st *attrs, BOOL create_new);
+BOOL write_system_dsn(esodbc_dsn_attrs_st *crr, esodbc_dsn_attrs_st *old);
 
 BOOL TEST_API parse_connection_string(esodbc_dsn_attrs_st *attrs,
 	SQLWCHAR *szConnStrIn, SQLSMALLINT cchConnStrIn);
@@ -80,11 +82,15 @@ long TEST_API write_connection_string(esodbc_dsn_attrs_st *attrs,
 	SQLWCHAR *szConnStrOut, SQLSMALLINT cchConnStrOutMax);
 
 size_t copy_installer_errors(wchar_t *err_buff, size_t eb_max);
+int validate_dsn(esodbc_dsn_attrs_st *attrs, const wchar_t *dsn_str,
+	wchar_t *err_out, size_t eo_max, BOOL try_connect);
 int prompt_user_config(HWND hwnd, BOOL on_conn, esodbc_dsn_attrs_st *attrs,
 	driver_callback_ft save_cb);
 
 /* Uncomment to enable 00-list format (vs. connection string,
- * `;`/`|`-separated) at the interface with the GUI API */
+ * `;`/`|`-separated) at the interface with the GUI API.
+ * The .NET framework has an ODBC connection string parser, so the that format
+ * will be used on Windows. */
 //#define ESODBC_DSN_API_WITH_00_LIST
 
 #endif /* __DSN_H__ */
