@@ -402,7 +402,6 @@
             this.Name = "DsnEditorForm";
             this.SizeGripStyle = System.Windows.Forms.SizeGripStyle.Hide;
             this.Text = "Elasticsearch ODBC DSN Configuration";
-            this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.DsnEditorForm_FormClosing);
             ((System.ComponentModel.ISupportInitialize)(this.header)).EndInit();
             this.groupBox1.ResumeLayout(false);
             this.groupBox1.PerformLayout();

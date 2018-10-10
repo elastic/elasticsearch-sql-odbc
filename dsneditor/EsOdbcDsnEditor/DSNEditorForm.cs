@@ -84,6 +84,9 @@ namespace EsOdbcDsnEditor
                     }
                 }
             }
+
+            // Set initial state of action buttons.
+            EnableDisableActionButtons();
         }
 
         /// <summary>
@@ -164,14 +167,8 @@ namespace EsOdbcDsnEditor
             }
         }
 
-        private void DsnEditorForm_FormClosing(object sender, FormClosingEventArgs e)
-        {
-            Builder.Clear();
-        }
-
         private void CancelButton_Click(object sender, EventArgs e)
         {
-            Builder.Clear();
             Close();
         }
 
@@ -230,22 +227,30 @@ namespace EsOdbcDsnEditor
             {
                 return input.Substring(1, input.Length - 2);
             }
+
             return input;
         }
 
         private void textName_TextChanged(object sender, EventArgs e)
         {
+            EnableDisableActionButtons();
+        }
 
+        private void EnableDisableActionButtons()
+        {
+            saveButton.Enabled = string.IsNullOrEmpty(textName.Text) == false
+                                 && string.IsNullOrEmpty(textHostname.Text) == false;
+            testButton.Enabled = string.IsNullOrEmpty(textHostname.Text) == false;
         }
 
         private void textHostname_TextChanged(object sender, EventArgs e)
         {
-
+            EnableDisableActionButtons();
         }
 
         private void numericUpDownPort_ValueChanged(object sender, EventArgs e)
         {
-
+            EnableDisableActionButtons();
         }
     }
 }

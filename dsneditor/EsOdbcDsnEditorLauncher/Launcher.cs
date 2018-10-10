@@ -20,14 +20,16 @@ namespace EsOdbcDsnEditorLauncher
 
         private int ConnectTest(string connectionString, ref string errorMessage, uint flags)
         {
-            textLog.Text += "Connection String:" + connectionString + Environment.NewLine;
+            textLog.Text += "CONNECT. Connection String:" + connectionString + Environment.NewLine;
             return 0;
         }
+
         private int SaveDsn(string connectionString, ref string errorMessage, uint flags)
         {
-            textLog.Text += "Connection String:" + connectionString + Environment.NewLine;
-            errorMessage = "ESODBC_DSN_EXISTS_ERROR";
-            return -1;
+            textLog.Text += "SAVE. Connection String:" + connectionString + Environment.NewLine;
+            //errorMessage = "ESODBC_DSN_EXISTS_ERROR";
+            //return -1;
+            return 0;
         }
     }
 }
