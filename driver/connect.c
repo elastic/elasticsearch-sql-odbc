@@ -1669,13 +1669,12 @@ SQLRETURN EsSQLDriverConnectW
 	init_dsn_attrs(&attrs);
 
 	if (szConnStrIn) {
-		DBGH(dbc, "Input connection string: '"LWPD"'[%d].", szConnStrIn,
-			cchConnStrIn);
+		DBGH(dbc, "Input connection string: [%hd] `" LWPDL "`.", cchConnStrIn,
+			(0 <= cchConnStrIn) ? cchConnStrIn : SHRT_MAX, szConnStrIn);
 		/* parse conn str into attrs */
 		if (! parse_connection_string(&attrs, szConnStrIn, cchConnStrIn)) {
 			ERRH(dbc, "failed to parse connection string `" LWPDL "`.",
-				cchConnStrIn < 0 ? wcslen(szConnStrIn) : cchConnStrIn,
-				szConnStrIn);
+				(0 <= cchConnStrIn) ? cchConnStrIn : SHRT_MAX, szConnStrIn);
 			RET_HDIAGS(dbc, SQL_STATE_HY000);
 		}
 		/* original received DSN saved for later query by the app */
@@ -1827,6 +1826,65 @@ SQLRETURN EsSQLDriverConnectW
 
 	return SQL_SUCCESS;
 }
+
+SQLRETURN EsSQLConnectW
+(
+	SQLHDBC             hdbc,
+	_In_reads_(cchDSN) SQLWCHAR *szDSN,
+	SQLSMALLINT         cchDSN,
+	_In_reads_(cchUID) SQLWCHAR *szUID,
+	SQLSMALLINT         cchUID,
+	_In_reads_(cchAuthStr) SQLWCHAR *szPWD,
+	SQLSMALLINT         cchPWD
+)
+{
+	esodbc_dsn_attrs_st attrs;
+	SQLWCHAR buff[sizeof(attrs.buff)/sizeof(*attrs.buff)];
+	size_t i;
+	int res;
+	SQLSMALLINT written;
+	esodbc_dbc_st *dbc = DBCH(hdbc);
+
+	wstr_st kw_dsn = MK_WSTR(ESODBC_DSN_DSN);
+	wstr_st val_dsn = (wstr_st) {
+		szDSN, cchDSN < 0 ? wcslen(szDSN) : cchDSN
+	};
+	wstr_st kw_uid = MK_WSTR(ESODBC_DSN_UID);
+	wstr_st val_uid = (wstr_st) {
+		szUID, cchUID < 0 ? wcslen(szUID) : cchUID
+	};
+	wstr_st kw_pwd = MK_WSTR(ESODBC_DSN_PWD);
+	wstr_st val_pwd = (wstr_st) {
+		szPWD, cchPWD < 0 ? wcslen(szPWD) : cchPWD
+	};
+	wstr_st *kws[] = {&kw_dsn, &kw_uid, &kw_pwd};
+	wstr_st *vals[] = {&val_dsn, &val_uid, &val_pwd};
+
+	init_dsn_attrs(&attrs);
+
+	for (i = 0; i < sizeof(kws)/sizeof(*kws); i ++) {
+		res = assign_dsn_attr(&attrs, kws[i], vals[i], /*overwrite*/FALSE);
+		if (res < 0) {
+			ERRH(dbc, "couldn't assign " LWPDL " value [%zu] "
+				"`" LWPDL "`.", LWSTR(kws[i]),
+				vals[i]->cnt, LWSTR(vals[i]));
+		} else {
+			assert(res == DSN_ASSIGNED);
+		}
+	}
+
+	if ((written = (SQLSMALLINT)write_connection_string(&attrs, buff,
+					sizeof(buff)/sizeof(*buff))) < 0) {
+		ERRH(dbc, "failed to serialize params as connection string.");
+		RET_HDIAG(dbc, SQL_STATE_HY000, "failed to serialize connection "
+			"parameters", 0);
+	}
+
+	return EsSQLDriverConnectW(dbc, /*win hndlr*/NULL, buff, written,
+			/*conn str out*/NULL, /*...len*/0, /* out written */NULL,
+			SQL_DRIVER_NOPROMPT);
+}
+
 
 /* "Implicitly allocated descriptors can be freed only by calling
  * SQLDisconnect, which drops any statements or descriptors open on the

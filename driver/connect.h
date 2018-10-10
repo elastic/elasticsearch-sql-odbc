@@ -31,7 +31,16 @@ SQLRETURN EsSQLDriverConnectW
 	_Out_opt_ SQLSMALLINT        *pcchConnStrOut,
 	SQLUSMALLINT        fDriverCompletion
 );
-
+SQLRETURN EsSQLConnectW
+(
+	SQLHDBC             hdbc,
+	_In_reads_(cchDSN) SQLWCHAR *szDSN,
+	SQLSMALLINT         cchDSN,
+	_In_reads_(cchUID) SQLWCHAR *szUID,
+	SQLSMALLINT         cchUID,
+	_In_reads_(cchAuthStr) SQLWCHAR *szPWD,
+	SQLSMALLINT         cchPWD
+);
 SQLRETURN EsSQLDisconnect(SQLHDBC ConnectionHandle);
 
 SQLRETURN EsSQLSetConnectAttrW(

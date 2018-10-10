@@ -284,6 +284,7 @@ BOOL TEST_API parse_connection_string(esodbc_dsn_attrs_st *attrs,
 
 	/* parse and assign attributes in connection string */
 	pos = szConnStrIn;
+	/* if NTS, parse till skip_ws() encounters the \0 */
 	end = pos + (cchConnStrIn == SQL_NTS ? SHRT_MAX : cchConnStrIn);
 
 	while (skip_ws(&pos, end, TRUE)) {

@@ -60,6 +60,12 @@ typedef struct {
 	SQLWCHAR buff[ESODBC_DSN_ATTRS_COUNT * ESODBC_DSN_MAX_ATTR_LEN];
 } esodbc_dsn_attrs_st;
 
+/* assign_dsn_attr() success codes. */
+#define DSN_NOT_MATCHED		0
+#define DSN_NOT_OVERWRITTEN	1
+#define DSN_ASSIGNED		2
+#define DSN_OVERWRITTEN		3
+
 void TEST_API init_dsn_attrs(esodbc_dsn_attrs_st *attrs);
 void assign_dsn_defaults(esodbc_dsn_attrs_st *attrs);
 BOOL assign_dsn_attr(esodbc_dsn_attrs_st *attrs,

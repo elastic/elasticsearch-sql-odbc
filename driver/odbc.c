@@ -94,7 +94,6 @@ SQLRETURN SQL_API SQLAllocHandle(SQLSMALLINT HandleType,
 	return ret;
 }
 
-#if WITH_EMPTY
 /*
  * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/unicode-drivers :
  * """
@@ -113,10 +112,18 @@ SQLRETURN SQL_API SQLConnectW
 	SQLSMALLINT         cchAuthStr
 )
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE7(_IN, "pphphph", hdbc, szDSN, cchDSN, szUID, cchUID,
+		szAuthStr, cchAuthStr);
+	HND_LOCK(hdbc);
+	ret = EsSQLConnectW(hdbc, szDSN, cchDSN, szUID, cchUID,
+			szAuthStr, cchAuthStr);
+	HND_UNLOCK(hdbc);
+	TRACE8(_OUT, "dpphphph", ret, hdbc, szDSN, cchDSN, szUID, cchUID,
+		szAuthStr, cchAuthStr);
+	return ret;
 }
 
-#endif /* WITH_EMPTY */
 
 SQLRETURN SQL_API SQLDriverConnectW
 (
@@ -142,8 +149,7 @@ SQLRETURN SQL_API SQLDriverConnectW
 	return ret;
 }
 
-#if WITH_EMPTY
-
+/* returns not-supported */
 SQLRETURN SQL_API SQLBrowseConnectW
 (
 	SQLHDBC             hdbc,
@@ -155,52 +161,17 @@ SQLRETURN SQL_API SQLBrowseConnectW
 	SQLSMALLINT        *pcchConnStrOut
 )
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE6(_IN, "pphphp", hdbc, szConnStrIn, cchConnStrIn,
+		szConnStrOut, cchConnStrOutMax, pcchConnStrOut);
+	ret = post_diagnostic(&HDRH(hdbc)->diag, SQL_STATE_HYC00, NULL, 0);
+	TRACE7(_OUT, "dpphphp", ret, hdbc, szConnStrIn, cchConnStrIn,
+		szConnStrOut, cchConnStrOutMax, pcchConnStrOut);
+	return ret;
 }
 
 
 
-/*
- *
- * Obtaining information about a driver and data source
- *
- */
-
-SQLRETURN SQL_API SQLDataSourcesW
-(
-	SQLHENV             henv,
-	SQLUSMALLINT        fDirection,
-	_Out_writes_opt_(cchDSNMax) SQLWCHAR *szDSN,
-	SQLSMALLINT         cchDSNMax,
-	_Out_opt_
-	SQLSMALLINT        *pcchDSN,
-	_Out_writes_opt_(cchDescriptionMax) SQLWCHAR *wszDescription,
-	SQLSMALLINT         cchDescriptionMax,
-	_Out_opt_
-	SQLSMALLINT        *pcchDescription
-)
-{
-	RET_NOT_IMPLEMENTED;
-}
-
-SQLRETURN SQL_API SQLDriversW
-(
-	SQLHENV         henv,
-	SQLUSMALLINT    fDirection,
-	_Out_writes_opt_(cchDriverDescMax) SQLWCHAR *szDriverDesc,
-	SQLSMALLINT     cchDriverDescMax,
-	_Out_opt_
-	SQLSMALLINT    *pcchDriverDesc,
-	_Out_writes_opt_(cchDrvrAttrMax) SQLWCHAR     *szDriverAttributes,
-	SQLSMALLINT     cchDrvrAttrMax,
-	_Out_opt_
-	SQLSMALLINT    *pcchDrvrAttr
-)
-{
-	RET_NOT_IMPLEMENTED;
-}
-
-#endif /* WITH_EMPTY */
 
 SQLRETURN  SQL_API SQLGetInfoW(SQLHDBC ConnectionHandle,
 	SQLUSMALLINT InfoType,
