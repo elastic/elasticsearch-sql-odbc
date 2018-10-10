@@ -21,6 +21,8 @@ namespace EsOdbcDsnEditor
         private DriverCallbackDelegate testConnection;
         private DriverCallbackDelegate saveDsn;
 
+        private readonly bool isConnecting;
+
         public OdbcConnectionStringBuilder Builder { get; set; } = new OdbcConnectionStringBuilder();
 
         public DsnEditorForm(
@@ -29,13 +31,24 @@ namespace EsOdbcDsnEditor
             DriverCallbackDelegate connectionTest,
             DriverCallbackDelegate dsnSave)
         {
+            this.isConnecting = onConnect;
+
             InitializeComponent();
 
             AcceptButton = saveButton;
             CancelButton = cancelButton;
-
             testConnection = connectionTest;
             saveDsn = dsnSave;
+
+            // If connecting then disable some user inputs
+            if (isConnecting)
+            {
+                textName.ReadOnly = true;
+                textName.Enabled = false;
+
+                textDescription.ReadOnly = true;
+                textDescription.Enabled = false;
+            }
 
             // If this is a call serving a connect request, call the button "Connect".
             // Otherwise it's a DSN editing, so it's going to be a "Save".
@@ -175,12 +188,12 @@ namespace EsOdbcDsnEditor
         private bool RebuildAndValidateDsn()
         {
             // Basic Panel
-            if (!string.IsNullOrEmpty(textName.Text)) Builder["dsn"] = textName.Text;
-            if (!string.IsNullOrEmpty(textDescription.Text)) Builder["description"] = textDescription.Text;
-            if (!string.IsNullOrEmpty(textUsername.Text)) Builder["uid"] = textUsername.Text;
-            if (!string.IsNullOrEmpty(textPassword.Text)) Builder["pwd"] = textPassword.Text;
-            if (!string.IsNullOrEmpty(textHostname.Text)) Builder["server"] = textHostname.Text;
-            if (!string.IsNullOrEmpty(numericUpDownPort.Text)) Builder["port"] = numericUpDownPort.Text;
+            Builder["dsn"] = textName.Text;
+            Builder["description"] = textDescription.Text;
+            Builder["uid"] = textUsername.Text;
+            Builder["pwd"] = textPassword.Text;
+            Builder["server"] = textHostname.Text;
+            Builder["port"] = numericUpDownPort.Text;
 
             // Security Panel
             if (radioButtonDisabled.Checked) Builder["secure"] = 0;
@@ -189,9 +202,10 @@ namespace EsOdbcDsnEditor
             if (radioEnabledHostname.Checked) Builder["secure"] = 3;
             if (radioEnabledFull.Checked) Builder["secure"] = 4;
 
+            Builder["capath"] = textCertificatePath.Text;
+
             if (!string.IsNullOrEmpty(textCertificatePath.Text))
             {
-                Builder["capath"] = textCertificatePath.Text;
                 return ValidateCertificateFile(textCertificatePath.Text);
             }
 
@@ -217,6 +231,21 @@ namespace EsOdbcDsnEditor
                 return input.Substring(1, input.Length - 2);
             }
             return input;
+        }
+
+        private void textName_TextChanged(object sender, EventArgs e)
+        {
+
+        }
+
+        private void textHostname_TextChanged(object sender, EventArgs e)
+        {
+
+        }
+
+        private void numericUpDownPort_ValueChanged(object sender, EventArgs e)
+        {
+
         }
     }
 }
