@@ -112,7 +112,7 @@ namespace EsOdbcDsnBinding {
 					// no resources available to load
 					assembly = nullptr;
 				} else {
-					// Get the briding assembley, get its location and based on that build the loading assembly path.
+					// Get the bridging assembley, its location and based on that build the loading assembly path.
 					// Note: this assumes that the two libraries are always going to be collocated.
 					assembly = Assembly::GetExecutingAssembly();
 					int lastBackSlash = assembly->Location->LastIndexOf('\\');
@@ -154,11 +154,29 @@ namespace EsOdbcDsnBinding {
 	};
 }
 
-extern "C" __declspec(dllexport) int EsOdbcDsnEdit(HWND hwnd, BOOL onConnect, wchar_t *dsnInW,
+#ifdef __cplusplus
+extern "C"
+#endif /* __cpluplus */
+#ifdef _WINDLL
+__declspec(dllexport)
+#else /* _WINDLL */
+__declspec(dllimport)
+#endif /* _WINDLL */
+int EsOdbcDsnEdit(HWND hwnd, BOOL onConnect, wchar_t *dsnInW,
 	driver_callback_ft cbConnectionTest, void *argConnectionTest,
 	driver_callback_ft cbSaveDsn, void *argSaveDsn)
 {
 	try {
+		// (re)set the threading model; "Multiple calls to CoInitializeEx by the same
+		// thread are allowed as long as they pass the same concurrency flag".
+		switch (CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_SPEED_OVER_MEMORY)) {
+			case S_OK:
+			case S_FALSE:
+				break;
+			default:
+				throw gcnew Exception("setting threading model failed.");
+		}
+
 		_hwnd = hwnd;
 		EsOdbcDsnBinding::EsOdbcDsnBinding binding(onConnect, dsnInW,
 			cbConnectionTest, argConnectionTest,
@@ -167,7 +185,7 @@ extern "C" __declspec(dllexport) int EsOdbcDsnEdit(HWND hwnd, BOOL onConnect, wc
 	} catch (Exception^ e) {
 		if (hwnd) {
 			pin_ptr<const wchar_t> wch = PtrToStringChars(e->Message);
-			if (! MessageBox(hwnd, wch, L"Loading Exeception", MB_OK | MB_ICONERROR)) {
+			if (! MessageBox(hwnd, wch, L"Loading Exception", MB_OK | MB_ICONERROR)) {
 				// failed to display failure error
 				return -3;
 			}
