@@ -17,7 +17,7 @@ namespace EsOdbcDsnEditor
         {
             Application.EnableVisualStyles();
             DsnEditorForm form = new DsnEditorForm(onConnect, dsnIn, delegConnectionTest, delegSaveDsn);
-            form.ShowDialog(); // instead of Application.Run(form);
+            form.ShowDialog(); // Instead of Application.Run(form);
             var dsn = form.Builder.ToString();
             return dsn.Length;
         }

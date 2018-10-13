@@ -83,6 +83,7 @@ namespace EsOdbcDsnEditor
             // Logging Panel
             textLogDirectoryPath.Text = Builder.ContainsKey("tracefile") ? Builder["tracefile"].ToString().StripBraces() : string.Empty;
             comboLogLevel.Text = "DEBUG"; // Default setting
+            checkLoggingEnabled.Checked = true; // Default setting
             if (Builder.ContainsKey("tracelevel"))
             {
                 switch (Builder["tracelevel"].ToString().ToUpperInvariant())
@@ -91,6 +92,18 @@ namespace EsOdbcDsnEditor
                     case "INFO": comboLogLevel.Text = "INFO"; break;
                     case "WARN": comboLogLevel.Text = "WARN"; break;
                     case "ERROR": comboLogLevel.Text = "ERROR"; break;
+                }
+            }
+            if (Builder.ContainsKey("traceenabled"))
+            {
+                var result = int.TryParse(Builder["traceenabled"].ToString(), out int val);
+                if (result)
+                {
+                    switch (val)
+                    {
+                        case 0: checkLoggingEnabled.Checked = false; break;
+                        case 1: checkLoggingEnabled.Checked = true; break;
+                    }
                 }
             }
 
@@ -197,6 +210,7 @@ namespace EsOdbcDsnEditor
             // Logging Panel
             Builder["tracefile"] = textLogDirectoryPath.Text;
             Builder["tracelevel"] = comboLogLevel.Text;
+            Builder["traceenabled"] = checkLoggingEnabled.Checked ? "1" : "0";
 
             // Validations
             var certificateFileOK = true;
@@ -291,6 +305,18 @@ namespace EsOdbcDsnEditor
             // Clear the builder so that the resulting int returned to the caller is 0.
             Builder.Clear();
             Close();
+        }
+
+        private void CheckLoggingEnabled_CheckedChanged(object sender, EventArgs e)
+        {
+            EnableDisableLoggingControls();
+        }
+
+        private void EnableDisableLoggingControls()
+        {
+            textLogDirectoryPath.Enabled = checkLoggingEnabled.Checked;
+            comboLogLevel.Enabled = checkLoggingEnabled.Checked;
+            logDirectoryPathButton.Enabled = checkLoggingEnabled.Checked;
         }
     }
 }

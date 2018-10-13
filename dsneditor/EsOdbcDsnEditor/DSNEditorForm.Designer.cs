@@ -65,6 +65,7 @@
             this.textLogDirectoryPath = new System.Windows.Forms.TextBox();
             this.labelLogDirectory = new System.Windows.Forms.Label();
             this.folderLogDirectoryDialog = new System.Windows.Forms.FolderBrowserDialog();
+            this.checkLoggingEnabled = new System.Windows.Forms.CheckBox();
             ((System.ComponentModel.ISupportInitialize)(this.header)).BeginInit();
             this.groupSSL.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDownPort)).BeginInit();
@@ -396,6 +397,7 @@
             // 
             // pageLogging
             // 
+            this.pageLogging.Controls.Add(this.checkLoggingEnabled);
             this.pageLogging.Controls.Add(this.comboLogLevel);
             this.pageLogging.Controls.Add(this.labelLogLevel);
             this.pageLogging.Controls.Add(this.logDirectoryPathButton);
@@ -418,7 +420,7 @@
             "INFO",
             "WARN",
             "ERROR"});
-            this.comboLogLevel.Location = new System.Drawing.Point(139, 72);
+            this.comboLogLevel.Location = new System.Drawing.Point(139, 123);
             this.comboLogLevel.Name = "comboLogLevel";
             this.comboLogLevel.Size = new System.Drawing.Size(121, 28);
             this.comboLogLevel.TabIndex = 21;
@@ -426,7 +428,7 @@
             // labelLogLevel
             // 
             this.labelLogLevel.AutoSize = true;
-            this.labelLogLevel.Location = new System.Drawing.Point(18, 75);
+            this.labelLogLevel.Location = new System.Drawing.Point(18, 126);
             this.labelLogLevel.Name = "labelLogLevel";
             this.labelLogLevel.Size = new System.Drawing.Size(81, 20);
             this.labelLogLevel.TabIndex = 20;
@@ -434,7 +436,7 @@
             // 
             // logDirectoryPathButton
             // 
-            this.logDirectoryPathButton.Location = new System.Drawing.Point(592, 18);
+            this.logDirectoryPathButton.Location = new System.Drawing.Point(592, 69);
             this.logDirectoryPathButton.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.logDirectoryPathButton.Name = "logDirectoryPathButton";
             this.logDirectoryPathButton.Size = new System.Drawing.Size(112, 35);
@@ -445,7 +447,7 @@
             // 
             // textLogDirectoryPath
             // 
-            this.textLogDirectoryPath.Location = new System.Drawing.Point(139, 20);
+            this.textLogDirectoryPath.Location = new System.Drawing.Point(139, 71);
             this.textLogDirectoryPath.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.textLogDirectoryPath.Name = "textLogDirectoryPath";
             this.textLogDirectoryPath.Size = new System.Drawing.Size(440, 26);
@@ -454,11 +456,24 @@
             // labelLogDirectory
             // 
             this.labelLogDirectory.AutoSize = true;
-            this.labelLogDirectory.Location = new System.Drawing.Point(18, 26);
+            this.labelLogDirectory.Location = new System.Drawing.Point(18, 77);
             this.labelLogDirectory.Name = "labelLogDirectory";
             this.labelLogDirectory.Size = new System.Drawing.Size(107, 20);
             this.labelLogDirectory.TabIndex = 16;
             this.labelLogDirectory.Text = "Log Directory:";
+            // 
+            // checkLoggingEnabled
+            // 
+            this.checkLoggingEnabled.AutoSize = true;
+            this.checkLoggingEnabled.Checked = true;
+            this.checkLoggingEnabled.CheckState = System.Windows.Forms.CheckState.Checked;
+            this.checkLoggingEnabled.Location = new System.Drawing.Point(18, 26);
+            this.checkLoggingEnabled.Name = "checkLoggingEnabled";
+            this.checkLoggingEnabled.Size = new System.Drawing.Size(155, 24);
+            this.checkLoggingEnabled.TabIndex = 22;
+            this.checkLoggingEnabled.Text = "Enable Logging?";
+            this.checkLoggingEnabled.UseVisualStyleBackColor = true;
+            this.checkLoggingEnabled.CheckedChanged += new System.EventHandler(this.CheckLoggingEnabled_CheckedChanged);
             // 
             // DsnEditorForm
             // 
@@ -530,6 +545,7 @@
         private System.Windows.Forms.Label labelLogDirectory;
         private System.Windows.Forms.FolderBrowserDialog folderLogDirectoryDialog;
         private System.Windows.Forms.ComboBox comboLogLevel;
+        private System.Windows.Forms.CheckBox checkLoggingEnabled;
     }
 }
 
