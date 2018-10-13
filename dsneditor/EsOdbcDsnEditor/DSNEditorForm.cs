@@ -288,6 +288,8 @@ namespace EsOdbcDsnEditor
 
         private void CancelButton_Click(object sender, EventArgs e)
         {
+            // Clear the builder so that the resulting int returned to the caller is 0.
+            Builder.Clear();
             Close();
         }
     }
