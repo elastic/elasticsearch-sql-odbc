@@ -9,7 +9,6 @@ namespace EsOdbcDsnEditor
 {
     public static class DsnEditorFactory
     {
-        [STAThread]
         public static int DsnEditor(
             bool onConnect,
             string dsnIn,
@@ -18,7 +17,7 @@ namespace EsOdbcDsnEditor
         {
             Application.EnableVisualStyles();
             DsnEditorForm form = new DsnEditorForm(onConnect, dsnIn, delegConnectionTest, delegSaveDsn);
-            Application.Run(form);
+            form.ShowDialog(); // instead of Application.Run(form);
             var dsn = form.Builder.ToString();
             return dsn.Length;
         }
