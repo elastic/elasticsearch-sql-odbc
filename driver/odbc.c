@@ -622,20 +622,29 @@ SQLRETURN SQL_API SQLExecDirectW
 	return ret;
 }
 
-#if WITH_EMPTY
 SQLRETURN SQL_API SQLNativeSqlW
 (
 	SQLHDBC                                     hdbc,
-	_In_reads_(cchSqlStrIn) SQLWCHAR          *szSqlStrIn,
+	_In_reads_(cchSqlStrIn) SQLWCHAR           *szSqlStrIn,
 	SQLINTEGER                                  cchSqlStrIn,
 	_Out_writes_opt_(cchSqlStrMax) SQLWCHAR    *szSqlStr,
 	SQLINTEGER                                  cchSqlStrMax,
 	SQLINTEGER                                 *pcchSqlStr
 )
 {
-	RET_NOT_IMPLEMENTED;
+	SQLRETURN ret;
+	TRACE6(_IN, "pplplp", hdbc, szSqlStrIn, cchSqlStrIn, szSqlStr,
+		cchSqlStrMax, pcchSqlStr);
+	HND_LOCK(hdbc);
+	ret = EsSQLNativeSqlW(hdbc, szSqlStrIn, cchSqlStrIn, szSqlStr,
+			cchSqlStrMax, pcchSqlStr);
+	HND_UNLOCK(hdbc);
+	TRACE7(_OUT, "dpplplg", ret, hdbc, szSqlStrIn, cchSqlStrIn, szSqlStr,
+		cchSqlStrMax, pcchSqlStr);
+	return ret;
 }
 
+#if WITH_EMPTY
 /*
  * "drivers are capable of setting the fields of the IPD after a parameterized
  * query has been prepared. The descriptor fields are automatically populated

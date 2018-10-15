@@ -39,7 +39,6 @@ TEST_F(Queries, attach_error_sql) {
   \"status\": " STR(SRC_AID3) "\
 }"
 
-	SQLRETURN ret;
 	cstr_st body = CSTR_INIT(SRC_STR);
 	SQLWCHAR *pos, *prev;
 
@@ -74,7 +73,6 @@ TEST_F(Queries, attach_error_non_sql) {
   \"status\": " STR(SRC_AID3) "\
 }"
 
-	SQLRETURN ret;
 	cstr_st body = CSTR_INIT(SRC_STR);
 	SQLWCHAR *pos, *prev;
 
@@ -91,6 +89,33 @@ TEST_F(Queries, attach_error_non_sql) {
 	ASSERT_EQ(HDRH(stmt)->diag.native_code, SRC_AID3);
 }
 
+TEST_F(Queries, SQLNativeSql) {
+#undef SRC_STR
+#define SRC_STR	"SELECT 1"
+	SQLWCHAR *src = MK_WPTR(SRC_STR);
+	SQLWCHAR buff[sizeof(SRC_STR)];
+	SQLINTEGER written;
+
+	ret = SQLNativeSql(dbc, src, SQL_NTSL, buff, sizeof(buff)/sizeof(*buff),
+			&written);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	assertState(SQL_HANDLE_DBC, NULL);
+	ASSERT_STREQ(buff, src);
+}
+
+TEST_F(Queries, SQLNativeSql_truncate) {
+#undef SRC_STR
+#define SRC_STR	"SELECT 1"
+	SQLWCHAR *src = MK_WPTR(SRC_STR);
+	SQLWCHAR buff[sizeof(SRC_STR) - /*0-term*/1];
+	SQLINTEGER written;
+
+	ret = SQLNativeSql(dbc, src, SQL_NTSL, buff, sizeof(buff)/sizeof(*buff),
+			&written);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	assertState(SQL_HANDLE_DBC, MK_WPTR("01004"));
+	ASSERT_TRUE(wcsncmp(buff, src, sizeof(buff)/sizeof(*buff) - 1) == 0);
+}
 
 } // test namespace
 
