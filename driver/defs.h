@@ -144,6 +144,8 @@
 #define ESODBC_DEF_FOLLOW			"yes"
 /* packing of REST bodies (JSON or CBOR) */
 #define ESODBC_DEF_PACKING			"JSON"
+/* default tracing activation */
+#define ESODBC_DEF_TRACE_ENABLED	"0"
 /* default tracing level */
 #define ESODBC_DEF_TRACE_LEVEL		"WARN"
 

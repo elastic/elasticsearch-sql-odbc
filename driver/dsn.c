@@ -67,11 +67,15 @@ int assign_dsn_attr(esodbc_dsn_attrs_st *attrs,
 		{&MK_WSTR(ESODBC_DSN_PACKING), &attrs->packing},
 		{&MK_WSTR(ESODBC_DSN_MAX_FETCH_SIZE), &attrs->max_fetch_size},
 		{&MK_WSTR(ESODBC_DSN_MAX_BODY_SIZE_MB), &attrs->max_body_size},
+		{&MK_WSTR(ESODBC_DSN_TRACE_ENABLED), &attrs->trace_enabled},
 		{&MK_WSTR(ESODBC_DSN_TRACE_FILE), &attrs->trace_file},
 		{&MK_WSTR(ESODBC_DSN_TRACE_LEVEL), &attrs->trace_level},
 		{NULL, NULL}
 	};
 	int ret;
+
+	assert(sizeof(map)/sizeof(*iter) - /* {NULL,NULL} terminator */1 ==
+		ESODBC_DSN_ATTRS_COUNT);
 
 	if (ESODBC_DSN_MAX_ATTR_LEN < value->cnt) {
 		ERR("attribute value lenght too large: %zu; max=%zu.", value->cnt,
@@ -387,6 +391,7 @@ long TEST_API write_00_list(esodbc_dsn_attrs_st *attrs,
 		{&MK_WSTR(ESODBC_DSN_PACKING), &attrs->packing},
 		{&MK_WSTR(ESODBC_DSN_MAX_FETCH_SIZE), &attrs->max_fetch_size},
 		{&MK_WSTR(ESODBC_DSN_MAX_BODY_SIZE_MB), &attrs->max_body_size},
+		{&MK_WSTR(ESODBC_DSN_TRACE_ENABLED), &attrs->trace_enabled},
 		{&MK_WSTR(ESODBC_DSN_TRACE_FILE), &attrs->trace_file},
 		{&MK_WSTR(ESODBC_DSN_TRACE_LEVEL), &attrs->trace_level},
 		{NULL, NULL}
@@ -656,6 +661,10 @@ BOOL write_system_dsn(esodbc_dsn_attrs_st *new_attrs,
 			old_attrs ? &old_attrs->max_body_size : NULL
 		},
 		{
+			&MK_WSTR(ESODBC_DSN_TRACE_ENABLED), &new_attrs->trace_enabled,
+			old_attrs ? &old_attrs->trace_enabled : NULL
+		},
+		{
 			&MK_WSTR(ESODBC_DSN_TRACE_FILE), &new_attrs->trace_file,
 			old_attrs ? &old_attrs->trace_file : NULL
 		},
@@ -733,6 +742,7 @@ long TEST_API write_connection_string(esodbc_dsn_attrs_st *attrs,
 		{&attrs->packing, &MK_WSTR(ESODBC_DSN_PACKING)},
 		{&attrs->max_fetch_size, &MK_WSTR(ESODBC_DSN_MAX_FETCH_SIZE)},
 		{&attrs->max_body_size, &MK_WSTR(ESODBC_DSN_MAX_BODY_SIZE_MB)},
+		{&attrs->trace_enabled, &MK_WSTR(ESODBC_DSN_TRACE_ENABLED)},
 		{&attrs->trace_file, &MK_WSTR(ESODBC_DSN_TRACE_FILE)},
 		{&attrs->trace_level, &MK_WSTR(ESODBC_DSN_TRACE_LEVEL)},
 		{NULL, NULL}
@@ -811,8 +821,11 @@ void assign_dsn_defaults(esodbc_dsn_attrs_st *attrs)
 
 	/* default: no trace file */
 	res |= assign_dsn_attr(attrs,
-			&MK_WSTR(ESODBC_DSN_TRACE_LEVEL), &MK_WSTR(ESODBC_DEF_TRACE_LEVEL),
-			/*overwrite?*/FALSE);
+			&MK_WSTR(ESODBC_DSN_TRACE_ENABLED),
+			&MK_WSTR(ESODBC_DEF_TRACE_ENABLED), /*overwrite?*/FALSE);
+	res |= assign_dsn_attr(attrs,
+			&MK_WSTR(ESODBC_DSN_TRACE_LEVEL),
+			&MK_WSTR(ESODBC_DEF_TRACE_LEVEL), /*overwrite?*/FALSE);
 
 	assert(0 <= res);
 }
@@ -1032,6 +1045,7 @@ int prompt_user_config(HWND hwnd, BOOL on_conn, esodbc_dsn_attrs_st *attrs,
 
 	ret = EsOdbcDsnEdit(hwnd, on_conn, dsn_str, &test_connect, NULL,
 			save_cb, attrs);
+	DBG("DSN editor returned: %d.", ret);
 	if (ret < 0) {
 		ERR("failed to bring up the GUI; code:%d.", ret);
 	}

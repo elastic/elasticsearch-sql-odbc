@@ -32,6 +32,7 @@
 #define ESODBC_DSN_PACKING			"Packing"
 #define ESODBC_DSN_MAX_FETCH_SIZE	"MaxFetchSize"
 #define ESODBC_DSN_MAX_BODY_SIZE_MB	"MaxBodySizeMB"
+#define ESODBC_DSN_TRACE_ENABLED	"TraceEnabled"
 #define ESODBC_DSN_TRACE_FILE		"TraceFile"
 #define ESODBC_DSN_TRACE_LEVEL		"TraceLevel"
 
@@ -54,9 +55,10 @@ typedef struct {
 	wstr_st packing;
 	wstr_st max_fetch_size;
 	wstr_st max_body_size;
+	wstr_st trace_enabled;
 	wstr_st trace_file;
 	wstr_st trace_level;
-#define ESODBC_DSN_ATTRS_COUNT	19
+#define ESODBC_DSN_ATTRS_COUNT	20
 	SQLWCHAR buff[ESODBC_DSN_ATTRS_COUNT * ESODBC_DSN_MAX_ATTR_LEN];
 } esodbc_dsn_attrs_st;
 

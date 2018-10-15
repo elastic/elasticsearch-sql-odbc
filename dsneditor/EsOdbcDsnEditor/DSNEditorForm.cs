@@ -103,9 +103,13 @@ namespace EsOdbcDsnEditor
                     switch (val)
                     {
                         case 0: checkLoggingEnabled.Checked = false; break;
-                        case 1: checkLoggingEnabled.Checked = true; break;
+                        default: checkLoggingEnabled.Checked = true; break;
                     }
                 }
+            }
+            else
+            {
+                checkLoggingEnabled.Checked = false;
             }
 
             // Set initial state of action buttons.
