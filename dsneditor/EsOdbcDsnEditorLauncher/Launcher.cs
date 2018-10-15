@@ -13,7 +13,7 @@ namespace EsOdbcDsnEditorLauncher
 
         private void LaunchButton_Click(object sender, EventArgs e)
         {
-            bool onConnect = true;
+            bool onConnect = false;
             string dsn = "driver={Elasticsearch Driver};Database=localhost;hostname=localhost;uid=elastic;pwd=pass!word1;secure=4";
             var form = new EsOdbcDsnEditor.DsnEditorForm(onConnect, dsn, ConnectTest, SaveDsn);
             form.Show();

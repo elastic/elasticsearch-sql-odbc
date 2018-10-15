@@ -33,6 +33,7 @@ namespace EsOdbcDsnEditor
         {
             InitializeComponent();
 
+            // Wire up default button behaviours
             AcceptButton = saveButton;
             CancelButton = cancelButton;
 
@@ -47,10 +48,10 @@ namespace EsOdbcDsnEditor
                 textName.Enabled = textDescription.Enabled = false;
             }
 
-            // If this is a call serving a connect request, call the button "Connect", otherwise it's a DSN editing, so it's going to be a "Save".
+            // If this is a call serving a connect request, name the button "Connect", otherwise it's a DSN editing, so it's going to be a "Save".
             saveButton.Text = onConnect ? "Connect" : "Save";
 
-            // Parse DSN
+            // Parse DSN into the builder
             Builder.ConnectionString = dsn;
 
             // Basic Panel
@@ -302,14 +303,7 @@ namespace EsOdbcDsnEditor
                                  && string.IsNullOrEmpty(textHostname.Text) == false;
             testButton.Enabled = string.IsNullOrEmpty(textHostname.Text) == false;
         }
-
-        private void CancelButton_Click(object sender, EventArgs e)
-        {
-            // Clear the builder so that the resulting int returned to the caller is 0.
-            Builder.Clear();
-            Close();
-        }
-
+        
         private void CheckLoggingEnabled_CheckedChanged(object sender, EventArgs e)
         {
             EnableDisableLoggingControls();
@@ -320,6 +314,25 @@ namespace EsOdbcDsnEditor
             textLogDirectoryPath.Enabled = checkLoggingEnabled.Checked;
             comboLogLevel.Enabled = checkLoggingEnabled.Checked;
             logDirectoryPathButton.Enabled = checkLoggingEnabled.Checked;
+        }
+
+        private void CancelButton_Click(object sender, EventArgs e)
+        {
+            // Clear the builder so that the resulting int returned to the caller is 0.
+            Builder.Clear();
+            Close();
+        }
+
+        // Remove the [X] close button in top right to force user to use the cancel button.
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                const int WS_SYSMENU = 0x80000;
+                CreateParams cp = base.CreateParams;
+                cp.Style &= ~WS_SYSMENU;
+                return cp;
+            }
         }
     }
 }
