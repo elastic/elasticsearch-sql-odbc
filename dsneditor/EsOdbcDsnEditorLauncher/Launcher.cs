@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace EsOdbcDsnEditorLauncher
@@ -13,13 +14,14 @@ namespace EsOdbcDsnEditorLauncher
         private void LaunchButton_Click(object sender, EventArgs e)
         {
             bool onConnect = true;
-            string dsn = "driver={IBM DB2 ODBC DRIVER};Database=SampleDB;hostname=SampleServerName;protocol=TCPIP;uid=Admin;pwd=pass!word1;secure=4";
+            string dsn = "driver={Elasticsearch Driver};Database=localhost;hostname=localhost;uid=elastic;pwd=pass!word1;secure=4";
             var form = new EsOdbcDsnEditor.DsnEditorForm(onConnect, dsn, ConnectTest, SaveDsn);
             form.Show();
         }
 
         private int ConnectTest(string connectionString, ref string errorMessage, uint flags)
         {
+            Thread.Sleep(5000); // Simulate a slow connection test
             textLog.Text += "CONNECT. Connection String:" + connectionString + Environment.NewLine;
             return 0;
         }

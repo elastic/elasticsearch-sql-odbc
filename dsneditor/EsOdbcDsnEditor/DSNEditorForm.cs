@@ -172,7 +172,10 @@ namespace EsOdbcDsnEditor
 
             var dsn = Builder.ToString();
 
+            // Wrap slow operation in a wait cursor
+            Cursor = Cursors.WaitCursor;
             int result = testConnection(dsn, ref errorMessage, 0);
+            Cursor = Cursors.Arrow;
 
             if (result >= 0)
             {
