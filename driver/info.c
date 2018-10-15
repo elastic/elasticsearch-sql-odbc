@@ -1065,6 +1065,8 @@ SQLRETURN EsSQLGetDiagFieldW(
 			if (diag->state == SQL_STATE_00000) {
 				DBGH(Handle, "no diagnostic available for handle type %d.",
 						HandleType);
+				/* "The function also returns SQL_NO_DATA for any positive
+				 * RecNumber if there are no diagnostic records for Handle" */
 				return SQL_NO_DATA;
 			}
 			wstr.str = esodbc_errors[diag->state].code;

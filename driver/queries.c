@@ -2017,6 +2017,48 @@ SQLRETURN EsSQLExecDirectW
 	return ret;
 }
 
+/* simple loop back, the driver does no actual translation */
+SQLRETURN EsSQLNativeSqlW(
+	SQLHDBC                                     hdbc,
+	_In_reads_(cchSqlStrIn) SQLWCHAR           *szSqlStrIn,
+	SQLINTEGER                                  cchSqlStrIn,
+	_Out_writes_opt_(cchSqlStrMax) SQLWCHAR    *szSqlStr,
+	SQLINTEGER                                  cchSqlStrMax,
+	SQLINTEGER                                 *pcchSqlStr)
+{
+	SQLINTEGER to_copy;
+	int state = SQL_STATE_00000;
+
+	if (! szSqlStrIn) {
+		RET_HDIAGS(DBCH(hdbc), SQL_STATE_HY009);
+	}
+
+	if (cchSqlStrIn == SQL_NTSL) {
+		cchSqlStrIn = (SQLINTEGER)wcslen(szSqlStrIn);
+	}
+	if (pcchSqlStr) {
+		*pcchSqlStr = cchSqlStrIn;
+	}
+
+	if (szSqlStr) {
+		//if (cchSqlStrMax < cchSqlStrIn) {
+		if (cchSqlStrMax <= cchSqlStrIn) {
+			to_copy = cchSqlStrMax - /* \0 */1;
+			state = SQL_STATE_01004;
+		} else {
+			to_copy = cchSqlStrIn;
+		}
+		memcpy(szSqlStr, szSqlStrIn, to_copy * sizeof(*szSqlStr));
+		szSqlStr[to_copy] = L'\0';
+	}
+
+	if (state == SQL_STATE_01004) {
+		RET_HDIAGS(DBCH(hdbc), SQL_STATE_01004);
+	} else {
+		return SQL_SUCCESS;
+	}
+}
+
 static inline SQLULEN get_col_size(esodbc_rec_st *rec)
 {
 	assert(DESC_TYPE_IS_IMPLEMENTATION(rec->desc->type));

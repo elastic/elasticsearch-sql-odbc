@@ -37,23 +37,24 @@ extern "C" {
 
 
 class ConnectedDBC {
-  protected:
-    SQLHANDLE env, dbc, stmt;
-    SQLRETURN ret;
-    SQLLEN ind_len = SQL_NULL_DATA;
+	protected:
+		SQLHANDLE env, dbc, stmt;
+		SQLRETURN ret;
+		SQLLEN ind_len = SQL_NULL_DATA;
 
 
-  ConnectedDBC();
-  virtual ~ConnectedDBC();
+	ConnectedDBC();
+	virtual ~ConnectedDBC();
 
-  void assertState(const SQLWCHAR *state);
+	void assertState(const SQLWCHAR *state);
+	void assertState(SQLSMALLINT htype, const SQLWCHAR *state);
 
-  // use the test name as SQL (for faster logs lookup)
-  void prepareStatement();
-  // use an actual SQL statement (if it might be processed)
-  void prepareStatement(const SQLWCHAR *sql, const char *jsonAnswer);
-  // use test name as SQL and attach given answer
-  void prepareStatement(const char *jsonAnswer);
+	// use the test name as SQL (for faster logs lookup)
+	void prepareStatement();
+	// use an actual SQL statement (if it might be processed)
+	void prepareStatement(const SQLWCHAR *sql, const char *jsonAnswer);
+	// use test name as SQL and attach given answer
+	void prepareStatement(const char *jsonAnswer);
 };
 
 #endif /* __CONNECTED_DBC_H__ */
