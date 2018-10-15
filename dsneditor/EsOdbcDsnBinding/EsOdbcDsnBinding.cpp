@@ -14,10 +14,10 @@ using namespace System;
 using namespace System::Reflection;
 using namespace System::Text;
 using namespace System::Runtime::InteropServices;
+using namespace System::Threading;
 
 using namespace EsOdbcDsnEditor;
 
-static HWND _hwnd;
 
 namespace EsOdbcDsnBinding {
 
@@ -28,12 +28,15 @@ namespace EsOdbcDsnBinding {
 	{
 		bool onConnect;
 		String ^dsnInStr;
+		int dsnOutLen;
 
 		driver_callback_ft cbConnectionTest;
 		void *argConnectionTest;
 
 		driver_callback_ft cbSaveDsn;
 		void *argSaveDsn;
+
+		public:static HWND hwnd;
 		
 
 		private:int cbImplementation(driver_callback_ft cbFunction, void *cbArgument,
@@ -81,10 +84,14 @@ namespace EsOdbcDsnBinding {
 		/*
 		 * The constructor merely saves the input parameters and registers an assembly resolve handler
 		 */
-		public: EsOdbcDsnBinding(bool onConnect, wchar_t *dsnInW,
+		public: EsOdbcDsnBinding(HWND hwnd, bool onConnect, wchar_t *dsnInW,
 			driver_callback_ft cbConnectionTest, void *argConnectionTest,
 			driver_callback_ft cbSaveDsn, void *argSaveDsn)
 		{
+			/* there should(?) be one window handler in use for one application through the driver */
+			assert(this->hwnd == NULL);
+			this->hwnd = hwnd;
+
 			this->onConnect = onConnect;
 			dsnInStr = dsnInW != NULL ? gcnew String(dsnInW) : "";
 
@@ -96,6 +103,11 @@ namespace EsOdbcDsnBinding {
 
 			// register an event handler for failed assembly loading
 			AppDomain::CurrentDomain->AssemblyResolve += gcnew ResolveEventHandler(resolveEventHandler);
+		}
+
+		public: ~EsOdbcDsnBinding()
+		{
+			hwnd = NULL;
 		}
 
 		/*
@@ -129,9 +141,9 @@ namespace EsOdbcDsnBinding {
 
 				return assembly;
 			} catch (Exception ^e) {
-				if (_hwnd) {
+				if (hwnd) {
 					pin_ptr<const wchar_t> wch = PtrToStringChars(e->Message);
-					MessageBox(_hwnd, wch, L"Loading Exeception", MB_OK | MB_ICONERROR);
+					MessageBox(hwnd, wch, L"Loading Exception", MB_OK | MB_ICONERROR);
 				}
 				assembly = nullptr;
 			}
@@ -141,13 +153,37 @@ namespace EsOdbcDsnBinding {
 
 		public:int EsOdbcDsnEditor()
 		{
+			Thread ^ t;
+			/* (Re)set the threading model; "Multiple calls to CoInitializeEx by the same
+			   thread are allowed as long as they pass the same concurrency flag".
+			   For neutral/MTAs create a new thread, for STAs just run the worker. */
+			switch (CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_SPEED_OVER_MEMORY)) {
+				case S_OK:
+				case S_FALSE:
+					DsnEditorWorker();
+					break;
+				case RPC_E_CHANGED_MODE:
+					t = gcnew Thread(gcnew ThreadStart(this, &EsOdbcDsnBinding::DsnEditorWorker));
+					t->ApartmentState = ApartmentState::STA;
+					t->Start();
+					t->Join();
+					break;
+				default:
+					throw gcnew Exception("setting threading model failed.");
+			}
+
+			return dsnOutLen;
+		}
+
+		private:void DsnEditorWorker()
+		{
 			EsOdbcDsnEditor::DriverCallbackDelegate ^delegConnectionTest;
 			EsOdbcDsnEditor::DriverCallbackDelegate ^delegSaveDsn;
 
 			delegConnectionTest = gcnew DriverCallbackDelegate(this, &EsOdbcDsnBinding::proxyConnectionTest);
 			delegSaveDsn = gcnew DriverCallbackDelegate(this, &EsOdbcDsnBinding::proxySaveDsn);
 
-			return DsnEditorFactory::DsnEditor(onConnect, dsnInStr, delegConnectionTest, delegSaveDsn);
+			dsnOutLen = DsnEditorFactory::DsnEditor(onConnect, dsnInStr, delegConnectionTest, delegSaveDsn);
 		}
 
 
@@ -167,18 +203,7 @@ int EsOdbcDsnEdit(HWND hwnd, BOOL onConnect, wchar_t *dsnInW,
 	driver_callback_ft cbSaveDsn, void *argSaveDsn)
 {
 	try {
-		// (re)set the threading model; "Multiple calls to CoInitializeEx by the same
-		// thread are allowed as long as they pass the same concurrency flag".
-		switch (CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_SPEED_OVER_MEMORY)) {
-			case S_OK:
-			case S_FALSE:
-				break;
-			default:
-				throw gcnew Exception("setting threading model failed.");
-		}
-
-		_hwnd = hwnd;
-		EsOdbcDsnBinding::EsOdbcDsnBinding binding(onConnect, dsnInW,
+		EsOdbcDsnBinding::EsOdbcDsnBinding binding(hwnd, onConnect, dsnInW,
 			cbConnectionTest, argConnectionTest,
 			cbSaveDsn, argSaveDsn);
 		return binding.EsOdbcDsnEditor();
