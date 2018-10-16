@@ -193,11 +193,11 @@ namespace EsOdbcDsnBinding {
 #ifdef __cplusplus
 extern "C"
 #endif /* __cpluplus */
-#ifdef _WINDLL
+#ifndef DRIVER_BUILD
 __declspec(dllexport)
-#else /* _WINDLL */
+#else /* DRIVER_BUILD */
 __declspec(dllimport)
-#endif /* _WINDLL */
+#endif /* DRIVER_BUILD */
 int EsOdbcDsnEdit(HWND hwnd, BOOL onConnect, wchar_t *dsnInW,
 	driver_callback_ft cbConnectionTest, void *argConnectionTest,
 	driver_callback_ft cbSaveDsn, void *argSaveDsn)
