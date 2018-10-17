@@ -179,7 +179,7 @@
     </BuildLog>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="EsOdbcDsnBinding.cpp" />
+    <ClCompile Include="EsOdbcDsnBinding.cc" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\EsOdbcDsnEditor\EsOdbcDsnEditor.csproj">

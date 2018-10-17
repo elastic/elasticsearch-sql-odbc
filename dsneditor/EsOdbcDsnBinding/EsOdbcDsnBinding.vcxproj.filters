@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="EsOdbcDsnBinding.cpp">
+    <ClCompile Include="EsOdbcDsnBinding.cc">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
