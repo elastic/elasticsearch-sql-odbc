@@ -11,7 +11,7 @@
 
 #include <timestamp.h>
 
-#include "log.h"
+#include "handles.h"
 
 #define JSON_VAL_NULL			"null"
 #define JSON_VAL_TRUE			"true"

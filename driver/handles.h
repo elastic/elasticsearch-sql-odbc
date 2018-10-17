@@ -12,6 +12,7 @@
 
 #include "error.h"
 #include "defs.h"
+#include "log.h"
 
 /* forward declarations */
 struct struct_env;
@@ -37,6 +38,9 @@ typedef struct struct_hheader { /* handle header */
 		struct struct_stmt *stmt;
 		void *parent;
 	};
+	/* logging helpers */
+	wstr_st typew; /* ENV/DBC/STMT/DESC as w-string */
+	esodbc_filelog_st *log; /* logger: owned by a DBC; ENV uses global */
 } esodbc_hhdr_st;
 
 /*
@@ -495,6 +499,27 @@ SQLRETURN EsSQLSetDescRec(
 	(rec)->data_ptr != NULL || \
 	(rec)->indicator_ptr != NULL || \
 	(rec)->octet_length_ptr != NULL)
+
+/*
+ * Logging with handle
+ */
+
+#define LOGH(lvl, werrn, hnd, fmt, ...) \
+	_LOG(HDRH(hnd)->log, lvl, werrn, "[" LWPDL "@0x%p] " fmt, \
+		LWSTR(&HDRH(hnd)->typew), hnd, __VA_ARGS__)
+
+#define ERRNH(hnd, fmt, ...)	LOGH(LOG_LEVEL_ERR, 1, hnd, fmt, __VA_ARGS__)
+#define ERRH(hnd, fmt, ...)		LOGH(LOG_LEVEL_ERR, 0, hnd, fmt, __VA_ARGS__)
+#define WARNH(hnd, fmt, ...)	LOGH(LOG_LEVEL_WARN, 0, hnd, fmt, __VA_ARGS__)
+#define INFOH(hnd, fmt, ...)	LOGH(LOG_LEVEL_INFO, 0, hnd, fmt, __VA_ARGS__)
+#define DBGH(hnd, fmt, ...)		LOGH(LOG_LEVEL_DBG, 0, hnd, fmt, __VA_ARGS__)
+
+#define BUGH(hnd, fmt, ...) \
+	do { \
+		ERRH(hnd, "[BUG] " fmt, __VA_ARGS__); \
+		assert(0); \
+	} while (0)
+
 
 
 #endif /* __HANDLES_H__ */

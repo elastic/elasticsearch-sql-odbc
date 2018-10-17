@@ -96,6 +96,10 @@ typedef struct {
  * HTTP headers used for all requests (Content-Type, Accept).
  */
 static struct curl_slist *http_headers = NULL;
+/* this mutex protects a counter used to number DBC log files:
+ * the files are stamped with time (@ second resolution) and PID, which is not
+ * enough to avoid name clashes. */
+esodbc_mutex_lt filelog_cnt_mux = SRWLOCK_INIT;
 
 BOOL connect_init()
 {
@@ -384,7 +388,7 @@ static SQLRETURN dbc_curl_init(esodbc_dbc_st *dbc)
 	}
 
 #ifndef NDEBUG
-	if (LOG_LEVEL_DBG <= _esodbc_log_level) {
+	if (dbc->hdr.log && LOG_LEVEL_DBG <= dbc->hdr.log->level) {
 		res = curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, debug_callback);
 		if (res != CURLE_OK) {
 			ERRH(dbc, "libcurl: failed to set debug callback.");
@@ -642,12 +646,91 @@ static SQLRETURN test_connect(esodbc_dbc_st *dbc)
 	RET_STATE(dbc->hdr.diag.state);
 }
 
+static unsigned filelog_inc_counter()
+{
+	static unsigned counter = 0;
+	unsigned val;
+
+	ESODBC_MUX_LOCK(&filelog_cnt_mux);
+	val = counter ++;
+	ESODBC_MUX_UNLOCK(&filelog_cnt_mux);
+	return val;
+}
+
+static BOOL config_dbc_logging(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
+{
+	int cnt, level;
+	SQLWCHAR ident_buff[MAX_PATH], path_buff[MAX_PATH];
+	wstr_st ident, path;
+
+	if (! wstr2bool(&attrs->trace_enabled)) {
+		return TRUE;
+	}
+
+	ident.cnt = sizeof(ident_buff)/sizeof(*ident_buff);
+	ident.str = ident_buff;
+	cnt = swprintf(ident.str, ident.cnt,
+			WPFWP_LDESC "_" WPFWP_LDESC "_" "%d-%u",
+			LWSTR(&attrs->server), LWSTR(&attrs->port),
+			GetCurrentProcessId(), filelog_inc_counter());
+	if (cnt <= 0 || ident.cnt <= cnt) {
+		ERRH(dbc, "failed to print log file identifier.");
+		SET_HDIAG(dbc, SQL_STATE_HY000, "failed to print log file ID", 0);
+		return FALSE;
+	} else {
+		ident.cnt = cnt;
+	}
+	/* replace reserved characters that could raise issues with the FS */
+	for (cnt = 0; cnt < ident.cnt; cnt ++) {
+		if (ident.str[cnt] < 31) {
+			ident.str[cnt] = L'_';
+		} else {
+			switch (ident.str[cnt]) {
+				case L'"':
+				case L'<':
+				case L'>':
+				case L'|':
+				case '/':
+				case '\\':
+				case L'?':
+				case '*':
+				case ':':
+					ident.str[cnt] = L'_';
+			}
+		}
+	}
+
+	path.cnt = sizeof(path_buff)/sizeof(*path_buff);
+	path.str = path_buff;
+	if (! filelog_print_path(&path, &attrs->trace_file, &ident)) {
+		ERRH(dbc, "failed to print log file path (dir: `" LWPDL "`, ident: `"
+			LWPDL "`).", LWSTR(&attrs->trace_file), LWSTR(&ident));
+		if (attrs->trace_file.cnt) {
+			SET_HDIAG(dbc, SQL_STATE_HY000, "failed to print log file path",
+				0);
+		} else {
+			SET_HDIAG(dbc, SQL_STATE_HY000, "no directory path for logging "
+				"provided", 0);
+		}
+		return FALSE;
+	}
+
+	level = parse_log_level(&attrs->trace_level);
+	if (! (dbc->hdr.log = filelog_new(&path, level))) {
+		ERRNH(dbc, "failed to allocate new file logger (file `" LWPDL "`, "
+			"level: %d).", LWSTR(&path), level);
+		SET_HDIAG(dbc, SQL_STATE_HY000, "failed to allocate new logger", 0);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
 /*
  * init dbc from configured attributes
  */
 SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 {
-	SQLRETURN ret;
 	int cnt, ipv6;
 	SQLBIGINT secure;
 	long long timeout, max_body_size, max_fetch_size;
@@ -656,17 +739,26 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 		buff_url, /*will be init'ed later*/0
 	};
 
+	/*
+	 * setup logging
+	 */
+	if (! config_dbc_logging(dbc, attrs)) {
+		/* attempt global logging the error */
+		ERRH(dbc, "failed to setup DBC logging");
+		goto err;
+	}
+
 	if (! str2bigint(&attrs->secure, /*wide?*/TRUE, &secure)) {
 		ERRH(dbc, "failed to read secure param `" LWPDL "`.",
 			LWSTR(&attrs->secure));
-		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "security setting number "
-				"conversion failure", 0);
+		SET_HDIAG(dbc, SQL_STATE_HY000, "security setting number "
+			"conversion failure", 0);
 		goto err;
 	}
 	if (secure < ESODBC_SEC_NONE || ESODBC_SEC_MAX <= secure) {
 		ERRH(dbc, "invalid secure param `" LWPDL "` (not within %d - %d).",
 			LWSTR(&attrs->secure), ESODBC_SEC_NONE, ESODBC_SEC_MAX - 1);
-		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "invalid security setting", 0);
+		SET_HDIAG(dbc, SQL_STATE_HY000, "invalid security setting", 0);
 		goto err;
 	} else {
 		dbc->secure = (long)secure;
@@ -677,8 +769,8 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 		if (! wstr_to_utf8(&attrs->ca_path, &dbc->ca_path)) {
 			ERRNH(dbc, "failed to convert CA path `" LWPDL "` to UTF8.",
 				LWSTR(&attrs->ca_path));
-			ret = SET_HDIAG(dbc, SQL_STATE_HY000, "reading the CA file path "
-					"failed", 0);
+			SET_HDIAG(dbc, SQL_STATE_HY000, "reading the CA file path "
+				"failed", 0);
 			goto err;
 		}
 		INFOH(dbc, "CA path: `%s`.", dbc->ca_path.str);
@@ -697,20 +789,19 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 			secure ? "s" : "",
 			ipv6 ? "[" : "", LWSTR(&attrs->server), ipv6 ? "]" : "",
 			LWSTR(&attrs->port));
-	if (cnt < 0) {
+	if (cnt <= 0) {
 		ERRNH(dbc, "failed to print URL out of server: `" LWPDL "` [%zd], "
 			"port: `" LWPDL "` [%zd].", LWSTR(&attrs->server),
 			LWSTR(&attrs->port));
-		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "assembling server's URL failed",
-				0);
+		SET_HDIAG(dbc, SQL_STATE_HY000, "assembling server's URL failed", 0);
 		goto err;
 	} else {
 		url.cnt = (size_t)cnt;
 	}
 	if (! wstr_to_utf8(&url, &dbc->url)) {
 		ERRNH(dbc, "failed to convert URL `" LWPDL "` to UTF8.", LWSTR(&url));
-		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "server URL's UTF8 conversion "
-				"failed", 0);
+		SET_HDIAG(dbc, SQL_STATE_HY000, "server URL's UTF8 conversion "
+			"failed", 0);
 		goto err;
 	}
 	INFOH(dbc, "connection URL: `%s`.", dbc->url.str);
@@ -722,16 +813,16 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 		if (! wstr_to_utf8(&attrs->uid, &dbc->uid)) {
 			ERRH(dbc, "failed to convert username [%zd] `" LWPDL "` to UTF8.",
 				attrs->uid.cnt, LWSTR(&attrs->uid));
-			ret = SET_HDIAG(dbc, SQL_STATE_HY000, "username UTF8 conversion "
-					"failed", 0);
+			SET_HDIAG(dbc, SQL_STATE_HY000, "username UTF8 conversion "
+				"failed", 0);
 			goto err;
 		}
 		if (attrs->pwd.cnt) {
 			if (! wstr_to_utf8(&attrs->pwd, &dbc->pwd)) {
 				ERRH(dbc, "failed to convert password [%zd] (-not shown-) to "
 					"UTF8.", attrs->pwd.cnt);
-				ret = SET_HDIAG(dbc, SQL_STATE_HY000, "password UTF8 "
-						"conversion failed", 0);
+				SET_HDIAG(dbc, SQL_STATE_HY000, "password UTF8 "
+					"conversion failed", 0);
 				goto err;
 			}
 		}
@@ -747,8 +838,8 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	if (! str2bigint(&attrs->timeout, /*wide?*/TRUE, (SQLBIGINT *)&timeout)) {
 		ERRH(dbc, "failed to convert `" LWPDL "` [%zu] to big int.",
 			LWSTR(&attrs->timeout), attrs->timeout.cnt);
-		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "timeout setting number "
-				"conversion failure", 0);
+		SET_HDIAG(dbc, SQL_STATE_HY000, "timeout setting number "
+			"conversion failure", 0);
 		goto err;
 	}
 	if (timeout < 0) {
@@ -765,15 +856,15 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 			(SQLBIGINT *)&max_body_size)) {
 		ERRH(dbc, "failed to convert max body size `" LWPDL "` [%zu] to LL.",
 			LWSTR(&attrs->max_body_size), attrs->max_body_size.cnt);
-		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "max body size setting number "
-				"conversion failure", 0);
+		SET_HDIAG(dbc, SQL_STATE_HY000, "max body size setting number "
+			"conversion failure", 0);
 		goto err;
 	}
 	if (max_body_size < 0) {
 		ERRH(dbc, "'%s' setting can't be negative (%ld).",
 			ESODBC_DSN_MAX_BODY_SIZE_MB, max_body_size);
-		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "invalid max body size setting "
-				"(negative)", 0);
+		SET_HDIAG(dbc, SQL_STATE_HY000, "invalid max body size setting "
+			"(negative)", 0);
 		goto err;
 	} else {
 		dbc->amax = (size_t)max_body_size * 1024 * 1024;
@@ -787,15 +878,15 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 			(SQLBIGINT *)&max_fetch_size)) {
 		ERRH(dbc, "failed to convert max fetch size `" LWPDL "` [%zu] to LL.",
 			LWSTR(&attrs->max_fetch_size), attrs->max_fetch_size.cnt);
-		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "max fetch size setting number "
-				"conversion failure", 0);
+		SET_HDIAG(dbc, SQL_STATE_HY000, "max fetch size setting number "
+			"conversion failure", 0);
 		goto err;
 	}
 	if (max_fetch_size < 0) {
 		ERRH(dbc, "'%s' setting can't be negative (%ld).",
 			ESODBC_DSN_MAX_FETCH_SIZE, max_fetch_size);
-		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "invalid max fetch size setting "
-				"(negative)", 0);
+		SET_HDIAG(dbc, SQL_STATE_HY000, "invalid max fetch size setting "
+			"(negative)", 0);
 		goto err;
 	} else {
 		dbc->fetch.max = (size_t)max_fetch_size;
@@ -825,8 +916,7 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	} else {
 		ERRH(dbc, "unknown packing encoding '" LWPDL "'.",
 			LWSTR(&attrs->packing));
-		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "invalid packing encoding "
-				"setting", 0);
+		SET_HDIAG(dbc, SQL_STATE_HY000, "invalid packing encoding setting", 0);
 		goto err;
 	}
 	INFOH(dbc, "pack JSON: %s.", dbc->pack_json ? "true" : "false");
@@ -895,8 +985,14 @@ void cleanup_dbc(esodbc_dbc_st *dbc)
 	} else {
 		assert(dbc->no_types == 0);
 	}
+
 	assert(dbc->abuff == NULL);
 	cleanup_curl(dbc);
+
+	if (dbc->hdr.log && dbc->hdr.log != _gf_log) {
+		filelog_del(dbc->hdr.log);
+		dbc->hdr.log = NULL;
+	}
 }
 
 SQLRETURN do_connect(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)

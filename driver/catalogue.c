@@ -500,7 +500,7 @@ SQLRETURN EsSQLPrimaryKeysW(
 	_In_reads_opt_(cchTableName) SQLWCHAR      *szTableName,
 	SQLSMALLINT        cchTableName)
 {
-	WARNH(hstmt, "no primary keys supported.");
+	INFOH(hstmt, "no primary keys supported.");
 	STMT_FORCE_NODATA(STMH(hstmt));
 	return SQL_SUCCESS;
 }

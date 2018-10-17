@@ -53,6 +53,28 @@ static void init_hheader(esodbc_hhdr_st *hdr, SQLSMALLINT type, void *parent)
 	init_diagnostic(&hdr->diag);
 	ESODBC_MUX_INIT(&hdr->mutex);
 	hdr->parent = parent;
+
+	/* init logging helpers */
+	switch(type) {
+		case SQL_HANDLE_ENV:
+			hdr->typew = MK_WSTR("ENV");
+			hdr->log = _gf_log; /* use global logger */
+			break;
+		case SQL_HANDLE_DBC:
+			hdr->typew = MK_WSTR("DBC");
+			hdr->log = _gf_log; /* use global logger, by default */
+			break;
+		case SQL_HANDLE_STMT:
+			hdr->typew = MK_WSTR("STMT");
+			hdr->log = HDRH(parent)->log; /* inherit */
+			break;
+		case SQL_HANDLE_DESC:
+			hdr->typew = MK_WSTR("DESC");
+			hdr->log = HDRH(parent)->log; /* inherit */
+			break;
+		default:
+			assert(0);
+	}
 }
 
 /*

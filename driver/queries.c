@@ -1036,7 +1036,7 @@ SQLRETURN EsSQLGetData(
 		}
 	} else {
 		if (0 <= stmt->gd_col) {
-			INFOH(stmt, "previous source column #%hu (pos @ %lld), SQL C %hd "
+			DBGH(stmt, "previous source column #%hu (pos @ %lld), SQL C %hd "
 				"abandoned for new #%hu, SQL C %hd.", stmt->gd_col,
 				stmt->gd_offt, stmt->gd_ctype, ColumnNumber, TargetType);
 			/* reset fields now, should the call eventually fail */
@@ -1176,6 +1176,7 @@ SQLRETURN EsSQLCloseCursor(SQLHSTMT StatementHandle)
 		ERRH(stmt, "no open cursor for statement");
 		RET_HDIAGS(stmt, SQL_STATE_24000);
 	}
+	/* TODO: POST /_xpack/sql/close {"cursor":"<cursor>"} if cursor */
 	return EsSQLFreeStmt(StatementHandle, SQL_CLOSE);
 }
 

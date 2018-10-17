@@ -16,8 +16,10 @@
 
 /*INDENT-OFF*/
 /* TODO: the SQL[U]LEN for _WIN32 */
-#define _PRINT_PARAM_VAL(type, val) \
+#define _PRINT_PARAM_VAL(type, val, prec) \
 	do { \
+		int _prec; \
+		wchar_t *_w; \
 		switch(type) { \
 				/*
 				 * numeric pointers
@@ -66,48 +68,66 @@
 				_n = snprintf(_bf + _ps, _AVAIL, "@0x%p", \
 						(void *)(uintptr_t)val); \
 				break; \
-			case 'W': /* wchar_t* */ \
-				/* TODO: scan for unsafe usages with uninit'ed buffers */ \
-				/* Note: problematic for untouched buffs: 'p' for unsure. */ \
-				_n = snprintf(_bf + _ps, _AVAIL, "`" LWPD "`[%zd]", \
-						val ? (wchar_t *)(uintptr_t)val : TWS_NULL, \
-						val ? wcslen((wchar_t *)(uintptr_t)val) : 0); \
+				/* TODO: support for (buffer*, max, written*) pattern */ \
+			case 'W': /* wchar_t* with precision (always following param) */ \
+				if (val) { \
+					_w = (wchar_t *)(uintptr_t)val; \
+					_prec = (int)(intptr_t)prec; \
+					_prec = (_prec == SQL_NTS) ? (int)wcslen(_w) : _prec; \
+					_n = snprintf(_bf + _ps, _AVAIL, "[%d] `" LWPDL "`", \
+							_prec, _prec, _w); \
+				} else { \
+					_n = snprintf(_bf + _ps, _AVAIL, TS_NULL); \
+				} \
 				break; \
-			case 's': /* char* */ \
-				/* Note: problematic for untouched buffs: 'p' for unsure. */ \
-				_n = snprintf(_bf + _ps, _AVAIL, "`" LCPD "`[%zd]", \
-						val ? (char *)(uintptr_t)val : TS_NULL, \
-						val ? strlen((char *)(uintptr_t)val) : 0); \
+			case 'w': /* NTS wchar_t* */ \
+				_n = snprintf(_bf + _ps, _AVAIL, "[%zu] `" LWPD "`", \
+						val ? wcslen((wchar_t *)(uintptr_t)val) : 0, \
+						val ? (wchar_t *)(uintptr_t)val : TWS_NULL); \
+				break; \
+			case 's': /* NTS char* */ \
+				_n = snprintf(_bf + _ps, _AVAIL, "[%zu] `" LCPD "`", \
+						val ? strlen((char *)(uintptr_t)val) : 0, \
+						val ? (char *)(uintptr_t)val : TS_NULL); \
 				break; \
 				/*
 				 * imediat values
 				 */ \
+				/* long longs */ \
+			case 'z': /* long long signed (SQLLEN) */ \
+				_n = snprintf(_bf + _ps, _AVAIL, "%lld", \
+						(long long)(intptr_t)val); \
+				break; \
+			case 'Z': /* long long unsigned (SQLULEN) */ \
+				_n = snprintf(_bf + _ps, _AVAIL, "%llu", \
+						(unsigned long long)(uintptr_t)val); \
+				break; \
 				/* longs */ \
-			case 'l': /* long signed */ \
+			case 'l': /* long signed (SQLINTEGER) */ \
 				_n = snprintf(_bf + _ps, _AVAIL, "%ld", \
 						(long)(intptr_t)val); \
-				break;\
-			case 'L': /* long unsigned */ \
+				break; \
+			case 'L': /* long unsigned (SQLUINTEGER) */ \
 				_n = snprintf(_bf + _ps, _AVAIL, "%lu", \
 						(unsigned long)(uintptr_t)val); \
-				break;\
+				break; \
 				/* ints */ \
 			case 'd': /* int signed */ \
 				_n = snprintf(_bf + _ps, _AVAIL, "%d", \
 						(int)(intptr_t)val); \
-				break;\
+				break; \
 			case 'u': /* int unsigned */ \
 				_n = snprintf(_bf + _ps, _AVAIL, "%u", \
 						(unsigned)(uintptr_t)val); \
-				break;\
-			case 'h': /* short signed */ \
+				break; \
+			case 'h': /* short signed (SQLSMALLINT) */ \
 				_n = snprintf(_bf + _ps, _AVAIL, "%hd", \
 						(short)(intptr_t)val); \
-				break;\
-			case 'H': /* short unsigned */ \
+				break; \
+			case 'H': /* short unsigned (SQLUSMALLINT) */ \
 				_n = snprintf(_bf + _ps, _AVAIL, "%hu", \
 						(unsigned short)(uintptr_t)val); \
-				break;\
+				break; \
 			default: \
 				_n = snprintf(_bf+_ps, _AVAIL, "BUG! unknown type: %d",type); \
 				break; \
@@ -133,7 +153,7 @@
 		} \
 	} while (0)
 
-#define _PRINT_PARAM(type, param, add_comma) \
+#define _PRINT_PARAM(type, param, prec, add_comma) \
 	do { \
 		BOOL _is_ptr; \
 		_IS_PTR(type, _is_ptr); \
@@ -141,7 +161,7 @@
 				_is_ptr ? "*" : "", # param); \
 		if (0 < _n) /* no proper err check */ \
 			_ps += _n; \
-		_PRINT_PARAM_VAL(type, param); \
+		_PRINT_PARAM_VAL(type, param, prec); \
 	} while (0)
 
 
@@ -150,205 +170,213 @@
 #define _OUT		1
 #define _TRACE_OUT	"EXIT: "
 
-#define _TRACE_DECLARATION(end) \
-	char _bf[1024]; /*"ought to be enough for anybody"*/\
+#define _TRACE_HEADER(inout, hnd) \
+	char _bf[1024]; \
 	int _ps = 0; \
-	_ps += snprintf(_bf + _ps, _AVAIL, end ? _TRACE_OUT : _TRACE_IN)
+	esodbc_filelog_st *_log; \
+	_log = (hnd && HDRH(hnd)->log) ? HDRH(hnd)->log : _gf_log; \
+	if ((! _log) || (_log->level < TRACE_LOG_LEVEL)) { \
+		/* skip all the printing as early as possible */ \
+		break; \
+	} \
+	_ps += snprintf(_bf + _ps, _AVAIL, inout ? _TRACE_OUT : _TRACE_IN)
 
-#define _TRACE_ENDING \
+#define _TRACE_FOOTER \
 	_ps += snprintf(_bf + _ps, _AVAIL, "."); \
-	LOG(TRACE_LOG_LEVEL, "%s", _bf)
+	_esodbc_log(_log, TRACE_LOG_LEVEL, /*werr*/0, \
+		__func__, __FILE__, __LINE__, "%s", _bf);
 
-#define TRACE1(out, fmt, p0) \
+#define TRACE1(inout, hnd, fmt, p0) \
 	do { \
-		_TRACE_DECLARATION(out); \
-		_PRINT_PARAM(fmt[0], p0, 0); \
-		_TRACE_ENDING; \
+		_TRACE_HEADER(inout, hnd); \
+		_PRINT_PARAM(fmt[0], p0, SQL_NTS, 0); \
+		_TRACE_FOOTER; \
 	} while(0)
 
-#define TRACE2(out, fmt, p0, p1) \
+#define TRACE2(inout, hnd, fmt, p0, p1) \
 	do { \
-		_TRACE_DECLARATION(out); \
-		_PRINT_PARAM(fmt[0], p0, 0); \
-		_PRINT_PARAM(fmt[1], p1, 1); \
-		_TRACE_ENDING; \
+		_TRACE_HEADER(inout, hnd); \
+		_PRINT_PARAM(fmt[0], p0, p1, 0); \
+		_PRINT_PARAM(fmt[1], p1, SQL_NTS, 1); \
+		_TRACE_FOOTER; \
 	} while(0)
 
-#define TRACE3(out, fmt, p0, p1, p2) \
+#define TRACE3(inout, hnd, fmt, p0, p1, p2) \
 	do { \
-		_TRACE_DECLARATION(out); \
-		_PRINT_PARAM(fmt[0], p0, 0); \
-		_PRINT_PARAM(fmt[1], p1, 1); \
-		_PRINT_PARAM(fmt[2], p2, 1); \
-		_TRACE_ENDING; \
+		_TRACE_HEADER(inout, hnd); \
+		_PRINT_PARAM(fmt[0], p0, p1, 0); \
+		_PRINT_PARAM(fmt[1], p1, p2, 1); \
+		_PRINT_PARAM(fmt[2], p2, SQL_NTS, 1); \
+		_TRACE_FOOTER; \
 	} while(0)
 
-#define TRACE4(out, fmt, p0, p1, p2, p3) \
+#define TRACE4(inout, hnd, fmt, p0, p1, p2, p3) \
 	do { \
-		_TRACE_DECLARATION(out); \
-		_PRINT_PARAM(fmt[0], p0, 0); \
-		_PRINT_PARAM(fmt[1], p1, 1); \
-		_PRINT_PARAM(fmt[2], p2, 1); \
-		_PRINT_PARAM(fmt[3], p3, 1); \
-		_TRACE_ENDING; \
+		_TRACE_HEADER(inout, hnd); \
+		_PRINT_PARAM(fmt[0], p0, p1, 0); \
+		_PRINT_PARAM(fmt[1], p1, p2, 1); \
+		_PRINT_PARAM(fmt[2], p2, p3, 1); \
+		_PRINT_PARAM(fmt[3], p3, SQL_NTS, 1); \
+		_TRACE_FOOTER; \
 	} while(0)
 
-#define TRACE5(out, fmt, p0, p1, p2, p3, p4) \
+#define TRACE5(inout, hnd, fmt, p0, p1, p2, p3, p4) \
 	do { \
-		_TRACE_DECLARATION(out); \
-		_PRINT_PARAM(fmt[0], p0, 0); \
-		_PRINT_PARAM(fmt[1], p1, 1); \
-		_PRINT_PARAM(fmt[2], p2, 1); \
-		_PRINT_PARAM(fmt[3], p3, 1); \
-		_PRINT_PARAM(fmt[4], p4, 1); \
-		_TRACE_ENDING; \
+		_TRACE_HEADER(inout, hnd); \
+		_PRINT_PARAM(fmt[0], p0, p1, 0); \
+		_PRINT_PARAM(fmt[1], p1, p2, 1); \
+		_PRINT_PARAM(fmt[2], p2, p3, 1); \
+		_PRINT_PARAM(fmt[3], p3, p4, 1); \
+		_PRINT_PARAM(fmt[4], p4, SQL_NTS, 1); \
+		_TRACE_FOOTER; \
 	} while(0)
 
-#define TRACE6(out, fmt, p0, p1, p2, p3, p4, p5) \
+#define TRACE6(inout, hnd, fmt, p0, p1, p2, p3, p4, p5) \
 	do { \
-		_TRACE_DECLARATION(out); \
-		_PRINT_PARAM(fmt[0], p0, 0); \
-		_PRINT_PARAM(fmt[1], p1, 1); \
-		_PRINT_PARAM(fmt[2], p2, 1); \
-		_PRINT_PARAM(fmt[3], p3, 1); \
-		_PRINT_PARAM(fmt[4], p4, 1); \
-		_PRINT_PARAM(fmt[5], p5, 1); \
-		_TRACE_ENDING; \
+		_TRACE_HEADER(inout, hnd); \
+		_PRINT_PARAM(fmt[0], p0, p1, 0); \
+		_PRINT_PARAM(fmt[1], p1, p2, 1); \
+		_PRINT_PARAM(fmt[2], p2, p3, 1); \
+		_PRINT_PARAM(fmt[3], p3, p4, 1); \
+		_PRINT_PARAM(fmt[4], p4, p5, 1); \
+		_PRINT_PARAM(fmt[5], p5, SQL_NTS, 1); \
+		_TRACE_FOOTER; \
 	} while(0)
 
-#define TRACE7(out, fmt, p0, p1, p2, p3, p4, p5, p6) \
+#define TRACE7(inout, hnd, fmt, p0, p1, p2, p3, p4, p5, p6) \
 	do { \
-		_TRACE_DECLARATION(out); \
-		_PRINT_PARAM(fmt[0], p0, 0); \
-		_PRINT_PARAM(fmt[1], p1, 1); \
-		_PRINT_PARAM(fmt[2], p2, 1); \
-		_PRINT_PARAM(fmt[3], p3, 1); \
-		_PRINT_PARAM(fmt[4], p4, 1); \
-		_PRINT_PARAM(fmt[5], p5, 1); \
-		_PRINT_PARAM(fmt[6], p6, 1); \
-		_TRACE_ENDING; \
+		_TRACE_HEADER(inout, hnd); \
+		_PRINT_PARAM(fmt[0], p0, p1, 0); \
+		_PRINT_PARAM(fmt[1], p1, p2, 1); \
+		_PRINT_PARAM(fmt[2], p2, p3, 1); \
+		_PRINT_PARAM(fmt[3], p3, p4, 1); \
+		_PRINT_PARAM(fmt[4], p4, p5, 1); \
+		_PRINT_PARAM(fmt[5], p5, p6, 1); \
+		_PRINT_PARAM(fmt[6], p6, SQL_NTS, 1); \
+		_TRACE_FOOTER; \
 	} while(0)
 
-#define TRACE8(out, fmt, p0, p1, p2, p3, p4, p5, p6, p7) \
+#define TRACE8(inout, hnd, fmt, p0, p1, p2, p3, p4, p5, p6, p7) \
 	do { \
-		_TRACE_DECLARATION(out); \
-		_PRINT_PARAM(fmt[0], p0, 0); \
-		_PRINT_PARAM(fmt[1], p1, 1); \
-		_PRINT_PARAM(fmt[2], p2, 1); \
-		_PRINT_PARAM(fmt[3], p3, 1); \
-		_PRINT_PARAM(fmt[4], p4, 1); \
-		_PRINT_PARAM(fmt[5], p5, 1); \
-		_PRINT_PARAM(fmt[6], p6, 1); \
-		_PRINT_PARAM(fmt[7], p7, 1); \
-		_TRACE_ENDING; \
+		_TRACE_HEADER(inout, hnd); \
+		_PRINT_PARAM(fmt[0], p0, p1, 0); \
+		_PRINT_PARAM(fmt[1], p1, p2, 1); \
+		_PRINT_PARAM(fmt[2], p2, p3, 1); \
+		_PRINT_PARAM(fmt[3], p3, p4, 1); \
+		_PRINT_PARAM(fmt[4], p4, p5, 1); \
+		_PRINT_PARAM(fmt[5], p5, p6, 1); \
+		_PRINT_PARAM(fmt[6], p6, p7, 1); \
+		_PRINT_PARAM(fmt[7], p7, SQL_NTS, 1); \
+		_TRACE_FOOTER; \
 	} while(0)
 
-#define TRACE9(out, fmt, p0, p1, p2, p3, p4, p5, p6, p7, p8) \
+#define TRACE9(inout, hnd, fmt, p0, p1, p2, p3, p4, p5, p6, p7, p8) \
 	do { \
-		_TRACE_DECLARATION(out); \
-		_PRINT_PARAM(fmt[0], p0, 0); \
-		_PRINT_PARAM(fmt[1], p1, 1); \
-		_PRINT_PARAM(fmt[2], p2, 1); \
-		_PRINT_PARAM(fmt[3], p3, 1); \
-		_PRINT_PARAM(fmt[4], p4, 1); \
-		_PRINT_PARAM(fmt[5], p5, 1); \
-		_PRINT_PARAM(fmt[6], p6, 1); \
-		_PRINT_PARAM(fmt[7], p7, 1); \
-		_PRINT_PARAM(fmt[8], p8, 1); \
-		_TRACE_ENDING; \
+		_TRACE_HEADER(inout, hnd); \
+		_PRINT_PARAM(fmt[0], p0, p1, 0); \
+		_PRINT_PARAM(fmt[1], p1, p2, 1); \
+		_PRINT_PARAM(fmt[2], p2, p3, 1); \
+		_PRINT_PARAM(fmt[3], p3, p4, 1); \
+		_PRINT_PARAM(fmt[4], p4, p5, 1); \
+		_PRINT_PARAM(fmt[5], p5, p6, 1); \
+		_PRINT_PARAM(fmt[6], p6, p7, 1); \
+		_PRINT_PARAM(fmt[7], p7, p8, 1); \
+		_PRINT_PARAM(fmt[8], p8, SQL_NTS, 1); \
+		_TRACE_FOOTER; \
 	} while(0)
 
-#define TRACE10(out, fmt, p0, p1, p2, p3, p4, p5, p6, p7, p8, p9) \
+#define TRACE10(inout, hnd, fmt, p0, p1, p2, p3, p4, p5, p6, p7, p8, p9) \
 	do { \
-		_TRACE_DECLARATION(out); \
-		_PRINT_PARAM(fmt[0], p0, 0); \
-		_PRINT_PARAM(fmt[1], p1, 1); \
-		_PRINT_PARAM(fmt[2], p2, 1); \
-		_PRINT_PARAM(fmt[3], p3, 1); \
-		_PRINT_PARAM(fmt[4], p4, 1); \
-		_PRINT_PARAM(fmt[5], p5, 1); \
-		_PRINT_PARAM(fmt[6], p6, 1); \
-		_PRINT_PARAM(fmt[7], p7, 1); \
-		_PRINT_PARAM(fmt[8], p8, 1); \
-		_PRINT_PARAM(fmt[9], p9, 1); \
-		_TRACE_ENDING; \
+		_TRACE_HEADER(inout, hnd); \
+		_PRINT_PARAM(fmt[0], p0, p1, 0); \
+		_PRINT_PARAM(fmt[1], p1, p2, 1); \
+		_PRINT_PARAM(fmt[2], p2, p3, 1); \
+		_PRINT_PARAM(fmt[3], p3, p4, 1); \
+		_PRINT_PARAM(fmt[4], p4, p5, 1); \
+		_PRINT_PARAM(fmt[5], p5, p6, 1); \
+		_PRINT_PARAM(fmt[6], p6, p7, 1); \
+		_PRINT_PARAM(fmt[7], p7, p8, 1); \
+		_PRINT_PARAM(fmt[8], p8, p9, 1); \
+		_PRINT_PARAM(fmt[9], p9, SQL_NTS, 1); \
+		_TRACE_FOOTER; \
 	} while(0)
 
-#define TRACE11(out, fmt, p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10) \
+#define TRACE11(inout, hnd, fmt, p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10) \
 	do { \
-		_TRACE_DECLARATION(out); \
-		_PRINT_PARAM(fmt[0], p0, 0); \
-		_PRINT_PARAM(fmt[1], p1, 1); \
-		_PRINT_PARAM(fmt[2], p2, 1); \
-		_PRINT_PARAM(fmt[3], p3, 1); \
-		_PRINT_PARAM(fmt[4], p4, 1); \
-		_PRINT_PARAM(fmt[5], p5, 1); \
-		_PRINT_PARAM(fmt[6], p6, 1); \
-		_PRINT_PARAM(fmt[7], p7, 1); \
-		_PRINT_PARAM(fmt[8], p8, 1); \
-		_PRINT_PARAM(fmt[9], p9, 1); \
-		_PRINT_PARAM(fmt[10], p10, 1); \
-		_TRACE_ENDING; \
+		_TRACE_HEADER(inout, hnd); \
+		_PRINT_PARAM(fmt[0], p0, p1, 0); \
+		_PRINT_PARAM(fmt[1], p1, p2, 1); \
+		_PRINT_PARAM(fmt[2], p2, p3, 1); \
+		_PRINT_PARAM(fmt[3], p3, p4, 1); \
+		_PRINT_PARAM(fmt[4], p4, p5, 1); \
+		_PRINT_PARAM(fmt[5], p5, p6, 1); \
+		_PRINT_PARAM(fmt[6], p6, p7, 1); \
+		_PRINT_PARAM(fmt[7], p7, p8, 1); \
+		_PRINT_PARAM(fmt[8], p8, p9, 1); \
+		_PRINT_PARAM(fmt[9], p9, p10, 1); \
+		_PRINT_PARAM(fmt[10], p10, SQL_NTS, 1); \
+		_TRACE_FOOTER; \
 	} while(0)
 
-#define TRACE12(out, fmt, p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11) \
-	do { \
-		_TRACE_DECLARATION(out); \
-		_PRINT_PARAM(fmt[0], p0, 0); \
-		_PRINT_PARAM(fmt[1], p1, 1); \
-		_PRINT_PARAM(fmt[2], p2, 1); \
-		_PRINT_PARAM(fmt[3], p3, 1); \
-		_PRINT_PARAM(fmt[4], p4, 1); \
-		_PRINT_PARAM(fmt[5], p5, 1); \
-		_PRINT_PARAM(fmt[6], p6, 1); \
-		_PRINT_PARAM(fmt[7], p7, 1); \
-		_PRINT_PARAM(fmt[8], p8, 1); \
-		_PRINT_PARAM(fmt[9], p9, 1); \
-		_PRINT_PARAM(fmt[10], p10, 1); \
-		_PRINT_PARAM(fmt[11], p11, 1); \
-		_TRACE_ENDING; \
-	} while(0)
+#define TRACE12(inout, hnd, fmt, p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, \
+	p11) \
+do { \
+	_TRACE_HEADER(inout, hnd); \
+	_PRINT_PARAM(fmt[0], p0, p1, 0); \
+	_PRINT_PARAM(fmt[1], p1, p2, 1); \
+	_PRINT_PARAM(fmt[2], p2, p3, 1); \
+	_PRINT_PARAM(fmt[3], p3, p4, 1); \
+	_PRINT_PARAM(fmt[4], p4, p5, 1); \
+	_PRINT_PARAM(fmt[5], p5, p6, 1); \
+	_PRINT_PARAM(fmt[6], p6, p7, 1); \
+	_PRINT_PARAM(fmt[7], p7, p8, 1); \
+	_PRINT_PARAM(fmt[8], p8, p9, 1); \
+	_PRINT_PARAM(fmt[9], p9, p10, 1); \
+	_PRINT_PARAM(fmt[10], p10, p11, 1); \
+	_PRINT_PARAM(fmt[11], p11, SQL_NTS, 1); \
+	_TRACE_FOOTER; \
+} while(0)
 
 /*INDENT-OFF*/ //astyle trips on these following two defs
-#define TRACE13(out, fmt, p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, \
-		p12) \
+#define TRACE13(inout, hnd, fmt, p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, \
+		p11, p12) \
 	do { \
-		_TRACE_DECLARATION(out); \
-		_PRINT_PARAM(fmt[0], p0, 0); \
-		_PRINT_PARAM(fmt[1], p1, 1); \
-		_PRINT_PARAM(fmt[2], p2, 1); \
-		_PRINT_PARAM(fmt[3], p3, 1); \
-		_PRINT_PARAM(fmt[4], p4, 1); \
-		_PRINT_PARAM(fmt[5], p5, 1); \
-		_PRINT_PARAM(fmt[6], p6, 1); \
-		_PRINT_PARAM(fmt[7], p7, 1); \
-		_PRINT_PARAM(fmt[8], p8, 1); \
-		_PRINT_PARAM(fmt[9], p9, 1); \
-		_PRINT_PARAM(fmt[10], p10, 1); \
-		_PRINT_PARAM(fmt[11], p11, 1); \
-		_PRINT_PARAM(fmt[12], p12, 1); \
-		_TRACE_ENDING; \
+		_TRACE_HEADER(inout, hnd); \
+		_PRINT_PARAM(fmt[0], p0, p1, 0); \
+		_PRINT_PARAM(fmt[1], p1, p2, 1); \
+		_PRINT_PARAM(fmt[2], p2, p3, 1); \
+		_PRINT_PARAM(fmt[3], p3, p4, 1); \
+		_PRINT_PARAM(fmt[4], p4, p5, 1); \
+		_PRINT_PARAM(fmt[5], p5, p6, 1); \
+		_PRINT_PARAM(fmt[6], p6, p7, 1); \
+		_PRINT_PARAM(fmt[7], p7, p8, 1); \
+		_PRINT_PARAM(fmt[8], p8, p9, 1); \
+		_PRINT_PARAM(fmt[9], p9, p10, 1); \
+		_PRINT_PARAM(fmt[10], p10, p11, 1); \
+		_PRINT_PARAM(fmt[11], p11, p12, 1); \
+		_PRINT_PARAM(fmt[12], p12, SQL_NTS, 1); \
+		_TRACE_FOOTER; \
 	} while(0)
 
-#define TRACE14(out, fmt, p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, \
-		p12, p13) \
+#define TRACE14(inout, hnd, fmt, p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, \
+		p11, p12, p13) \
 	do { \
-		_TRACE_DECLARATION(out); \
-		_PRINT_PARAM(fmt[0], p0, 0); \
-		_PRINT_PARAM(fmt[1], p1, 1); \
-		_PRINT_PARAM(fmt[2], p2, 1); \
-		_PRINT_PARAM(fmt[3], p3, 1); \
-		_PRINT_PARAM(fmt[4], p4, 1); \
-		_PRINT_PARAM(fmt[5], p5, 1); \
-		_PRINT_PARAM(fmt[6], p6, 1); \
-		_PRINT_PARAM(fmt[7], p7, 1); \
-		_PRINT_PARAM(fmt[8], p8, 1); \
-		_PRINT_PARAM(fmt[9], p9, 1); \
-		_PRINT_PARAM(fmt[10], p10, 1); \
-		_PRINT_PARAM(fmt[11], p11, 1); \
-		_PRINT_PARAM(fmt[12], p12, 1); \
-		_PRINT_PARAM(fmt[13], p13, 1); \
-		_TRACE_ENDING; \
+		_TRACE_HEADER(inout, hnd); \
+		_PRINT_PARAM(fmt[0], p0, p1, 0); \
+		_PRINT_PARAM(fmt[1], p1, p2, 1); \
+		_PRINT_PARAM(fmt[2], p2, p3, 1); \
+		_PRINT_PARAM(fmt[3], p3, p4, 1); \
+		_PRINT_PARAM(fmt[4], p4, p5, 1); \
+		_PRINT_PARAM(fmt[5], p5, p6, 1); \
+		_PRINT_PARAM(fmt[6], p6, p7, 1); \
+		_PRINT_PARAM(fmt[7], p7, p8, 1); \
+		_PRINT_PARAM(fmt[8], p8, p9, 1); \
+		_PRINT_PARAM(fmt[9], p9, p10, 1); \
+		_PRINT_PARAM(fmt[10], p10, p11, 1); \
+		_PRINT_PARAM(fmt[11], p11, p12, 1); \
+		_PRINT_PARAM(fmt[12], p12, p13, 1); \
+		_PRINT_PARAM(fmt[13], p13, SQL_NTS, 1); \
+		_TRACE_FOOTER; \
 	} while(0)
 /*INDENT-ON*/
 

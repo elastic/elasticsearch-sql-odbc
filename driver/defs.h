@@ -17,7 +17,8 @@
 #define ESODBC_LOG_FILE_PREFIX		"esodbc"
 #define ESODBC_LOG_FILE_SUFFIX		".log"
 /* Environment variable name holding the log directory name */
-#define ESODBC_ENV_VAR_LOG_DIR		"ESODBC_LOG_DIR"
+#define ESODBC_LOG_DIR_ENV_VAR		"ESODBC_LOG_DIR"
+#define ESODBC_LOG_MAX_RETRY		5
 
 // FIXME: review@alpha
 /* TODO: should there be a max? */
@@ -119,8 +120,8 @@
 /* driver version ex. 7.0.0(b0a34b4,u,d) */
 #define ESODBC_DRIVER_VER	STR(DRV_VERSION) \
 	"(" STR(DRV_SRC_VER) "," STR(DRV_ENCODING) "," STR(DRV_BUILD_TYPE) ")"
-/* TODO: learn it from ES */
-#define ESODBC_ELASTICSEARCH_VER	"7.x"
+/* TODO: POST / (together with cluster "sniffing") */
+#define ESODBC_ELASTICSEARCH_VER	"7.0.0"
 #define ESODBC_ELASTICSEARCH_NAME	"Elasticsearch"
 
 /*

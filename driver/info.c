@@ -892,10 +892,7 @@ SQLRETURN EsSQLGetDiagFieldW(
 	if (RecNumber <= 0) {
 		ERRH(Handle, "record number must be >=1; received: %d.", RecNumber);
 		return SQL_ERROR;
-	}
-	if (1 < RecNumber) {
-		/* XXX: does it make sense to have error FIFOs? see: EsSQLGetDiagRec */
-		// WARN("no error lists supported (yet).");
+	} else if (1 < RecNumber) {
 		return SQL_NO_DATA;
 	}
 
@@ -903,41 +900,37 @@ SQLRETURN EsSQLGetDiagFieldW(
 		ERR("null handle provided.");
 		return SQL_INVALID_HANDLE;
 	}
-
 	diag = &HDRH(Handle)->diag;
 	/* GetDiagField can't set diagnostics itself, so use a dummy */
 	*HDRH(&dummy) = *HDRH(Handle); /* need a valid hhdr struct */
 
 	/*INDENT-OFF*/
-	switch(DiagIdentifier) {
+	switch (DiagIdentifier) {
 		/* Header Fields */
 		case SQL_DIAG_NUMBER:
-			if (StringLengthPtr) {
-				*StringLengthPtr = sizeof(SQLINTEGER);
+			if (! DiagInfoPtr) {
+				ERRH(Handle, "NULL DiagInfo with SQL_DIAG_NUMBER");
+				return SQL_ERROR;
 			}
-			if (DiagInfoPtr) {
-				// FIXME: check HandleType's record count (1 or 0)
-				*(SQLINTEGER *)DiagInfoPtr = 0;
-				DBGH(Handle, "available diagnostics: %d.",
-						*(SQLINTEGER *)DiagInfoPtr);
-			} else {
-				DBGH(Handle, "no DiagInfo buffer provided - returning ");
-				return SQL_SUCCESS_WITH_INFO;
-			}
-			FIXME; // FIXME
-			break;
+			*(SQLINTEGER *)DiagInfoPtr =
+				(diag->state != SQL_STATE_00000) ? 1 : 0;
+			DBGH(Handle, "available diagnostics count: %ld.",
+					*(SQLINTEGER *)DiagInfoPtr);
+			return SQL_SUCCESS;
+
 		case SQL_DIAG_CURSOR_ROW_COUNT:
 		case SQL_DIAG_DYNAMIC_FUNCTION:
 		case SQL_DIAG_DYNAMIC_FUNCTION_CODE:
 		case SQL_DIAG_ROW_COUNT:
+			/* should be handled by DM */
 			if (HandleType != SQL_HANDLE_STMT) {
 				ERRH(Handle, "DiagIdentifier %d called with non-statement "
 						"handle type %d.", DiagIdentifier, HandleType);
 				return SQL_ERROR;
 			}
-			// FIXME
-			FIXME;
-			//break;
+			ERRH(Handle, "DiagIdentifier %hd is not supported.");
+			return SQL_ERROR;
+
 		/* case SQL_DIAG_RETURNCODE: break; -- DM only */
 
 		/* Record Fields */
