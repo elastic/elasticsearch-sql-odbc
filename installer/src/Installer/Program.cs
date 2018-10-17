@@ -7,11 +7,32 @@ namespace ODBCInstaller
 {
     partial class Program
     {
-        static void Main()
-        {
-            const string PreRelease = "-alpha8";
+        static void Main(string[] args)
+		{
+			// Remove the platform suffix
+			const string platformSuffix = "-windows-x86_64";
+			var releaseString = args[1];
+			if (string.IsNullOrEmpty(releaseString) == false &&
+				releaseString.EndsWith(platformSuffix))
+			{
+				releaseString = releaseString.Replace(platformSuffix, string.Empty);
+			}
+
+			var preRelease = string.Empty;
+			// Is this a pre-release?
+			if (releaseString.Contains("-"))
+			{
+				var versionSplit = releaseString.Split('-');
+				if (versionSplit.Length > 2)
+				{
+					throw new ArgumentException("Unexpected version string: " + args[1]);
+				}
+
+				preRelease = "-" + versionSplit[1];
+			}
+
             var odbcVersion = FileVersionInfo.GetVersionInfo(System.IO.Path.GetFullPath("driver\\esodbc7u.dll"));
-            var VersionString = $"{odbcVersion.ProductVersion }{PreRelease}";
+            var VersionString = $"{odbcVersion.ProductVersion}{preRelease}";
 
             var driverDirectory = "driver\\";
             var driverFilename = System.IO.Path.Combine(driverDirectory, "esodbc7u.dll");

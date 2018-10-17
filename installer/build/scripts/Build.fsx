@@ -2,7 +2,6 @@
 
 #r "FakeLib.dll"
 #load "Products.fsx"
-#load "BuildConfig.fsx"
 
 open System
 open System.Diagnostics
@@ -86,6 +85,7 @@ module Builder =
     //        ]
 
     let BuildMsi (product : ProductVersions) =
+
         if (product.Versions |> List.exists (fun v -> v.Source = Compile)) then
             !! (MsiDir @@ "*.csproj")
             |> MSBuildRelease MsiBuildDir "Build"
@@ -99,16 +99,13 @@ module Builder =
            match version.Source with
            | Compile ->
                let exitCode = ExecProcess (fun info ->
-                                info.FileName <- sprintf "%sElastic.Installer.Msi" MsiBuildDir
+                                info.FileName <- sprintf "%sOdbcInstaller" MsiBuildDir
                                 info.WorkingDirectory <- MsiDir
                                 info.Arguments <- [product.Name; version.FullVersion; Path.GetFullPath(InDir)] |> String.concat " "
                                ) <| TimeSpan.FromMinutes 20.
     
                if exitCode <> 0 then failwithf "Error building MSI for %s" product.Name
-               let finalMsi = outMsiPath product version
-               CopyFile finalMsi (MsiDir @@ (sprintf "%s.msi" product.Name))
-               Sign finalMsi product
-           | _ ->
-               if not <| fileExists (product.DownloadPath version) then failwithf "No file found at %s" (product.DownloadPath version)
-               CopyFile (outMsiPath product version) (product.DownloadPath version)
+              // let finalMsi = outMsiPath product version
+              // CopyFile finalMsi (MsiDir @@ (sprintf "%s.msi" product.Name))
+              // Sign finalMsi product
         )

@@ -8,13 +8,11 @@
     <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>ODBCInstaller</RootNamespace>
-    <AssemblyName>WixSharp Setup</AssemblyName>
+    <AssemblyName>ODBCInstaller</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
-    <NuGetPackageImportStamp>
-    </NuGetPackageImportStamp>
-    <TargetFrameworkProfile />
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+	<TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -50,45 +48,17 @@
     <Compile Include="ODBCDriverDataSource.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <None Include="driver\esodbc7u.lib" />
-    <None Include="driver\LICENSE.rtf" />
-    <None Include="wix\$(ProjectName).g.wxs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
-    <None Include="packages.config" />
+    <None Include="paket.references" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="driver\esdsnbnd.dll" />
-    <Content Include="driver\esdsnedt.dll" />
-    <Content Include="driver\esodbc7u.dll" />
     <Content Include="leftbanner.bmp" />
     <Content Include="topbanner.bmp" />
   </ItemGroup>
-  <!--   <ItemGroup>
-    <PackageReference Include="WixSharp">
-      <Version>1.4.8.0</Version>
-    </PackageReference>
-  </ItemGroup> -->
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="..\..\.paket\paket.targets" />
-  <Import Project="..\..\packages\WixSharp.bin.1.9.1\build\WixSharp.bin.targets" Condition="Exists('..\..\packages\WixSharp.bin.1.9.1\build\WixSharp.bin.targets')" />
-  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
-    <PropertyGroup>
-      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
-    </PropertyGroup>
-    <Error Condition="!Exists('..\..\packages\WixSharp.bin.1.9.1\build\WixSharp.bin.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\..\packages\WixSharp.bin.1.9.1\build\WixSharp.bin.targets'))" />
-    <Error Condition="!Exists('..\..\packages\WixSharp.1.9.1\build\WixSharp.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\..\packages\WixSharp.1.9.1\build\WixSharp.targets'))" />
-  </Target>
-  <Import Project="..\..\packages\WixSharp.1.9.1\build\WixSharp.targets" Condition="Exists('..\..\packages\WixSharp.1.9.1\build\WixSharp.targets')" />
-  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
-       Other similar extension points exist, see Microsoft.Common.targets.
-  <Target Name="BeforeBuild">
-  </Target>
-  <Target Name="AfterBuild">
-  </Target>
-  -->
-  <UsingTask AssemblyFile="$(SolutionDir)packages\WixSharp.1.9.1\build\SetEnvVar.dll" TaskName="SetEnvVar" />
   <ItemGroup>
     <Reference Include="BootstrapperCore">
       <HintPath>..\..\packages\WixSharp.bin\lib\BootstrapperCore.dll</HintPath>
@@ -116,5 +86,5 @@
       <Paket>True</Paket>
     </Reference>
   </ItemGroup>
-  <Import Project="..\..\packages\WixSharp.bin\build\WixSharp.bin.targets" Condition="Exists('..\..\packages\WixSharp.bin\build\WixSharp.bin.targets')" Label="Paket" />
+
 </Project>
