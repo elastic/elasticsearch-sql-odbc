@@ -50,20 +50,9 @@ Target:
 """
     type VersionRegex = Regex< @"^(?:\s*(?<Product>.*?)\s*)?((?<Source>\w*)\:)?(?<Version>(?<Major>\d+)\.(?<Minor>\d+)\.(?<Patch>\d+)(?:\-(?<Prerelease>[\w\-]+))?)", noMethodPrefix=true >
 
-    let private parseSource = function
-        | "r" -> Released
-        | hash when isNotNullOrEmpty hash -> BuildCandidate hash
-        | _ -> Compile
-
     let parseVersion version =
         let m = VersionRegex().Match version
         if m.Success |> not then failwithf "Could not parse version from %s" version
-        let source = parseSource m.Source.Value
-
-        let rawValue =
-            match source with
-            | Compile -> m.Version.Value
-            | _ -> sprintf "%s:%s" m.Source.Value m.Version.Value
 
         { Product = m.Product.Value;
           FullVersion = m.Version.Value;
@@ -71,8 +60,7 @@ Target:
           Minor = m.Minor.Value |> int;
           Patch = m.Patch.Value |> int;
           Prerelease = m.Prerelease.Value; 
-          Source = source;
-          RawValue = rawValue; }
+          RawValue = m.Version.Value; }
 
     let private args = getBuildParamOrDefault "cmdline" "buildinstaller" |> split ' '
 
@@ -82,13 +70,18 @@ Target:
 
         let zips = InDir
                    |> directoryInfo
-                   |> filesInDirMatching ("es*" + product.Name + "*.zip")
+                   |> filesInDirMatching ("*.zip")
 
         match zips.Length with
         | 0 -> failwithf "No %s zip file found in %s" product.Name InDir
         | 1 ->
             let version = zips.[0] |> extractVersion |> parseVersion
-            tracefn "Extracted %s from %s" version.FullVersion zips.[0].FullName
+            tracefn "Extracted version information %s from %s" version.FullVersion zips.[0].FullName
+
+            // Unzip the files
+            Unzip InDir zips.[0].FullName
+            tracefn "Unzipped files in %s" zips.[0].FullName
+            
             [version]
         | _ -> failwithf "Expecting one %s zip file in %s but found %i" product.Name InDir zips.Length
 
@@ -116,7 +109,7 @@ Target:
         | _ -> target :: args
 
     let private certAndPasswordFromEnvVariables () =
-        trace "Getting signing cert and password from environment variables"
+        trace "SKIP: Getting signing cert and password from environment variables"
         //[("ELASTIC_CERT_FILE", "certificate");("ELASTIC_CERT_PASSWORD", "password")]
         //|> List.iter(fun (v, b) ->
         //        let ev = Environment.GetEnvironmentVariable(v, EnvironmentVariableTarget.Machine)
@@ -125,7 +118,7 @@ Target:
         //   )
 
     let private certAndPasswordFromFile certFile passwordFile =
-        trace "Getting signing cert and password from file arguments"
+        trace "SKIP: Getting signing cert and password from file arguments"
         //match (fileExists certFile, fileExists passwordFile) with
         //| (true, true) ->
         //    setBuildParam "certificate" certFile
@@ -139,11 +132,11 @@ Target:
                        | ["release"] ->
                            setBuildParam "release" "1"
                            certAndPasswordFromEnvVariables ()
-                           All |> List.map (ProductVersions.CreateFromProduct versionFromInDir)
+                           [Odbc] |> List.map (ProductVersions.CreateFromProduct versionFromInDir)
                        | ["release"; certFile; passwordFile ] ->
                            setBuildParam "release" "1"
                            certAndPasswordFromFile certFile passwordFile
-                           All |> List.map (ProductVersions.CreateFromProduct versionFromInDir)
+                           [Odbc] |> List.map (ProductVersions.CreateFromProduct versionFromInDir)
                        | _ ->
                            traceError usage
                            exit 2

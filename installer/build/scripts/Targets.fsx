@@ -8,7 +8,6 @@
 #load "Commandline.fsx"
 
 open System
-open System.Management.Automation
 open Fake
 open Products
 open Products.Products
@@ -22,7 +21,7 @@ let productsToBuild = Commandline.parse()
 let productDescriptions = productsToBuild
                           |> List.map(fun p ->
                                  p.Versions 
-                                 |> List.map(fun v -> sprintf "%s %s (%s)" p.Title v.FullVersion v.Source.Description)
+                                 |> List.map(fun v -> sprintf "%s %s (%s)" p.Title v.FullVersion "Compile")
                              )
                           |> List.concat
                           |> String.concat Environment.NewLine
@@ -31,7 +30,7 @@ if (getBuildParam "target" |> toLower <> "help") then
     traceHeader (sprintf "Products:%s%s%s" Environment.NewLine Environment.NewLine productDescriptions)
 
 Target "Clean" (fun _ ->
-    CleanDirs [MsiBuildDir; OutDir; ResultsDir]
+    CleanDirs [MsiBuildDir; OutDir;]
     productsToBuild
     |> List.iter(fun p -> CleanDirs [OutDir @@ p.Name;])
 )

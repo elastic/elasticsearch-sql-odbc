@@ -5,23 +5,17 @@
 
 open System
 open System.Diagnostics
-open System.Text
 open System.IO
-open System.Text.RegularExpressions
-open Microsoft.FSharp.Reflection
 open Fake
-open Fake.AssemblyInfoFile
-open Fake.FileHelper
-open Fake.Git
-open Fake.Testing.XUnit2
 open Products.Products
 open Products.Paths
 open Products
 
 module Builder =
+    open Fake.FileHelper
 
     let Sign file (product : ProductVersions) =
-        tracefn "Skipping signing"
+        tracefn "SKIP: Signing file"
         //let release = getBuildParam "release" = "1"
         //if release then
         //    let certificate = getBuildParam "certificate"
@@ -65,47 +59,35 @@ module Builder =
 
         //    let exitCode = sign()
         //    if exitCode <> 0 then failwithf "Signing %s returned error exit code: %i" product.Title exitCode
-    
-    //let patchAssemblyInformation (product: ProductVersions) (version:Version) = 
-    //    let version = version.FullVersion
-    //    let commitHash = Information.getCurrentHash()
-    //    let file = product.ServiceDir @@ "Properties" @@ "AssemblyInfo.cs"
-    //    CreateCSharpAssemblyInfo file
-    //        [Attribute.Title product.Product.AssemblyTitle
-    //         Attribute.Description product.Product.AssemblyDescription
-    //         Attribute.Guid product.Product.AssemblyGuid
-    //         Attribute.Product product.Product.Title
-    //         Attribute.Metadata("GitBuildHash", commitHash)
-    //         Attribute.Company  "Elasticsearch BV"
-    //         Attribute.Copyright "Apache License, version 2 (ALv2). Copyright Elasticsearch."
-    //         Attribute.Trademark (sprintf "%s is a trademark of Elasticsearch BV, registered in the U.S. and in other countries." product.Product.Title)
-    //         Attribute.Version version
-    //         Attribute.FileVersion version
-    //         Attribute.InformationalVersion version // Attribute.Version and Attribute.FileVersion normalize the version number, so retain the prelease suffix
-    //        ]
 
     let BuildMsi (product : ProductVersions) =
 
-        if (product.Versions |> List.exists (fun v -> v.Source = Compile)) then
-            !! (MsiDir @@ "*.csproj")
-            |> MSBuildRelease MsiBuildDir "Build"
-            |> ignore
-
-        let outMsiPath (product:ProductVersions) (version:Version) = 
-            OutDir @@ product.Name @@ (sprintf "%s-%s.msi" product.Name version.FullVersion)
+        !! (MsiDir @@ "*.csproj")
+        |> MSBuildRelease MsiBuildDir "Build"
+        |> ignore
 
         product.Versions
         |> List.iter(fun version -> 
-           match version.Source with
-           | Compile ->
-               let exitCode = ExecProcess (fun info ->
-                                info.FileName <- sprintf "%sOdbcInstaller" MsiBuildDir
-                                info.WorkingDirectory <- MsiDir
-                                info.Arguments <- [product.Name; version.FullVersion; Path.GetFullPath(InDir)] |> String.concat " "
-                               ) <| TimeSpan.FromMinutes 20.
+
+            let zipfileName = InDir
+                              |> directoryInfo
+                              |> filesInDirMatching ("*.zip")
+                              |> Seq.head
+
+            let exitCode = ExecProcess (fun info ->
+                             info.FileName <- sprintf "%sOdbcInstaller" MsiBuildDir
+                             info.WorkingDirectory <- MsiDir
+                             info.Arguments <- [version.FullVersion; zipfileName.FullName] |> String.concat " "
+                            ) <| TimeSpan.FromMinutes 20.
     
-               if exitCode <> 0 then failwithf "Error building MSI for %s" product.Name
-              // let finalMsi = outMsiPath product version
-              // CopyFile finalMsi (MsiDir @@ (sprintf "%s.msi" product.Name))
-              // Sign finalMsi product
+            if exitCode <> 0 then failwithf "Error building MSI for %s" product.Name
+
+            let MsiFiles = MsiDir
+                           |> directoryInfo
+                           |> filesInDirMatching ("*.msi")
+                           |> Seq.map (fun f -> f.FullName)
+
+            CopyFiles OutDir MsiFiles
+            // CopyFile finalMsi (MsiDir @@ (sprintf "%s.msi" product.Name))
+            // Sign finalMsi product
         )

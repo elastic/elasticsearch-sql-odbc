@@ -11,7 +11,7 @@ namespace ODBCInstaller
 		{
 			// Remove the platform suffix
 			const string platformSuffix = "-windows-x86_64";
-			var releaseString = args[1];
+			var releaseString = args[0];
 			if (string.IsNullOrEmpty(releaseString) == false &&
 				releaseString.EndsWith(platformSuffix))
 			{
@@ -25,47 +25,51 @@ namespace ODBCInstaller
 				var versionSplit = releaseString.Split('-');
 				if (versionSplit.Length > 2)
 				{
-					throw new ArgumentException("Unexpected version string: " + args[1]);
+					throw new ArgumentException("Unexpected version string: " + args[0]);
 				}
 
 				preRelease = "-" + versionSplit[1];
 			}
 
-            var odbcVersion = FileVersionInfo.GetVersionInfo(System.IO.Path.GetFullPath("driver\\esodbc7u.dll"));
-            var VersionString = $"{odbcVersion.ProductVersion}{preRelease}";
+			// Get the input files
+			var zipFilepath = args[1];
+			var zipContentsDirectory = new System.IO.DirectoryInfo(zipFilepath.Replace(".zip", string.Empty)).FullName;
+			var driverFileInfo = GetDriverFileInfo(zipContentsDirectory);
+            var driverFilePath = System.IO.Path.Combine(zipContentsDirectory, driverFileInfo.FileName);
 
-            var driverDirectory = "driver\\";
-            var driverFilename = System.IO.Path.Combine(driverDirectory, "esodbc7u.dll");
+			// Append any prerelease flags onto the version string
+			var msiVersionString = $"{driverFileInfo.ProductVersion}{preRelease}";
+			var msiFileName = new System.IO.FileInfo(zipFilepath).Name.Replace(".zip", string.Empty);
 
-            var files = System.IO.Directory.GetFiles(driverDirectory)
-                              .Where(f => f.EndsWith(driverFilename) == false)
+            var files = System.IO.Directory.GetFiles(zipContentsDirectory)
+                              .Where(f => f.EndsWith(driverFilePath) == false)
                               .Select(f => new File(f))
-                              .Concat(new[] { new File(driverFilename, new ODBCDriver("Elasticsearch Driver")) } )
+                              .Concat(new[] { new File(driverFilePath, new ODBCDriver("Elasticsearch Driver")) })
                               .Cast<WixEntity>()
                               .ToArray();
 
-            var installDirectory = $@"%ProgramFiles%\Elastic\ODBCDriver\{VersionString}";
+            var installDirectory = $@"%ProgramFiles%\Elastic\ODBCDriver\{msiVersionString}";
             var components = new Dir(installDirectory, files);
 
             var project = new Project("ODBCDriverInstaller", components)
             {
                 Platform = Platform.x64,
                 InstallScope = InstallScope.perMachine,
-                Version = new Version(odbcVersion.ProductMajorPart, odbcVersion.ProductMinorPart, odbcVersion.ProductBuildPart, odbcVersion.ProductPrivatePart),
+                Version = new Version(driverFileInfo.ProductMajorPart, driverFileInfo.ProductMinorPart, driverFileInfo.ProductBuildPart, driverFileInfo.ProductPrivatePart),
                 GUID = new Guid("e87c5d53-fddf-4539-9447-49032ed527bb"),
                 UI = WUI.WixUI_InstallDir,
                 BannerImage = "topbanner.bmp",
                 BackgroundImage = "leftbanner.bmp",
                 Name = "Elasticsearch ODBC Driver",
-                Description = $"{odbcVersion.FileDescription} ({VersionString})",
+                Description = $"{driverFileInfo.FileDescription} ({msiVersionString})",
                 ControlPanelInfo = new ProductInfo
                 {
                     ProductIcon = "ODBC.ico",
-                    Manufacturer = odbcVersion.CompanyName,
+                    Manufacturer = driverFileInfo.CompanyName,
                     UrlInfoAbout = "https://www.elastic.co/products/stack/elasticsearch-sql",
                     HelpLink = "https://discuss.elastic.co/c/elasticsearch"
                 },
-                OutFileName = $"elasticsearch-odbc-driver-{VersionString}",
+                OutFileName = msiFileName,
                 
                 // http://wixtoolset.org/documentation/manual/v3/xsd/wix/majorupgrade.html
                 MajorUpgrade = new MajorUpgrade
@@ -73,15 +77,23 @@ namespace ODBCInstaller
                     AllowDowngrades = false,
                     AllowSameVersionUpgrades = false,
                     Disallow = true,
-                    DisallowUpgradeErrorMessage = "An existing version is already installed, please uninstall this version before continuing.",
-                    DowngradeErrorMessage = "A more recent version is already installed, please uninstall this version before continuing.",
+                    DisallowUpgradeErrorMessage = "An existing version is already installed, please uninstall before continuing.",
+                    DowngradeErrorMessage = "A more recent version is already installed, please uninstall before continuing.",
                 }
             };
 
-            project.Attributes.Add("Manufacturer", odbcVersion.CompanyName);
-            project.WixVariables.Add("WixUILicenseRtf", "driver\\LICENSE.rtf");
+            project.Attributes.Add("Manufacturer", driverFileInfo.CompanyName);
+            project.WixVariables.Add("WixUILicenseRtf", System.IO.Path.Combine(zipContentsDirectory, "LICENSE.rtf"));
 
             project.BuildMsi();
         }
-    }
+
+		private static FileVersionInfo GetDriverFileInfo(string zipContentsDirectory)
+		{
+			return System.IO.Directory.GetFiles(zipContentsDirectory)
+						 .Where(f => f.EndsWith(".dll"))
+						 .Select(f => FileVersionInfo.GetVersionInfo(f))
+						 .Single(f => f.FileDescription == "ODBC Unicode driver for Elasticsearch");
+		}
+	}
 }

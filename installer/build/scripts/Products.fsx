@@ -3,7 +3,6 @@
 #r "FakeLib.dll"
 
 open System.Globalization
-open System.IO
 open Fake
 
 module Paths =
@@ -11,7 +10,6 @@ module Paths =
     let ToolsDir = BuildDir @@ "tools/"
     let InDir = BuildDir @@ "in/"
     let OutDir = BuildDir @@ "out/"
-    let ResultsDir = BuildDir @@ "results/"
 
     let SrcDir = "./src/"
     let MsiDir = SrcDir @@ "Installer/"
@@ -42,19 +40,6 @@ module Products =
         member this.Title =
             CultureInfo.InvariantCulture.TextInfo.ToTitleCase this.Name
 
-    let All = [Odbc]
-
-    type Source =
-        | Compile
-        | Released
-        | BuildCandidate of hash:string
-
-        member this.Description =
-            match this with
-            | Compile -> "compiled from source"
-            | Released -> "official release"
-            | BuildCandidate hash -> sprintf "build candidate %s" hash
-
     type Version = {
         Product : string;
         FullVersion : string;
@@ -62,7 +47,6 @@ module Products =
         Minor : int;
         Patch : int;
         Prerelease : string;
-        Source : Source;
         RawValue: string;
     }
 
@@ -71,19 +55,6 @@ module Products =
         member this.Versions = versions
         member this.Name = product.Name
         member this.Title = product.Title
-
-        member private this.ZipFile (version:Version) =
-            let fullPathInDir = InDir |> Path.GetFullPath
-            Path.Combine(fullPathInDir, sprintf "%s-%s.zip" this.Name version.FullVersion)
-
-        member private this.ExtractedDirectory (version:Version) =
-            let fullPathInDir = InDir |> Path.GetFullPath            
-            Path.Combine(fullPathInDir, sprintf "%s-%s" this.Name version.FullVersion)
-
-        member this.BinDirs = 
-            this.Versions
-            |> List.filter (fun v -> v.Source = Compile)
-            |> List.map(fun v -> InDir @@ sprintf "%s-%s/bin/" this.Name v.FullVersion)
 
         static member CreateFromProduct (productToVersion:Product -> Version list) (product: Product)  =
             ProductVersions(product, productToVersion product)
