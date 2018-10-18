@@ -227,9 +227,16 @@ BOOL SQL_API ConfigDSNW(
 	int res;
 	DWORD ierror = 0;
 
-	TRACE4(_IN, NULL, "phww", hwndParent, fRequest, lpszDriver,
-		lpszAttributes);
+#ifndef NDEBUG /* don't print the PWD */
+	const char *fmt_in = "phww";
+	const char *fmt_out = "dphww";
+#else /* NDEBUG */
+	const char *fmt_in = "phwp";
+	const char *fmt_out = "dphwp";
+#endif /* NDEBUG */
 
+	TRACE4(_IN, NULL, fmt_in, hwndParent, fRequest, lpszDriver,
+		lpszAttributes);
 	init_dsn_attrs(&attrs);
 
 	/* assign the Driver name; this is not the value of the Driver key in the
@@ -281,7 +288,7 @@ BOOL SQL_API ConfigDSNW(
 		SQLPostInstallerError(ODBC_ERROR_REQUEST_FAILED, NULL);
 	}
 
-	TRACE5(_OUT, NULL, "dphww", ierror, hwndParent, fRequest, lpszDriver,
+	TRACE5(_OUT, NULL, fmt_out, ierror, hwndParent, fRequest, lpszDriver,
 		lpszAttributes);
 	return ierror == 0;
 }

@@ -1765,8 +1765,10 @@ SQLRETURN EsSQLDriverConnectW
 	init_dsn_attrs(&attrs);
 
 	if (szConnStrIn) {
+#ifndef NDEBUG /* don't print the PWD */
 		DBGH(dbc, "Input connection string: '"LWPD"'[%d].", szConnStrIn,
 			cchConnStrIn);
+#endif /* NDEBUG */
 		/* parse conn str into attrs */
 		if (! parse_connection_string(&attrs, szConnStrIn, cchConnStrIn)) {
 			ERRH(dbc, "failed to parse connection string `" LWPDL "`.",

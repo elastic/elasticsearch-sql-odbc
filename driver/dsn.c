@@ -11,6 +11,7 @@
 #include "log.h"
 #include "connect.h"
 #include "info.h"
+#include "util.h"
 
 #define ODBC_REG_SUBKEY_PATH	"SOFTWARE\\ODBC\\ODBC.INI"
 #define REG_HKLM				"HKEY_LOCAL_MACHINE"
@@ -28,6 +29,15 @@ void TEST_API init_dsn_attrs(esodbc_dsn_attrs_st *attrs)
 		wstr = &((wstr_st *)attrs)[i];
 		wstr->str = &attrs->buff[i * ESODBC_DSN_MAX_ATTR_LEN];
 	}
+}
+
+/* used with LWSTR() macro, so invoked twice, but it is:
+ * - executed only if the message level is low enough (i.e. it's logged);
+ * - more compact this way. */
+static inline wstr_st *mask_pwd(wstr_st *attr, wstr_st *val)
+{
+	static wstr_st subst = WSTR_INIT(ESODBC_PWD_VAL_SUBST);
+	return EQ_CASE_WSTR(attr, &MK_WSTR(ESODBC_DSN_PWD)) ? &subst : val;
 }
 
 #define DSN_NOT_MATCHED		0
@@ -92,16 +102,18 @@ int assign_dsn_attr(esodbc_dsn_attrs_st *attrs,
 			if (! overwrite) {
 				INFO("keyword '" LWPDL "' already assigned; "
 					"ignoring new `" LWPDL "`, keeping previous `" LWPDL "`.",
-					LWSTR(iter->kw), LWSTR(value), LWSTR(iter->val));
+					LWSTR(iter->kw), LWSTR(mask_pwd(iter->kw, value)),
+					LWSTR(mask_pwd(iter->kw, iter->val)));
 				return DSN_NOT_OVERWRITTEN;
 			}
 			INFO("keyword '" LWPDL "' already assigned: "
 				"overwriting previous `" LWPDL "` with new `" LWPDL "`.",
-				LWSTR(iter->kw), LWSTR(iter->val), LWSTR(value));
+				LWSTR(iter->kw), LWSTR(mask_pwd(iter->kw, iter->val)),
+				LWSTR(mask_pwd(iter->kw, value)));
 			ret = DSN_OVERWRITTEN;
 		} else {
 			INFO("keyword '" LWPDL "' new assignment: `" LWPDL "`.",
-				LWSTR(iter->kw), LWSTR(value));
+				LWSTR(iter->kw), LWSTR(mask_pwd(iter->kw, value)));
 			ret = DSN_ASSIGNED;
 		}
 		memcpy(iter->val->str, value->str, value->cnt * sizeof(*value->str));
@@ -318,7 +330,7 @@ BOOL TEST_API parse_connection_string(esodbc_dsn_attrs_st *attrs,
 		}
 
 		DBG("read connection string attribute: `" LWPDL "` = `" LWPDL "`.",
-			LWSTR(&keyword), LWSTR(&value));
+			LWSTR(&keyword), LWSTR(mask_pwd(&keyword, &value)));
 		if (assign_dsn_attr(attrs, &keyword, &value, TRUE) < 0) {
 			ERRN("failed to assign keyword `" LWPDL "` with val `" LWPDL "`.",
 				LWSTR(&keyword), LWSTR(&value));
@@ -579,7 +591,7 @@ BOOL load_system_dsn(esodbc_dsn_attrs_st *attrs, SQLWCHAR *list00)
 			}
 			/* assign it to the config */
 			DBG("read DSN attribute: `" LWPDL "` = `" LWPDL "`.",
-				LWSTR(&keyword), LWSTR(&value));
+				LWSTR(&keyword), LWSTR(mask_pwd(&keyword, &value)));
 			/* assign attributes not yet given in the 00-list */
 			if (assign_dsn_attr(attrs, &keyword, &value, /*over?*/FALSE) < 0) {
 				ERR("keyword '" LWPDL "' couldn't be assigned.",
@@ -684,7 +696,7 @@ BOOL write_system_dsn(esodbc_dsn_attrs_st *new_attrs,
 			if (EQ_WSTR(iter->new, iter->old)) {
 				DBG("DSN `" LWPDL "` attribute " LWPDL " maintained "
 					"value `" LWPDL "`.", LWSTR(&new_attrs->dsn),
-					LWSTR(iter->kw), LWSTR(iter->new));
+					LWSTR(iter->kw), LWSTR(mask_pwd(iter->kw, iter->new)));
 				continue;
 			}
 			if (! SQLWritePrivateProfileStringW(new_attrs->dsn.str,
@@ -694,21 +706,23 @@ BOOL write_system_dsn(esodbc_dsn_attrs_st *new_attrs,
 					iter->new->cnt ? iter->new->str : NULL,
 					MK_WPTR(SUBKEY_ODBC))) {
 				ERR("failed to write key `" LWPDL "` with value `" LWPDL "`.",
-					LWSTR(iter->kw), LWSTR(iter->new));
+					LWSTR(iter->kw), LWSTR(mask_pwd(iter->kw, iter->new)));
 				return FALSE;
 			}
 			INFO("DSN `" LWPDL "` attribute " LWPDL " set to `" LWPDL "`%s.",
-				LWSTR(&new_attrs->dsn), LWSTR(iter->kw), LWSTR(iter->new),
+				LWSTR(&new_attrs->dsn), LWSTR(iter->kw),
+				LWSTR(mask_pwd(iter->kw, iter->new)),
 				iter->new->cnt ? "" : " (deleted)");
 		} else if (iter->new->cnt) {
 			if (! SQLWritePrivateProfileStringW(new_attrs->dsn.str,
 					iter->kw->str, iter->new->str, MK_WPTR(SUBKEY_ODBC))) {
 				ERR("failed to write key `" LWPDL "` with value `" LWPDL "`.",
-					LWSTR(iter->kw), LWSTR(iter->new));
+					LWSTR(iter->kw), LWSTR(mask_pwd(iter->kw, iter->new)));
 				return FALSE;
 			}
 			INFO("DSN `" LWPDL "` attribute " LWPDL " set to `" LWPDL "`.",
-				LWSTR(&new_attrs->dsn), LWSTR(iter->kw), LWSTR(iter->new));
+				LWSTR(&new_attrs->dsn), LWSTR(iter->kw),
+				LWSTR(mask_pwd(iter->kw, iter->new)));
 		}
 	}
 	return TRUE;
@@ -782,7 +796,9 @@ long TEST_API write_connection_string(esodbc_dsn_attrs_st *attrs,
 		}
 	}
 
+#ifndef NDEBUG /* don't print the PWD */
 	DBG("new connection string: `" LWPD "`; out len: %zu.", szConnStrOut, pos);
+#endif /* NDEBUG */
 	assert(pos < LONG_MAX);
 	return (long)pos;
 }
@@ -962,10 +978,14 @@ int validate_dsn(esodbc_dsn_attrs_st *attrs, const wchar_t *dsn_str,
 	}
 #ifdef ESODBC_DSN_API_WITH_00_LIST
 	/* this won't be "complete" if using 00-list */
+#ifndef NDEBUG /* don't print the PWD */
 	DBG("received DSN string starting with: `" LWPD "`.", dsn_str);
+#endif /* NDEBUG */
 	if (! parse_00_list(attrs, (SQLWCHAR *)dsn_str)) {
 #else
+#ifndef NDEBUG /* don't print the PWD */
 	DBG("received DSN string: `" LWPD "`.", dsn_str);
+#endif /* NDEBUG */
 	if (! parse_connection_string(attrs, (SQLWCHAR *)dsn_str, SQL_NTS)) {
 #endif /* ESODBC_DSN_API_WITH_00_LIST */
 		ERR("failed to parse received DSN string.");

@@ -134,14 +134,21 @@ SQLRETURN SQL_API SQLDriverConnectW
 	SQLUSMALLINT        fDriverCompletion
 )
 {
+#ifndef NDEBUG /* don't print the PWD */
+	const char *fmt_in = "ppWhphpH";
+	const char *fmt_out = "dppWhWhtH";
+#else /* NDEBUG */
+	const char *fmt_in = "ppphphpH";
+	const char *fmt_out = "dppphWhtH";
+#endif /* NDEBUG */
 	SQLRETURN ret;
-	TRACE8(_IN, hdbc, "ppWhphpH", hdbc, hwnd, szConnStrIn, cchConnStrIn,
+	TRACE8(_IN, hdbc, fmt_in, hdbc, hwnd, szConnStrIn, cchConnStrIn,
 		szConnStrOut, cchConnStrOutMax, pcchConnStrOut, fDriverCompletion);
 	HND_LOCK(hdbc);
 	ret = EsSQLDriverConnectW(hdbc, hwnd, szConnStrIn, cchConnStrIn,
 			szConnStrOut, cchConnStrOutMax, pcchConnStrOut, fDriverCompletion);
 	HND_UNLOCK(hdbc);
-	TRACE9(_OUT, hdbc, "dppWhWhtH", ret, hdbc, hwnd, szConnStrIn, cchConnStrIn,
+	TRACE9(_OUT, hdbc, fmt_out, ret, hdbc, hwnd, szConnStrIn, cchConnStrIn,
 		szConnStrOut, cchConnStrOutMax, pcchConnStrOut, fDriverCompletion);
 	return ret;
 }

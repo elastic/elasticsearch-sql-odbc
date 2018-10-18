@@ -149,6 +149,7 @@
 #define ESODBC_DEF_TRACE_ENABLED	"0"
 /* default tracing level */
 #define ESODBC_DEF_TRACE_LEVEL		"WARN"
+#define ESODBC_PWD_VAL_SUBST		"<original substituted>"
 
 /*
  *
