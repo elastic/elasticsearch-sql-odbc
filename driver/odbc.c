@@ -16,14 +16,11 @@
 //#include "elasticodbc_export.h"
 //#define SQL_API	ELASTICODBC_EXPORT SQL_API
 
-// compile in empty functions (less unref'd params when leaving them out)
-#define WITH_EMPTY	1
 
-
-#define RET_NOT_IMPLEMENTED	\
+#define RET_NOT_IMPLEMENTED(hnd) \
 	do { \
-		ERR("not implemented.");\
-		return SQL_ERROR; \
+		ERR("not implemented."); \
+		RET_HDIAGS(hnd, SQL_STATE_HYC00); \
 	} while (0)
 
 
@@ -95,7 +92,6 @@ SQLRETURN SQL_API SQLAllocHandle(SQLSMALLINT HandleType,
 	return ret;
 }
 
-#if WITH_EMPTY
 /*
  * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/unicode-drivers :
  * """
@@ -114,10 +110,9 @@ SQLRETURN SQL_API SQLConnectW
 	SQLSMALLINT         cchAuthStr
 )
 {
-	RET_NOT_IMPLEMENTED;
+	RET_NOT_IMPLEMENTED(hdbc);
 }
 
-#endif /* WITH_EMPTY */
 
 SQLRETURN SQL_API SQLDriverConnectW
 (
@@ -153,7 +148,6 @@ SQLRETURN SQL_API SQLDriverConnectW
 	return ret;
 }
 
-#if WITH_EMPTY
 
 SQLRETURN SQL_API SQLBrowseConnectW
 (
@@ -166,52 +160,8 @@ SQLRETURN SQL_API SQLBrowseConnectW
 	SQLSMALLINT        *pcchConnStrOut
 )
 {
-	RET_NOT_IMPLEMENTED;
+	RET_NOT_IMPLEMENTED(hdbc);
 }
-
-
-
-/*
- *
- * Obtaining information about a driver and data source
- *
- */
-
-SQLRETURN SQL_API SQLDataSourcesW
-(
-	SQLHENV             henv,
-	SQLUSMALLINT        fDirection,
-	_Out_writes_opt_(cchDSNMax) SQLWCHAR *szDSN,
-	SQLSMALLINT         cchDSNMax,
-	_Out_opt_
-	SQLSMALLINT        *pcchDSN,
-	_Out_writes_opt_(cchDescriptionMax) SQLWCHAR *wszDescription,
-	SQLSMALLINT         cchDescriptionMax,
-	_Out_opt_
-	SQLSMALLINT        *pcchDescription
-)
-{
-	RET_NOT_IMPLEMENTED;
-}
-
-SQLRETURN SQL_API SQLDriversW
-(
-	SQLHENV         henv,
-	SQLUSMALLINT    fDirection,
-	_Out_writes_opt_(cchDriverDescMax) SQLWCHAR *szDriverDesc,
-	SQLSMALLINT     cchDriverDescMax,
-	_Out_opt_
-	SQLSMALLINT    *pcchDriverDesc,
-	_Out_writes_opt_(cchDrvrAttrMax) SQLWCHAR     *szDriverAttributes,
-	SQLSMALLINT     cchDrvrAttrMax,
-	_Out_opt_
-	SQLSMALLINT    *pcchDrvrAttr
-)
-{
-	RET_NOT_IMPLEMENTED;
-}
-
-#endif /* WITH_EMPTY */
 
 SQLRETURN  SQL_API SQLGetInfoW(SQLHDBC ConnectionHandle,
 	SQLUSMALLINT InfoType,
@@ -436,7 +386,6 @@ SQLRETURN  SQL_API SQLSetDescFieldW
 	return ret;
 }
 
-#if WITH_EMPTY
 SQLRETURN SQL_API SQLGetDescRecW(
 	SQLHDESC        DescriptorHandle,
 	SQLSMALLINT     RecNumber,
@@ -459,7 +408,7 @@ SQLRETURN SQL_API SQLGetDescRecW(
 	_Out_opt_
 	SQLSMALLINT     *NullablePtr)
 {
-	RET_NOT_IMPLEMENTED;
+	RET_NOT_IMPLEMENTED(DescriptorHandle);
 }
 
 
@@ -475,7 +424,7 @@ SQLRETURN  SQL_API SQLSetDescRec(
 	_Inout_opt_ SQLLEN *StringLength,
 	_Inout_opt_ SQLLEN *Indicator)
 {
-	RET_NOT_IMPLEMENTED;
+	RET_NOT_IMPLEMENTED(DescriptorHandle);
 }
 
 /*
@@ -493,9 +442,8 @@ SQLRETURN  SQL_API SQLSetDescRec(
 SQLRETURN  SQL_API SQLCopyDesc(SQLHDESC SourceDescHandle,
 	SQLHDESC TargetDescHandle)
 {
-	RET_NOT_IMPLEMENTED;
+	RET_NOT_IMPLEMENTED(SourceDescHandle);
 }
-#endif // WITH_EMPTY
 
 /*
  * "The prepared statement associated with the statement handle can be
@@ -551,7 +499,6 @@ SQLRETURN SQL_API SQLBindParameter(
 	return ret;
 }
 
-#if WITH_EMPTY
 SQLRETURN SQL_API SQLGetCursorNameW
 (
 	SQLHSTMT        hstmt,
@@ -561,7 +508,7 @@ SQLRETURN SQL_API SQLGetCursorNameW
 	SQLSMALLINT    *pcchCursor
 )
 {
-	RET_NOT_IMPLEMENTED;
+	RET_NOT_IMPLEMENTED(hstmt);
 }
 
 SQLRETURN SQL_API SQLSetCursorNameW
@@ -571,7 +518,7 @@ SQLRETURN SQL_API SQLSetCursorNameW
 	SQLSMALLINT         cchCursor
 )
 {
-	RET_NOT_IMPLEMENTED;
+	RET_NOT_IMPLEMENTED(hstmt);
 }
 
 SQLRETURN SQL_API SQLSetScrollOptions(    /*      Use SQLSetStmtOptions */
@@ -580,9 +527,8 @@ SQLRETURN SQL_API SQLSetScrollOptions(    /*      Use SQLSetStmtOptions */
 	SQLLEN             crowKeyset,
 	SQLUSMALLINT       crowRowset)
 {
-	RET_NOT_IMPLEMENTED;
+	RET_NOT_IMPLEMENTED(hstmt);
 }
-#endif // WITH_EMPTY
 
 /*
  *
@@ -642,7 +588,6 @@ SQLRETURN SQL_API SQLExecDirectW
 	return ret;
 }
 
-#if WITH_EMPTY
 SQLRETURN SQL_API SQLNativeSqlW
 (
 	SQLHDBC                                     hdbc,
@@ -653,7 +598,7 @@ SQLRETURN SQL_API SQLNativeSqlW
 	SQLINTEGER                                 *pcchSqlStr
 )
 {
-	RET_NOT_IMPLEMENTED;
+	RET_NOT_IMPLEMENTED(hdbc);
 }
 
 /*
@@ -676,9 +621,8 @@ SQLRETURN SQL_API SQLDescribeParam(
 	_Out_opt_
 	SQLSMALLINT       *pfNullable)
 {
-	RET_NOT_IMPLEMENTED;
+	RET_NOT_IMPLEMENTED(hstmt);
 }
-#endif /* WITH_EMPTY */
 
 SQLRETURN SQL_API SQLNumParams(
 	SQLHSTMT           hstmt,
@@ -694,20 +638,18 @@ SQLRETURN SQL_API SQLNumParams(
 	return ret;
 }
 
-#if WITH_EMPTY
 SQLRETURN  SQL_API SQLParamData(SQLHSTMT StatementHandle,
 	_Out_opt_ SQLPOINTER *Value)
 {
-	RET_NOT_IMPLEMENTED;
+	RET_NOT_IMPLEMENTED(StatementHandle);
 }
 
 SQLRETURN  SQL_API SQLPutData(SQLHSTMT StatementHandle,
 	_In_reads_(_Inexpressible_(StrLen_or_Ind)) SQLPOINTER Data,
 	SQLLEN StrLen_or_Ind)
 {
-	RET_NOT_IMPLEMENTED;
+	RET_NOT_IMPLEMENTED(StatementHandle);
 }
-#endif /* WITH_EMPTY */
 
 /*
  *
@@ -843,7 +785,6 @@ SQLRETURN  SQL_API SQLFetch(SQLHSTMT StatementHandle)
 	return ret;
 }
 
-#if WITH_EMPTY
 /*
  * "SQLFetch and SQLFetchScroll use the rowset size at the time of the call to
  * determine how many rows to fetch. However, SQLFetchScroll with a
@@ -875,9 +816,8 @@ SQLRETURN  SQL_API SQLFetch(SQLHSTMT StatementHandle)
 SQLRETURN  SQL_API SQLFetchScroll(SQLHSTMT StatementHandle,
 	SQLSMALLINT FetchOrientation, SQLLEN FetchOffset)
 {
-	RET_NOT_IMPLEMENTED;
+	RET_NOT_IMPLEMENTED(StatementHandle);
 }
-#endif /* WITH_EMPTY */
 
 SQLRETURN SQL_API SQLGetData(
 	SQLHSTMT StatementHandle,
@@ -998,7 +938,6 @@ SQLRETURN  SQL_API SQLGetDiagRecW
 	return ret;
 }
 
-#if WITH_EMPTY
 /*
  *
  * Obtaining information about the data source's system tables
@@ -1018,9 +957,8 @@ SQLRETURN SQL_API SQLColumnPrivilegesW(
 	SQLSMALLINT        cchColumnName
 )
 {
-	RET_NOT_IMPLEMENTED;
+	RET_NOT_IMPLEMENTED(hstmt);
 }
-#endif /* WITH_EMPTY */
 
 SQLRETURN SQL_API SQLColumnsW
 (
@@ -1137,7 +1075,6 @@ SQLRETURN SQL_API SQLPrimaryKeysW
 	return ret;
 }
 
-#if WITH_EMPTY
 SQLRETURN SQL_API SQLProcedureColumnsW
 (
 	SQLHSTMT           hstmt,
@@ -1151,7 +1088,7 @@ SQLRETURN SQL_API SQLProcedureColumnsW
 	SQLSMALLINT        cchColumnName
 )
 {
-	RET_NOT_IMPLEMENTED;
+	RET_NOT_IMPLEMENTED(hstmt);
 }
 
 SQLRETURN SQL_API SQLProceduresW
@@ -1165,9 +1102,8 @@ SQLRETURN SQL_API SQLProceduresW
 	SQLSMALLINT        cchProcName
 )
 {
-	RET_NOT_IMPLEMENTED;
+	RET_NOT_IMPLEMENTED(hstmt);
 }
-#endif // WITH_EMPTY
 
 SQLRETURN SQL_API SQLSpecialColumnsW
 (
@@ -1201,7 +1137,6 @@ SQLRETURN SQL_API SQLSpecialColumnsW
 	return ret;
 }
 
-#if WITH_EMPTY
 SQLRETURN SQL_API SQLStatisticsW
 (
 	SQLHSTMT           hstmt,
@@ -1215,7 +1150,7 @@ SQLRETURN SQL_API SQLStatisticsW
 	SQLUSMALLINT       fAccuracy
 )
 {
-	RET_NOT_IMPLEMENTED;
+	RET_NOT_IMPLEMENTED(hstmt);
 }
 
 SQLRETURN SQL_API SQLTablePrivilegesW
@@ -1229,10 +1164,9 @@ SQLRETURN SQL_API SQLTablePrivilegesW
 	SQLSMALLINT        cchTableName
 )
 {
-	RET_NOT_IMPLEMENTED;
+	RET_NOT_IMPLEMENTED(hstmt);
 }
 
-#endif /* WITH_EMPTY */
 
 SQLRETURN SQL_API SQLTablesW
 (
@@ -1318,13 +1252,11 @@ SQLRETURN  SQL_API SQLCancelHandle(SQLSMALLINT HandleType,
 	return ret;
 }
 
-#if WITH_EMPTY
 SQLRETURN  SQL_API SQLEndTran(SQLSMALLINT HandleType, SQLHANDLE Handle,
 	SQLSMALLINT CompletionType)
 {
-	RET_NOT_IMPLEMENTED;
+	RET_NOT_IMPLEMENTED(Handle);
 }
-#endif /* WITH_EMPTY */
 
 
 /*
