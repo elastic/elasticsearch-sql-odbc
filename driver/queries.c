@@ -20,6 +20,7 @@
 #define JSON_ANSWER_ERROR		"error"
 #define JSON_ANSWER_ERR_TYPE	"type"
 #define JSON_ANSWER_ERR_REASON	"reason"
+#define JSON_ANSWER_ERR_RCAUSE	"root_cause"
 #define JSON_ANSWER_COL_NAME	"name"
 #define JSON_ANSWER_COL_TYPE	"type"
 
@@ -314,21 +315,34 @@ SQLRETURN TEST_API attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 static BOOL attach_sql_error(SQLHANDLE hnd, cstr_st *body)
 {
 	BOOL ret;
-	UJObject obj, o_status, o_error, o_type, o_reason;
-	const wchar_t *wtype, *wreason;
-	size_t tlen, rlen, left;
+	UJObject obj, o_status, o_error, o_type, o_reason, o_rcause;
+	wstr_st type, reason;
 	wchar_t wbuf[SQL_MAX_MESSAGE_LENGTH];
-	size_t wbuflen;
-	int n;
-	void *state;
+	int cnt;
+	void *state, *iter;
+	/* following grouped JSON unpacking items must remain in sync */
+	/* {"error": {..}, "status":200} */
 	const wchar_t *outer_keys[] = {
 		MK_WPTR(JSON_ANSWER_ERROR),
 		MK_WPTR(JSON_ANSWER_STATUS)
 	};
+	const char fmt_outer_keys[] = "ON";
+	int cnt_outer_keys = sizeof(fmt_outer_keys) - /*\0*/1;
+	/* "error": {"root_cause":[?], "type":"..", "reason":".." ...} */
 	const wchar_t *err_keys[] = {
+		MK_WPTR(JSON_ANSWER_ERR_RCAUSE),
 		MK_WPTR(JSON_ANSWER_ERR_TYPE),
-		MK_WPTR(JSON_ANSWER_ERR_REASON)
+		MK_WPTR(JSON_ANSWER_ERR_REASON),
 	};
+	const char fmt_err_keys[] = "aSS";
+	int cnt_err_keys = sizeof(fmt_err_keys) - /*\0*/1;
+	/* "root_cause":[{"type":"..", "reason":".."} ..] */
+	const wchar_t *r_err_keys[] = {
+		MK_WPTR(JSON_ANSWER_ERR_TYPE),
+		MK_WPTR(JSON_ANSWER_ERR_REASON),
+	};
+	const char fmt_r_err_keys[] = "SS";
+	int cnt_r_err_keys = sizeof(fmt_r_err_keys) - /*\0*/1;
 
 	ret = FALSE;
 	state = NULL;
@@ -336,48 +350,74 @@ static BOOL attach_sql_error(SQLHANDLE hnd, cstr_st *body)
 	/* parse the entire JSON answer */
 	obj = UJDecode(body->str, body->cnt, NULL, &state);
 	if (! obj) {
-		INFOH(hnd, "answer not JSON (%s).",
+		ERRH(hnd, "answer not JSON (%s).",
 			state ? UJGetError(state) : "<none>");
 		goto end;
 	}
 	/* extract the status and error object */
-	if (UJObjectUnpack(obj, 2, "ON", outer_keys, &o_error, &o_status) < 2) {
-		INFOH(hnd, "JSON answer not a SQL error (%s).", UJGetError(state));
+	if (UJObjectUnpack(obj, cnt_outer_keys, fmt_outer_keys, outer_keys,
+			&o_error, &o_status) < cnt_outer_keys) {
+		ERRH(hnd, "JSON answer not a SQL error (%s).", UJGetError(state));
 		goto end;
 	}
 	/* unpack error object */
-	if (UJObjectUnpack(o_error, 2, "SS", err_keys, &o_type, &o_reason) < 2) {
-		INFOH(hnd, "failed to unpack error object (%s).", UJGetError(state));
+	if (UJObjectUnpack(o_error, cnt_err_keys, fmt_err_keys, err_keys,
+			&o_rcause, &o_type, &o_reason) < cnt_err_keys) {
+		ERRH(hnd, "failed to unpack error object (%s).", UJGetError(state));
 		goto end;
 	}
 
-	wtype = UJReadString(o_type, &tlen);
-	wreason = UJReadString(o_reason, &rlen);
-	/* these return empty string in case of mismatch */
-	assert(wtype && wreason);
-	DBGH(hnd, "server failures: type: [%zd] `" LWPDL "`, reason: [%zd] `"
-		LWPDL "`, status: %d.", tlen, tlen, wtype, rlen, rlen, wreason,
-		UJNumericInt(o_status));
+	/* this is safe for NULL o_rcause: => -1 */
+	cnt = UJLengthArray(o_rcause);
+	DBGH(hnd, "root cause(s) received: %d.", cnt);
+	if (0 < cnt) {
+		/* print the root_cause, if available */
+		iter = UJBeginArray(o_rcause);
+		/* save, UJIterArray() checks against NULL */
+		assert(iter);
+		while (UJIterArray(&iter, &o_rcause)) { /* reuse o_rcause obj */
+			/* unpack root error object */
+			if (UJObjectUnpack(o_rcause, cnt_r_err_keys, fmt_r_err_keys,
+					r_err_keys, &o_type, &o_reason) < cnt_r_err_keys) {
+				ERRH(hnd, "failed to unpack root error object (%s).",
+					UJGetError(state));
+				goto end;
+			} else {
+				/* stop at first element. TODO: is ever [array] > 1? */
+				break;
+			}
+		}
+	}
+	/* else: root_cause not available, print "generic" reason */
+	type.str = (SQLWCHAR *)UJReadString(o_type, &type.cnt);
+	reason.str = (SQLWCHAR *)UJReadString(o_reason, &reason.cnt);
 
-	/* swprintf will always append the 0-term, but fail if formated string
-	 * would overrun the buffer size (in an equivocal way: overrun <?> encoding
-	 * error) => find out the limit first. */
-	n = swprintf(NULL, 0, MK_WPTR("%.*s: %.*s"), (int)tlen, wtype, (int)rlen,
-			wreason);
-	if (0 < n) {
-		wbuflen = sizeof(wbuf)/sizeof(*wbuf);
-		wbuflen -= /* ": " */2 + /*\0*/1;
-		tlen = wbuflen < tlen ? wbuflen : tlen;
-		left = wbuflen - tlen;
-		rlen = left < rlen ? left : rlen;
-		wbuflen += /* ": " */2 + /*\0*/1;
-		/* swprintf will add the 0-term (or fail, if it can't) */
-		n = swprintf(wbuf, wbuflen, MK_WPTR("%.*s: %.*s"), (int)tlen, wtype,
-				(int)rlen, wreason);
+	/* should be empty string in case of mismatch */
+	assert(type.str && reason.str);
+	DBGH(hnd, "reported failure: type: [%zd] `" LWPDL "`, reason: [%zd] `"
+		LWPDL "`, status: %d.", type.cnt, LWSTR(&type),
+		reason.cnt, LWSTR(&reason), UJNumericInt(o_status));
+
+	/* swprintf will always append the 0-term ("A null character is appended
+	 * after the last character written."), but fail if formated string would
+	 * overrun the buffer size (in an equivocal way: overrun <?> encoding
+	 * error). */
+	errno = 0;
+	cnt = swprintf(wbuf, sizeof(wbuf)/sizeof(*wbuf),
+			WPFWP_LDESC L": " WPFWP_LDESC, LWSTR(&type), LWSTR(&reason));
+	assert(cnt);
+	if (cnt < 0) {
+		if (errno) {
+			ERRH(hnd, "printing the received error message failed.");
+			goto end;
+		}
+		/* partial error message printed */
+		WARNH(hnd, "current error buffer to small (%zu) for full error "
+			"detail.", sizeof(wbuf)/sizeof(*wbuf));
+		cnt = sizeof(wbuf)/sizeof(*wbuf) - 1;
 	}
-	if (n <= 0) {
-		wbuf[0] = L'\0';
-	}
+	assert(wbuf[cnt] == L'\0');
+	ERRH(hnd, "request failure reason: [%d] `" LWPD "`.", cnt, wbuf);
 
 	post_diagnostic(&HDRH(hnd)->diag, SQL_STATE_HY000, wbuf,
 		UJNumericInt(o_status));
