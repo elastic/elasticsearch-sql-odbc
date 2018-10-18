@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using System.Collections.Generic;
 using System.Diagnostics;
 using WixSharp;
 
@@ -70,9 +71,22 @@ namespace ODBCInstaller
                     HelpLink = "https://discuss.elastic.co/c/elasticsearch"
                 },
                 OutFileName = msiFileName,
-                
-                // http://wixtoolset.org/documentation/manual/v3/xsd/wix/majorupgrade.html
-                MajorUpgrade = new MajorUpgrade
+
+				Properties = new[]
+				{
+					new PropertyRef("NETFRAMEWORK40FULL"),
+				},
+				LaunchConditions = new List<LaunchCondition>
+				{
+					new LaunchCondition(
+						"Installed OR NETFRAMEWORK40FULL",
+						"This installer requires at least .NET Framework 4.0 in order to run the configuration editor. " +
+						"Please install .NET Framework 4.0 then run this installer again."
+					)
+				},
+
+				// http://wixtoolset.org/documentation/manual/v3/xsd/wix/majorupgrade.html
+				MajorUpgrade = new MajorUpgrade
                 {
                     AllowDowngrades = false,
                     AllowSameVersionUpgrades = false,
@@ -84,8 +98,8 @@ namespace ODBCInstaller
 
             project.Attributes.Add("Manufacturer", driverFileInfo.CompanyName);
             project.WixVariables.Add("WixUILicenseRtf", System.IO.Path.Combine(zipContentsDirectory, "LICENSE.rtf"));
-
-            project.BuildMsi();
+			project.Include(WixExtension.NetFx);
+			project.BuildMsi();
         }
 
 		private static FileVersionInfo GetDriverFileInfo(string zipContentsDirectory)
