@@ -1977,19 +1977,6 @@ SQLRETURN EsSQLSetConnectAttrW(
 			//state = SQL_STATE_IM001;
 			return SQL_ERROR; /* error means ANSI */
 
-		case SQL_ATTR_LOGIN_TIMEOUT:
-			if (dbc->es_types) {
-				ERRH(dbc, "connection already established, can't set "
-					"connection timeout anymore (to %u).",
-					(SQLUINTEGER)(uintptr_t)Value);
-				RET_HDIAG(dbc, SQL_STATE_HY011, "connection established, "
-					"can't set connection timeout.", 0);
-			}
-			INFOH(dbc, "setting connection timeout to: %u, from previous: %u.",
-				dbc->timeout, (SQLUINTEGER)(uintptr_t)Value);
-			dbc->timeout = (long)(uintptr_t)Value;
-			break;
-
 		/* https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/automatic-population-of-the-ipd */
 		case SQL_ATTR_AUTO_IPD:
 			ERRH(dbc, "trying to set read-only attribute AUTO IPD.");
@@ -2042,6 +2029,53 @@ SQLRETURN EsSQLSetConnectAttrW(
 			 * it: */
 			//RET_HDIAGS(dbc, SQL_STATE_HYC00);
 			break;
+
+		case SQL_ATTR_ACCESS_MODE:
+			DBGH(dbc, "setting access mode to: %lu.",
+				(SQLUINTEGER)(uintptr_t)Value);
+			if ((SQLUINTEGER)(uintptr_t)Value != SQL_MODE_READ_ONLY) {
+				WARNH(dbc, "no support for requested access mode.");
+			}
+			break;
+
+		case SQL_ATTR_AUTOCOMMIT:
+			DBGH(dbc, "setting autocommit mode: %lu",
+				(SQLUINTEGER)(uintptr_t)Value);
+			if ((SQLUINTEGER)(uintptr_t)Value != SQL_AUTOCOMMIT_ON) {
+				WARNH(dbc, "no support for manual-commit mode.");
+			}
+			break;
+
+		case SQL_ATTR_CONNECTION_DEAD:
+			RET_HDIAGS(dbc, SQL_STATE_HY092);
+			break;
+
+		case SQL_ATTR_CONNECTION_TIMEOUT:
+			DBGH(dbc, "setting connection timeout: %lu",
+				(SQLUINTEGER)(uintptr_t)Value);
+			dbc->timeout = (SQLUINTEGER)(uintptr_t)Value;
+			break;
+		case SQL_ATTR_LOGIN_TIMEOUT:
+			WARNH(dbc, "no individual login timeout supported");
+			if (dbc->timeout != (SQLUINTEGER)(uintptr_t)Value) {
+				RET_HDIAGS(dbc, SQL_STATE_01S02);
+			}
+			break;
+
+		case SQL_ATTR_TRANSLATE_LIB:
+			DBGH(dbc, "setting translation to lib: `" LWPD "`.",
+				(SQLWCHAR *)Value);
+			ERRH(dbc, "no traslation support available.");
+			RET_HDIAGS(dbc, SQL_STATE_IM009);
+
+		case SQL_ATTR_TRACE:
+		case SQL_ATTR_TRACEFILE: /* DM-only */
+		case SQL_ATTR_ENLIST_IN_DTC:
+		case SQL_ATTR_PACKET_SIZE:
+		case SQL_ATTR_TRANSLATE_OPTION:
+		case SQL_ATTR_ODBC_CURSORS: /* DM-only & deprecated */
+			ERRH(dbc, "unsupported attribute %ld.", Attribute);
+			RET_HDIAGS(dbc, SQL_STATE_HYC00);
 
 		default:
 			ERRH(dbc, "unknown Attribute: %d.", Attribute);
@@ -2109,22 +2143,48 @@ SQLRETURN EsSQLGetConnectAttrW(
 			break;
 
 		case SQL_ATTR_ACCESS_MODE:
+			DBGH(dbc, "getting access mode: %lu", SQL_MODE_READ_ONLY);
+			*(SQLUINTEGER *)ValuePtr = SQL_MODE_READ_ONLY;
+			break;
+
 		case SQL_ATTR_ASYNC_DBC_EVENT:
+			ERRH(dbc, "no asynchronous support available.");
+			RET_HDIAGS(dbc, SQL_STATE_S1118);
 		case SQL_ATTR_ASYNC_DBC_FUNCTIONS_ENABLE:
+			ERRH(dbc, "no asynchronous support available.");
+			RET_HDIAGS(dbc, SQL_STATE_HY114);
+
 		//case SQL_ATTR_ASYNC_DBC_PCALLBACK:
 		//case SQL_ATTR_ASYNC_DBC_PCONTEXT:
+
 		case SQL_ATTR_AUTOCOMMIT:
+			DBGH(dbc, "getting autocommit mode: %lu", SQL_AUTOCOMMIT_ON);
+			*(SQLUINTEGER *)ValuePtr = SQL_AUTOCOMMIT_ON;
+			break;
+
 		case SQL_ATTR_CONNECTION_DEAD:
-		case SQL_ATTR_CONNECTION_TIMEOUT:
-		//case SQL_ATTR_DBC_INFO_TOKEN:
-		case SQL_ATTR_ENLIST_IN_DTC:
+			DBGH(dbc, "getting connection state: %lu", SQL_CD_FALSE);
+			*(SQLUINTEGER *)ValuePtr = SQL_CD_FALSE;
+			break;
+
 		case SQL_ATTR_LOGIN_TIMEOUT:
-		case SQL_ATTR_ODBC_CURSORS:
-		case SQL_ATTR_PACKET_SIZE:
+			WARNH(dbc, "no login timeout supported: use connection timeout.");
+		case SQL_ATTR_CONNECTION_TIMEOUT:
+			DBGH(dbc, "getting connection timeout: %lu", dbc->timeout);
+			*(SQLUINTEGER *)ValuePtr = dbc->timeout;
+			break;
+
+		//case SQL_ATTR_DBC_INFO_TOKEN:
+
 		case SQL_ATTR_TRACE:
-		case SQL_ATTR_TRACEFILE:
+		case SQL_ATTR_TRACEFILE: /* DM-only */
+		case SQL_ATTR_ENLIST_IN_DTC:
+		case SQL_ATTR_PACKET_SIZE:
 		case SQL_ATTR_TRANSLATE_LIB:
 		case SQL_ATTR_TRANSLATE_OPTION:
+		case SQL_ATTR_ODBC_CURSORS: /* DM-only & deprecated */
+			ERRH(dbc, "unsupported attribute %ld.", Attribute);
+			RET_HDIAGS(dbc, SQL_STATE_HY000);
 
 		default:
 			// FIXME: add the other attributes
