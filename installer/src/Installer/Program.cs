@@ -71,7 +71,6 @@ namespace ODBCInstaller
                     HelpLink = "https://discuss.elastic.co/c/elasticsearch"
                 },
                 OutFileName = msiFileName,
-
 				Properties = new[]
 				{
 					new PropertyRef("NETFRAMEWORK40FULL"),
@@ -82,6 +81,14 @@ namespace ODBCInstaller
 						"Installed OR NETFRAMEWORK40FULL",
 						"This installer requires at least .NET Framework 4.0 in order to run the configuration editor. " +
 						"Please install .NET Framework 4.0 then run this installer again."
+					),
+					/*
+						Windows 10:				VersionNT64 = 1000 AND MsiNTProductType = 1
+						Windows Server 2016:	VersionNT64 = 1000 AND MsiNTProductType <> 1 
+					*/
+					new LaunchCondition(
+						"NOT ((VersionNT64 = 1000 AND MsiNTProductType = 1) OR (VersionNT64 = 1000 AND MsiNTProductType <> 1))",
+						"This installer requires at least Windows 10 or Windows Server 2016."	
 					)
 				},
 
