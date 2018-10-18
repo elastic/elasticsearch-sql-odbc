@@ -325,7 +325,7 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 		ERRN("OOM for handle type %hd, on input handle@0x%p.", HandleType,
 			InputHandle);
 		if (InputHandle) {
-			RET_DIAG(&HDRH(InputHandle)->diag, SQL_STATE_HY001, NULL, 0);
+			RET_HDIAGS(InputHandle, SQL_STATE_HY001);
 		} else {
 			RET_STATE(SQL_STATE_HY001);
 		}
@@ -1244,13 +1244,14 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
  * IxD must have es_type pointer set and it's value is not checked at
  * header/field access time -> only this function guards against NP deref'ing.
  */
-static BOOL check_access(desc_type_et desc_type, SQLSMALLINT field_id,
+static BOOL check_access(esodbc_desc_st *desc, SQLSMALLINT field_id,
 	char mode /* O_RDONLY | O_RDWR */)
 {
 	BOOL ret;
+	desc_type_et desc_type = desc->type;
 
 	if (desc_type == DESC_TYPE_ANON) {
-		BUG("can't check permissions against ANON descryptor type.");
+		BUGH(desc, "can't check permissions against ANON descryptor type.");
 		return FALSE;
 	}
 	assert(mode == O_RDONLY || mode == O_RDWR);
@@ -1340,10 +1341,10 @@ static BOOL check_access(desc_type_et desc_type, SQLSMALLINT field_id,
 			break;
 
 		default:
-			BUG("unknown field identifier: %d.", field_id);
+			BUGH(desc, "unknown field identifier: %d.", field_id);
 			ret = FALSE;
 	}
-	LOG(ret ? LOG_LEVEL_DBG : LOG_LEVEL_ERR,
+	LOGH(desc, ret ? LOG_LEVEL_DBG : LOG_LEVEL_ERR, /*werr*/0,
 		"Descriptor type: %d, Field ID: %d, mode=%s => grant: %s.",
 		desc_type, field_id,
 		mode == O_RDONLY ? "read" : "read/write",
@@ -1403,7 +1404,7 @@ SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count)
 	}
 
 	if (desc->count == new_count) {
-		LOGH(new_count ? LOG_LEVEL_INFO : LOG_LEVEL_DBG, 0, desc,
+		LOGH(desc, new_count ? LOG_LEVEL_INFO : LOG_LEVEL_DBG, 0,
 			"new descriptor count equals old one, %d.", new_count);
 		return SQL_SUCCESS;
 	}
@@ -1549,8 +1550,7 @@ SQLRETURN EsSQLGetDescFieldW(
 	SQLINTEGER intgr;
 	esodbc_rec_st *rec;
 
-	if (! check_access(desc->type, FieldIdentifier,
-			O_RDONLY)) {
+	if (! check_access(desc, FieldIdentifier, O_RDONLY)) {
 		int llev;
 #if 0
 		/*
@@ -1566,7 +1566,7 @@ SQLRETURN EsSQLGetDescFieldW(
 		llev = LOG_LEVEL_WARN;
 		state = SQL_STATE_01000;
 #endif /* 0 */
-		LOGH(llev, 0, desc, "field (%d) access check failed: not defined for "
+		LOGH(desc, llev, 0, "field (%d) access check failed: not defined for "
 			"desciptor (type: %d).", FieldIdentifier, desc->type);
 		RET_HDIAG(desc, state,
 			"field type not defined for descriptor", 0);
@@ -2278,7 +2278,7 @@ SQLRETURN EsSQLSetDescFieldW(
 	SQLULEN ulen;
 	size_t wlen;
 
-	if (! check_access(desc->type, FieldIdentifier, O_RDWR)) {
+	if (! check_access(desc, FieldIdentifier, O_RDWR)) {
 		/* "The SQL_DESC_DATA_PTR field of an IPD is not normally set;
 		 * however, an application can do so to force a consistency check of
 		 * IPD fields."

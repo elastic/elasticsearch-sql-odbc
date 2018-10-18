@@ -418,7 +418,7 @@ err:
 		curl_easy_strerror(res));
 	assert(curl);
 	curl_easy_cleanup(curl);
-	return post_c_diagnostic(&dbc->hdr.diag, SQL_STATE_HY000,
+	return post_c_diagnostic(dbc, SQL_STATE_HY000,
 			/* propagate CURL's message, if there's any available */
 			dbc->curl_err_buff[0] ? dbc->curl_err_buff :
 			"failed to init the transport", res);
@@ -541,12 +541,11 @@ static void dbc_curl_post_diag(esodbc_dbc_st *dbc)
 		 * available buffer room, but 0-terminate it; if that's the case.
 		 * retry, skipping formatting. */
 		ERRH(dbc, "formatting error message failed; skipping formatting.");
-		post_c_diagnostic(&HDRH(dbc)->diag, SQL_STATE_08S01,
+		post_c_diagnostic(dbc, SQL_STATE_08S01,
 			curl_easy_strerror(dbc->curl_err), dbc->curl_err);
 	} else {
 		ERRH(dbc, "libcurl failure message: " LWPD ".", buff);
-		post_diagnostic(&HDRH(dbc)->diag, SQL_STATE_08S01, buff,
-			dbc->curl_err);
+		post_diagnostic(dbc, SQL_STATE_08S01, buff, dbc->curl_err);
 	}
 }
 
@@ -1344,8 +1343,8 @@ static BOOL bind_types_cols(esodbc_stmt_st *stmt, estype_row_st *type_row)
 
 /* Copies the type info from the result-set to array to be associated with the
  * connection. */
-static void *copy_types_rows(estype_row_st *type_row, SQLULEN rows_fetched,
-	esodbc_estype_st *types)
+static void *copy_types_rows(esodbc_dbc_st *dbc, estype_row_st *type_row,
+	SQLULEN rows_fetched, esodbc_estype_st *types)
 {
 	SQLWCHAR *pos;
 	int c;
@@ -1410,7 +1409,7 @@ static void *copy_types_rows(estype_row_st *type_row, SQLULEN rows_fetched,
 		pos += types[i].type_name.cnt + /*\0*/1;
 		if ((c = ascii_w2c(types[i].type_name.str, types[i].type_name_c.str,
 						types[i].type_name.cnt)) < 0) {
-			ERR("failed to convert ES/SQL type `" LWPDL "` to C-str.",
+			ERRH(dbc, "failed to convert ES/SQL type `" LWPDL "` to C-str.",
 				LWSTR(&types[i].type_name));
 			return NULL;
 		} else {
@@ -1424,7 +1423,7 @@ static void *copy_types_rows(estype_row_st *type_row, SQLULEN rows_fetched,
 
 		/* notify if scales extremes are different */
 		if (types[i].maximum_scale != types[i].minimum_scale) {
-			INFO("type `" LWPDL "` returned with non-equal max/min "
+			INFOH(dbc, "type `" LWPDL "` returned with non-equal max/min "
 				"scale: %d/%d -- using the max.", LWSTR(&types[i].type_name),
 				types[i].maximum_scale, types[i].minimum_scale);
 		}
@@ -1433,11 +1432,11 @@ static void *copy_types_rows(estype_row_st *type_row, SQLULEN rows_fetched,
 		if (! elastic_name2types(&types[i].type_name, &types[i].c_concise_type,
 				&sql_type)) {
 			/* ES version newer than driver's? */
-			ERR("failed to convert type name `" LWPDL "` to SQL C type.",
+			ERRH(dbc, "failed to convert type name `" LWPDL "` to SQL C type.",
 				LWSTR(&types[i].type_name));
 			return NULL;
 		}
-		DBG("ES type `" LWPDL "` resolved to C concise: %hd, SQL: %hd.",
+		DBGH(dbc, "ES type `" LWPDL "` resolved to C concise: %hd, SQL: %hd.",
 			LWSTR(&types[i].type_name), types[i].c_concise_type, sql_type);
 
 		/* BOOLEAN is used in catalog calls (like SYS TYPES / SQLGetTypeInfo),
@@ -1451,8 +1450,8 @@ static void *copy_types_rows(estype_row_st *type_row, SQLULEN rows_fetched,
 		/* .data_type is used in data conversions -> make sure the SQL type
 		 * derived from type's name is the same with type reported value */
 		if (sql_type != types[i].data_type) {
-			ERR("type `" LWPDL "` derived (%d) and reported (%d) SQL type "
-				"identifiers differ.", LWSTR(&types[i].type_name),
+			ERRH(dbc, "type `" LWPDL "` derived (%d) and reported (%d) SQL "
+				"type identifiers differ.", LWSTR(&types[i].type_name),
 				sql_type, types[i].data_type);
 			return NULL;
 		}
@@ -1679,7 +1678,7 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 		goto end;
 	}
 
-	if (! (pos = copy_types_rows(type_row, rows_fetched, types))) {
+	if (! (pos = copy_types_rows(dbc, type_row, rows_fetched, types))) {
 		ERRH(dbc, "failed to process recieved ES/SQL data types.");
 		goto end;
 	}

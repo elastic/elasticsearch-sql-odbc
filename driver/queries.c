@@ -419,8 +419,7 @@ static BOOL attach_sql_error(SQLHANDLE hnd, cstr_st *body)
 	assert(wbuf[cnt] == L'\0');
 	ERRH(hnd, "request failure reason: [%d] `" LWPD "`.", cnt, wbuf);
 
-	post_diagnostic(&HDRH(hnd)->diag, SQL_STATE_HY000, wbuf,
-		UJNumericInt(o_status));
+	post_diagnostic(hnd, SQL_STATE_HY000, wbuf, UJNumericInt(o_status));
 	ret = TRUE;
 
 end:
@@ -450,13 +449,13 @@ SQLRETURN TEST_API attach_error(SQLHANDLE hnd, cstr_st *body, int code)
 			memcpy(buff, body->str, to_copy);
 			buff[to_copy] = '\0';
 
-			post_c_diagnostic(&HDRH(hnd)->diag, SQL_STATE_08S01, buff, code);
+			post_c_diagnostic(hnd, SQL_STATE_08S01, buff, code);
 		}
 
 		RET_STATE(HDRH(hnd)->diag.state);
 	}
 
-	return post_diagnostic(&HDRH(hnd)->diag, SQL_STATE_08S01, NULL, code);
+	return post_diagnostic(hnd, SQL_STATE_08S01, NULL, code);
 }
 
 /*
@@ -665,7 +664,7 @@ SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos)
 	do { \
 		if (ard->array_status_ptr) \
 			ard->array_status_ptr[pos] = SQL_ROW_ERROR; \
-		return post_row_diagnostic(&stmt->hdr.diag, _state, MK_WPTR(_message),\
+		return post_row_diagnostic(stmt, _state, MK_WPTR(_message), \
 				0, rowno, _colno); \
 	} while (0)
 #define SET_ROW_DIAG(_rowno, _colno) \

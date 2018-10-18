@@ -430,7 +430,7 @@ static size_t buff_octet_size(
 
 	/* apply "network" truncation first, if need to */
 	if (0 < max && max < avail) {
-		INFO("applying 'network' truncation %zd -> %zd.", avail, max);
+		INFOH(stmt, "applying 'network' truncation %zd -> %zd.", avail, max);
 		max_copy = max;
 		/* no truncation indicated for this case */
 	} else {
@@ -441,7 +441,7 @@ static size_t buff_octet_size(
 	/* Note: this should only be tested/applied if ARD.meta_type == STR||BIN */
 	// FIXME: check note above
 	if (room < max_copy) {
-		INFO("applying buffer truncation %zd -> %zd.", max_copy, room);
+		INFOH(stmt, "applying buffer truncation %zd -> %zd.", max_copy, room);
 		max_copy = room;
 		*state = SQL_STATE_01004;
 	}
@@ -451,7 +451,7 @@ static size_t buff_octet_size(
 		max_copy -= max_copy % unit_size;
 	}
 
-	DBG("avail=%zd, room=%zd, attr_max=%zd, metatype:%d => "
+	DBGH(stmt, "avail=%zd, room=%zd, attr_max=%zd, metatype:%d => "
 		"max_copy=%zd, state=%d.",
 		avail, room, attr_max, ird_mt, max_copy, *state);
 	return max_copy;
@@ -476,7 +476,8 @@ static inline void write_out_octets(
 	size_t max;
 
 	if (! octet_len_ptr) {
-		DBG("NULL octet len pointer, length (%zd) not indicated.", avail);
+		DBGH(stmt, "NULL octet len pointer, length (%zu) not indicated.",
+			avail);
 		return;
 	}
 
@@ -490,14 +491,14 @@ static inline void write_out_octets(
 		 * occupies after conversion: "the driver has no way of
 		 * figuring out what the actual length is" */
 		*octet_len_ptr = max;
-		DBG("max length (%zd) attribute enforced.", max);
+		DBGH(stmt, "max length (%zd) attribute enforced.", max);
 	} else {
 		/* if no "network" truncation done, indicate data's length, no
 		 * matter if truncated to buffer's size or not */
 		*octet_len_ptr = avail;
 	}
 
-	DBG("length of data available for transfer: %ld", *octet_len_ptr);
+	DBGH(stmt, "length of data available for transfer: %ld", *octet_len_ptr);
 }
 
 /* if an application doesn't specify the conversion, use column's type */

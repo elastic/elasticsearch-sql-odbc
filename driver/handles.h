@@ -471,17 +471,17 @@ SQLRETURN EsSQLSetDescRec(
 #define HND_UNLOCK(_h)	ESODBC_MUX_UNLOCK(&HDRH(_h)->mutex)
 
 
-/* wraper of RET_CDIAG, compatible with any defined handle */
+/* post state into the diagnostic and return state's return code */
 #define RET_HDIAG(_hp/*handle ptr*/, _s/*tate*/, _t/*char text*/, _c/*ode*/) \
-	RET_CDIAG(&HDRH(_hp)->diag, _s, _t, _c)
+	return post_diagnostic(_hp, _s, MK_WPTR(_t), _c)
 /* similar to RET_HDIAG, but only post the state */
 #define RET_HDIAGS(_hp/*handle ptr*/, _s/*tate*/) \
-	RET_DIAG(&HDRH(_hp)->diag, _s, NULL, 0)
+	return post_diagnostic(_hp, _s, NULL, 0)
 /* copy the diagnostics from one handle to the other */
 #define HDIAG_COPY(_s, _d)	(_d)->hdr.diag = (_s)->hdr.diag
 /* set a diagnostic to a(ny) handle */
 #define SET_HDIAG(_hp/*handle ptr*/, _s/*tate*/, _t/*char text*/, _c/*ode*/) \
-	post_diagnostic(&HDRH(_hp)->diag, _s, MK_WPTR(_t), _c)
+	post_diagnostic(_hp, _s, MK_WPTR(_t), _c)
 
 /* return the code associated with the given state (and debug-log) */
 #define RET_STATE(_s)	\
@@ -504,15 +504,15 @@ SQLRETURN EsSQLSetDescRec(
  * Logging with handle
  */
 
-#define LOGH(lvl, werrn, hnd, fmt, ...) \
+#define LOGH(hnd, lvl, werrn, fmt, ...) \
 	_LOG(HDRH(hnd)->log, lvl, werrn, "[" LWPDL "@0x%p] " fmt, \
 		LWSTR(&HDRH(hnd)->typew), hnd, __VA_ARGS__)
 
-#define ERRNH(hnd, fmt, ...)	LOGH(LOG_LEVEL_ERR, 1, hnd, fmt, __VA_ARGS__)
-#define ERRH(hnd, fmt, ...)		LOGH(LOG_LEVEL_ERR, 0, hnd, fmt, __VA_ARGS__)
-#define WARNH(hnd, fmt, ...)	LOGH(LOG_LEVEL_WARN, 0, hnd, fmt, __VA_ARGS__)
-#define INFOH(hnd, fmt, ...)	LOGH(LOG_LEVEL_INFO, 0, hnd, fmt, __VA_ARGS__)
-#define DBGH(hnd, fmt, ...)		LOGH(LOG_LEVEL_DBG, 0, hnd, fmt, __VA_ARGS__)
+#define ERRNH(hnd, fmt, ...)	LOGH(hnd, LOG_LEVEL_ERR, 1, fmt, __VA_ARGS__)
+#define ERRH(hnd, fmt, ...)		LOGH(hnd, LOG_LEVEL_ERR, 0, fmt, __VA_ARGS__)
+#define WARNH(hnd, fmt, ...)	LOGH(hnd, LOG_LEVEL_WARN, 0, fmt, __VA_ARGS__)
+#define INFOH(hnd, fmt, ...)	LOGH(hnd, LOG_LEVEL_INFO, 0, fmt, __VA_ARGS__)
+#define DBGH(hnd, fmt, ...)		LOGH(hnd, LOG_LEVEL_DBG, 0, fmt, __VA_ARGS__)
 
 #define BUGH(hnd, fmt, ...) \
 	do { \
