@@ -19,15 +19,16 @@
 #define ORIG_CLASS_ODBC	"ODBC 3.0"
 
 #if defined(_WIN32) || defined (WIN32)
-/* DRV_NAME is a define */
+/* DRV_NAME defined in CMakeLists.txt */
 #define DRIVER_NAME	STR(DRV_NAME) ".dll"
 #else /* win32 */
 #endif /* win32 */
 
 
 
-/* List of supported functions in the driver */
-// FIXME: review at alpha what's implemented
+/* List of supported functions in the driver.
+ * Advertize them as being all implemented and fail at call time, to prevent
+ * an early failure in the client application. */
 static SQLUSMALLINT esodbc_functions[] = {
 	SQL_API_SQLALLOCHANDLE,
 	SQL_API_SQLBINDCOL,
@@ -196,9 +197,6 @@ static SQLRETURN getinfo_driver(
 		case SQL_FILE_USAGE:
 			/* JDBC[0]: usesLocalFilePerTable() */
 			DBGH(dbc, "requested: file usage: table.");
-			/* TODO: JDBC indicates true for file per table; howerver, this
-			 * can be apparently used to ask GUI user to ask 'file' or
-			 * 'table'; elastic uses index => files? */
 			*(SQLUSMALLINT *)InfoValue = SQL_FILE_TABLE;
 			return SQL_SUCCESS;
 		case SQL_GETDATA_EXTENSIONS:
@@ -347,7 +345,6 @@ static SQLRETURN getinfo_data_source(
 			DBGH(dbc, "requested: accessible tables (`Y`).");
 			return write_wstr(dbc, InfoValue, &MK_WSTR("Y"),
 					BufferLength, StringLengthPtr);
-		// FIXME: review along with cursor review
 		case SQL_BOOKMARK_PERSISTENCE:
 			DBGH(dbc, "requested bookmark persistence (none).");
 			*(SQLUINTEGER *)InfoValue = 0; /* no support */
@@ -357,7 +354,6 @@ static SQLRETURN getinfo_data_source(
 			DBGH(dbc, "requested: catalog term (`%s`).", ESODBC_CATALOG_TERM);
 			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_CATALOG_TERM),
 					BufferLength, StringLengthPtr);
-		// FIXME: review at alpha
 		case SQL_COLLATION_SEQ:
 			DBGH(dbc, "requested: collation seq (`UTF8`).");
 			return write_wstr(dbc, InfoValue, &MK_WSTR("UTF8"),

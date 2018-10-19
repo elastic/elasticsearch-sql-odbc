@@ -513,7 +513,6 @@ SQLRETURN EsSQLSetEnvAttr(SQLHENV EnvironmentHandle,
 	assert(sizeof(SQLINTEGER) == 4);
 
 	switch (Attribute) {
-		/* TODO: connection pooling? */
 		case SQL_ATTR_CONNECTION_POOLING:
 		case SQL_ATTR_CP_MATCH:
 			RET_HDIAG(ENVH(EnvironmentHandle), SQL_STATE_HYC00,
@@ -521,7 +520,6 @@ SQLRETURN EsSQLSetEnvAttr(SQLHENV EnvironmentHandle,
 
 		case SQL_ATTR_ODBC_VERSION:
 			switch ((intptr_t)Value) {
-				// FIXME: review@alpha
 				// supporting applications of 2.x and 3.x<3.8 needs extensive
 				// review of the options.
 				case SQL_OV_ODBC2:
@@ -561,7 +559,6 @@ SQLRETURN EsSQLGetEnvAttr(SQLHENV EnvironmentHandle, SQLINTEGER Attribute,
 	SQLINTEGER BufferLength, _Out_opt_ SQLINTEGER *StringLength)
 {
 	switch (Attribute) {
-		/* TODO: connection pooling? */
 		case SQL_ATTR_CONNECTION_POOLING:
 		case SQL_ATTR_CP_MATCH:
 			RET_HDIAG(ENVH(EnvironmentHandle), SQL_STATE_HYC00,
@@ -1422,7 +1419,6 @@ SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count)
 		free_desc_recs(desc);
 		recs = NULL;
 	} else {
-		/* TODO: change to a list implementation? review@alpha */
 		recs = (esodbc_rec_st *)realloc(desc->recs,
 				sizeof(esodbc_rec_st) * new_count);
 		if (! recs) {

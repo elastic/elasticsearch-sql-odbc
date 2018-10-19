@@ -48,15 +48,13 @@
 #define ESODBC_QUOTE_CHAR			"\""
 #define ESODBC_PATTERN_ESCAPE		"\\"
 #define ESODBC_CATALOG_SEPARATOR	":"
-#define ESODBC_CATALOG_TERM			"clusterName"
-#define ESODBC_TABLE_TERM			"type" // TODO: or table?
+#define ESODBC_CATALOG_TERM			"catalog"
+#define ESODBC_TABLE_TERM			"table"
 #define ESODBC_SCHEMA_TERM			"schema"
 #define ESODBC_PARAM_MARKER			"?"
 
-/* maximum identifer length */
-/* TODO: review@alpha */
-/* match 'keyword' ES type length */
-#define ESODBC_MAX_IDENTIFIER_LEN			256
+/* maximum identifer length: match ES/Lucene byte max */
+#define ESODBC_MAX_IDENTIFIER_LEN		SHRT_MAX
 /* "the relationship between the columns in the GROUP BY clause and the
  * nonaggregated columns in the select list" */
 #define ESODBC_GROUP_BY						SQL_GB_NO_RELATION
