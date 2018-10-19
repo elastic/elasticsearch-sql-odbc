@@ -1493,7 +1493,7 @@ esodbc_desc_st *getdata_set_ard(esodbc_stmt_st *stmt, esodbc_desc_st *gd_ard,
 
 	if (colno < count) { /* can the static recs be used? */
 		/* need to init all records, not only the single one that will be
-		 * bound, since data compat. check will run against all bound recs. */
+		 * bound, since data covert. check will run against all bound recs. */
 		for (i = 0; i < count; i ++) {
 			init_rec(&recs[i], gd_ard);
 		}
@@ -1501,6 +1501,7 @@ esodbc_desc_st *getdata_set_ard(esodbc_stmt_st *stmt, esodbc_desc_st *gd_ard,
 		gd_ard->count = count;
 		gd_ard->recs = recs;
 	}
+	/* else: recs will be alloc'd later when binding the column */
 
 	DBGH(stmt, "GD ARD @0x%p, records allocated %s.", gd_ard,
 		colno < count ? "statically" : "dynamically");

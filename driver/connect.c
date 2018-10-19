@@ -1514,26 +1514,31 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 	SQLRETURN ret = FALSE;
 	SQLSMALLINT col_cnt;
 	SQLLEN row_cnt;
-	/* both arrays below must use ESODBC_MAX_ROW_ARRAY_SIZE since no SQLFetch()
-	 * looping is implemented (see check after SQLFetch() below). */
-	SQLUSMALLINT row_status[ESODBC_MAX_ROW_ARRAY_SIZE];
-	/* a static estype_row_st array is over 350KB and too big for the default
-	 * stack size in certain cases: needs allocation on heap */
-	estype_row_st *type_row = NULL;
+	SQLUSMALLINT *row_status;
+	estype_row_st *type_row;
+	void *row_arrays;
 	SQLULEN rows_fetched, i, strs_len;
 	size_t size;
 	esodbc_estype_st *types = NULL;
 	void *pos;
 
-	type_row = calloc(ESODBC_MAX_ROW_ARRAY_SIZE, sizeof(estype_row_st));
-	if (! type_row) {
+	/* Both arrays below must be of same size (ESODBC_MAX_NO_TYPES), since no
+	 * SQLFetch() looping is implemented (see check after SQLFetch() below). */
+	/* A static estype_row_st array can get too big for the default stack size
+	 * in certain cases: needs allocation on heap. */
+	if (! (row_arrays = calloc(ESODBC_MAX_NO_TYPES,
+					sizeof(*type_row) + sizeof(*row_status)))) {
 		ERRNH(dbc, "OOM");
 		return FALSE;
+	} else {
+		row_status = (SQLUSMALLINT *)row_arrays;
+		type_row = (estype_row_st *)((char *)row_arrays +
+				ESODBC_MAX_NO_TYPES * sizeof(*row_status));
 	}
 
 	if (! SQL_SUCCEEDED(EsSQLAllocHandle(SQL_HANDLE_STMT, dbc, &stmt))) {
 		ERRH(dbc, "failed to alloc a statement handle.");
-		free(type_row);
+		free(row_arrays);
 		return FALSE;
 	}
 	assert(stmt);
@@ -1580,9 +1585,9 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 	} else if (row_cnt <= 0) {
 		ERRH(stmt, "Elasticsearch returned no type as supported.");
 		goto end;
-	} else if (ESODBC_MAX_ROW_ARRAY_SIZE < row_cnt) {
+	} else if (ESODBC_MAX_NO_TYPES < row_cnt) {
 		ERRH(stmt, "Elasticsearch returned too many types (%d vs limit %zd).",
-			row_cnt, ESODBC_MAX_ROW_ARRAY_SIZE);
+			row_cnt, ESODBC_MAX_NO_TYPES);
 		goto end;
 	} else {
 		DBGH(stmt, "Elasticsearch types rows count: %ld.", row_cnt);
@@ -1596,13 +1601,13 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 	}
 	/* indicate rowset size */
 	if (! SQL_SUCCEEDED(EsSQLSetStmtAttrW(stmt, SQL_ATTR_ROW_ARRAY_SIZE,
-				(SQLPOINTER)ESODBC_MAX_ROW_ARRAY_SIZE, 0))) {
+				(SQLPOINTER)ESODBC_MAX_NO_TYPES, 0))) {
 		ERRH(stmt, "failed to set rowset size (%zd).",
-			ESODBC_MAX_ROW_ARRAY_SIZE);
+			ESODBC_MAX_NO_TYPES);
 		goto end;
 	}
 	/* indicate array to write row status into; initialize with error first */
-	for (i = 0; i < ESODBC_MAX_ROW_ARRAY_SIZE; i ++) {
+	for (i = 0; i < ESODBC_MAX_NO_TYPES; i ++) {
 		row_status[i] = SQL_ROW_ERROR;
 	}
 	if (! SQL_SUCCEEDED(EsSQLSetStmtAttrW(stmt, SQL_ATTR_ROW_STATUS_PTR,
@@ -1705,9 +1710,9 @@ end:
 		free(types);
 		types = NULL;
 	}
-	if (type_row) {
-		free(type_row);
-		type_row = NULL;
+	if (row_arrays) {
+		free(row_arrays);
+		row_arrays = NULL;
 	}
 
 	return ret;

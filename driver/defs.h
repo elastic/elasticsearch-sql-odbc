@@ -18,16 +18,18 @@
 #define ESODBC_LOG_FILE_SUFFIX		".log"
 /* Environment variable name holding the log directory name */
 #define ESODBC_LOG_DIR_ENV_VAR		"ESODBC_LOG_DIR"
+/* number of consecutive logging failures that will disable logging */
 #define ESODBC_LOG_MAX_RETRY		5
 
-// FIXME: review@alpha
-/* TODO: should there be a max? */
-#define ESODBC_MAX_ROW_ARRAY_SIZE	128
+#define ESODBC_MAX_ROW_ARRAY_SIZE	USHRT_MAX
+/* max number of ES/SQL types supported */
+#define ESODBC_MAX_NO_TYPES			64
 #define ESODBC_DEF_ARRAY_SIZE		1
 /* max cols or args to bind; needs to stay <= SHRT_MAX */
-#define ESODBC_MAX_DESC_COUNT		128
-/* number of static records for SQLGetData() */
-#define ESODBC_GD_DESC_COUNT		ESODBC_MAX_DESC_COUNT
+#define ESODBC_MAX_DESC_COUNT		SHRT_MAX
+/* number of static records for SQLGetData(): if using SQLGetData() with more
+ * columns than this def, recs will be allocated dynamically. */
+#define ESODBC_GD_DESC_COUNT		128
 /* values for SQL_ATTR_MAX_LENGTH statement attribute */
 #define ESODBC_UP_MAX_LENGTH		0 // USHORT_MAX
 #define ESODBC_LO_MAX_LENGTH		0

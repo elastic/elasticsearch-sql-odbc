@@ -1093,7 +1093,7 @@ SQLRETURN EsSQLGetData(
 	}
 	/* data is available */
 
-	/* save stmt current ARD before overwriting it */
+	/* save stmt's current ARD before overwriting it */
 	ard = getdata_set_ard(stmt, &gd_ard, ColumnNumber, arecs,
 			sizeof(arecs)/sizeof(arecs[0]));
 	if (! ard) {
