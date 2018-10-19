@@ -2112,16 +2112,19 @@ SQLRETURN EsSQLSetConnectAttrW(
 			RET_HDIAGS(dbc, SQL_STATE_HY092);
 			break;
 
+		/* coalesce login and connection timeouts for a REST req. */
 		case SQL_ATTR_CONNECTION_TIMEOUT:
-			DBGH(dbc, "setting connection timeout: %lu",
-				(SQLUINTEGER)(uintptr_t)Value);
-			dbc->timeout = (SQLUINTEGER)(uintptr_t)Value;
-			break;
 		case SQL_ATTR_LOGIN_TIMEOUT:
-			WARNH(dbc, "no individual login timeout supported");
-			if (dbc->timeout != (SQLUINTEGER)(uintptr_t)Value) {
+			DBGH(dbc, "setting login/connection timeout: %lu",
+				(SQLUINTEGER)(uintptr_t)Value);
+			if (dbc->timeout && (! Value)) {
+				/* if one of the values had been set to non-0 (=no timeout),
+				 * keep that value as the timeout. */
+				WARNH(dbc, "keeping previous non-0 setting: %lu.",
+					dbc->timeout);
 				RET_HDIAGS(dbc, SQL_STATE_01S02);
-			}
+			} /* else: last setting wins */
+			dbc->timeout = (SQLUINTEGER)(uintptr_t)Value;
 			break;
 
 		case SQL_ATTR_TRANSLATE_LIB:
@@ -2229,10 +2232,10 @@ SQLRETURN EsSQLGetConnectAttrW(
 			*(SQLUINTEGER *)ValuePtr = SQL_CD_FALSE;
 			break;
 
-		case SQL_ATTR_LOGIN_TIMEOUT:
-			WARNH(dbc, "no login timeout supported: use connection timeout.");
 		case SQL_ATTR_CONNECTION_TIMEOUT:
-			DBGH(dbc, "getting connection timeout: %lu", dbc->timeout);
+		case SQL_ATTR_LOGIN_TIMEOUT:
+			INFOH(dbc, "login == connection timeout.");
+			DBGH(dbc, "getting login/connection timeout: %lu", dbc->timeout);
 			*(SQLUINTEGER *)ValuePtr = dbc->timeout;
 			break;
 
