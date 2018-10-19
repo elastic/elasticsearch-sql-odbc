@@ -77,11 +77,6 @@ Target:
         | 1 ->
             let version = zips.[0] |> extractVersion |> parseVersion
             tracefn "Extracted version information %s from %s" version.FullVersion zips.[0].FullName
-
-            // Unzip the files
-            Unzip InDir zips.[0].FullName
-            tracefn "Unzipped files in %s" zips.[0].FullName
-            
             [version]
         | _ -> failwithf "Expecting one %s zip file in %s but found %i" product.Name InDir zips.Length
 
@@ -109,22 +104,22 @@ Target:
         | _ -> target :: args
 
     let private certAndPasswordFromEnvVariables () =
-        trace "SKIP: Getting signing cert and password from environment variables"
-        //[("ELASTIC_CERT_FILE", "certificate");("ELASTIC_CERT_PASSWORD", "password")]
-        //|> List.iter(fun (v, b) ->
-        //        let ev = Environment.GetEnvironmentVariable(v, EnvironmentVariableTarget.Machine)
-        //        if isNullOrWhiteSpace ev then failwithf "Expecting non-null value for %s environment variable" v
-        //        setBuildParam b ev
-        //   )
+        trace "Getting signing cert and password from environment variables"
+        [("ELASTIC_CERT_FILE", "certificate");("ELASTIC_CERT_PASSWORD", "password")]
+        |> List.iter(fun (v, b) ->
+                let ev = Environment.GetEnvironmentVariable(v, EnvironmentVariableTarget.Machine)
+                if isNullOrWhiteSpace ev then failwithf "Expecting non-null value for %s environment variable" v
+                setBuildParam b ev
+           )
 
     let private certAndPasswordFromFile certFile passwordFile =
-        trace "SKIP: Getting signing cert and password from file arguments"
-        //match (fileExists certFile, fileExists passwordFile) with
-        //| (true, true) ->
-        //    setBuildParam "certificate" certFile
-        //    passwordFile |> File.ReadAllText |> setBuildParam "password"
-        //| (false, _) -> failwithf "certificate file does not exist at %s" certFile
-        //| (_, false) -> failwithf "password file does not exist at %s" passwordFile
+        trace "Getting signing cert and password from file arguments"
+        match (fileExists certFile, fileExists passwordFile) with
+        | (true, true) ->
+            setBuildParam "certificate" certFile
+            passwordFile |> File.ReadAllText |> setBuildParam "password"
+        | (false, _) -> failwithf "certificate file does not exist at %s" certFile
+        | (_, false) -> failwithf "password file does not exist at %s" passwordFile
 
     let parse () =
         setEnvironVar "FAKEBUILD" "1"
@@ -136,6 +131,10 @@ Target:
                        | ["release"; certFile; passwordFile ] ->
                            setBuildParam "release" "1"
                            certAndPasswordFromFile certFile passwordFile
+                           [Odbc] |> List.map (ProductVersions.CreateFromProduct versionFromInDir)
+                       | [IsTarget target] ->
+                           [Odbc] |> List.map (ProductVersions.CreateFromProduct versionFromInDir)
+                       | [] ->
                            [Odbc] |> List.map (ProductVersions.CreateFromProduct versionFromInDir)
                        | _ ->
                            traceError usage

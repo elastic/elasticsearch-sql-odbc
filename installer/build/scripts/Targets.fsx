@@ -29,8 +29,6 @@ if (getBuildParam "target" |> toLower <> "help") then
 
 Target "Clean" (fun _ ->
     CleanDirs [MsiBuildDir; OutDir;]
-    productsToBuild
-    |> List.iter(fun p -> CleanDirs [OutDir @@ p.Name;])
 )
 
 Target "BuildInstaller" (fun () ->
