@@ -1360,8 +1360,8 @@ static SQLRETURN wstr_to_wstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
  * xstr needs to be trimmed to exact data (no padding, no 0-term counted).
  * If ts_buff is non-NULL, the xstr will be copied (possibly W-to-C converted)
  * into it. */
-static BOOL xstr_to_timestamp_struct(xstr_st *xstr, TIMESTAMP_STRUCT *tss,
-	cstr_st *ts_buff)
+static BOOL xstr_to_timestamp_struct(esodbc_stmt_st *stmt, xstr_st *xstr,
+	TIMESTAMP_STRUCT *tss, cstr_st *ts_buff)
 {
 	/* need the 0-term in the buff, since ascii_w2c will write it */
 	char buff[sizeof(ESODBC_ISO8601_TEMPLATE)/*+\0*/];
@@ -1379,18 +1379,20 @@ static BOOL xstr_to_timestamp_struct(xstr_st *xstr, TIMESTAMP_STRUCT *tss,
 	}
 
 	if (xstr->wide) {
-		DBG("converting ISO 8601 `" LWPDL "` to timestamp.", LWSTR(&xstr->w));
+		DBGH(stmt, "converting ISO 8601 `" LWPDL "` to timestamp.",
+			LWSTR(&xstr->w));
 		if (sizeof(ESODBC_ISO8601_TEMPLATE) - 1 < xstr->w.cnt) {
-			ERR("`" LWPDL "` not a TIMESTAMP.", LWSTR(&xstr->w));
+			ERRH(stmt, "`" LWPDL "` not a TIMESTAMP.", LWSTR(&xstr->w));
 			return FALSE;
 		}
 		/* convert the W-string to C-string; also, copy it directly into out
 		 * ts_buff, if given (thus saving one extra copying) */
 		ts_ptr->cnt = ascii_w2c(xstr->w.str, ts_ptr->str, xstr->w.cnt) - 1;
 	} else {
-		DBG("converting ISO 8601 `" LCPDL "` to timestamp.", LCSTR(&xstr->c));
+		DBGH(stmt, "converting ISO 8601 `" LCPDL "` to timestamp.",
+			LCSTR(&xstr->c));
 		if (sizeof(ESODBC_ISO8601_TEMPLATE) - 1 < xstr->c.cnt) {
-			ERR("`" LCPDL "` not a TIMESTAMP.", LCSTR(&xstr->c));
+			ERRH(stmt, "`" LCPDL "` not a TIMESTAMP.", LCSTR(&xstr->c));
 			return FALSE;
 		}
 		/* no conversion needed; but copying to the out ts_buff, if given */
@@ -1405,13 +1407,14 @@ static BOOL xstr_to_timestamp_struct(xstr_st *xstr, TIMESTAMP_STRUCT *tss,
 	/* len counts the 0-term */
 	if (ts_ptr->cnt <= 1 || timestamp_parse(ts_ptr->str, ts_ptr->cnt, &tsp) ||
 		(! timestamp_to_tm_local(&tsp, &tmp))) {
-		ERR("data `" LCPDL "` not an ANSI ISO 8601 format.", LCSTR(ts_ptr));
+		ERRH(stmt, "data `" LCPDL "` not an ANSI ISO 8601 format.",
+			LCSTR(ts_ptr));
 		return FALSE;
 	}
 	TM_TO_TIMESTAMP_STRUCT(&tmp, tss);
 	tss->fraction = tsp.nsec / 1000000;
 
-	DBG("parsed ISO 8601: `%04d-%02d-%02dT%02d:%02d:%02d.%u+%dm`.",
+	DBGH(stmt, "parsed ISO 8601: `%04d-%02d-%02dT%02d:%02d:%02d.%u+%dm`.",
 		tss->year, tss->month, tss->day,
 		tss->hour, tss->minute, tss->second, tss->fraction,
 		tsp.offset);
@@ -1420,8 +1423,8 @@ static BOOL xstr_to_timestamp_struct(xstr_st *xstr, TIMESTAMP_STRUCT *tss,
 }
 
 
-static BOOL parse_timedate(xstr_st *xstr, TIMESTAMP_STRUCT *tss,
-	SQLSMALLINT *format, cstr_st *ts_buff)
+static BOOL parse_timedate(esodbc_stmt_st *stmt, xstr_st *xstr,
+	TIMESTAMP_STRUCT *tss, SQLSMALLINT *format, cstr_st *ts_buff)
 {
 	/* template buffer: date or time values will be copied in place and
 	 * evaluated as a timestamp (needs to be valid) */
@@ -1434,7 +1437,7 @@ static BOOL parse_timedate(xstr_st *xstr, TIMESTAMP_STRUCT *tss,
 	/* is this a TIMESTAMP? */
 	if (sizeof(ESODBC_TIME_TEMPLATE) - 1 < XSTR_LEN(xstr)) {
 		/* longer than a date-value -> try a timestamp */
-		if (! xstr_to_timestamp_struct(xstr, tss, ts_buff)) {
+		if (! xstr_to_timestamp_struct(stmt, xstr, tss, ts_buff)) {
 			return FALSE;
 		}
 		if (format) {
@@ -1462,8 +1465,8 @@ static BOOL parse_timedate(xstr_st *xstr, TIMESTAMP_STRUCT *tss,
 		templ[sizeof(ESODBC_DATE_TEMPLATE) - 1 + td.cnt] = 'Z';
 		xtd.c.str = templ;
 		xtd.c.cnt = td.cnt + sizeof(ESODBC_DATE_TEMPLATE);
-		if (! xstr_to_timestamp_struct(&xtd, tss, ts_buff)) {
-			ERR("`" LCPDL "` not a TIME.", LCSTR(&td));
+		if (! xstr_to_timestamp_struct(stmt, &xtd, tss, ts_buff)) {
+			ERRH(stmt, "`" LCPDL "` not a TIME.", LCSTR(&td));
 			return FALSE;
 		} else {
 			tss->year = tss->month = tss->day = 0;
@@ -1481,8 +1484,8 @@ static BOOL parse_timedate(xstr_st *xstr, TIMESTAMP_STRUCT *tss,
 		memcpy(templ, td.str, td.cnt);
 		xtd.c.str = templ;
 		xtd.c.cnt = sizeof(templ)/sizeof(templ[0]) - 1;
-		if (! xstr_to_timestamp_struct(&xtd, tss, ts_buff)) {
-			ERR("`" LCPDL "` not a DATE.", LCSTR(&td));
+		if (! xstr_to_timestamp_struct(stmt, &xtd, tss, ts_buff)) {
+			ERRH(stmt, "`" LCPDL "` not a DATE.", LCSTR(&td));
 			return FALSE;
 		} else {
 			tss->hour = tss->minute = tss->second = 0;
@@ -1494,7 +1497,7 @@ static BOOL parse_timedate(xstr_st *xstr, TIMESTAMP_STRUCT *tss,
 		return TRUE;
 	}
 
-	ERR("`" LCPDL "` not a Time/Date/Timestamp.", LCSTR(&td));
+	ERRH(stmt, "`" LCPDL "` not a Time/Date/Timestamp.", LCSTR(&td));
 	return FALSE;
 }
 
@@ -1528,7 +1531,7 @@ static SQLRETURN wstr_to_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 		switch (irec->concise_type) {
 			case SQL_TYPE_TIMESTAMP:
-				if (! xstr_to_timestamp_struct(&xstr, tss, NULL)) {
+				if (! xstr_to_timestamp_struct(stmt, &xstr, tss, NULL)) {
 					RET_HDIAGS(stmt, SQL_STATE_22018);
 				}
 				if (format) {
@@ -1536,7 +1539,7 @@ static SQLRETURN wstr_to_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
 				}
 				break;
 			case SQL_VARCHAR:
-				if (! parse_timedate(&xstr, tss, format, NULL)) {
+				if (! parse_timedate(stmt, &xstr, tss, format, NULL)) {
 					RET_HDIAGS(stmt, SQL_STATE_22018);
 				}
 				break;
@@ -1958,8 +1961,8 @@ SQLRETURN sql2c_convertible(esodbc_stmt_st *stmt)
  * needs to be set;
  * Returns success of conversion and pointer to trimmed number str
  * representation.  */
-static BOOL xstr_to_number(void *data_ptr, SQLLEN *octet_len_ptr,
-	xstr_st *xstr, SQLSMALLINT dest_type, void *dest)
+static BOOL xstr_to_number(esodbc_stmt_st *stmt, void *data_ptr,
+	SQLLEN *octet_len_ptr, xstr_st *xstr, SQLSMALLINT dest_type, void *dest)
 {
 	BOOL res;
 
@@ -1986,7 +1989,7 @@ static BOOL xstr_to_number(void *data_ptr, SQLLEN *octet_len_ptr,
 
 	if (xstr->wide) {
 		wtrim_ws(&xstr->w);
-		DBG("converting paramter value `" LWPDL "` to number.",
+		DBGH(stmt, "converting paramter value `" LWPDL "` to number.",
 			LWSTR(&xstr->w));
 		switch (dest_type) {
 			case SQL_C_SBIGINT:
@@ -2003,7 +2006,7 @@ static BOOL xstr_to_number(void *data_ptr, SQLLEN *octet_len_ptr,
 		}
 	} else {
 		trim_ws(&xstr->c);
-		DBG("converting paramter value `" LCPDL "` to number.",
+		DBGH(stmt, "converting paramter value `" LCPDL "` to number.",
 			LCSTR(&xstr->c));
 		switch (dest_type) {
 			case SQL_C_SBIGINT:
@@ -2022,10 +2025,10 @@ static BOOL xstr_to_number(void *data_ptr, SQLLEN *octet_len_ptr,
 
 	if (! res) {
 		if (xstr->wide) {
-			ERR("can't convert `" LWPDL "` to type %hd number.",
+			ERRH(stmt, "can't convert `" LWPDL "` to type %hd number.",
 				LWSTR(&xstr->w), dest_type);
 		} else {
-			ERR("can't convert `" LCPDL "` to type %hd number.",
+			ERRH(stmt, "can't convert `" LCPDL "` to type %hd number.",
 				LCSTR(&xstr->c), dest_type);
 		}
 		return FALSE;
@@ -2094,8 +2097,8 @@ SQLRETURN c2sql_boolean(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			octet_len_ptr = deferred_address(SQL_DESC_OCTET_LENGTH_PTR, pos,
 					arec);
 			xstr.wide = ctype == SQL_C_WCHAR;
-			if (! xstr_to_number(data_ptr, octet_len_ptr, &xstr, SQL_C_DOUBLE,
-						&dbl)) {
+			if (! xstr_to_number(stmt, data_ptr, octet_len_ptr, &xstr,
+						SQL_C_DOUBLE, &dbl)) {
 				RET_HDIAGS(stmt, SQL_STATE_22018);
 			}
 			ret = double_to_bool(stmt, dbl, &val);
@@ -2194,7 +2197,7 @@ static SQLRETURN string_to_number(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	xstr.wide = wide;
 	/* do a conversion check: use double, as a capture all cases
 	 * value: ES/SQL will accept a float for an INTEGER param */
-	if (! xstr_to_number(data_ptr, octet_len_ptr, &xstr,
+	if (! xstr_to_number(stmt, data_ptr, octet_len_ptr, &xstr,
 			SQL_C_DOUBLE, dest ? &dbl : NULL)) {
 		ERRH(stmt, "failed to convert param value to a double.");
 		RET_HDIAGS(stmt, SQL_STATE_22018);
@@ -2537,7 +2540,7 @@ static SQLRETURN convert_str_to_timestamp(esodbc_stmt_st *stmt,
 	assert(dest);
 	ts_buff.str = dest;
 	ts_buff.cnt = sizeof(ESODBC_ISO8601_TEMPLATE) - 1;
-	if (! parse_timedate(&xstr, &tss, &format, &ts_buff)) {
+	if (! parse_timedate(stmt, &xstr, &tss, &format, &ts_buff)) {
 		ERRH(stmt, "failed to parse input as Time/Date/Timestamp");
 		RET_HDIAGS(stmt, SQL_STATE_22008);
 	} else if (format == SQL_TYPE_TIME) {
