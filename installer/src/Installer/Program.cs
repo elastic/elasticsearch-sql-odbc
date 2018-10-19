@@ -74,21 +74,32 @@ namespace ODBCInstaller
 				Properties = new[]
 				{
 					new PropertyRef("NETFRAMEWORK40FULL"),
+
+					// Perform registry search for redist key
+					new Property("VS2017REDISTINSTALLED",
+						new RegistrySearch(RegistryHive.LocalMachine, @"SOFTWARE\WOW6432Node\Microsoft\VisualStudio\14.0\VC\Runtimes\x64", "Installed", RegistrySearchType.raw){
+							Win64 = true
+						})
 				},
 				LaunchConditions = new List<LaunchCondition>
 				{
-					new LaunchCondition(
-						"Installed OR NETFRAMEWORK40FULL",
-						"This installer requires at least .NET Framework 4.0 in order to run the configuration editor. " +
-						"Please install .NET Framework 4.0 then run this installer again."
-					),
 					/*
 						Windows 10:				VersionNT64 = 1000 AND MsiNTProductType = 1
 						Windows Server 2016:	VersionNT64 = 1000 AND MsiNTProductType <> 1 
 					*/
 					new LaunchCondition(
 						"NOT ((VersionNT64 = 1000 AND MsiNTProductType = 1) OR (VersionNT64 = 1000 AND MsiNTProductType <> 1))",
-						"This installer requires at least Windows 10 or Windows Server 2016."	
+						"This installer requires at least Windows 10 or Windows Server 2016."
+					),
+					new LaunchCondition(
+						"VS2017REDISTINSTALLED",
+						"This installer requires the Visual C++ 2017 Redistributable. " +
+						"Please install Visual C++ 2017 Redistributable and then run this installer again."
+					),
+					new LaunchCondition(
+						"Installed OR NETFRAMEWORK40FULL",
+						"This installer requires at least .NET Framework 4.0 in order to run the configuration editor. " +
+						"Please install .NET Framework 4.0 and then run this installer again."
 					)
 				},
 
