@@ -426,6 +426,23 @@ SQLRETURN SQL_API SQLGetDescRecW(
 }
 
 
+/*
+ * "When the application sets the SQL_DESC_TYPE field, the driver checks that
+ * other fields that specify the type are valid and consistent." AND:
+ *
+ * "A consistency check is performed by the driver automatically whenever an
+ * application sets the SQL_DESC_DATA_PTR field of the APD, ARD, or IPD.
+ * Whenever this field is set, the driver checks that the value of the
+ * SQL_DESC_TYPE field and the values applicable to the SQL_DESC_TYPE field in
+ * the same record are valid and consistent.
+ *
+ * The SQL_DESC_DATA_PTR field of an IPD is not normally set; however, an
+ * application can do so to force a consistency check of IPD fields. The value
+ * that the SQL_DESC_DATA_PTR field of the IPD is set to is not actually
+ * stored and cannot be retrieved by a call to SQLGetDescField or
+ * SQLGetDescRec; the setting is made only to force the consistency check. A
+ * consistency check cannot be performed on an IRD."
+ */
 SQLRETURN  SQL_API SQLSetDescRec(
 	SQLHDESC DescriptorHandle,
 	SQLSMALLINT RecNumber,
@@ -438,6 +455,20 @@ SQLRETURN  SQL_API SQLSetDescRec(
 	_Inout_opt_ SQLLEN *StringLength,
 	_Inout_opt_ SQLLEN *Indicator)
 {
+	/*
+	 * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/column-wise-binding :
+	 * "When using column-wise binding, an application binds one or two, or in
+	 * some cases three, arrays to each column for which data is to be
+	 * returned. The first array holds the data values, and the second array
+	 * holds length/indicator buffers. Indicators and length values can be
+	 * stored in separate buffers by setting the SQL_DESC_INDICATOR_PTR and
+	 * SQL_DESC_OCTET_LENGTH_PTR descriptor fields to different values; if
+	 * this is done, a third array is bound. Each array contains as many
+	 * elements as there are rows in the rowset."
+	 */
+
+	/* needs to trigger consistency_check */
+
 	RET_NOT_IMPLEMENTED(DescriptorHandle);
 }
 
@@ -899,7 +930,6 @@ SQLRETURN SQL_API SQLMoreResults(SQLHSTMT StatementHandle)
 	return ret;
 }
 
-/* TODO: see error.h: esodbc_errors definition note (2.x apps support) */
 SQLRETURN  SQL_API SQLGetDiagFieldW(
 	SQLSMALLINT HandleType,
 	SQLHANDLE Handle,

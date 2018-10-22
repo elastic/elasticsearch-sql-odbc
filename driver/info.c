@@ -94,7 +94,6 @@ static SQLUSMALLINT esodbc_functions[] = {
 
 #define ESODBC_FUNC_SIZE \
 	(sizeof(esodbc_functions)/sizeof(esodbc_functions[0]))
-// TODO: are these def'd in sql.h??
 #define SQL_FUNC_SET(pfExists, uwAPI) \
 	*(((UWORD*) (pfExists)) + ((uwAPI) >> 4)) |= (1 << ((uwAPI) & 0x000F))
 #define SQL_API_ODBC2_ALL_FUNCTIONS_SIZE	100
@@ -865,7 +864,7 @@ SQLRETURN EsSQLGetInfoW(
 }
 
 
-/* TODO: see error.h: esodbc_errors definition note (2.x apps support) */
+/* TODO: see error.h: esodbc_errors definition note on 2.x apps support */
 /* Note: with SQL_DIAG_SQLSTATE DM provides a NULL StringLengthPtr */
 SQLRETURN EsSQLGetDiagFieldW(
 	SQLSMALLINT HandleType,
@@ -1095,7 +1094,7 @@ SQLRETURN EsSQLGetDiagFieldW(
  * """
  * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/implementing-sqlgetdiagrec-and-sqlgetdiagfield :
  */
-/* TODO: see error.h: esodbc_errors definition note (2.x apps support) */
+/* TODO: see error.h: esodbc_errors definition note on 2.x apps support */
 SQLRETURN EsSQLGetDiagRecW
 (
 	SQLSMALLINT HandleType,

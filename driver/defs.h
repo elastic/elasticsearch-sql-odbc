@@ -176,8 +176,7 @@
 #define ESODBC_CATALOG_USAGE					(0 | \
 	SQL_CU_DML_STATEMENTS | SQL_CU_PROCEDURE_INVOCATION)
 /* what's allowed in an identifier name (eg. table, column, index) except
- * [a-zA-Z0-9_], accepted in a delimited specification -> all printable ASCII
- * (assuming ASCII is the limitation?? TODO ), 0x20-0x7E. */
+ * [a-zA-Z0-9_], accepted in a delimited specification. */
 #define ESODBC_SPECIAL_CHARACTERS				" !\"#$%&'()*+,-./" /*[0-9]*/ \
 	";<=>?@" /*[A-Z]*/ "[\\]^" /*[_]*/ "`" /*[a-z]*/ "{|}~"
 /* SQLFetchScroll() and SQLSetPos() capabilities.

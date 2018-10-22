@@ -1459,7 +1459,7 @@ static void *copy_types_rows(esodbc_dbc_st *dbc, estype_row_st *type_row,
 		types[i].meta_type = concise_to_meta(types[i].c_concise_type,
 				/*C type -> AxD*/DESC_TYPE_ARD);
 
-		/* fix SQL_DATA_TYPE and SQL_DATETIME_SUB columns TODO: GH issue */
+		/* fix SQL_DATA_TYPE and SQL_DATETIME_SUB columns */
 		concise_to_type_code(types[i].data_type, &types[i].sql_data_type,
 			&types[i].sql_datetime_sub);
 
@@ -2035,7 +2035,6 @@ SQLRETURN EsSQLSetConnectAttrW(
 			 * or Unicode. */
 			INFOH(dbc, "no ANSI/Unicode specific behaviour (app is: %s).",
 				(uintptr_t)Value == SQL_AA_TRUE ? "ANSI" : "Unicode");
-			/* TODO: API doesn't require to set a state? */
 			//state = SQL_STATE_IM001;
 			return SQL_ERROR; /* error means ANSI */
 
