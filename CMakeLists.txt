@@ -146,6 +146,23 @@ if (${CMD_RETURN})
 	message("\terr: ${CMD_OUTERR}")
 endif (${CMD_RETURN})
 
+# generate installable NOTICE.txt
+execute_process(COMMAND
+	${CMAKE_SOURCE_DIR}/devtools/3rd_party/notice_report.bat
+		${CMAKE_BINARY_DIR}/NOTICE.txt
+	WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+	RESULT_VARIABLE CMD_RETURN
+	OUTPUT_VARIABLE CMD_OUTPUT
+	ERROR_VARIABLE CMD_OUTERR
+	)
+#	WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/${DRV_SRC_DIR}"
+if (${CMD_RETURN})
+	message(WARNING "Generating install NOTICE.txt file failed:")
+	message("\tret: ${CMD_RETURN}")
+	message("\tout: ${CMD_OUTPUT}")
+	message("\terr: ${CMD_OUTERR}")
+endif (${CMD_RETURN})
+
 
 #
 # add ODBC-Specification to the project
@@ -324,7 +341,7 @@ set(INSTALL_DIR
 set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY TRUE)
 # add instalation project/target
 install(FILES
-	LICENSE.rtf LICENSE.txt
+	LICENSE.rtf LICENSE.txt ${CMAKE_BINARY_DIR}/NOTICE.txt
 	DESTINATION ${INSTALL_DIR})
 # add libcurl if build dynamically
 if (${LIBCURL_LINK_MODE} MATCHES [Dd][Ll][Ll])
