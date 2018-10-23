@@ -2041,7 +2041,6 @@ SQLRETURN EsSQLNativeSqlW(
 	}
 
 	if (szSqlStr) {
-		//if (cchSqlStrMax < cchSqlStrIn) {
 		if (cchSqlStrMax <= cchSqlStrIn) {
 			to_copy = cchSqlStrMax - /* \0 */1;
 			state = SQL_STATE_01004;
