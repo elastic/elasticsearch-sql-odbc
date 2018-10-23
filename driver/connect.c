@@ -1947,6 +1947,9 @@ SQLRETURN EsSQLConnectW
 	SQLSMALLINT written;
 	esodbc_dbc_st *dbc = DBCH(hdbc);
 
+	/*
+	 * Note: keep the order in sync with loop's switch cases!
+	 */
 	wstr_st kw_dsn = MK_WSTR(ESODBC_DSN_DSN);
 	wstr_st val_dsn = (wstr_st) {
 		szDSN, cchDSN < 0 ? wcslen(szDSN) : cchDSN
@@ -1970,6 +1973,17 @@ SQLRETURN EsSQLConnectW
 			ERRH(dbc, "couldn't assign " LWPDL " value [%zu] "
 				"`" LWPDL "`.", LWSTR(kws[i]),
 				vals[i]->cnt, LWSTR(vals[i]));
+			switch (i) {
+				case 0: /* DSN */
+					RET_HDIAGS(hdbc, SQL_STATE_HY090);
+				case 1: /* UID */
+					RET_HDIAGS(hdbc, SQL_STATE_IM010);
+				case 2: /* PWD */
+					RET_HDIAG(hdbc, SQL_STATE_HY000, "Password longer "
+						"than max (" STR(ESODBC_DSN_MAX_ATTR_LEN) ")", 0);
+				default:
+					assert(0);
+			}
 		} else {
 			assert(res == DSN_ASSIGNED);
 		}
