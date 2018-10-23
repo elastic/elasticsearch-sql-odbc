@@ -96,10 +96,10 @@ typedef struct {
  * HTTP headers used for all requests (Content-Type, Accept).
  */
 static struct curl_slist *http_headers = NULL;
-/* this mutex protects a counter used to number DBC log files:
+/* counter used to number DBC log files:
  * the files are stamped with time (@ second resolution) and PID, which is not
  * enough to avoid name clashes. */
-esodbc_mutex_lt filelog_cnt_mux = SRWLOCK_INIT;
+volatile unsigned filelog_cnt = 0;
 
 BOOL connect_init()
 {
@@ -645,17 +645,6 @@ static SQLRETURN test_connect(esodbc_dbc_st *dbc)
 	RET_STATE(dbc->hdr.diag.state);
 }
 
-static unsigned filelog_inc_counter()
-{
-	static unsigned counter = 0;
-	unsigned val;
-
-	ESODBC_MUX_LOCK(&filelog_cnt_mux);
-	val = counter ++;
-	ESODBC_MUX_UNLOCK(&filelog_cnt_mux);
-	return val;
-}
-
 static BOOL config_dbc_logging(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 {
 	int cnt, level;
@@ -671,7 +660,7 @@ static BOOL config_dbc_logging(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	cnt = swprintf(ident.str, ident.cnt,
 			WPFWP_LDESC "_" WPFWP_LDESC "_" "%d-%u",
 			LWSTR(&attrs->server), LWSTR(&attrs->port),
-			GetCurrentProcessId(), filelog_inc_counter());
+			GetCurrentProcessId(), InterlockedIncrement(&filelog_cnt));
 	if (cnt <= 0 || ident.cnt <= cnt) {
 		ERRH(dbc, "failed to print log file identifier.");
 		SET_HDIAG(dbc, SQL_STATE_HY000, "failed to print log file ID", 0);
@@ -689,11 +678,11 @@ static BOOL config_dbc_logging(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 				case L'<':
 				case L'>':
 				case L'|':
-				case '/':
-				case '\\':
+				case L'/':
+				case L'\\':
 				case L'?':
-				case '*':
-				case ':':
+				case L'*':
+				case L':':
 					ident.str[cnt] = L'_';
 			}
 		}
