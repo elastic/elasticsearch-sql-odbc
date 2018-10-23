@@ -23,7 +23,8 @@ namespace EsOdbcDsnEditor
         {
             Application.EnableVisualStyles();
             DsnEditorForm form = new DsnEditorForm(onConnect, dsnIn, delegConnectionTest, delegSaveDsn);
-            form.ShowDialog(); // Instead of Application.Run(form);
+            // instead of Application.Run(form): prevent STA apps from launching a new editor within the same thread
+            form.ShowDialog();
             var dsn = form.Builder.ToString();
             return dsn.Length;
         }
