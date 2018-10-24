@@ -11,7 +11,7 @@ setlocal EnableExtensions EnableDelayedExpansion
 set SRC_PATH=%~dp0
 set OUT_FILE=%1
 
-set LIC_DIR=%SRC_PATH%\licenses
+set LIC_DIR=%SRC_PATH%licenses
 set ES_NOTICE=%LIC_DIR%\..\..\..\NOTICE.txt
 
 if [%OUT_FILE%] == [] (
@@ -23,13 +23,34 @@ if [%OUT_FILE%] == [] (
 	exit /b 1
 )
 
-type %ES_NOTICE% > %OUT_FILE%
+echo ===========Notice for Elasticsearch=========== > %OUT_FILE%
+echo.>>%OUT_FILE%
+type %ES_NOTICE% >> %OUT_FILE%
 
-cd %LIC_DIR%
-for /r %%i in ("*.txt") do if not %%~zi==0 (
-	type %%i >> %OUT_FILE%
-	echo.>>%OUT_FILE%
-	echo.>>%OUT_FILE%
+for /f "delims=" %%i in ('dir /b %LIC_DIR%\*.txt') do (
+	for %%f in (%LIC_DIR%\%%i) do if not %%~zf==0 (
+		set fname=%%~nf
+
+		set proj=!fname:-NOTICE=!
+		if not [!proj!] == [!fname!] (
+			echo.>>%OUT_FILE%
+			echo ===========Notice for !proj!=========== >> %OUT_FILE%
+			echo.>>%OUT_FILE%
+		)
+		set proj=!fname:-LICENSE=!
+		if not [!proj!] == [!fname!] (
+			echo.>>%OUT_FILE%
+			echo ===========License for !proj!=========== >> %OUT_FILE%
+			echo.>>%OUT_FILE%
+		)
+
+		type %%f >> %OUT_FILE%
+
+		rem UJSON4C's license doesn't end with new line
+		if [!proj!] == [ujson4c] (
+			echo.>>%OUT_FILE%
+		)
+	)
 )
 
 exit /b 0
