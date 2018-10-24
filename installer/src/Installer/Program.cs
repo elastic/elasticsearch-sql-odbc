@@ -120,7 +120,6 @@ namespace ODBCInstaller
 			//Compiler.LightOptions = "-sw1076 -sw1079 -sval";
 			Compiler.WixLocation = wixLocation;
 
-			project.Attributes.Add("Manufacturer", driverFileInfo.CompanyName);
             project.WixVariables.Add("WixUILicenseRtf", System.IO.Path.Combine(zipContentsDirectory, "LICENSE.rtf"));
 			project.Include(WixExtension.NetFx);
 			project.BuildMsi();
