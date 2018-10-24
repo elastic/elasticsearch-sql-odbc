@@ -5,9 +5,6 @@ nuget WixSharp.wix.bin
 
 source https://www.nuget.org/api/v2
 
-nuget xunit
-nuget FluentAssertions
-
 group build
     source https://www.nuget.org/api/v2
 
@@ -15,6 +12,3 @@ group build
     nuget FSharp.Data
 	nuget FSharp.Text.RegexProvider
     nuget FSharp.Configuration
-
-    source https://www.myget.org/F/xunit/
-    nuget xunit.runner.console 2.2.0

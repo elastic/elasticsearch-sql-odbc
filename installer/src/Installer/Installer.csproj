@@ -12,7 +12,7 @@
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
-	<TargetFrameworkProfile />
+    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -86,5 +86,5 @@
       <Paket>True</Paket>
     </Reference>
   </ItemGroup>
-
+  <Import Project="..\..\packages\WixSharp.bin\build\WixSharp.bin.targets" Condition="Exists('..\..\packages\WixSharp.bin\build\WixSharp.bin.targets')" Label="Paket" />
 </Project>
