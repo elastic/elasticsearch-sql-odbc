@@ -1,12 +1,11 @@
 ﻿using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("Elasticserach DSN Editor")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyTitle("Elasticsearch DSN Editor")]
+[assembly: AssemblyDescription("Elasticsearch DSN Editor for managing ODBC connection strings.")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Elasticsearch B.V.")]
 [assembly: AssemblyProduct("Elasticsearch ODBC Driver")]

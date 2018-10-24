@@ -263,7 +263,7 @@ namespace EsOdbcDsnEditor
                 return true;
             }
 
-            MessageBox.Show("Log directory invalid", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show("Log directory invalid, path does not exist", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return false;
         }
 
@@ -282,8 +282,13 @@ namespace EsOdbcDsnEditor
 
         private bool ValidateCertificateFile(string file)
         {
-            if (string.IsNullOrEmpty(file)
-                || (File.Exists(file) && File.ReadAllBytes(file).Length > 0))
+            if (string.IsNullOrEmpty(file))
+            {
+                return true;
+            }
+
+            var info = new FileInfo(file);
+            if (info.Exists && info.Length > 0)
             {
                 return true;
             }

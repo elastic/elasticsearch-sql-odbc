@@ -1,16 +1,15 @@
 ﻿using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("EsOdbcDsnEditorLauncher")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyTitle("Elasticsearch DSN Editor Launcher")]
+[assembly: AssemblyDescription("Elasticsearch DSN Editor Launcher.")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("EsOdbcDsnEditorLauncher")]
-[assembly: AssemblyCopyright("Copyright ©  2018")]
+[assembly: AssemblyCompany("Elasticsearch B.V.")]
+[assembly: AssemblyProduct("Elasticsearch ODBC Driver")]
+[assembly: AssemblyCopyright("Copyright Elasticsearch B.V. ©")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
