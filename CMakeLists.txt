@@ -148,8 +148,7 @@ endif (${CMD_RETURN})
 
 # generate installable NOTICE.txt
 execute_process(COMMAND
-	${CMAKE_SOURCE_DIR}/devtools/3rd_party/notice_report.bat
-		${CMAKE_BINARY_DIR}/NOTICE.txt
+	${CMAKE_SOURCE_DIR}/devtools/3rd_party/notice_report.bat NOTICE.txt
 	WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
 	RESULT_VARIABLE CMD_RETURN
 	OUTPUT_VARIABLE CMD_OUTPUT
