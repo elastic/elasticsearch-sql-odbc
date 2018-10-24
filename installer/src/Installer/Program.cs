@@ -40,7 +40,7 @@ namespace ODBCInstaller
 
 			// Append any prerelease flags onto the version string
 			var msiVersionString = $"{driverFileInfo.ProductVersion}{preRelease}";
-			var msiFileName = new System.IO.FileInfo(zipFilepath).Name.Replace(".zip", string.Empty);
+			var msiFileName =  System.IO.Path.GetFileNameWithoutExtension(zipFilepath);
 
             var files = System.IO.Directory.GetFiles(zipContentsDirectory)
                               .Where(f => f.EndsWith(driverFilePath) == false)
