@@ -11,9 +11,9 @@ open Products.Products
 open Products.Paths
 open Products
 open System.Text
+open Fake.FileHelper
 
 module Builder =
-    open Fake.FileHelper
 
     let Sign file (product : ProductVersions) =
         tracefn "Signing MSI"
