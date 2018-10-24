@@ -16,12 +16,8 @@ open Fake.Runtime.Trace
 
 let productsToBuild = Commandline.parse()
 
-let productDescriptions = productsToBuild
-                          |> List.map(fun p ->
-                                 p.Versions 
-                                 |> List.map(fun v -> sprintf "%s %s (%s)" p.Title v.FullVersion "Compile")
-                             )
-                          |> List.concat
+let productDescriptions = productsToBuild.Versions
+                          |> List.map(fun v -> sprintf "%s %s (%s)" productsToBuild.Title v.FullVersion "Compile")
                           |> String.concat Environment.NewLine
 
 if (getBuildParam "target" |> toLower <> "help") then 
@@ -32,7 +28,7 @@ Target "Clean" (fun _ ->
 )
 
 Target "BuildInstaller" (fun () ->
-    productsToBuild |> List.iter (fun p -> BuildMsi p)
+    BuildMsi productsToBuild
 )
 
 Target "Release" (fun () ->

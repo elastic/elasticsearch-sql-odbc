@@ -14,6 +14,7 @@ module Paths =
     let SrcDir = "./src/"
     let MsiDir = SrcDir @@ "Installer/"
     let MsiBuildDir = MsiDir @@ "bin/Release/"
+    let DriverFilesDir = SrcDir @@ "../../builds/" // Output folder from driver compilation
 
 module Products =
     open Paths
@@ -43,5 +44,5 @@ module Products =
         member this.Versions = versions
         member this.Title = product.Title
 
-        static member CreateFromProduct (productToVersion:Product -> Version list) (product: Product)  =
-            ProductVersions(product, productToVersion product)
+        static member Create (versions: Version list) =
+            ProductVersions(Odbc, versions)

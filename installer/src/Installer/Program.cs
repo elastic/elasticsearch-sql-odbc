@@ -33,16 +33,14 @@ namespace ODBCInstaller
 			}
 
 			// Get the input files
-			var zipFilepath = args[1];
-			var zipContentsDirectory = new System.IO.DirectoryInfo(zipFilepath.Replace(".zip", string.Empty)).FullName;
-			var driverFileInfo = GetDriverFileInfo(zipContentsDirectory);
-            var driverFilePath = System.IO.Path.Combine(zipContentsDirectory, driverFileInfo.FileName);
+			var driverInputFilesPath = args[1];
+			var driverFileInfo = GetDriverFileInfo(driverInputFilesPath);
+            var driverFilePath = System.IO.Path.Combine(driverInputFilesPath, driverFileInfo.FileName);
 
 			// Append any prerelease flags onto the version string
 			var msiVersionString = $"{driverFileInfo.ProductVersion}{preRelease}";
-			var msiFileName =  System.IO.Path.GetFileNameWithoutExtension(zipFilepath);
 
-            var files = System.IO.Directory.GetFiles(zipContentsDirectory)
+            var files = System.IO.Directory.GetFiles(driverInputFilesPath)
                               .Where(f => f.EndsWith(driverFilePath) == false)
                               .Select(f => new File(f))
                               .Concat(new[] { new File(driverFilePath, new ODBCDriver("Elasticsearch Driver")) })
@@ -70,7 +68,7 @@ namespace ODBCInstaller
                     UrlInfoAbout = "https://www.elastic.co/products/stack/elasticsearch-sql",
                     HelpLink = "https://discuss.elastic.co/c/elasticsearch"
                 },
-                OutFileName = msiFileName,
+                OutFileName = "esodbc-" + msiVersionString,
 				Properties = new[]
 				{
 					new PropertyRef("NETFRAMEWORK40FULL"),
@@ -120,7 +118,7 @@ namespace ODBCInstaller
 			//Compiler.LightOptions = "-sw1076 -sw1079 -sval";
 			Compiler.WixLocation = wixLocation;
 
-            project.WixVariables.Add("WixUILicenseRtf", System.IO.Path.Combine(zipContentsDirectory, "LICENSE.rtf"));
+            project.WixVariables.Add("WixUILicenseRtf", System.IO.Path.Combine(driverInputFilesPath, "LICENSE.rtf"));
 			project.Include(WixExtension.NetFx);
 			project.BuildMsi();
         }

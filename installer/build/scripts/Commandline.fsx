@@ -64,6 +64,10 @@ Target:
 
     let private args = getBuildParamOrDefault "cmdline" "buildinstaller" |> split ' '
 
+    let private versionFromCommandArgument (versionString: string) =
+        let version = versionString |> parseVersion
+        [version]
+
     let private versionFromInDir (product : Product) =
         let extractVersion (fileInfo:FileInfo) =
             Regex.Replace(fileInfo.Name, "^" + product.Name + "\-(.*)\.zip$", "$1")
@@ -124,18 +128,18 @@ Target:
     let parse () =
         setEnvironVar "FAKEBUILD" "1"
         let products = match arguments with
-                       | ["release"] ->
+                       | ["release"; version] ->
                            setBuildParam "release" "1"
                            certAndPasswordFromEnvVariables ()
-                           [Odbc] |> List.map (ProductVersions.CreateFromProduct versionFromInDir)
-                       | ["release"; certFile; passwordFile ] ->
+                           ProductVersions.Create (versionFromCommandArgument version)
+                       | ["release"; version; certFile; passwordFile ] ->
                            setBuildParam "release" "1"
                            certAndPasswordFromFile certFile passwordFile
-                           [Odbc] |> List.map (ProductVersions.CreateFromProduct versionFromInDir)
-                       | [IsTarget target] ->
-                           [Odbc] |> List.map (ProductVersions.CreateFromProduct versionFromInDir)
-                       | [] ->
-                           [Odbc] |> List.map (ProductVersions.CreateFromProduct versionFromInDir)
+                           ProductVersions.Create (versionFromCommandArgument version)
+                       | [IsTarget target; version] ->
+                           ProductVersions.Create (versionFromCommandArgument version)
+                       | [version] ->
+                           ProductVersions.Create (versionFromCommandArgument version)
                        | _ ->
                            traceError usage
                            exit 2

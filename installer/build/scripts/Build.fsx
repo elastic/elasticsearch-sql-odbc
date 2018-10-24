@@ -70,19 +70,10 @@ module Builder =
         product.Versions
         |> List.iter(fun version -> 
 
-            let zipfile = InDir
-                          |> directoryInfo
-                          |> filesInDirMatching ("*.zip")
-                          |> Seq.head
-                              
-            // Unzip the zip file
-            Unzip InDir zipfile.FullName
-            tracefn "Unzipped zip file in %s" zipfile.FullName
-
             let exitCode = ExecProcess (fun info ->
                              info.FileName <- sprintf "%sOdbcInstaller" MsiBuildDir
                              info.WorkingDirectory <- MsiDir
-                             info.Arguments <- [version.FullVersion; zipfile.FullName] |> String.concat " "
+                             info.Arguments <- [version.FullVersion; System.IO.Path.GetFullPath(DriverFilesDir)] |> String.concat " "
                             ) <| TimeSpan.FromMinutes 20.
     
             if exitCode <> 0 then failwithf "Error building MSI"
