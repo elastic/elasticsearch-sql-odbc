@@ -114,7 +114,13 @@ namespace ODBCInstaller
                 }
             };
 
-            project.Attributes.Add("Manufacturer", driverFileInfo.CompanyName);
+			const string wixLocation = @"..\..\packages\WixSharp.wix.bin\tools\bin";
+			if (!System.IO.Directory.Exists(wixLocation))
+				throw new Exception($"The directory '{wixLocation}' could not be found");
+			//Compiler.LightOptions = "-sw1076 -sw1079 -sval";
+			Compiler.WixLocation = wixLocation;
+
+			project.Attributes.Add("Manufacturer", driverFileInfo.CompanyName);
             project.WixVariables.Add("WixUILicenseRtf", System.IO.Path.Combine(zipContentsDirectory, "LICENSE.rtf"));
 			project.Include(WixExtension.NetFx);
 			project.BuildMsi();
