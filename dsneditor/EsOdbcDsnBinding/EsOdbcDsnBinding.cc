@@ -97,7 +97,12 @@ namespace EsOdbcDsnBinding {
 			this->hwnd = hwnd;
 
 			this->onConnect = onConnect;
-			dsnInStr = dsnInW != NULL ? gcnew String(dsnInW) : "";
+			if (dsnInW != NULL) {
+				dsnInStr = gcnew String(dsnInW);
+			}
+			else {
+				dsnInStr = "";
+			}
 
 			this->cbConnectionTest = cbConnectionTest;
 			this->argConnectionTest = argConnectionTest;
