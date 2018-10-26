@@ -193,7 +193,7 @@ typedef SRWLOCK esodbc_mutex_lt;
 
 #else /* _WIN32 */
 
-#error "unsupported platform" /* TODO */
+#error "unsupported platform"
 /* "[R]eturns the number of bytes written into the multibyte output
  * string, excluding the terminating NULL (if any)".  Copies until \0 is
  * met in wstr or buffer runs out.  If \0 is met, it's copied, but not
@@ -253,7 +253,6 @@ SQLRETURN write_wstr(SQLHANDLE hnd, SQLWCHAR *dest, wstr_st *src,
  * (returned pointer or dst->str).
  * Returns NULL on error.
  */
-//cstr_st* TEST_API wstr_to_utf8(wstr_st *src, cstr_st *dst);
 cstr_st TEST_API *wstr_to_utf8(wstr_st *src, cstr_st *dst);
 
 /*
@@ -265,7 +264,6 @@ cstr_st TEST_API *wstr_to_utf8(wstr_st *src, cstr_st *dst);
  * "WPrintF Wide/Char Pointer _ DESCriptor"
  */
 #ifdef _WIN32
-/* funny M$ 'inverted' logic */
 /* wprintf wide_t pointer descriptor */
 #	define WPFWP_DESC		L"%s"
 #	define WPFWP_LDESC		L"%.*s"
@@ -292,30 +290,6 @@ cstr_st TEST_API *wstr_to_utf8(wstr_st *src, cstr_st *dst);
 #	define PFCP_DESC		"%s"
 #	define PFCP_LDESC		"%.*s"
 #endif /* _WIN32 */
-
-
-/* SNTPRINTF: function to printf into a string */
-#ifdef UNICODE
-#define SNTPRINTF	_snwprintf
-#define TSTRCHR		wcschr
-#else /* UNICODE */
-#define SNTPRINTF	snprintf
-#define TSTRCHR		strchr
-#endif /* UNICODE */
-
-
-/*
- * Descriptors to be used with STPRINTF for TCHAR pointer type.
- * "SNTPRINTF Tchar Pointer Descriptor [with Length]"
- */
-#ifdef UNICODE
-#define STPD	WPFWP_DESC
-#define STPDL	WPFWP_LDESC
-#else /* UNICODE */
-#define STPD	PFCP_DESC
-#define STPDL	PFCP_LDESC
-#endif /* UNICODE */
-
 
 
 #endif /* __UTIL_H__ */

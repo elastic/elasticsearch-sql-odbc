@@ -163,7 +163,8 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 
 		set_col_size(rec);
 
-		/* TODO: set remaining of settable fields (base table etc.) */
+		/* setting the remaining of settable fields (base table etc.) requires
+		 * server side changes => set them to "" */
 
 		/* "If a base column name does not exist (as in the case of columns
 		 * that are expressions), then this variable contains an empty
@@ -381,7 +382,7 @@ static BOOL attach_sql_error(SQLHANDLE hnd, cstr_st *body)
 					r_err_keys, &o_type, &o_reason) < cnt_r_err_keys) {
 				ERRH(hnd, "failed to unpack root error object (%s).",
 					UJGetError(state));
-				goto end;
+				goto end; /* TODO: continue on error? */
 			} else {
 				/* stop at first element. TODO: is ever [array] > 1? */
 				break;
@@ -1093,7 +1094,7 @@ SQLRETURN EsSQLGetData(
 	}
 	/* data is available */
 
-	/* save stmt current ARD before overwriting it */
+	/* save stmt's current ARD before overwriting it */
 	ard = getdata_set_ard(stmt, &gd_ard, ColumnNumber, arecs,
 			sizeof(arecs)/sizeof(arecs[0]));
 	if (! ard) {
@@ -1204,7 +1205,7 @@ SQLRETURN EsSQLBulkOperations(
 
 SQLRETURN EsSQLMoreResults(SQLHSTMT hstmt)
 {
-	INFOH(hstmt, "multiple result sets not supported."); // TODO?
+	INFOH(hstmt, "multiple result sets not supported.");
 	return SQL_NO_DATA;
 }
 
@@ -2310,9 +2311,9 @@ SQLRETURN EsSQLColAttributeW(
 
 /* function implementation is correct, but it can't really be used as
  * intended, since the driver's "preparation" doesn't really involve sending
- * it to ES or even parameter marker counting.
- * TODO: marker counting? (SQLDescribeParam would need ES/SQL support, tho);
- * or execute with fetch_size 0 or 1. */
+ * it to ES or even parameter marker counting; the later would be doable now,
+ * but SQLDescribeParam would either need ES/SQL support, or execute with
+ * fetch_size 0 or 1. */
 SQLRETURN EsSQLNumParams(
 	SQLHSTMT           StatementHandle,
 	_Out_opt_

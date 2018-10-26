@@ -1448,7 +1448,7 @@ static void *copy_types_rows(esodbc_dbc_st *dbc, estype_row_st *type_row,
 		types[i].meta_type = concise_to_meta(types[i].c_concise_type,
 				/*C type -> AxD*/DESC_TYPE_ARD);
 
-		/* fix SQL_DATA_TYPE and SQL_DATETIME_SUB columns TODO: GH issue */
+		/* fix SQL_DATA_TYPE and SQL_DATETIME_SUB columns */
 		concise_to_type_code(types[i].data_type, &types[i].sql_data_type,
 			&types[i].sql_datetime_sub);
 
@@ -1503,26 +1503,31 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 	SQLRETURN ret = FALSE;
 	SQLSMALLINT col_cnt;
 	SQLLEN row_cnt;
-	/* both arrays below must use ESODBC_MAX_ROW_ARRAY_SIZE since no SQLFetch()
-	 * looping is implemented (see check after SQLFetch() below). */
-	SQLUSMALLINT row_status[ESODBC_MAX_ROW_ARRAY_SIZE];
-	/* a static estype_row_st array is over 350KB and too big for the default
-	 * stack size in certain cases: needs allocation on heap */
-	estype_row_st *type_row = NULL;
+	SQLUSMALLINT *row_status;
+	estype_row_st *type_row;
+	void *row_arrays;
 	SQLULEN rows_fetched, i, strs_len;
 	size_t size;
 	esodbc_estype_st *types = NULL;
 	void *pos;
 
-	type_row = calloc(ESODBC_MAX_ROW_ARRAY_SIZE, sizeof(estype_row_st));
-	if (! type_row) {
+	/* Both arrays below must be of same size (ESODBC_MAX_NO_TYPES), since no
+	 * SQLFetch() looping is implemented (see check after SQLFetch() below). */
+	/* A static estype_row_st array can get too big for the default stack size
+	 * in certain cases: needs allocation on heap. */
+	if (! (row_arrays = calloc(ESODBC_MAX_NO_TYPES,
+					sizeof(*type_row) + sizeof(*row_status)))) {
 		ERRNH(dbc, "OOM");
 		return FALSE;
+	} else {
+		row_status = (SQLUSMALLINT *)row_arrays;
+		type_row = (estype_row_st *)((char *)row_arrays +
+				ESODBC_MAX_NO_TYPES * sizeof(*row_status));
 	}
 
 	if (! SQL_SUCCEEDED(EsSQLAllocHandle(SQL_HANDLE_STMT, dbc, &stmt))) {
 		ERRH(dbc, "failed to alloc a statement handle.");
-		free(type_row);
+		free(row_arrays);
 		return FALSE;
 	}
 	assert(stmt);
@@ -1569,9 +1574,9 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 	} else if (row_cnt <= 0) {
 		ERRH(stmt, "Elasticsearch returned no type as supported.");
 		goto end;
-	} else if (ESODBC_MAX_ROW_ARRAY_SIZE < row_cnt) {
+	} else if (ESODBC_MAX_NO_TYPES < row_cnt) {
 		ERRH(stmt, "Elasticsearch returned too many types (%d vs limit %zd).",
-			row_cnt, ESODBC_MAX_ROW_ARRAY_SIZE);
+			row_cnt, ESODBC_MAX_NO_TYPES);
 		goto end;
 	} else {
 		DBGH(stmt, "Elasticsearch types rows count: %ld.", row_cnt);
@@ -1585,13 +1590,13 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 	}
 	/* indicate rowset size */
 	if (! SQL_SUCCEEDED(EsSQLSetStmtAttrW(stmt, SQL_ATTR_ROW_ARRAY_SIZE,
-				(SQLPOINTER)ESODBC_MAX_ROW_ARRAY_SIZE, 0))) {
+				(SQLPOINTER)ESODBC_MAX_NO_TYPES, 0))) {
 		ERRH(stmt, "failed to set rowset size (%zd).",
-			ESODBC_MAX_ROW_ARRAY_SIZE);
+			ESODBC_MAX_NO_TYPES);
 		goto end;
 	}
 	/* indicate array to write row status into; initialize with error first */
-	for (i = 0; i < ESODBC_MAX_ROW_ARRAY_SIZE; i ++) {
+	for (i = 0; i < ESODBC_MAX_NO_TYPES; i ++) {
 		row_status[i] = SQL_ROW_ERROR;
 	}
 	if (! SQL_SUCCEEDED(EsSQLSetStmtAttrW(stmt, SQL_ATTR_ROW_STATUS_PTR,
@@ -1694,9 +1699,9 @@ end:
 		free(types);
 		types = NULL;
 	}
-	if (type_row) {
-		free(type_row);
-		type_row = NULL;
+	if (row_arrays) {
+		free(row_arrays);
+		row_arrays = NULL;
 	}
 
 	return ret;
@@ -1754,14 +1759,13 @@ SQLRETURN EsSQLDriverConnectW
 
 	if (szConnStrIn) {
 #ifndef NDEBUG /* don't print the PWD */
-		DBGH(dbc, "Input connection string: '"LWPD"'[%d].", szConnStrIn,
-			cchConnStrIn);
+		DBGH(dbc, "Input connection string: [%hd] `" LWPDL "`.", cchConnStrIn,
+			(0 <= cchConnStrIn) ? cchConnStrIn : SHRT_MAX, szConnStrIn);
 #endif /* NDEBUG */
 		/* parse conn str into attrs */
 		if (! parse_connection_string(&attrs, szConnStrIn, cchConnStrIn)) {
 			ERRH(dbc, "failed to parse connection string `" LWPDL "`.",
-				cchConnStrIn < 0 ? wcslen(szConnStrIn) : cchConnStrIn,
-				szConnStrIn);
+				(0 <= cchConnStrIn) ? cchConnStrIn : SHRT_MAX, szConnStrIn);
 			RET_HDIAGS(dbc, SQL_STATE_HY000);
 		}
 		/* original received DSN saved for later query by the app */
@@ -1914,6 +1918,79 @@ SQLRETURN EsSQLDriverConnectW
 	return SQL_SUCCESS;
 }
 
+SQLRETURN EsSQLConnectW
+(
+	SQLHDBC             hdbc,
+	_In_reads_(cchDSN) SQLWCHAR *szDSN,
+	SQLSMALLINT         cchDSN,
+	_In_reads_(cchUID) SQLWCHAR *szUID,
+	SQLSMALLINT         cchUID,
+	_In_reads_(cchAuthStr) SQLWCHAR *szPWD,
+	SQLSMALLINT         cchPWD
+)
+{
+	esodbc_dsn_attrs_st attrs;
+	SQLWCHAR buff[sizeof(attrs.buff)/sizeof(*attrs.buff)];
+	size_t i;
+	int res;
+	SQLSMALLINT written;
+	esodbc_dbc_st *dbc = DBCH(hdbc);
+
+	/*
+	 * Note: keep the order in sync with loop's switch cases!
+	 */
+	wstr_st kw_dsn = MK_WSTR(ESODBC_DSN_DSN);
+	wstr_st val_dsn = (wstr_st) {
+		szDSN, cchDSN < 0 ? wcslen(szDSN) : cchDSN
+	};
+	wstr_st kw_uid = MK_WSTR(ESODBC_DSN_UID);
+	wstr_st val_uid = (wstr_st) {
+		szUID, cchUID < 0 ? wcslen(szUID) : cchUID
+	};
+	wstr_st kw_pwd = MK_WSTR(ESODBC_DSN_PWD);
+	wstr_st val_pwd = (wstr_st) {
+		szPWD, cchPWD < 0 ? wcslen(szPWD) : cchPWD
+	};
+	wstr_st *kws[] = {&kw_dsn, &kw_uid, &kw_pwd};
+	wstr_st *vals[] = {&val_dsn, &val_uid, &val_pwd};
+
+	init_dsn_attrs(&attrs);
+
+	for (i = 0; i < sizeof(kws)/sizeof(*kws); i ++) {
+		res = assign_dsn_attr(&attrs, kws[i], vals[i], /*overwrite*/FALSE);
+		if (res < 0) {
+			ERRH(dbc, "couldn't assign " LWPDL " value [%zu] "
+				"`" LWPDL "`.", LWSTR(kws[i]),
+				vals[i]->cnt, LWSTR(vals[i]));
+			switch (i) {
+				case 0: /* DSN */
+					RET_HDIAGS(hdbc, SQL_STATE_HY090);
+				case 1: /* UID */
+					RET_HDIAGS(hdbc, SQL_STATE_IM010);
+				case 2: /* PWD */
+					RET_HDIAG(hdbc, SQL_STATE_HY000, "Password longer "
+						"than max (" STR(ESODBC_DSN_MAX_ATTR_LEN) ")", 0);
+				default:
+					assert(0);
+			}
+		} else {
+			assert(res == DSN_ASSIGNED);
+		}
+	}
+
+	if ((written = (SQLSMALLINT)write_connection_string(&attrs, buff,
+					sizeof(buff)/sizeof(*buff))) < 0) {
+		ERRH(dbc, "failed to serialize params as connection string.");
+		RET_HDIAG(dbc, SQL_STATE_HY000, "failed to serialize connection "
+			"parameters", 0);
+	}
+
+	return EsSQLDriverConnectW(dbc, /*win hndlr*/NULL, buff, written,
+			/*conn str out*/NULL, /*...len*/0, /* out written */NULL,
+			SQL_DRIVER_NOPROMPT);
+}
+
+
 /* "Implicitly allocated descriptors can be freed only by calling
  * SQLDisconnect, which drops any statements or descriptors open on the
  * connection" */
@@ -1961,7 +2038,6 @@ SQLRETURN EsSQLSetConnectAttrW(
 			 * or Unicode. */
 			INFOH(dbc, "no ANSI/Unicode specific behaviour (app is: %s).",
 				(uintptr_t)Value == SQL_AA_TRUE ? "ANSI" : "Unicode");
-			/* TODO: API doesn't require to set a state? */
 			//state = SQL_STATE_IM001;
 			return SQL_ERROR; /* error means ANSI */
 
@@ -2038,16 +2114,19 @@ SQLRETURN EsSQLSetConnectAttrW(
 			RET_HDIAGS(dbc, SQL_STATE_HY092);
 			break;
 
+		/* coalesce login and connection timeouts for a REST req. */
 		case SQL_ATTR_CONNECTION_TIMEOUT:
-			DBGH(dbc, "setting connection timeout: %lu",
-				(SQLUINTEGER)(uintptr_t)Value);
-			dbc->timeout = (SQLUINTEGER)(uintptr_t)Value;
-			break;
 		case SQL_ATTR_LOGIN_TIMEOUT:
-			WARNH(dbc, "no individual login timeout supported");
-			if (dbc->timeout != (SQLUINTEGER)(uintptr_t)Value) {
+			DBGH(dbc, "setting login/connection timeout: %lu",
+				(SQLUINTEGER)(uintptr_t)Value);
+			if (dbc->timeout && (! Value)) {
+				/* if one of the values had been set to non-0 (=no timeout),
+				 * keep that value as the timeout. */
+				WARNH(dbc, "keeping previous non-0 setting: %lu.",
+					dbc->timeout);
 				RET_HDIAGS(dbc, SQL_STATE_01S02);
-			}
+			} /* else: last setting wins */
+			dbc->timeout = (SQLUINTEGER)(uintptr_t)Value;
 			break;
 
 		case SQL_ATTR_TRANSLATE_LIB:
@@ -2155,10 +2234,10 @@ SQLRETURN EsSQLGetConnectAttrW(
 			*(SQLUINTEGER *)ValuePtr = SQL_CD_FALSE;
 			break;
 
-		case SQL_ATTR_LOGIN_TIMEOUT:
-			WARNH(dbc, "no login timeout supported: use connection timeout.");
 		case SQL_ATTR_CONNECTION_TIMEOUT:
-			DBGH(dbc, "getting connection timeout: %lu", dbc->timeout);
+		case SQL_ATTR_LOGIN_TIMEOUT:
+			INFOH(dbc, "login == connection timeout.");
+			DBGH(dbc, "getting login/connection timeout: %lu", dbc->timeout);
 			*(SQLUINTEGER *)ValuePtr = dbc->timeout;
 			break;
 

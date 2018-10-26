@@ -14,8 +14,6 @@ set DRIVER_BASE_NAME=esodbc
 set ARG="%*"
 set SRC_PATH=%~dp0
 
-REM "funny" fact: removing 'REM X' from above label definition makes 'cmd'
-REM no longer find the label -- why? (check with "> build nobuild")
 call:SET_ARCH
 call:SET_CMAKE
 

@@ -55,7 +55,6 @@ typedef struct struct_hheader { /* handle header */
 typedef struct struct_env {
 	esodbc_hhdr_st hdr;
 	SQLUINTEGER version; /* versions defined as UL (see SQL_OV_ODBC3) */
-	// TODO?: connections
 } esodbc_env_st;
 
 /* meta data types (same for both SQL_C_<t> and SQL_<t> types) */
@@ -150,7 +149,7 @@ typedef struct struct_dbc {
 		char *str; /* as string */
 		char slen; /* string's length (w/o terminator) */
 	} fetch;
-	BOOL pack_json; /* should JSON be used in REST bodies? (vs. CBOR) *///TODO
+	BOOL pack_json; /* should JSON be used in REST bodies? (vs. CBOR) */
 
 	esodbc_estype_st *es_types; /* array with ES types */
 	SQLULEN no_types; /* number of types in array */
@@ -266,8 +265,7 @@ typedef struct struct_desc {
 	SQLULEN			*rows_processed_ptr;
 	/* /header fields */
 
-	/* array of records of .count cardinality
-	 * TODO: list? binding occurs seldomly, compared to execution, tho. */
+	/* array of records of .count cardinality */
 	esodbc_rec_st *recs;
 } esodbc_desc_st;
 
@@ -369,7 +367,6 @@ esodbc_desc_st *getdata_set_ard(esodbc_stmt_st *stmt, esodbc_desc_st *gd_ard,
 void getdata_reset_ard(esodbc_stmt_st *stmt, esodbc_desc_st *ard,
 	SQLUSMALLINT colno, esodbc_rec_st *recs, SQLUSMALLINT count);
 
-/* TODO: move to some utils.h */
 void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type,
 	SQLSMALLINT *code);
 esodbc_metatype_et concise_to_meta(SQLSMALLINT concise_type,

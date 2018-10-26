@@ -424,7 +424,7 @@ SQLRETURN EsSQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option)
 			 * doing nothing, it might leak mem. */
 			ERRH(stmt, "DROPing is deprecated -- no action taken! "
 				"(might leak memory)");
-			//return SQLFreeStmt(SQL_HANDLE_STMT, (SQLHANDLE)StatementHandle);
+			//return SQLFreeHandle(SQL_HANDLE_STMT,(SQLHANDLE)StatementHandle);
 			break;
 
 		/* "This does not unbind the bookmark column; to do that, the
@@ -513,7 +513,6 @@ SQLRETURN EsSQLSetEnvAttr(SQLHENV EnvironmentHandle,
 	assert(sizeof(SQLINTEGER) == 4);
 
 	switch (Attribute) {
-		/* TODO: connection pooling? */
 		case SQL_ATTR_CONNECTION_POOLING:
 		case SQL_ATTR_CP_MATCH:
 			RET_HDIAG(ENVH(EnvironmentHandle), SQL_STATE_HYC00,
@@ -521,7 +520,6 @@ SQLRETURN EsSQLSetEnvAttr(SQLHENV EnvironmentHandle,
 
 		case SQL_ATTR_ODBC_VERSION:
 			switch ((intptr_t)Value) {
-				// FIXME: review@alpha
 				// supporting applications of 2.x and 3.x<3.8 needs extensive
 				// review of the options.
 				case SQL_OV_ODBC2:
@@ -561,7 +559,6 @@ SQLRETURN EsSQLGetEnvAttr(SQLHENV EnvironmentHandle, SQLINTEGER Attribute,
 	SQLINTEGER BufferLength, _Out_opt_ SQLINTEGER *StringLength)
 {
 	switch (Attribute) {
-		/* TODO: connection pooling? */
 		case SQL_ATTR_CONNECTION_POOLING:
 		case SQL_ATTR_CP_MATCH:
 			RET_HDIAG(ENVH(EnvironmentHandle), SQL_STATE_HYC00,
@@ -1422,7 +1419,6 @@ SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count)
 		free_desc_recs(desc);
 		recs = NULL;
 	} else {
-		/* TODO: change to a list implementation? review@alpha */
 		recs = (esodbc_rec_st *)realloc(desc->recs,
 				sizeof(esodbc_rec_st) * new_count);
 		if (! recs) {
@@ -1493,7 +1489,7 @@ esodbc_desc_st *getdata_set_ard(esodbc_stmt_st *stmt, esodbc_desc_st *gd_ard,
 
 	if (colno < count) { /* can the static recs be used? */
 		/* need to init all records, not only the single one that will be
-		 * bound, since data compat. check will run against all bound recs. */
+		 * bound, since data covert. check will run against all bound recs. */
 		for (i = 0; i < count; i ++) {
 			init_rec(&recs[i], gd_ard);
 		}
@@ -1501,6 +1497,7 @@ esodbc_desc_st *getdata_set_ard(esodbc_stmt_st *stmt, esodbc_desc_st *gd_ard,
 		gd_ard->count = count;
 		gd_ard->recs = recs;
 	}
+	/* else: recs will be alloc'd later when binding the column */
 
 	DBGH(stmt, "GD ARD @0x%p, records allocated %s.", gd_ard,
 		colno < count ? "statically" : "dynamically");
@@ -2637,53 +2634,5 @@ SQLRETURN EsSQLSetDescFieldW(
 	return SQL_SUCCESS;
 }
 
-
-#if 0
-/*
- * "When the application sets the SQL_DESC_TYPE field, the driver checks that
- * other fields that specify the type are valid and consistent." AND:
- *
- * "A consistency check is performed by the driver automatically whenever an
- * application sets the SQL_DESC_DATA_PTR field of the APD, ARD, or IPD.
- * Whenever this field is set, the driver checks that the value of the
- * SQL_DESC_TYPE field and the values applicable to the SQL_DESC_TYPE field in
- * the same record are valid and consistent.
- *
- * The SQL_DESC_DATA_PTR field of an IPD is not normally set; however, an
- * application can do so to force a consistency check of IPD fields. The value
- * that the SQL_DESC_DATA_PTR field of the IPD is set to is not actually
- * stored and cannot be retrieved by a call to SQLGetDescField or
- * SQLGetDescRec; the setting is made only to force the consistency check. A
- * consistency check cannot be performed on an IRD."
- */
-SQLRETURN EsSQLSetDescRec(
-	SQLHDESC DescriptorHandle,
-	SQLSMALLINT RecNumber,
-	SQLSMALLINT Type,
-	SQLSMALLINT SubType,
-	SQLLEN Length,
-	SQLSMALLINT Precision,
-	SQLSMALLINT Scale,
-	_Inout_updates_bytes_opt_(Length) SQLPOINTER Data,
-	_Inout_opt_ SQLLEN *StringLength,
-	_Inout_opt_ SQLLEN *Indicator)
-{
-	/*
-	 * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/column-wise-binding :
-	 * "When using column-wise binding, an application binds one or two, or in
-	 * some cases three, arrays to each column for which data is to be
-	 * returned. The first array holds the data values, and the second array
-	 * holds length/indicator buffers. Indicators and length values can be
-	 * stored in separate buffers by setting the SQL_DESC_INDICATOR_PTR and
-	 * SQL_DESC_OCTET_LENGTH_PTR descriptor fields to different values; if
-	 * this is done, a third array is bound. Each array contains as many
-	 * elements as there are rows in the rowset."
-	 */
-
-	// TODO: needs to trigger consistency_check
-
-	RET_NOT_IMPLEMENTED;
-}
-#endif //0
 
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */
