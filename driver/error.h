@@ -444,11 +444,11 @@ typedef struct {
 
 void init_diagnostic(esodbc_diag_st *dest);
 SQLRETURN post_diagnostic(esodbc_diag_st *dest, esodbc_state_et state,
-	SQLWCHAR *text, SQLINTEGER code);
+	const SQLWCHAR *text, SQLINTEGER code);
 SQLRETURN post_c_diagnostic(esodbc_diag_st *dest, esodbc_state_et state,
-	SQLCHAR *text, SQLINTEGER code);
+	const SQLCHAR *text, SQLINTEGER code);
 /* post state into the diagnostic and return state's return code */
-#define RET_DIAG(_d/*est*/, _s/*tate*/, _t/*ext*/, _c/*ode*/) \
+#define RET_DIAG(_d/*iag dest*/, _s/*tate*/, _t/*ext*/, _c/*ode*/) \
 	return post_diagnostic(_d, _s, _t, _c)
 /* same as above, but take C-strings as messages */
 #define RET_CDIAG(_d/*est*/, _s/*tate*/, _t/*char text*/, _c/*ode*/) \

@@ -2,3 +2,6 @@
 driver/*.swp
 cscope.out
 .vs
+dsneditor/EsOdbcDsnEditor/Debug/
+dsneditor/EsOdbcDsnEditorLauncher/bin/
+dsneditor/EsOdbcDsnEditorLauncher/obj/

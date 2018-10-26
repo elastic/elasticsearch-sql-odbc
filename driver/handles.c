@@ -55,6 +55,25 @@ static void init_hheader(esodbc_hhdr_st *hdr, SQLSMALLINT type, void *parent)
 	hdr->parent = parent;
 }
 
+/*
+ *  "un-static" the initializers as needed
+ */
+static inline void init_env(esodbc_env_st *env)
+{
+	memset(env, 0, sizeof(*env));
+	init_hheader(HDRH(env), SQL_HANDLE_ENV, NULL);
+}
+
+void init_dbc(esodbc_dbc_st *dbc, SQLHANDLE InputHandle)
+{
+	memset(dbc, 0, sizeof(*dbc));
+	init_hheader(HDRH(dbc), SQL_HANDLE_DBC, InputHandle);
+
+	dbc->metadata_id = SQL_FALSE;
+	ESODBC_MUX_INIT(&dbc->curl_mux);
+	/* rest of initialization done at connect time */
+}
+
 static void init_desc(esodbc_desc_st *desc, esodbc_stmt_st *stmt,
 	desc_type_et type, SQLSMALLINT alloc_type)
 {
@@ -72,6 +91,7 @@ static void init_desc(esodbc_desc_st *desc, esodbc_stmt_st *stmt,
 	if (DESC_TYPE_IS_APPLICATION(type)) {
 		desc->bind_type = SQL_BIND_BY_COLUMN;
 	}
+	// XXX: assign/chain to statement?
 }
 
 static void clear_desc(esodbc_desc_st *desc, BOOL reinit)
@@ -99,6 +119,33 @@ static void clear_desc(esodbc_desc_st *desc, BOOL reinit)
 	if (reinit) {
 		init_desc(desc, desc->hdr.stmt, desc->type, desc->alloc_type);
 	}
+}
+
+static void init_stmt(esodbc_stmt_st *stmt, SQLHANDLE InputHandle)
+{
+	memset(stmt, 0, sizeof(*stmt));
+	init_hheader(HDRH(stmt), SQL_HANDLE_STMT, InputHandle);
+
+	init_desc(&stmt->i_ard, stmt, DESC_TYPE_ARD, SQL_DESC_ALLOC_AUTO);
+	init_desc(&stmt->i_ird, stmt, DESC_TYPE_IRD, SQL_DESC_ALLOC_AUTO);
+	init_desc(&stmt->i_apd, stmt, DESC_TYPE_APD, SQL_DESC_ALLOC_AUTO);
+	init_desc(&stmt->i_ipd, stmt, DESC_TYPE_IPD, SQL_DESC_ALLOC_AUTO);
+
+	/* "When a statement is allocated, four descriptor handles are
+	 * automatically allocated and associated with the statement." */
+	stmt->ard = &stmt->i_ard;
+	stmt->ird = &stmt->i_ird;
+	stmt->apd = &stmt->i_apd;
+	stmt->ipd = &stmt->i_ipd;
+
+	/* set option defaults */
+	/* TODO: change to SQL_UB_DEFAULT when supporting bookmarks */
+	stmt->bookmarks = SQL_UB_OFF;
+	/* inherit this connection-statement attributes
+	 * Note: these attributes won't propagate at statement level when
+	 * set at connection level. */
+	stmt->metadata_id = DBCH(InputHandle)->metadata_id;
+	stmt->sql2c_conversion = CONVERSION_UNCHECKED;
 }
 
 void dump_record(esodbc_rec_st *rec)
@@ -145,7 +192,6 @@ void dump_record(esodbc_rec_st *rec)
 #undef DUMP_FIELD
 }
 
-
 /*
  * The Driver Manager does not call the driver-level environment handle
  * allocation function until the application calls SQLConnect,
@@ -167,10 +213,22 @@ void dump_record(esodbc_rec_st *rec)
 SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 	SQLHANDLE InputHandle, _Out_ SQLHANDLE *OutputHandle)
 {
-	esodbc_env_st *env;
-	esodbc_dbc_st *dbc;
-	esodbc_stmt_st *stmt;
-	esodbc_hhdr_st *hdr;
+	if (! OutputHandle) {
+		ERR("null output handle provided.");
+		RET_STATE(SQL_STATE_HY009);
+	}
+
+	if (HandleType != SQL_HANDLE_ENV) {
+		if (! InputHandle) {
+			ERR("null input handle provided");
+			RET_STATE(SQL_STATE_HY009);
+		}
+	} else {
+		if (InputHandle) {
+			ERR("not null (@0x%p) input handle for Environment.", InputHandle);
+			/* not fatal a.t.p., tho it'll likely fail (->error level) */
+		}
+	}
 
 	switch(HandleType) {
 		/*
@@ -186,21 +244,11 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 		 * """
 		 */
 		case SQL_HANDLE_ENV: /* Environment Handle */
-			if (InputHandle != SQL_NULL_HANDLE) {
-				WARN("passed InputHandle not null (=0x%p).",InputHandle);
-				/* not fatal a.t.p. */
+			*OutputHandle = (SQLHANDLE)malloc(sizeof(esodbc_env_st));
+			if (*OutputHandle) {
+				init_env(*OutputHandle);
+				DBG("new Environment handle @0x%p.", *OutputHandle);
 			}
-			if (! OutputHandle) {
-				ERR("null output handle provided.");
-				RET_STATE(SQL_STATE_HY009);
-			}
-			*OutputHandle = (SQLHANDLE *)calloc(1, sizeof(esodbc_env_st));
-			if (! *OutputHandle) {
-				ERRN("failed to callocate env handle.");
-				RET_STATE(SQL_STATE_HY001);
-			}
-
-			DBG("new Environment handle allocated @0x%p.",*OutputHandle);
 			break;
 
 		case SQL_HANDLE_DBC: /* Connection Handle */
@@ -212,90 +260,57 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			 * return SQLSTATE HY010 (Function sequence error).
 			 * """
 			 */
-			env = ENVH(InputHandle);
-			if (! env->version) {
-				ERRH(env, "no version set in env when allocating DBC.");
-				RET_HDIAG(env, SQL_STATE_HY010,
-					"enviornment has no version set yet", 0);
+			if (! ENVH(InputHandle)->version) {
+				ERRH(InputHandle, "no version set in ENV.");
+				RET_HDIAG(InputHandle, SQL_STATE_HY010,
+					"enviornment has no version set", 0);
 			}
-			dbc = (esodbc_dbc_st *)calloc(1, sizeof(esodbc_dbc_st));
-			*OutputHandle = (SQLHANDLE *)dbc;
-			if (! dbc) {
-				ERRNH(env, "failed to callocate connection handle.");
-				RET_HDIAGS(env, SQL_STATE_HY001);
+			*OutputHandle = (SQLHANDLE)malloc(sizeof(esodbc_dbc_st));
+			if (*OutputHandle) {
+				init_dbc(*OutputHandle, InputHandle);
+				DBGH(InputHandle, "new Connection @0x%p.", *OutputHandle);
 			}
-			dbc->metadata_id = SQL_FALSE;
-
-			/* rest of initialization done at connect time */
-
-			DBGH(env, "new Connection handle allocated @0x%p.", *OutputHandle);
 			break;
 
 		case SQL_HANDLE_STMT: /* Statement Handle */
-			dbc = DBCH(InputHandle);
-			stmt = (esodbc_stmt_st *)calloc(1, sizeof(esodbc_stmt_st));
-			*OutputHandle = stmt;
-			if (! stmt) {
-				ERRNH(dbc, "failed to callocate statement handle.");
-				RET_HDIAGS(dbc, SQL_STATE_HY001);
+			*OutputHandle = (SQLHANDLE)malloc(sizeof(esodbc_stmt_st));
+			if (*OutputHandle) {
+				init_stmt(*OutputHandle, InputHandle);
+				DBGH(InputHandle, "new Statement @0x%p.", *OutputHandle);
 			}
-
-			init_desc(&stmt->i_ard, stmt, DESC_TYPE_ARD, SQL_DESC_ALLOC_AUTO);
-			init_desc(&stmt->i_ird, stmt, DESC_TYPE_IRD, SQL_DESC_ALLOC_AUTO);
-			init_desc(&stmt->i_apd, stmt, DESC_TYPE_APD, SQL_DESC_ALLOC_AUTO);
-			init_desc(&stmt->i_ipd, stmt, DESC_TYPE_IPD, SQL_DESC_ALLOC_AUTO);
-
-			/* "When a statement is allocated, four descriptor handles are
-			 * automatically allocated and associated with the statement." */
-			stmt->ard = &stmt->i_ard;
-			stmt->ird = &stmt->i_ird;
-			stmt->apd = &stmt->i_apd;
-			stmt->ipd = &stmt->i_ipd;
-
-			/* set option defaults */
-			/* TODO: change to SQL_UB_DEFAULT when supporting bookmarks */
-			stmt->bookmarks = SQL_UB_OFF;
-			/* inherit this connection-statement attributes
-			 * Note: these attributes won't propagate at statement level when
-			 * set at connection level. */
-			stmt->metadata_id = dbc->metadata_id;
-			stmt->sql2c_conversion = CONVERSION_UNCHECKED;
-
-			ESODBC_MUX_INIT(&dbc->curl_mux);
-
-			DBGH(dbc, "new Statement handle allocated @0x%p.", *OutputHandle);
 			break;
 
-		case SQL_HANDLE_DESC:
-			stmt = STMH(InputHandle);
-			*OutputHandle = (SQLHANDLE *)calloc(1, sizeof(esodbc_desc_st));
-			if (! *OutputHandle) {
-				ERRNH(stmt, "failed to callocate descriptor handle.");
-				RET_HDIAGS(stmt, SQL_STATE_HY001);
+		case SQL_HANDLE_DESC: /* Descriptor Handle */
+			*OutputHandle = (SQLHANDLE)malloc(sizeof(esodbc_desc_st));
+			if (*OutputHandle) {
+				init_desc(*OutputHandle, InputHandle, DESC_TYPE_ANON,
+					SQL_DESC_ALLOC_USER);
+				DBGH(InputHandle, "new Statement @0x%p.", *OutputHandle);
 			}
-			init_desc(*OutputHandle, InputHandle, DESC_TYPE_ANON,
-				SQL_DESC_ALLOC_USER);
-			DBGH(stmt, "new Descriptor handle allocated @0x%p.",*OutputHandle);
-			// FIXME: assign/chain to statement?
 			break;
 
 		case SQL_HANDLE_SENV: /* Shared Environment Handle */
-			FIXME; // FIXME
-			//break;
-#if 0
-		case SQL_HANDLE_DBC_INFO_TOKEN:
-			//break;
-#endif
+			// case SQL_HANDLE_DBC_INFO_TOKEN:
+			ERR("handle type %hd not implemented.", HandleType);
+			RET_STATE(SQL_STATE_HYC00); // optional feature
+
 		default:
 			ERR("unknown HandleType: %d.", HandleType);
 			return SQL_INVALID_HANDLE;
 	}
 
-	/*
-	 * Initialize new handle's header.
-	 */
-	hdr = HDRH(*OutputHandle);
-	init_hheader(hdr, HandleType, InputHandle);
+	if (! *OutputHandle) {
+		ERRN("OOM for handle type %hd, on input handle@0x%p.", HandleType,
+			InputHandle);
+		if (InputHandle) {
+			RET_DIAG(&HDRH(InputHandle)->diag, SQL_STATE_HY001, NULL, 0);
+		} else {
+			RET_STATE(SQL_STATE_HY001);
+		}
+	} else {
+		/* new handle has been init'ed */
+		assert(HDRH(*OutputHandle)->type);
+	}
 
 	return SQL_SUCCESS;
 }
@@ -844,6 +859,14 @@ SQLRETURN EsSQLSetStmtAttrW(
 				RET_HDIAGS(stmt, SQL_STATE_HYC00);
 			}
 			break;
+
+		/* SQL Server non-standard attributes */
+		case 1226:
+		case 1227:
+		case 1228:
+			ERRH(stmt, "non-standard attribute: %d.", Attribute);
+			/* "Invalid attribute/option identifier" */
+			RET_HDIAGS(stmt, SQL_STATE_HY092);
 
 		default:
 			// FIXME

@@ -7,6 +7,7 @@
 #ifndef __DSN_H__
 #define __DSN_H__
 
+#include "EsOdbcDsnBinding.h"
 #include "util.h"
 #include "defs.h"
 
@@ -31,6 +32,7 @@
 #define ESODBC_DSN_PACKING			"Packing"
 #define ESODBC_DSN_MAX_FETCH_SIZE	"MaxFetchSize"
 #define ESODBC_DSN_MAX_BODY_SIZE_MB	"MaxBodySizeMB"
+#define ESODBC_DSN_TRACE_ENABLED	"TraceEnabled"
 #define ESODBC_DSN_TRACE_FILE		"TraceFile"
 #define ESODBC_DSN_TRACE_LEVEL		"TraceLevel"
 
@@ -53,31 +55,45 @@ typedef struct {
 	wstr_st packing;
 	wstr_st max_fetch_size;
 	wstr_st max_body_size;
+	wstr_st trace_enabled;
 	wstr_st trace_file;
 	wstr_st trace_level;
-#define ESODBC_DSN_ATTRS_COUNT	19
+#define ESODBC_DSN_ATTRS_COUNT	20
 	SQLWCHAR buff[ESODBC_DSN_ATTRS_COUNT * ESODBC_DSN_MAX_ATTR_LEN];
 } esodbc_dsn_attrs_st;
 
-void init_dsn_attrs(esodbc_dsn_attrs_st *attrs);
-BOOL assign_dsn_defaults(esodbc_dsn_attrs_st *attrs);
+void TEST_API init_dsn_attrs(esodbc_dsn_attrs_st *attrs);
+void assign_dsn_defaults(esodbc_dsn_attrs_st *attrs);
 BOOL assign_dsn_attr(esodbc_dsn_attrs_st *attrs,
 	wstr_st *keyword, wstr_st *value, BOOL overwrite);
 
+BOOL TEST_API parse_00_list(esodbc_dsn_attrs_st *attrs, SQLWCHAR *list00);
+long TEST_API write_00_list(esodbc_dsn_attrs_st *attrs,
+	SQLWCHAR *list00, size_t cnt00);
+
+/* "system" from "system information" (cf. SQLDriverConnect), not as
+ * in User/System DSN */
 BOOL read_system_info(esodbc_dsn_attrs_st *attrs);
 int system_dsn_exists(wstr_st *dsn);
 BOOL load_system_dsn(esodbc_dsn_attrs_st *attrs, SQLWCHAR *list00);
-BOOL write_system_dsn(esodbc_dsn_attrs_st *attrs, BOOL create_new);
+BOOL write_system_dsn(esodbc_dsn_attrs_st *crr, esodbc_dsn_attrs_st *old);
 
-BOOL parse_connection_string(esodbc_dsn_attrs_st *attrs,
+BOOL TEST_API parse_connection_string(esodbc_dsn_attrs_st *attrs,
 	SQLWCHAR *szConnStrIn, SQLSMALLINT cchConnStrIn);
-BOOL write_connection_string(esodbc_dsn_attrs_st *attrs,
-	SQLWCHAR *szConnStrOut, SQLSMALLINT cchConnStrOutMax,
-	SQLSMALLINT *pcchConnStrOut);
+long TEST_API write_connection_string(esodbc_dsn_attrs_st *attrs,
+	SQLWCHAR *szConnStrOut, SQLSMALLINT cchConnStrOutMax);
 
-BOOL prompt_user_config(HWND hwndParent, esodbc_dsn_attrs_st *attrs,
-	BOOL disable_nonconn);
-int prompt_user_overwrite(HWND hwndParent, wstr_st *dsn);
+size_t copy_installer_errors(wchar_t *err_buff, size_t eb_max);
+int validate_dsn(esodbc_dsn_attrs_st *attrs, const wchar_t *dsn_str,
+	wchar_t *err_out, size_t eo_max, BOOL try_connect);
+int prompt_user_config(HWND hwnd, BOOL on_conn, esodbc_dsn_attrs_st *attrs,
+	driver_callback_ft save_cb);
+
+/* Uncomment to enable 00-list format (vs. connection string,
+ * `;`/`|`-separated) at the interface with the GUI API.
+ * The .NET framework has an ODBC connection string parser, so the that format
+ * will be used on Windows. */
+//#define ESODBC_DSN_API_WITH_00_LIST
 
 #endif /* __DSN_H__ */
 
