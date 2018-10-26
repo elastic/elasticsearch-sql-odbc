@@ -7,13 +7,32 @@ open System
 open System.Diagnostics
 open System.IO
 open Fake
+open Fake.Git
 open Products.Products
 open Products.Paths
 open Products
 open System.Text
 open Fake.FileHelper
+open Fake.AssemblyInfoFile
 
 module Builder =
+
+    let patchAssemblyInformation (version:Version) = 
+        let version = version.FullVersion
+        let commitHash = Information.getCurrentHash()
+        CreateCSharpAssemblyInfo (MsiDir @@ "Properties/AssemblyInfo.cs")
+            [Attribute.Title "Installer"
+             Attribute.Description "Elasticsearch ODBC Installer."
+             Attribute.Guid "44555887-c439-470c-944d-8866ec3d7067"
+             Attribute.Product "Elasticsearch ODBC Installer"
+             Attribute.Metadata("GitBuildHash", commitHash)
+             Attribute.Company  "Elasticsearch B.V."
+             Attribute.Copyright "Elastic License. Copyright Elasticsearch."
+             Attribute.Trademark "Elasticsearch is a trademark of Elasticsearch B.V."
+             Attribute.Version  version
+             Attribute.FileVersion version
+             Attribute.InformationalVersion version // Attribute.Version and Attribute.FileVersion normalize the version number, so retain the prelease suffix
+            ]
 
     let Sign file (product : ProductVersions) =
         tracefn "Signing MSI"
@@ -69,6 +88,8 @@ module Builder =
 
         product.Versions
         |> List.iter(fun version -> 
+
+            patchAssemblyInformation (version)
 
             let exitCode = ExecProcess (fun info ->
                              info.FileName <- sprintf "%sOdbcInstaller" MsiBuildDir
