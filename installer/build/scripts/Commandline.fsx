@@ -88,6 +88,7 @@ Target:
         match candidate.ToLowerInvariant() with
         | "buildinstaller"
         | "clean"
+        | "help"
         | "release" -> Some candidate
         | _ -> None
 

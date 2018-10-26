@@ -1,16 +1,15 @@
 ﻿using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("ODBCInstaller")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyTitle("Installer")]
+[assembly: AssemblyDescription("Elasticsearch ODBC Installer.")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("ODBCInstaller")]
-[assembly: AssemblyCopyright("Copyright © 2017")]
+[assembly: AssemblyCompany("Elasticsearch B.V.")]
+[assembly: AssemblyProduct("Elasticsearch ODBC Installer")]
+[assembly: AssemblyCopyright("Copyright Elasticsearch B.V. ©")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
