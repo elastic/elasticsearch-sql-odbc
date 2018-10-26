@@ -70,6 +70,13 @@ SQLRETURN EsSQLExecDirectW(
 	SQLHSTMT    hstmt,
 	_In_reads_opt_(TextLength) SQLWCHAR *szSqlStr,
 	SQLINTEGER cchSqlStr);
+SQLRETURN EsSQLNativeSqlW(
+	SQLHDBC                                     hdbc,
+	_In_reads_(cchSqlStrIn) SQLWCHAR           *szSqlStrIn,
+	SQLINTEGER                                  cchSqlStrIn,
+	_Out_writes_opt_(cchSqlStrMax) SQLWCHAR    *szSqlStr,
+	SQLINTEGER                                  cchSqlStrMax,
+	SQLINTEGER                                 *pcchSqlStr);
 
 SQLRETURN EsSQLDescribeColW(
 	SQLHSTMT            hstmt,

@@ -88,93 +88,113 @@ static const SQLWCHAR connect_string[] = L"Driver=ElasticODBC";
 /*
  * Class will provide a "connected" DBC: the ES types are loaded.
  */
-ConnectedDBC::ConnectedDBC() {
-  SQLRETURN ret;
-  cstr_st types;
+ConnectedDBC::ConnectedDBC()
+{
+	SQLRETURN ret;
+	cstr_st types;
 
-  ret = SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &env);
-  assert(SQL_SUCCEEDED(ret));
+	ret = SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &env);
+	assert(SQL_SUCCEEDED(ret));
 
-  ret = SQLSetEnvAttr(env, SQL_ATTR_ODBC_VERSION,
-      (SQLPOINTER)SQL_OV_ODBC3_80, NULL);
-  assert(SQL_SUCCEEDED(ret));
+	ret = SQLSetEnvAttr(env, SQL_ATTR_ODBC_VERSION,
+			(SQLPOINTER)SQL_OV_ODBC3_80, NULL);
+	assert(SQL_SUCCEEDED(ret));
 
-  ret = SQLAllocHandle(SQL_HANDLE_DBC, env, &dbc);
-  assert(SQL_SUCCEEDED(ret));
+	ret = SQLAllocHandle(SQL_HANDLE_DBC, env, &dbc);
+	assert(SQL_SUCCEEDED(ret));
 
 
-  types.cnt = sizeof(systypes_answer) - 1;
-  types.str = (SQLCHAR *)malloc(types.cnt);
-  assert(types.str != NULL);
-  memcpy(types.str, systypes_answer, types.cnt);
+	types.cnt = sizeof(systypes_answer) - 1;
+	types.str = (SQLCHAR *)malloc(types.cnt);
+	assert(types.str != NULL);
+	memcpy(types.str, systypes_answer, types.cnt);
 
-  ret = SQLDriverConnect(dbc, (SQLHWND)&types, (SQLWCHAR *)connect_string,
-    sizeof(connect_string) / sizeof(connect_string[0]) - 1, NULL, 0, NULL,
-    ESODBC_SQL_DRIVER_TEST);
-  assert(SQL_SUCCEEDED(ret));
+	ret = SQLDriverConnect(dbc, (SQLHWND)&types, (SQLWCHAR *)connect_string,
+		sizeof(connect_string) / sizeof(connect_string[0]) - 1, NULL, 0, NULL,
+		ESODBC_SQL_DRIVER_TEST);
+	assert(SQL_SUCCEEDED(ret));
 
-  ret = SQLAllocHandle(SQL_HANDLE_STMT, dbc, &stmt);
-  assert(SQL_SUCCEEDED(ret));
-  assert(stmt != NULL);
+	ret = SQLAllocHandle(SQL_HANDLE_STMT, dbc, &stmt);
+	assert(SQL_SUCCEEDED(ret));
+	assert(stmt != NULL);
 }
 
-ConnectedDBC::~ConnectedDBC() {
-  SQLRETURN ret;
+ConnectedDBC::~ConnectedDBC()
+{
+	SQLRETURN ret;
 
-  ret = SQLFreeHandle(SQL_HANDLE_STMT, stmt);
-  assert(SQL_SUCCEEDED(ret));
+	ret = SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+	assert(SQL_SUCCEEDED(ret));
 
-  ret = SQLFreeHandle(SQL_HANDLE_DBC, dbc);
-  assert(SQL_SUCCEEDED(ret));
+	ret = SQLFreeHandle(SQL_HANDLE_DBC, dbc);
+	assert(SQL_SUCCEEDED(ret));
 
-  ret = SQLFreeHandle(SQL_HANDLE_ENV, env);
-  assert(SQL_SUCCEEDED(ret));
+	ret = SQLFreeHandle(SQL_HANDLE_ENV, env);
+	assert(SQL_SUCCEEDED(ret));
 }
 
-void ConnectedDBC::assertState(const SQLWCHAR *state) {
-  SQLRETURN ret;
-  SQLWCHAR buff[SQL_SQLSTATE_SIZE+1] = {L'\0'};
-  SQLSMALLINT len;
+void ConnectedDBC::assertState(SQLSMALLINT htype, const SQLWCHAR *state)
+{
+	SQLHANDLE hnd;
+	SQLWCHAR buff[SQL_SQLSTATE_SIZE+1] = {L'\0'};
+	SQLSMALLINT len;
 
-  ret = SQLGetDiagField(SQL_HANDLE_STMT, stmt, 1, SQL_DIAG_SQLSTATE, buff,
-      (SQL_SQLSTATE_SIZE + 1) * sizeof(buff[0]), &len);
-  if (state) {
-    ASSERT_TRUE(SQL_SUCCEEDED(ret));
-    ASSERT_EQ(len, SQL_SQLSTATE_SIZE * sizeof(buff[0]));
-    ASSERT_STREQ(buff, state);
-  } else {
-    ASSERT_EQ(ret, SQL_NO_DATA);
-  }
-
+	switch (htype) {
+		case SQL_HANDLE_STMT: hnd = stmt; break;
+		case SQL_HANDLE_DBC: hnd = dbc; break;
+		case SQL_HANDLE_ENV: hnd = env; break;
+		default: ASSERT_TRUE(FALSE);
+	}
+	ret = SQLGetDiagField(htype, hnd, 1, SQL_DIAG_SQLSTATE, buff,
+			(SQL_SQLSTATE_SIZE + 1) * sizeof(buff[0]), &len);
+	if (state) {
+		if (! wcscmp(state, MK_WPTR("00000"))) {
+			ASSERT_EQ(ret, SQL_NO_DATA);
+		} else {
+			ASSERT_TRUE(SQL_SUCCEEDED(ret));
+			ASSERT_EQ(len, SQL_SQLSTATE_SIZE * sizeof(buff[0]));
+			ASSERT_STREQ(buff, state);
+		}
+	} else {
+		ASSERT_EQ(ret, SQL_NO_DATA);
+	}
 }
 
-void ConnectedDBC::prepareStatement() {
-  const char *testName =
-    ::testing::UnitTest::GetInstance()->current_test_info()->name();
-  size_t nameLen = strlen(testName);
-  std::wstring wstr(nameLen, L' ');
-  ASSERT_TRUE(mbstowcs(&wstr[0], testName, nameLen + 1) != (size_t)-1);
+void ConnectedDBC::assertState(const SQLWCHAR *state)
+{
+	assertState(SQL_HANDLE_STMT, state);
+}
 
-  ret = ATTACH_SQL(stmt, &wstr[0], nameLen);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+void ConnectedDBC::prepareStatement()
+{
+	const char *testName =
+		::testing::UnitTest::GetInstance()->current_test_info()->name();
+	size_t nameLen = strlen(testName);
+	std::wstring wstr(nameLen, L' ');
+	ASSERT_TRUE(mbstowcs(&wstr[0], testName, nameLen + 1) != (size_t)-1);
+
+	ret = ATTACH_SQL(stmt, &wstr[0], nameLen);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 }
 
 void ConnectedDBC::prepareStatement(const SQLWCHAR *sql,
-    const char *jsonAnswer) {
-  ret = ATTACH_SQL(stmt, sql, wcslen(sql));
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+    const char *jsonAnswer)
+{
+	ret = ATTACH_SQL(stmt, sql, wcslen(sql));
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  char *answer = STRDUP(jsonAnswer);
-  ASSERT_TRUE(answer != NULL);
-  ret =  ATTACH_ANSWER(stmt, answer, strlen(answer));
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	char *answer = STRDUP(jsonAnswer);
+	ASSERT_TRUE(answer != NULL);
+	ret =  ATTACH_ANSWER(stmt, answer, strlen(answer));
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 }
 
-void ConnectedDBC::prepareStatement(const char *jsonAnswer) {
-  prepareStatement();
+void ConnectedDBC::prepareStatement(const char *jsonAnswer)
+{
+	prepareStatement();
 
-  char *answer = STRDUP(jsonAnswer);
-  ASSERT_TRUE(answer != NULL);
-  ret =  ATTACH_ANSWER(stmt, answer, strlen(answer));
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	char *answer = STRDUP(jsonAnswer);
+	ASSERT_TRUE(answer != NULL);
+	ret =  ATTACH_ANSWER(stmt, answer, strlen(answer));
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 }

@@ -17,7 +17,7 @@ typedef struct {
 
 /* Note: keep in sync with esodbc_errors[] */
 typedef enum {
-	/* non-standard, must be 0/first position (calloc'ing) */
+	/* must be 0/first position (calloc'ing) */
 	/* diagnostic meaning: no diag posted */
 	SQL_STATE_00000 = 0,
 
