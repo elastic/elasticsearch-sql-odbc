@@ -23,7 +23,7 @@
     <ProjectGuid>{47824E02-6B1A-4B43-9D20-3CB2F5479F6B}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>EsOdbcDsnBinding</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.17134.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.17763.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
