@@ -9,7 +9,7 @@
 #include <stdio.h>
 
 #include "util.h"
-#include "log.h"
+#include "handles.h"
 #include "error.h"
 
 
@@ -503,7 +503,7 @@ SQLRETURN write_wstr(SQLHANDLE hnd, SQLWCHAR *dest, wstr_st *src,
 		/* needs to be multiple of SQLWCHAR units (2 on Win) */
 		if (avail % sizeof(SQLWCHAR)) {
 			ERRH(hnd, "invalid buffer length provided: %d.", avail);
-			RET_DIAG(&HDRH(hnd)->diag, SQL_STATE_HY090, NULL, 0);
+			RET_HDIAGS(hnd, SQL_STATE_HY090);
 		} else {
 			wide_avail = avail/sizeof(SQLWCHAR);
 		}
@@ -516,7 +516,7 @@ SQLRETURN write_wstr(SQLHANDLE hnd, SQLWCHAR *dest, wstr_st *src,
 			INFOH(hnd, "not enough buffer size to write required string (plus "
 				"terminator): `" LWPD "` [%zu]; available: %zu.",
 				LWSTR(src), src->cnt, wide_avail);
-			RET_DIAG(&HDRH(hnd)->diag, SQL_STATE_01004, NULL, 0);
+			RET_HDIAGS(hnd, SQL_STATE_01004);
 		} else {
 			wcsncpy(dest, src->str, src->cnt + /* 0-term */1);
 		}

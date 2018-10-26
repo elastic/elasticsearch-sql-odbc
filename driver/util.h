@@ -114,10 +114,9 @@ typedef struct wstr {
 #ifndef __cplusplus /* no MSVC support for compound literals with /TP */
 #	define MK_WSTR(_s)	((wstr_st){.str = MK_WPTR(_s), .cnt = sizeof(_s) - 1})
 #	define MK_CSTR(_s)	((cstr_st){.str = _s, .cnt = sizeof(_s) - 1})
-#else /* !__cplusplus */
-#	define WSTR_INIT(_s)	{MK_WPTR(_s), sizeof(_s) - 1}
-#	define CSTR_INIT(_s)	{(SQLCHAR *)_s, sizeof(_s) - 1}
 #endif /* !__cplusplus */
+#define WSTR_INIT(_s)	{MK_WPTR(_s), sizeof(_s) - 1}
+#define CSTR_INIT(_s)	{(SQLCHAR *)_s, sizeof(_s) - 1}
 /*
  * Test equality of two wstr_st objects.
  */

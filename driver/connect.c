@@ -96,6 +96,10 @@ typedef struct {
  * HTTP headers used for all requests (Content-Type, Accept).
  */
 static struct curl_slist *http_headers = NULL;
+/* counter used to number DBC log files:
+ * the files are stamped with time (@ second resolution) and PID, which is not
+ * enough to avoid name clashes. */
+volatile unsigned filelog_cnt = 0;
 
 BOOL connect_init()
 {
@@ -384,7 +388,7 @@ static SQLRETURN dbc_curl_init(esodbc_dbc_st *dbc)
 	}
 
 #ifndef NDEBUG
-	if (LOG_LEVEL_DBG <= _esodbc_log_level) {
+	if (dbc->hdr.log && LOG_LEVEL_DBG <= dbc->hdr.log->level) {
 		res = curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, debug_callback);
 		if (res != CURLE_OK) {
 			ERRH(dbc, "libcurl: failed to set debug callback.");
@@ -414,7 +418,7 @@ err:
 		curl_easy_strerror(res));
 	assert(curl);
 	curl_easy_cleanup(curl);
-	return post_c_diagnostic(&dbc->hdr.diag, SQL_STATE_HY000,
+	return post_c_diagnostic(dbc, SQL_STATE_HY000,
 			/* propagate CURL's message, if there's any available */
 			dbc->curl_err_buff[0] ? dbc->curl_err_buff :
 			"failed to init the transport", res);
@@ -537,12 +541,11 @@ static void dbc_curl_post_diag(esodbc_dbc_st *dbc)
 		 * available buffer room, but 0-terminate it; if that's the case.
 		 * retry, skipping formatting. */
 		ERRH(dbc, "formatting error message failed; skipping formatting.");
-		post_c_diagnostic(&HDRH(dbc)->diag, SQL_STATE_08S01,
+		post_c_diagnostic(dbc, SQL_STATE_08S01,
 			curl_easy_strerror(dbc->curl_err), dbc->curl_err);
 	} else {
 		ERRH(dbc, "libcurl failure message: " LWPD ".", buff);
-		post_diagnostic(&HDRH(dbc)->diag, SQL_STATE_08S01, buff,
-			dbc->curl_err);
+		post_diagnostic(dbc, SQL_STATE_08S01, buff, dbc->curl_err);
 	}
 }
 
@@ -642,12 +645,80 @@ static SQLRETURN test_connect(esodbc_dbc_st *dbc)
 	RET_STATE(dbc->hdr.diag.state);
 }
 
+static BOOL config_dbc_logging(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
+{
+	int cnt, level;
+	SQLWCHAR ident_buff[MAX_PATH], path_buff[MAX_PATH];
+	wstr_st ident, path;
+
+	if (! wstr2bool(&attrs->trace_enabled)) {
+		return TRUE;
+	}
+
+	ident.cnt = sizeof(ident_buff)/sizeof(*ident_buff);
+	ident.str = ident_buff;
+	cnt = swprintf(ident.str, ident.cnt,
+			WPFWP_LDESC "_" WPFWP_LDESC "_" "%d-%u",
+			LWSTR(&attrs->server), LWSTR(&attrs->port),
+			GetCurrentProcessId(), InterlockedIncrement(&filelog_cnt));
+	if (cnt <= 0 || ident.cnt <= cnt) {
+		ERRH(dbc, "failed to print log file identifier.");
+		SET_HDIAG(dbc, SQL_STATE_HY000, "failed to print log file ID", 0);
+		return FALSE;
+	} else {
+		ident.cnt = cnt;
+	}
+	/* replace reserved characters that could raise issues with the FS */
+	for (cnt = 0; cnt < ident.cnt; cnt ++) {
+		if (ident.str[cnt] < 31) {
+			ident.str[cnt] = L'_';
+		} else {
+			switch (ident.str[cnt]) {
+				case L'"':
+				case L'<':
+				case L'>':
+				case L'|':
+				case L'/':
+				case L'\\':
+				case L'?':
+				case L'*':
+				case L':':
+					ident.str[cnt] = L'_';
+			}
+		}
+	}
+
+	path.cnt = sizeof(path_buff)/sizeof(*path_buff);
+	path.str = path_buff;
+	if (! filelog_print_path(&path, &attrs->trace_file, &ident)) {
+		ERRH(dbc, "failed to print log file path (dir: `" LWPDL "`, ident: `"
+			LWPDL "`).", LWSTR(&attrs->trace_file), LWSTR(&ident));
+		if (attrs->trace_file.cnt) {
+			SET_HDIAG(dbc, SQL_STATE_HY000, "failed to print log file path",
+				0);
+		} else {
+			SET_HDIAG(dbc, SQL_STATE_HY000, "no directory path for logging "
+				"provided", 0);
+		}
+		return FALSE;
+	}
+
+	level = parse_log_level(&attrs->trace_level);
+	if (! (dbc->hdr.log = filelog_new(&path, level))) {
+		ERRNH(dbc, "failed to allocate new file logger (file `" LWPDL "`, "
+			"level: %d).", LWSTR(&path), level);
+		SET_HDIAG(dbc, SQL_STATE_HY000, "failed to allocate new logger", 0);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
 /*
  * init dbc from configured attributes
  */
 SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 {
-	SQLRETURN ret;
 	int cnt, ipv6;
 	SQLBIGINT secure;
 	long long timeout, max_body_size, max_fetch_size;
@@ -656,17 +727,26 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 		buff_url, /*will be init'ed later*/0
 	};
 
+	/*
+	 * setup logging
+	 */
+	if (! config_dbc_logging(dbc, attrs)) {
+		/* attempt global logging the error */
+		ERRH(dbc, "failed to setup DBC logging");
+		goto err;
+	}
+
 	if (! str2bigint(&attrs->secure, /*wide?*/TRUE, &secure)) {
 		ERRH(dbc, "failed to read secure param `" LWPDL "`.",
 			LWSTR(&attrs->secure));
-		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "security setting number "
-				"conversion failure", 0);
+		SET_HDIAG(dbc, SQL_STATE_HY000, "security setting number "
+			"conversion failure", 0);
 		goto err;
 	}
 	if (secure < ESODBC_SEC_NONE || ESODBC_SEC_MAX <= secure) {
 		ERRH(dbc, "invalid secure param `" LWPDL "` (not within %d - %d).",
 			LWSTR(&attrs->secure), ESODBC_SEC_NONE, ESODBC_SEC_MAX - 1);
-		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "invalid security setting", 0);
+		SET_HDIAG(dbc, SQL_STATE_HY000, "invalid security setting", 0);
 		goto err;
 	} else {
 		dbc->secure = (long)secure;
@@ -677,8 +757,8 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 		if (! wstr_to_utf8(&attrs->ca_path, &dbc->ca_path)) {
 			ERRNH(dbc, "failed to convert CA path `" LWPDL "` to UTF8.",
 				LWSTR(&attrs->ca_path));
-			ret = SET_HDIAG(dbc, SQL_STATE_HY000, "reading the CA file path "
-					"failed", 0);
+			SET_HDIAG(dbc, SQL_STATE_HY000, "reading the CA file path "
+				"failed", 0);
 			goto err;
 		}
 		INFOH(dbc, "CA path: `%s`.", dbc->ca_path.str);
@@ -697,20 +777,19 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 			secure ? "s" : "",
 			ipv6 ? "[" : "", LWSTR(&attrs->server), ipv6 ? "]" : "",
 			LWSTR(&attrs->port));
-	if (cnt < 0) {
+	if (cnt <= 0) {
 		ERRNH(dbc, "failed to print URL out of server: `" LWPDL "` [%zd], "
 			"port: `" LWPDL "` [%zd].", LWSTR(&attrs->server),
 			LWSTR(&attrs->port));
-		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "assembling server's URL failed",
-				0);
+		SET_HDIAG(dbc, SQL_STATE_HY000, "assembling server's URL failed", 0);
 		goto err;
 	} else {
 		url.cnt = (size_t)cnt;
 	}
 	if (! wstr_to_utf8(&url, &dbc->url)) {
 		ERRNH(dbc, "failed to convert URL `" LWPDL "` to UTF8.", LWSTR(&url));
-		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "server URL's UTF8 conversion "
-				"failed", 0);
+		SET_HDIAG(dbc, SQL_STATE_HY000, "server URL's UTF8 conversion "
+			"failed", 0);
 		goto err;
 	}
 	INFOH(dbc, "connection URL: `%s`.", dbc->url.str);
@@ -722,16 +801,16 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 		if (! wstr_to_utf8(&attrs->uid, &dbc->uid)) {
 			ERRH(dbc, "failed to convert username [%zd] `" LWPDL "` to UTF8.",
 				attrs->uid.cnt, LWSTR(&attrs->uid));
-			ret = SET_HDIAG(dbc, SQL_STATE_HY000, "username UTF8 conversion "
-					"failed", 0);
+			SET_HDIAG(dbc, SQL_STATE_HY000, "username UTF8 conversion "
+				"failed", 0);
 			goto err;
 		}
 		if (attrs->pwd.cnt) {
 			if (! wstr_to_utf8(&attrs->pwd, &dbc->pwd)) {
 				ERRH(dbc, "failed to convert password [%zd] (-not shown-) to "
 					"UTF8.", attrs->pwd.cnt);
-				ret = SET_HDIAG(dbc, SQL_STATE_HY000, "password UTF8 "
-						"conversion failed", 0);
+				SET_HDIAG(dbc, SQL_STATE_HY000, "password UTF8 "
+					"conversion failed", 0);
 				goto err;
 			}
 		}
@@ -747,8 +826,8 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	if (! str2bigint(&attrs->timeout, /*wide?*/TRUE, (SQLBIGINT *)&timeout)) {
 		ERRH(dbc, "failed to convert `" LWPDL "` [%zu] to big int.",
 			LWSTR(&attrs->timeout), attrs->timeout.cnt);
-		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "timeout setting number "
-				"conversion failure", 0);
+		SET_HDIAG(dbc, SQL_STATE_HY000, "timeout setting number "
+			"conversion failure", 0);
 		goto err;
 	}
 	if (timeout < 0) {
@@ -765,15 +844,15 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 			(SQLBIGINT *)&max_body_size)) {
 		ERRH(dbc, "failed to convert max body size `" LWPDL "` [%zu] to LL.",
 			LWSTR(&attrs->max_body_size), attrs->max_body_size.cnt);
-		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "max body size setting number "
-				"conversion failure", 0);
+		SET_HDIAG(dbc, SQL_STATE_HY000, "max body size setting number "
+			"conversion failure", 0);
 		goto err;
 	}
 	if (max_body_size < 0) {
 		ERRH(dbc, "'%s' setting can't be negative (%ld).",
 			ESODBC_DSN_MAX_BODY_SIZE_MB, max_body_size);
-		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "invalid max body size setting "
-				"(negative)", 0);
+		SET_HDIAG(dbc, SQL_STATE_HY000, "invalid max body size setting "
+			"(negative)", 0);
 		goto err;
 	} else {
 		dbc->amax = (size_t)max_body_size * 1024 * 1024;
@@ -787,15 +866,15 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 			(SQLBIGINT *)&max_fetch_size)) {
 		ERRH(dbc, "failed to convert max fetch size `" LWPDL "` [%zu] to LL.",
 			LWSTR(&attrs->max_fetch_size), attrs->max_fetch_size.cnt);
-		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "max fetch size setting number "
-				"conversion failure", 0);
+		SET_HDIAG(dbc, SQL_STATE_HY000, "max fetch size setting number "
+			"conversion failure", 0);
 		goto err;
 	}
 	if (max_fetch_size < 0) {
 		ERRH(dbc, "'%s' setting can't be negative (%ld).",
 			ESODBC_DSN_MAX_FETCH_SIZE, max_fetch_size);
-		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "invalid max fetch size setting "
-				"(negative)", 0);
+		SET_HDIAG(dbc, SQL_STATE_HY000, "invalid max fetch size setting "
+			"(negative)", 0);
 		goto err;
 	} else {
 		dbc->fetch.max = (size_t)max_fetch_size;
@@ -825,8 +904,7 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	} else {
 		ERRH(dbc, "unknown packing encoding '" LWPDL "'.",
 			LWSTR(&attrs->packing));
-		ret = SET_HDIAG(dbc, SQL_STATE_HY000, "invalid packing encoding "
-				"setting", 0);
+		SET_HDIAG(dbc, SQL_STATE_HY000, "invalid packing encoding setting", 0);
 		goto err;
 	}
 	INFOH(dbc, "pack JSON: %s.", dbc->pack_json ? "true" : "false");
@@ -895,8 +973,14 @@ void cleanup_dbc(esodbc_dbc_st *dbc)
 	} else {
 		assert(dbc->no_types == 0);
 	}
+
 	assert(dbc->abuff == NULL);
 	cleanup_curl(dbc);
+
+	if (dbc->hdr.log && dbc->hdr.log != _gf_log) {
+		filelog_del(dbc->hdr.log);
+		dbc->hdr.log = NULL;
+	}
 }
 
 SQLRETURN do_connect(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
@@ -1248,8 +1332,8 @@ static BOOL bind_types_cols(esodbc_stmt_st *stmt, estype_row_st *type_row)
 
 /* Copies the type info from the result-set to array to be associated with the
  * connection. */
-static void *copy_types_rows(estype_row_st *type_row, SQLULEN rows_fetched,
-	esodbc_estype_st *types)
+static void *copy_types_rows(esodbc_dbc_st *dbc, estype_row_st *type_row,
+	SQLULEN rows_fetched, esodbc_estype_st *types)
 {
 	SQLWCHAR *pos;
 	int c;
@@ -1314,7 +1398,7 @@ static void *copy_types_rows(estype_row_st *type_row, SQLULEN rows_fetched,
 		pos += types[i].type_name.cnt + /*\0*/1;
 		if ((c = ascii_w2c(types[i].type_name.str, types[i].type_name_c.str,
 						types[i].type_name.cnt)) < 0) {
-			ERR("failed to convert ES/SQL type `" LWPDL "` to C-str.",
+			ERRH(dbc, "failed to convert ES/SQL type `" LWPDL "` to C-str.",
 				LWSTR(&types[i].type_name));
 			return NULL;
 		} else {
@@ -1328,7 +1412,7 @@ static void *copy_types_rows(estype_row_st *type_row, SQLULEN rows_fetched,
 
 		/* notify if scales extremes are different */
 		if (types[i].maximum_scale != types[i].minimum_scale) {
-			INFO("type `" LWPDL "` returned with non-equal max/min "
+			INFOH(dbc, "type `" LWPDL "` returned with non-equal max/min "
 				"scale: %d/%d -- using the max.", LWSTR(&types[i].type_name),
 				types[i].maximum_scale, types[i].minimum_scale);
 		}
@@ -1337,11 +1421,11 @@ static void *copy_types_rows(estype_row_st *type_row, SQLULEN rows_fetched,
 		if (! elastic_name2types(&types[i].type_name, &types[i].c_concise_type,
 				&sql_type)) {
 			/* ES version newer than driver's? */
-			ERR("failed to convert type name `" LWPDL "` to SQL C type.",
+			ERRH(dbc, "failed to convert type name `" LWPDL "` to SQL C type.",
 				LWSTR(&types[i].type_name));
 			return NULL;
 		}
-		DBG("ES type `" LWPDL "` resolved to C concise: %hd, SQL: %hd.",
+		DBGH(dbc, "ES type `" LWPDL "` resolved to C concise: %hd, SQL: %hd.",
 			LWSTR(&types[i].type_name), types[i].c_concise_type, sql_type);
 
 		/* BOOLEAN is used in catalog calls (like SYS TYPES / SQLGetTypeInfo),
@@ -1355,8 +1439,8 @@ static void *copy_types_rows(estype_row_st *type_row, SQLULEN rows_fetched,
 		/* .data_type is used in data conversions -> make sure the SQL type
 		 * derived from type's name is the same with type reported value */
 		if (sql_type != types[i].data_type) {
-			ERR("type `" LWPDL "` derived (%d) and reported (%d) SQL type "
-				"identifiers differ.", LWSTR(&types[i].type_name),
+			ERRH(dbc, "type `" LWPDL "` derived (%d) and reported (%d) SQL "
+				"type identifiers differ.", LWSTR(&types[i].type_name),
 				sql_type, types[i].data_type);
 			return NULL;
 		}
@@ -1583,7 +1667,7 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 		goto end;
 	}
 
-	if (! (pos = copy_types_rows(type_row, rows_fetched, types))) {
+	if (! (pos = copy_types_rows(dbc, type_row, rows_fetched, types))) {
 		ERRH(dbc, "failed to process recieved ES/SQL data types.");
 		goto end;
 	}
@@ -1669,8 +1753,10 @@ SQLRETURN EsSQLDriverConnectW
 	init_dsn_attrs(&attrs);
 
 	if (szConnStrIn) {
+#ifndef NDEBUG /* don't print the PWD */
 		DBGH(dbc, "Input connection string: '"LWPD"'[%d].", szConnStrIn,
 			cchConnStrIn);
+#endif /* NDEBUG */
 		/* parse conn str into attrs */
 		if (! parse_connection_string(&attrs, szConnStrIn, cchConnStrIn)) {
 			ERRH(dbc, "failed to parse connection string `" LWPDL "`.",
@@ -1879,19 +1965,6 @@ SQLRETURN EsSQLSetConnectAttrW(
 			//state = SQL_STATE_IM001;
 			return SQL_ERROR; /* error means ANSI */
 
-		case SQL_ATTR_LOGIN_TIMEOUT:
-			if (dbc->es_types) {
-				ERRH(dbc, "connection already established, can't set "
-					"connection timeout anymore (to %u).",
-					(SQLUINTEGER)(uintptr_t)Value);
-				RET_HDIAG(dbc, SQL_STATE_HY011, "connection established, "
-					"can't set connection timeout.", 0);
-			}
-			INFOH(dbc, "setting connection timeout to: %u, from previous: %u.",
-				dbc->timeout, (SQLUINTEGER)(uintptr_t)Value);
-			dbc->timeout = (long)(uintptr_t)Value;
-			break;
-
 		/* https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/automatic-population-of-the-ipd */
 		case SQL_ATTR_AUTO_IPD:
 			ERRH(dbc, "trying to set read-only attribute AUTO IPD.");
@@ -1944,6 +2017,53 @@ SQLRETURN EsSQLSetConnectAttrW(
 			 * it: */
 			//RET_HDIAGS(dbc, SQL_STATE_HYC00);
 			break;
+
+		case SQL_ATTR_ACCESS_MODE:
+			DBGH(dbc, "setting access mode to: %lu.",
+				(SQLUINTEGER)(uintptr_t)Value);
+			if ((SQLUINTEGER)(uintptr_t)Value != SQL_MODE_READ_ONLY) {
+				WARNH(dbc, "no support for requested access mode.");
+			}
+			break;
+
+		case SQL_ATTR_AUTOCOMMIT:
+			DBGH(dbc, "setting autocommit mode: %lu",
+				(SQLUINTEGER)(uintptr_t)Value);
+			if ((SQLUINTEGER)(uintptr_t)Value != SQL_AUTOCOMMIT_ON) {
+				WARNH(dbc, "no support for manual-commit mode.");
+			}
+			break;
+
+		case SQL_ATTR_CONNECTION_DEAD:
+			RET_HDIAGS(dbc, SQL_STATE_HY092);
+			break;
+
+		case SQL_ATTR_CONNECTION_TIMEOUT:
+			DBGH(dbc, "setting connection timeout: %lu",
+				(SQLUINTEGER)(uintptr_t)Value);
+			dbc->timeout = (SQLUINTEGER)(uintptr_t)Value;
+			break;
+		case SQL_ATTR_LOGIN_TIMEOUT:
+			WARNH(dbc, "no individual login timeout supported");
+			if (dbc->timeout != (SQLUINTEGER)(uintptr_t)Value) {
+				RET_HDIAGS(dbc, SQL_STATE_01S02);
+			}
+			break;
+
+		case SQL_ATTR_TRANSLATE_LIB:
+			DBGH(dbc, "setting translation to lib: `" LWPD "`.",
+				(SQLWCHAR *)Value);
+			ERRH(dbc, "no traslation support available.");
+			RET_HDIAGS(dbc, SQL_STATE_IM009);
+
+		case SQL_ATTR_TRACE:
+		case SQL_ATTR_TRACEFILE: /* DM-only */
+		case SQL_ATTR_ENLIST_IN_DTC:
+		case SQL_ATTR_PACKET_SIZE:
+		case SQL_ATTR_TRANSLATE_OPTION:
+		case SQL_ATTR_ODBC_CURSORS: /* DM-only & deprecated */
+			ERRH(dbc, "unsupported attribute %ld.", Attribute);
+			RET_HDIAGS(dbc, SQL_STATE_HYC00);
 
 		default:
 			ERRH(dbc, "unknown Attribute: %d.", Attribute);
@@ -2011,22 +2131,48 @@ SQLRETURN EsSQLGetConnectAttrW(
 			break;
 
 		case SQL_ATTR_ACCESS_MODE:
+			DBGH(dbc, "getting access mode: %lu", SQL_MODE_READ_ONLY);
+			*(SQLUINTEGER *)ValuePtr = SQL_MODE_READ_ONLY;
+			break;
+
 		case SQL_ATTR_ASYNC_DBC_EVENT:
+			ERRH(dbc, "no asynchronous support available.");
+			RET_HDIAGS(dbc, SQL_STATE_S1118);
 		case SQL_ATTR_ASYNC_DBC_FUNCTIONS_ENABLE:
+			ERRH(dbc, "no asynchronous support available.");
+			RET_HDIAGS(dbc, SQL_STATE_HY114);
+
 		//case SQL_ATTR_ASYNC_DBC_PCALLBACK:
 		//case SQL_ATTR_ASYNC_DBC_PCONTEXT:
+
 		case SQL_ATTR_AUTOCOMMIT:
+			DBGH(dbc, "getting autocommit mode: %lu", SQL_AUTOCOMMIT_ON);
+			*(SQLUINTEGER *)ValuePtr = SQL_AUTOCOMMIT_ON;
+			break;
+
 		case SQL_ATTR_CONNECTION_DEAD:
-		case SQL_ATTR_CONNECTION_TIMEOUT:
-		//case SQL_ATTR_DBC_INFO_TOKEN:
-		case SQL_ATTR_ENLIST_IN_DTC:
+			DBGH(dbc, "getting connection state: %lu", SQL_CD_FALSE);
+			*(SQLUINTEGER *)ValuePtr = SQL_CD_FALSE;
+			break;
+
 		case SQL_ATTR_LOGIN_TIMEOUT:
-		case SQL_ATTR_ODBC_CURSORS:
-		case SQL_ATTR_PACKET_SIZE:
+			WARNH(dbc, "no login timeout supported: use connection timeout.");
+		case SQL_ATTR_CONNECTION_TIMEOUT:
+			DBGH(dbc, "getting connection timeout: %lu", dbc->timeout);
+			*(SQLUINTEGER *)ValuePtr = dbc->timeout;
+			break;
+
+		//case SQL_ATTR_DBC_INFO_TOKEN:
+
 		case SQL_ATTR_TRACE:
-		case SQL_ATTR_TRACEFILE:
+		case SQL_ATTR_TRACEFILE: /* DM-only */
+		case SQL_ATTR_ENLIST_IN_DTC:
+		case SQL_ATTR_PACKET_SIZE:
 		case SQL_ATTR_TRANSLATE_LIB:
 		case SQL_ATTR_TRANSLATE_OPTION:
+		case SQL_ATTR_ODBC_CURSORS: /* DM-only & deprecated */
+			ERRH(dbc, "unsupported attribute %ld.", Attribute);
+			RET_HDIAGS(dbc, SQL_STATE_HY000);
 
 		default:
 			// FIXME: add the other attributes

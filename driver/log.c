@@ -27,152 +27,247 @@
  */
 #define LOG_ERRNO_BUF_SIZE	128
 
-/* log level; disabled by default */
-int _esodbc_log_level = LOG_LEVEL_DISABLED;
-/* log file path -- process variable */
-static TCHAR *log_path = NULL;
-/* log file mutex -- process variable */
-static esodbc_mutex_lt log_mux = ESODBC_MUX_SINIT;
-
-
-static inline HANDLE log_file_handle(BOOL open)
-{
-	static HANDLE log_handle = INVALID_HANDLE_VALUE;
-	if (open) {
-		if (log_handle == INVALID_HANDLE_VALUE) {
-			log_handle = CreateFile(
-					log_path, /* file name ("path") */
-					GENERIC_WRITE, /* desired access */
-					FILE_SHARE_WRITE, /* share mode */
-					NULL, /* security attributes */
-					OPEN_ALWAYS, /* creation disposition */
-					FILE_ATTRIBUTE_NORMAL, /* flags & attributes */
-					NULL /* template */);
-		}
-	} else {
-		if (log_handle != INVALID_HANDLE_VALUE) {
-			CloseHandle(log_handle);
-			log_handle = INVALID_HANDLE_VALUE;
-		}
-	}
-	return log_handle;
-}
+/* global file log */
+esodbc_filelog_st *_gf_log = NULL;
 
 BOOL log_init()
 {
-	int pos;
-	/*
-	 * Fully qualified path name of the log file:
-	 * <path>\<E._LOG_FILE_PREFIX>_<datetime>_<pid><E._LOG_FILE_SUFFIX>
-	 * Example:
-	 * C:\Users\username\AppData\Local\Temp\esodbc_20181231235959_233.log
-	 */
-	static TCHAR path[MAX_PATH];
-	TCHAR *qmark; /* question mark position */
-	struct tm *then;
-	time_t now = time(NULL);
+	int cnt;
+	wchar_t *qmark; /* question mark position */
+	wstr_st str_level;
+	int log_level;
+	/* PID buffer */
+	wchar_t pid_buff[sizeof("4294967295")];
+	wstr_st pid = (wstr_st) {
+		pid_buff, sizeof(pid_buff)/sizeof(*pid_buff)
+	};
+	/* directory path */
+	wchar_t dpath_buff[MAX_PATH + 1];
+	wstr_st dpath = (wstr_st) {
+		dpath_buff, sizeof(dpath_buff)/sizeof(*dpath_buff)
+	};
+	/* full file path */
+	wchar_t fpath_buff[MAX_PATH + 1];
+	wstr_st fpath = (wstr_st) {
+		fpath_buff, sizeof(fpath_buff)/sizeof(*fpath_buff)
+	};
 
-	pos = GetEnvironmentVariable(_T(ESODBC_ENV_VAR_LOG_DIR), path,
-			sizeof(path)/sizeof(path[0]));
-	if (! pos) { /* 0 means error */
+	cnt = GetEnvironmentVariable(MK_WPTR(ESODBC_LOG_DIR_ENV_VAR),
+			dpath.str, (DWORD)dpath.cnt);
+	if (! cnt) { /* 0 means error */
 		/* env var wasn't defined OR error occured (which we can't log). */
 		return GetLastError() == ERROR_ENVVAR_NOT_FOUND;
-	}
-	if (sizeof(path)/sizeof(path[0]) < pos) {
+	} else if (dpath.cnt <= cnt) {
 		/* path buffer too small */
 		assert(0);
 		return FALSE;
 	}
 
 	/* is there a log level specified? */
-	if ((qmark = TSTRCHR(path, LOG_LEVEL_SEPARATOR))) {
+	if ((qmark = wcschr(dpath.str, LOG_LEVEL_SEPARATOR))) {
 		*qmark = 0; /* end the path here */
-		pos = (int)(qmark - path); /* adjust the length of path */
-		/* first letter will indicate the log level, with the default being
-		 * debug, since this is mostly a tracing functionality */
-		switch (qmark[1]) {
-			case 'e':
-			case 'E':
-				_esodbc_log_level = LOG_LEVEL_ERR;
-				break;
-			case 'w':
-			case 'W':
-				_esodbc_log_level = LOG_LEVEL_WARN;
-				break;
-			case 'i':
-			case 'I':
-				_esodbc_log_level = LOG_LEVEL_INFO;
-				break;
-			default:
-				_esodbc_log_level = LOG_LEVEL_DBG;
-		}
+		dpath.cnt = qmark - dpath.str; /* adjust the length of path */
+		str_level.str = qmark + 1;
+		str_level.cnt = cnt - dpath.cnt - /* separator */1;
+		log_level = parse_log_level(&str_level);
 	} else {
+		dpath.cnt = cnt;
 		/* default log level, if not specified, is debug */
-		_esodbc_log_level = LOG_LEVEL_DBG;
+		log_level = LOG_LEVEL_DBG;
 	}
 
-	/* break down time to date-time */
-	if (! (then = localtime(&now))) {
-		assert(0);
-		return FALSE; /* should not happen */
-	}
-
-	/* build the log path name */
-	path[pos ++] = FILE_PATH_SEPARATOR;
-	pos = SNTPRINTF(path + pos, sizeof(path)/sizeof(path[0]),
-			"%c" STPD "_%d%.2d%.2d%.2d%.2d%.2d_%u" STPD,
-			FILE_PATH_SEPARATOR, _T(ESODBC_LOG_FILE_PREFIX),
-			then->tm_year + 1900, then->tm_mon + 1, then->tm_mday,
-			then->tm_hour, then->tm_min, then->tm_sec,
-			GetCurrentProcessId(),
-			_T(ESODBC_LOG_FILE_SUFFIX));
-	if (sizeof(path)/sizeof(path[0]) < pos) {
-		/* path buffer is too small */
+	pid.cnt = i64tot((int64_t)GetCurrentProcessId(), pid.str, /*w?*/TRUE);
+	if (pid.cnt <= 0) {
 		assert(0);
 		return FALSE;
 	}
 
-	/* save the file path and open the file, to check path validity */
-	log_path = path;
-	return (log_file_handle(/* open*/TRUE) != INVALID_HANDLE_VALUE);
+	if (! filelog_print_path(&fpath, &dpath, &pid)) {
+		return FALSE;
+	}
+
+	_gf_log = filelog_new(&fpath, log_level);
+	return _gf_log != NULL;
 }
 
 void log_cleanup()
 {
-	log_file_handle(/*open?*/FALSE);
-	ESODBC_MUX_DEL(&log_mux);
-
+	if (_gf_log) {
+		filelog_del(_gf_log);
+		_gf_log = NULL;
+	}
 }
 
-static void log_file_write(char *buff, size_t pos)
+int parse_log_level(wstr_st *level)
 {
-	HANDLE log_handle;
-	DWORD written;
+	if (level->cnt < 1) {
+		return LOG_LEVEL_DISABLED;
+	}
+	/* first letter will indicate the log level */
+	switch ((unsigned)level->str[0] | 0x20) {
+		case 'e':
+			return LOG_LEVEL_ERR;
+		case 'w':
+			return LOG_LEVEL_WARN;
+		case 'i':
+			return LOG_LEVEL_INFO;
+		case 'd':
+			return LOG_LEVEL_DBG;
+	}
+	return LOG_LEVEL_DISABLED;
+}
 
-	log_handle = log_file_handle(/*open*/TRUE);
-	if (log_handle == INVALID_HANDLE_VALUE) {
+/*
+ * Fully qualified path name of the log file:
+ * <dir_path>\<E._LOG_FILE_PREFIX>_<datetime>_<ident><E._LOG_FILE_SUFFIX>
+ * Example:
+ * C:\Users\username\AppData\Local\Temp\esodbc_20181231235959_233.log
+ */
+BOOL filelog_print_path(wstr_st *dest, wstr_st *dir_path, wstr_st *ident)
+{
+	wstr_st dir = *dir_path;
+	int cnt;
+	time_t now = time(NULL);
+	struct tm *then = localtime(&now); /* "single tm structure per thread" */
+
+	if (! then) {
+		assert(0); /* should not happen */
+		return FALSE;
+	}
+
+	/* strip trailing path separator */
+	for (; 0 < dir.cnt; dir.cnt --) {
+		if (dir.str[dir.cnt - 1] != MK_WPTR(FILE_PATH_SEPARATOR)) {
+			break;
+		}
+	}
+	if (dir.cnt <= 0) {
+		/* input was just '\' (or empty) */
+		return FALSE;
+	}
+
+	/* build the log full path name */
+	cnt = _snwprintf(dest->str, dest->cnt,
+			L"%.*s" "%c" "%s" "_%d%.2d%.2d%.2d%.2d%.2d_" "%.*s" "%s",
+			(int)dir.cnt, dir.str,
+			FILE_PATH_SEPARATOR,
+			MK_WPTR(ESODBC_LOG_FILE_PREFIX),
+			then->tm_year + 1900, then->tm_mon + 1, then->tm_mday,
+			then->tm_hour, then->tm_min, then->tm_sec,
+			(int)ident->cnt, ident->str,
+			MK_WPTR(ESODBC_LOG_FILE_SUFFIX));
+
+	if (cnt <= 0 || dest->cnt <= cnt) {
+		/* fpath buffer is too small */
+		return FALSE;
+	} else {
+		dest->cnt = cnt;
+	}
+
+	return TRUE;
+}
+
+BOOL filelog_reset(esodbc_filelog_st *log)
+{
+	if (ESODBC_LOG_MAX_RETRY < log->fails) {
+		/* disable logging alltogether on this logger */
+		log->level = LOG_LEVEL_DISABLED;
+		log->handle = INVALID_HANDLE_VALUE;
+		return FALSE;
+	}
+	if (log->handle != INVALID_HANDLE_VALUE) {
+		CloseHandle(log->handle);
+	}
+	log->handle = CreateFile(
+			log->path, /* file name ("path") */
+			GENERIC_WRITE, /* desired access */
+			FILE_SHARE_WRITE, /* share mode */
+			NULL, /* security attributes */
+			OPEN_ALWAYS, /* creation disposition */
+			FILE_ATTRIBUTE_NORMAL, /* flags & attributes */
+			NULL /* template */);
+	if (log->handle == INVALID_HANDLE_VALUE) {
+		log->fails ++;
+		return FALSE;
+	}
+	return TRUE;
+}
+
+esodbc_filelog_st *filelog_new(wstr_st *path, int level)
+{
+	esodbc_filelog_st *log;
+
+	if (! (log = malloc(sizeof(*log) +
+					(path->cnt + /*\0*/1) * sizeof(*log->path)))) {
+		return NULL;
+	}
+	memset(log, 0, sizeof(*log));
+
+	log->path = (wchar_t *)((char *)log + sizeof(*log));
+	wcsncpy(log->path, path->str, path->cnt);
+	log->path[path->cnt] = L'\0';
+
+	log->level = level;
+	log->handle = INVALID_HANDLE_VALUE;
+	ESODBC_MUX_INIT(&log->mux);
+
+	if (LOG_LEVEL_INFO <= level) {
+#ifndef NDEBUG
+		_LOG(log, LOG_LEVEL_INFO, /*werr*/0, "level: %d, file: " LWPDL ".",
+			level, LWSTR(path));
+#endif /* NDEBUG */
+		_LOG(log, LOG_LEVEL_INFO, /*werr*/0, "driver version: %s.",
+			ESODBC_DRIVER_VER);
+	}
+
+	return log;
+}
+
+void filelog_del(esodbc_filelog_st *log)
+{
+	if (! log) {
 		return;
 	}
+	if (log->handle != INVALID_HANDLE_VALUE) {
+		CloseHandle(log->handle);
+	}
+	ESODBC_MUX_DEL(&log->mux);
+	free(log);
+}
+
+static BOOL filelog_write(esodbc_filelog_st *log, char *buff, size_t cnt)
+{
+	DWORD written;
 
 	/* write the buffer to file */
 	if (! WriteFile(
-			log_handle, /*handle*/
+			log->handle, /*handle*/
 			buff, /* buffer */
-			(DWORD)(pos * sizeof(buff[0])), /*bytes to write */
+			(DWORD)(cnt * sizeof(buff[0])), /*bytes to write */
 			&written /* bytes written */,
 			NULL /*overlap*/)) {
-		log_file_handle(/* close */FALSE);
+		log->fails ++;
+		if (filelog_reset(log)) {
+			/* reattempt the write, if reset is successfull */
+			if (filelog_write(log, buff, cnt)) {
+				log->fails = 0;
+				return TRUE;
+			}
+		}
+		return FALSE;
 	} else {
 #ifndef NDEBUG
 #ifdef _WIN32
-		//FlushFileBuffers(log_handle);
+		//FlushFileBuffers(log->handle);
 #endif /* _WIN32 */
 #endif /* NDEBUG */
 	}
+	return TRUE;
 }
 
-static inline void log_file(int level, int werrno, const char *func,
-	const char *srcfile, int lineno, const char *fmt, va_list args)
+static inline void filelog_log(esodbc_filelog_st *log,
+	int level, int werrno, const char *func, const char *srcfile, int lineno,
+	const char *fmt, va_list args)
 {
 	time_t now = time(NULL);
 	int ret;
@@ -184,7 +279,6 @@ static inline void log_file(int level, int werrno, const char *func,
 	static const char *level2str[] = { "ERROR", "WARN", "INFO", "DEBUG", };
 	assert(level < sizeof(level2str)/sizeof(level2str[0]));
 
-	/* FIXME: 4!WINx */
 	if (ctime_s(buff, sizeof(buff), &now)) {
 		/* writing failed */
 		pos = 0;
@@ -201,13 +295,12 @@ static inline void log_file(int level, int werrno, const char *func,
 		assert(pos == 24);
 	}
 
-	/* drop path from file name */
+	/* drop path from source file name */
 	for (next = srcfile; next; next = strchr(sfile, FILE_PATH_SEPARATOR)) {
 		sfile = next + 1;
 	}
 
 	/* write the debugging prefix */
-	/* XXX: add release (file o.a.) printing? */
 	if ((ret = snprintf(buff + pos, sizeof(buff) - pos, " - [%s] %s()@%s:%d ",
 					level2str[level], func, sfile, lineno)) < 0) {
 		return;
@@ -224,7 +317,6 @@ static inline void log_file(int level, int werrno, const char *func,
 			pos += ret;
 		}
 
-		/* FIXME: 4!WINx */
 		if (strerror_s(ebuff, sizeof(ebuff), errno)) {
 			return;
 		}
@@ -254,17 +346,17 @@ static inline void log_file(int level, int werrno, const char *func,
 	}
 	assert(pos <= sizeof(buff));
 
-	ESODBC_MUX_LOCK(&log_mux);
-	log_file_write(buff, pos);
-	ESODBC_MUX_UNLOCK(&log_mux);
+	ESODBC_MUX_LOCK(&log->mux);
+	filelog_write(log, buff, pos);
+	ESODBC_MUX_UNLOCK(&log->mux);
 }
 
-void _esodbc_log(int lvl, int werrno, const char *func,
-	const char *srcfile, int lineno, const char *fmt, ...)
+void _esodbc_log(esodbc_filelog_st *log, int lvl, int werrno,
+	const char *func, const char *srcfile, int lineno, const char *fmt, ...)
 {
 	va_list args;
 	va_start(args, fmt);
-	log_file(lvl, werrno, func, srcfile, lineno, fmt, args);
+	filelog_log(log, lvl, werrno, func, srcfile, lineno, fmt, args);
 	va_end(args);
 }
 
