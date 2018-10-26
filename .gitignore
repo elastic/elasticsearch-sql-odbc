@@ -2,6 +2,7 @@
 driver/*.swp
 cscope.out
 .vs
+installer/src/Installer/driver/
 dsneditor/EsOdbcDsnEditor/Debug/
 dsneditor/EsOdbcDsnEditorLauncher/bin/
 dsneditor/EsOdbcDsnEditorLauncher/obj/
