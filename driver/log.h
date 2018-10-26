@@ -13,7 +13,6 @@
 
 #include "util.h"
 #include "error.h"
-#include "handles.h"
 
 
 /*
@@ -68,18 +67,35 @@ enum osodbc_log_levels {
 BOOL log_init();
 void log_cleanup();
 
-void _esodbc_log(int lvl, int werrno, const char *func,
-	const char *srcfile, int lineno, const char *fmt, ...);
-extern int _esodbc_log_level;
+typedef struct struct_filelog {
+	int level;
+	HANDLE handle;
+	wchar_t *path;
+	unsigned char fails;
+	esodbc_mutex_lt mux;
+} esodbc_filelog_st;
 
-#define _LOG(lvl, werr, fmt, ...) \
-	if ((lvl) <= _esodbc_log_level) \
-		_esodbc_log(lvl, werr, __func__, __FILE__, __LINE__, fmt, __VA_ARGS__)
+esodbc_filelog_st *filelog_new(wstr_st *path, int level);
+void filelog_del(esodbc_filelog_st *log);
 
+int parse_log_level(wstr_st *level);
+BOOL filelog_print_path(wstr_st *dest, wstr_st *dir_path, wstr_st *ident);
 
-#define LOG(lvl, fmt, ...)	_LOG(lvl, 0, fmt, __VA_ARGS__)
+extern esodbc_filelog_st *_gf_log;
+void _esodbc_log(esodbc_filelog_st *log, int lvl, int werrno,
+	const char *func, const char *srcfile, int lineno, const char *fmt, ...);
 
-#define ERRN(fmt, ...)	_LOG(LOG_LEVEL_ERR, 1, fmt, __VA_ARGS__)
+#define _LOG(logp, lvl, werr, fmt, ...) \
+	do { \
+		if ((logp) && ((lvl) <= (logp)->level)) { \
+			_esodbc_log(logp, lvl, werr, __func__, __FILE__, __LINE__, \
+				fmt, __VA_ARGS__); \
+		} \
+	} while (0)
+
+#define LOG(lvl, fmt, ...)	_LOG(_gf_log, lvl, 0, fmt, __VA_ARGS__)
+#define ERRN(fmt, ...)		_LOG(_gf_log, LOG_LEVEL_ERR, 1, fmt, __VA_ARGS__)
+
 #define ERR(fmt, ...)	LOG(LOG_LEVEL_ERR, fmt, __VA_ARGS__)
 #define WARN(fmt, ...)	LOG(LOG_LEVEL_WARN, fmt, __VA_ARGS__)
 #define INFO(fmt, ...)	LOG(LOG_LEVEL_INFO, fmt, __VA_ARGS__)
@@ -97,47 +113,6 @@ extern int _esodbc_log_level;
 /* NULL as ("to Wide") string */
 #define TWS_NULL	MK_WPTR("<null>")
 #define TS_NULL		MK_CPTR("<null>")
-
-
-/*
- * Logging with handle
- */
-
-/* get handle type prefix  */
-static inline char *_hhtype2str(SQLHANDLE handle)
-{
-	if (! handle) {
-		return "";
-	}
-	switch (HDRH(handle)->type) {
-		case SQL_HANDLE_ENV:
-			return "ENV";
-		case SQL_HANDLE_DBC:
-			return "DBC";
-		case SQL_HANDLE_STMT:
-			return "STMT";
-		case SQL_HANDLE_DESC:
-			return "DESC";
-	}
-	/* likely mem corruption, it'll probably crash */
-	BUG("unknown handle (@0x%p) type (%d)", handle, HDRH(handle)->type);
-	return "???";
-}
-
-#define LOGH(lvl, werrn, hnd, fmt, ...) \
-	_LOG(lvl, werrn, "[%s@0x%p] " fmt, _hhtype2str(hnd), hnd, __VA_ARGS__)
-
-#define ERRNH(hnd, fmt, ...)	LOGH(LOG_LEVEL_ERR, 1, hnd, fmt, __VA_ARGS__)
-#define ERRH(hnd, fmt, ...)		LOGH(LOG_LEVEL_ERR, 0, hnd, fmt, __VA_ARGS__)
-#define WARNH(hnd, fmt, ...)	LOGH(LOG_LEVEL_WARN, 0, hnd, fmt, __VA_ARGS__)
-#define INFOH(hnd, fmt, ...)	LOGH(LOG_LEVEL_INFO, 0, hnd, fmt, __VA_ARGS__)
-#define DBGH(hnd, fmt, ...)		LOGH(LOG_LEVEL_DBG, 0, hnd, fmt, __VA_ARGS__)
-
-#define BUGH(hnd, fmt, ...) \
-	do { \
-		ERRH(hnd, "[BUG] " fmt, __VA_ARGS__); \
-		assert(0); \
-	} while (0)
 
 
 

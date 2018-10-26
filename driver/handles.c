@@ -53,6 +53,47 @@ static void init_hheader(esodbc_hhdr_st *hdr, SQLSMALLINT type, void *parent)
 	init_diagnostic(&hdr->diag);
 	ESODBC_MUX_INIT(&hdr->mutex);
 	hdr->parent = parent;
+
+	/* init logging helpers */
+	switch(type) {
+		case SQL_HANDLE_ENV:
+			hdr->typew = MK_WSTR("ENV");
+			hdr->log = _gf_log; /* use global logger */
+			break;
+		case SQL_HANDLE_DBC:
+			hdr->typew = MK_WSTR("DBC");
+			hdr->log = _gf_log; /* use global logger, by default */
+			break;
+		case SQL_HANDLE_STMT:
+			hdr->typew = MK_WSTR("STMT");
+			hdr->log = HDRH(parent)->log; /* inherit */
+			break;
+		case SQL_HANDLE_DESC:
+			hdr->typew = MK_WSTR("DESC");
+			hdr->log = HDRH(parent)->log; /* inherit */
+			break;
+		default:
+			assert(0);
+	}
+}
+
+/*
+ *  "un-static" the initializers as needed
+ */
+static inline void init_env(esodbc_env_st *env)
+{
+	memset(env, 0, sizeof(*env));
+	init_hheader(HDRH(env), SQL_HANDLE_ENV, NULL);
+}
+
+void init_dbc(esodbc_dbc_st *dbc, SQLHANDLE InputHandle)
+{
+	memset(dbc, 0, sizeof(*dbc));
+	init_hheader(HDRH(dbc), SQL_HANDLE_DBC, InputHandle);
+
+	dbc->metadata_id = SQL_FALSE;
+	ESODBC_MUX_INIT(&dbc->curl_mux);
+	/* rest of initialization done at connect time */
 }
 
 static void init_desc(esodbc_desc_st *desc, esodbc_stmt_st *stmt,
@@ -72,6 +113,7 @@ static void init_desc(esodbc_desc_st *desc, esodbc_stmt_st *stmt,
 	if (DESC_TYPE_IS_APPLICATION(type)) {
 		desc->bind_type = SQL_BIND_BY_COLUMN;
 	}
+	// XXX: assign/chain to statement?
 }
 
 static void clear_desc(esodbc_desc_st *desc, BOOL reinit)
@@ -99,6 +141,33 @@ static void clear_desc(esodbc_desc_st *desc, BOOL reinit)
 	if (reinit) {
 		init_desc(desc, desc->hdr.stmt, desc->type, desc->alloc_type);
 	}
+}
+
+static void init_stmt(esodbc_stmt_st *stmt, SQLHANDLE InputHandle)
+{
+	memset(stmt, 0, sizeof(*stmt));
+	init_hheader(HDRH(stmt), SQL_HANDLE_STMT, InputHandle);
+
+	init_desc(&stmt->i_ard, stmt, DESC_TYPE_ARD, SQL_DESC_ALLOC_AUTO);
+	init_desc(&stmt->i_ird, stmt, DESC_TYPE_IRD, SQL_DESC_ALLOC_AUTO);
+	init_desc(&stmt->i_apd, stmt, DESC_TYPE_APD, SQL_DESC_ALLOC_AUTO);
+	init_desc(&stmt->i_ipd, stmt, DESC_TYPE_IPD, SQL_DESC_ALLOC_AUTO);
+
+	/* "When a statement is allocated, four descriptor handles are
+	 * automatically allocated and associated with the statement." */
+	stmt->ard = &stmt->i_ard;
+	stmt->ird = &stmt->i_ird;
+	stmt->apd = &stmt->i_apd;
+	stmt->ipd = &stmt->i_ipd;
+
+	/* set option defaults */
+	/* TODO: change to SQL_UB_DEFAULT when supporting bookmarks */
+	stmt->bookmarks = SQL_UB_OFF;
+	/* inherit this connection-statement attributes
+	 * Note: these attributes won't propagate at statement level when
+	 * set at connection level. */
+	stmt->metadata_id = DBCH(InputHandle)->metadata_id;
+	stmt->sql2c_conversion = CONVERSION_UNCHECKED;
 }
 
 void dump_record(esodbc_rec_st *rec)
@@ -145,7 +214,6 @@ void dump_record(esodbc_rec_st *rec)
 #undef DUMP_FIELD
 }
 
-
 /*
  * The Driver Manager does not call the driver-level environment handle
  * allocation function until the application calls SQLConnect,
@@ -167,10 +235,22 @@ void dump_record(esodbc_rec_st *rec)
 SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 	SQLHANDLE InputHandle, _Out_ SQLHANDLE *OutputHandle)
 {
-	esodbc_env_st *env;
-	esodbc_dbc_st *dbc;
-	esodbc_stmt_st *stmt;
-	esodbc_hhdr_st *hdr;
+	if (! OutputHandle) {
+		ERR("null output handle provided.");
+		RET_STATE(SQL_STATE_HY009);
+	}
+
+	if (HandleType != SQL_HANDLE_ENV) {
+		if (! InputHandle) {
+			ERR("null input handle provided");
+			RET_STATE(SQL_STATE_HY009);
+		}
+	} else {
+		if (InputHandle) {
+			ERR("not null (@0x%p) input handle for Environment.", InputHandle);
+			/* not fatal a.t.p., tho it'll likely fail (->error level) */
+		}
+	}
 
 	switch(HandleType) {
 		/*
@@ -186,21 +266,11 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 		 * """
 		 */
 		case SQL_HANDLE_ENV: /* Environment Handle */
-			if (InputHandle != SQL_NULL_HANDLE) {
-				WARN("passed InputHandle not null (=0x%p).",InputHandle);
-				/* not fatal a.t.p. */
+			*OutputHandle = (SQLHANDLE)malloc(sizeof(esodbc_env_st));
+			if (*OutputHandle) {
+				init_env(*OutputHandle);
+				DBG("new Environment handle @0x%p.", *OutputHandle);
 			}
-			if (! OutputHandle) {
-				ERR("null output handle provided.");
-				RET_STATE(SQL_STATE_HY009);
-			}
-			*OutputHandle = (SQLHANDLE *)calloc(1, sizeof(esodbc_env_st));
-			if (! *OutputHandle) {
-				ERRN("failed to callocate env handle.");
-				RET_STATE(SQL_STATE_HY001);
-			}
-
-			DBG("new Environment handle allocated @0x%p.",*OutputHandle);
 			break;
 
 		case SQL_HANDLE_DBC: /* Connection Handle */
@@ -212,90 +282,57 @@ SQLRETURN EsSQLAllocHandle(SQLSMALLINT HandleType,
 			 * return SQLSTATE HY010 (Function sequence error).
 			 * """
 			 */
-			env = ENVH(InputHandle);
-			if (! env->version) {
-				ERRH(env, "no version set in env when allocating DBC.");
-				RET_HDIAG(env, SQL_STATE_HY010,
-					"enviornment has no version set yet", 0);
+			if (! ENVH(InputHandle)->version) {
+				ERRH(InputHandle, "no version set in ENV.");
+				RET_HDIAG(InputHandle, SQL_STATE_HY010,
+					"enviornment has no version set", 0);
 			}
-			dbc = (esodbc_dbc_st *)calloc(1, sizeof(esodbc_dbc_st));
-			*OutputHandle = (SQLHANDLE *)dbc;
-			if (! dbc) {
-				ERRNH(env, "failed to callocate connection handle.");
-				RET_HDIAGS(env, SQL_STATE_HY001);
+			*OutputHandle = (SQLHANDLE)malloc(sizeof(esodbc_dbc_st));
+			if (*OutputHandle) {
+				init_dbc(*OutputHandle, InputHandle);
+				DBGH(InputHandle, "new Connection @0x%p.", *OutputHandle);
 			}
-			dbc->metadata_id = SQL_FALSE;
-
-			/* rest of initialization done at connect time */
-
-			DBGH(env, "new Connection handle allocated @0x%p.", *OutputHandle);
 			break;
 
 		case SQL_HANDLE_STMT: /* Statement Handle */
-			dbc = DBCH(InputHandle);
-			stmt = (esodbc_stmt_st *)calloc(1, sizeof(esodbc_stmt_st));
-			*OutputHandle = stmt;
-			if (! stmt) {
-				ERRNH(dbc, "failed to callocate statement handle.");
-				RET_HDIAGS(dbc, SQL_STATE_HY001);
+			*OutputHandle = (SQLHANDLE)malloc(sizeof(esodbc_stmt_st));
+			if (*OutputHandle) {
+				init_stmt(*OutputHandle, InputHandle);
+				DBGH(InputHandle, "new Statement @0x%p.", *OutputHandle);
 			}
-
-			init_desc(&stmt->i_ard, stmt, DESC_TYPE_ARD, SQL_DESC_ALLOC_AUTO);
-			init_desc(&stmt->i_ird, stmt, DESC_TYPE_IRD, SQL_DESC_ALLOC_AUTO);
-			init_desc(&stmt->i_apd, stmt, DESC_TYPE_APD, SQL_DESC_ALLOC_AUTO);
-			init_desc(&stmt->i_ipd, stmt, DESC_TYPE_IPD, SQL_DESC_ALLOC_AUTO);
-
-			/* "When a statement is allocated, four descriptor handles are
-			 * automatically allocated and associated with the statement." */
-			stmt->ard = &stmt->i_ard;
-			stmt->ird = &stmt->i_ird;
-			stmt->apd = &stmt->i_apd;
-			stmt->ipd = &stmt->i_ipd;
-
-			/* set option defaults */
-			/* TODO: change to SQL_UB_DEFAULT when supporting bookmarks */
-			stmt->bookmarks = SQL_UB_OFF;
-			/* inherit this connection-statement attributes
-			 * Note: these attributes won't propagate at statement level when
-			 * set at connection level. */
-			stmt->metadata_id = dbc->metadata_id;
-			stmt->sql2c_conversion = CONVERSION_UNCHECKED;
-
-			ESODBC_MUX_INIT(&dbc->curl_mux);
-
-			DBGH(dbc, "new Statement handle allocated @0x%p.", *OutputHandle);
 			break;
 
-		case SQL_HANDLE_DESC:
-			stmt = STMH(InputHandle);
-			*OutputHandle = (SQLHANDLE *)calloc(1, sizeof(esodbc_desc_st));
-			if (! *OutputHandle) {
-				ERRNH(stmt, "failed to callocate descriptor handle.");
-				RET_HDIAGS(stmt, SQL_STATE_HY001);
+		case SQL_HANDLE_DESC: /* Descriptor Handle */
+			*OutputHandle = (SQLHANDLE)malloc(sizeof(esodbc_desc_st));
+			if (*OutputHandle) {
+				init_desc(*OutputHandle, InputHandle, DESC_TYPE_ANON,
+					SQL_DESC_ALLOC_USER);
+				DBGH(InputHandle, "new Statement @0x%p.", *OutputHandle);
 			}
-			init_desc(*OutputHandle, InputHandle, DESC_TYPE_ANON,
-				SQL_DESC_ALLOC_USER);
-			DBGH(stmt, "new Descriptor handle allocated @0x%p.",*OutputHandle);
-			// FIXME: assign/chain to statement?
 			break;
 
 		case SQL_HANDLE_SENV: /* Shared Environment Handle */
-			FIXME; // FIXME
-			//break;
-#if 0
-		case SQL_HANDLE_DBC_INFO_TOKEN:
-			//break;
-#endif
+			// case SQL_HANDLE_DBC_INFO_TOKEN:
+			ERR("handle type %hd not implemented.", HandleType);
+			RET_STATE(SQL_STATE_HYC00); // optional feature
+
 		default:
 			ERR("unknown HandleType: %d.", HandleType);
 			return SQL_INVALID_HANDLE;
 	}
 
-	/*
-	 * Initialize new handle's header.
-	 */
-	hdr = HDRH(*OutputHandle);
-	init_hheader(hdr, HandleType, InputHandle);
+	if (! *OutputHandle) {
+		ERRN("OOM for handle type %hd, on input handle@0x%p.", HandleType,
+			InputHandle);
+		if (InputHandle) {
+			RET_HDIAGS(InputHandle, SQL_STATE_HY001);
+		} else {
+			RET_STATE(SQL_STATE_HY001);
+		}
+	} else {
+		/* new handle has been init'ed */
+		assert(HDRH(*OutputHandle)->type);
+	}
 
 	return SQL_SUCCESS;
 }
@@ -387,7 +424,7 @@ SQLRETURN EsSQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option)
 			 * doing nothing, it might leak mem. */
 			ERRH(stmt, "DROPing is deprecated -- no action taken! "
 				"(might leak memory)");
-			//return SQLFreeStmt(SQL_HANDLE_STMT, (SQLHANDLE)StatementHandle);
+			//return SQLFreeHandle(SQL_HANDLE_STMT,(SQLHANDLE)StatementHandle);
 			break;
 
 		/* "This does not unbind the bookmark column; to do that, the
@@ -476,7 +513,6 @@ SQLRETURN EsSQLSetEnvAttr(SQLHENV EnvironmentHandle,
 	assert(sizeof(SQLINTEGER) == 4);
 
 	switch (Attribute) {
-		/* TODO: connection pooling? */
 		case SQL_ATTR_CONNECTION_POOLING:
 		case SQL_ATTR_CP_MATCH:
 			RET_HDIAG(ENVH(EnvironmentHandle), SQL_STATE_HYC00,
@@ -484,7 +520,6 @@ SQLRETURN EsSQLSetEnvAttr(SQLHENV EnvironmentHandle,
 
 		case SQL_ATTR_ODBC_VERSION:
 			switch ((intptr_t)Value) {
-				// FIXME: review@alpha
 				// supporting applications of 2.x and 3.x<3.8 needs extensive
 				// review of the options.
 				case SQL_OV_ODBC2:
@@ -524,7 +559,6 @@ SQLRETURN EsSQLGetEnvAttr(SQLHENV EnvironmentHandle, SQLINTEGER Attribute,
 	SQLINTEGER BufferLength, _Out_opt_ SQLINTEGER *StringLength)
 {
 	switch (Attribute) {
-		/* TODO: connection pooling? */
 		case SQL_ATTR_CONNECTION_POOLING:
 		case SQL_ATTR_CP_MATCH:
 			RET_HDIAG(ENVH(EnvironmentHandle), SQL_STATE_HYC00,
@@ -844,6 +878,14 @@ SQLRETURN EsSQLSetStmtAttrW(
 				RET_HDIAGS(stmt, SQL_STATE_HYC00);
 			}
 			break;
+
+		/* SQL Server non-standard attributes */
+		case 1226:
+		case 1227:
+		case 1228:
+			ERRH(stmt, "non-standard attribute: %d.", Attribute);
+			/* "Invalid attribute/option identifier" */
+			RET_HDIAGS(stmt, SQL_STATE_HY092);
 
 		default:
 			// FIXME
@@ -1199,13 +1241,14 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
  * IxD must have es_type pointer set and it's value is not checked at
  * header/field access time -> only this function guards against NP deref'ing.
  */
-static BOOL check_access(desc_type_et desc_type, SQLSMALLINT field_id,
+static BOOL check_access(esodbc_desc_st *desc, SQLSMALLINT field_id,
 	char mode /* O_RDONLY | O_RDWR */)
 {
 	BOOL ret;
+	desc_type_et desc_type = desc->type;
 
 	if (desc_type == DESC_TYPE_ANON) {
-		BUG("can't check permissions against ANON descryptor type.");
+		BUGH(desc, "can't check permissions against ANON descryptor type.");
 		return FALSE;
 	}
 	assert(mode == O_RDONLY || mode == O_RDWR);
@@ -1295,10 +1338,10 @@ static BOOL check_access(desc_type_et desc_type, SQLSMALLINT field_id,
 			break;
 
 		default:
-			BUG("unknown field identifier: %d.", field_id);
+			BUGH(desc, "unknown field identifier: %d.", field_id);
 			ret = FALSE;
 	}
-	LOG(ret ? LOG_LEVEL_DBG : LOG_LEVEL_ERR,
+	LOGH(desc, ret ? LOG_LEVEL_DBG : LOG_LEVEL_ERR, /*werr*/0,
 		"Descriptor type: %d, Field ID: %d, mode=%s => grant: %s.",
 		desc_type, field_id,
 		mode == O_RDONLY ? "read" : "read/write",
@@ -1358,7 +1401,7 @@ SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count)
 	}
 
 	if (desc->count == new_count) {
-		LOGH(new_count ? LOG_LEVEL_INFO : LOG_LEVEL_DBG, 0, desc,
+		LOGH(desc, new_count ? LOG_LEVEL_INFO : LOG_LEVEL_DBG, 0,
 			"new descriptor count equals old one, %d.", new_count);
 		return SQL_SUCCESS;
 	}
@@ -1376,7 +1419,6 @@ SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count)
 		free_desc_recs(desc);
 		recs = NULL;
 	} else {
-		/* TODO: change to a list implementation? review@alpha */
 		recs = (esodbc_rec_st *)realloc(desc->recs,
 				sizeof(esodbc_rec_st) * new_count);
 		if (! recs) {
@@ -1447,7 +1489,7 @@ esodbc_desc_st *getdata_set_ard(esodbc_stmt_st *stmt, esodbc_desc_st *gd_ard,
 
 	if (colno < count) { /* can the static recs be used? */
 		/* need to init all records, not only the single one that will be
-		 * bound, since data compat. check will run against all bound recs. */
+		 * bound, since data covert. check will run against all bound recs. */
 		for (i = 0; i < count; i ++) {
 			init_rec(&recs[i], gd_ard);
 		}
@@ -1455,6 +1497,7 @@ esodbc_desc_st *getdata_set_ard(esodbc_stmt_st *stmt, esodbc_desc_st *gd_ard,
 		gd_ard->count = count;
 		gd_ard->recs = recs;
 	}
+	/* else: recs will be alloc'd later when binding the column */
 
 	DBGH(stmt, "GD ARD @0x%p, records allocated %s.", gd_ard,
 		colno < count ? "statically" : "dynamically");
@@ -1504,8 +1547,7 @@ SQLRETURN EsSQLGetDescFieldW(
 	SQLINTEGER intgr;
 	esodbc_rec_st *rec;
 
-	if (! check_access(desc->type, FieldIdentifier,
-			O_RDONLY)) {
+	if (! check_access(desc, FieldIdentifier, O_RDONLY)) {
 		int llev;
 #if 0
 		/*
@@ -1521,7 +1563,7 @@ SQLRETURN EsSQLGetDescFieldW(
 		llev = LOG_LEVEL_WARN;
 		state = SQL_STATE_01000;
 #endif /* 0 */
-		LOGH(llev, 0, desc, "field (%d) access check failed: not defined for "
+		LOGH(desc, llev, 0, "field (%d) access check failed: not defined for "
 			"desciptor (type: %d).", FieldIdentifier, desc->type);
 		RET_HDIAG(desc, state,
 			"field type not defined for descriptor", 0);
@@ -2233,7 +2275,7 @@ SQLRETURN EsSQLSetDescFieldW(
 	SQLULEN ulen;
 	size_t wlen;
 
-	if (! check_access(desc->type, FieldIdentifier, O_RDWR)) {
+	if (! check_access(desc, FieldIdentifier, O_RDWR)) {
 		/* "The SQL_DESC_DATA_PTR field of an IPD is not normally set;
 		 * however, an application can do so to force a consistency check of
 		 * IPD fields."
@@ -2592,53 +2634,5 @@ SQLRETURN EsSQLSetDescFieldW(
 	return SQL_SUCCESS;
 }
 
-
-#if 0
-/*
- * "When the application sets the SQL_DESC_TYPE field, the driver checks that
- * other fields that specify the type are valid and consistent." AND:
- *
- * "A consistency check is performed by the driver automatically whenever an
- * application sets the SQL_DESC_DATA_PTR field of the APD, ARD, or IPD.
- * Whenever this field is set, the driver checks that the value of the
- * SQL_DESC_TYPE field and the values applicable to the SQL_DESC_TYPE field in
- * the same record are valid and consistent.
- *
- * The SQL_DESC_DATA_PTR field of an IPD is not normally set; however, an
- * application can do so to force a consistency check of IPD fields. The value
- * that the SQL_DESC_DATA_PTR field of the IPD is set to is not actually
- * stored and cannot be retrieved by a call to SQLGetDescField or
- * SQLGetDescRec; the setting is made only to force the consistency check. A
- * consistency check cannot be performed on an IRD."
- */
-SQLRETURN EsSQLSetDescRec(
-	SQLHDESC DescriptorHandle,
-	SQLSMALLINT RecNumber,
-	SQLSMALLINT Type,
-	SQLSMALLINT SubType,
-	SQLLEN Length,
-	SQLSMALLINT Precision,
-	SQLSMALLINT Scale,
-	_Inout_updates_bytes_opt_(Length) SQLPOINTER Data,
-	_Inout_opt_ SQLLEN *StringLength,
-	_Inout_opt_ SQLLEN *Indicator)
-{
-	/*
-	 * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/column-wise-binding :
-	 * "When using column-wise binding, an application binds one or two, or in
-	 * some cases three, arrays to each column for which data is to be
-	 * returned. The first array holds the data values, and the second array
-	 * holds length/indicator buffers. Indicators and length values can be
-	 * stored in separate buffers by setting the SQL_DESC_INDICATOR_PTR and
-	 * SQL_DESC_OCTET_LENGTH_PTR descriptor fields to different values; if
-	 * this is done, a third array is bound. Each array contains as many
-	 * elements as there are rows in the rowset."
-	 */
-
-	// TODO: needs to trigger consistency_check
-
-	RET_NOT_IMPLEMENTED;
-}
-#endif //0
 
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */

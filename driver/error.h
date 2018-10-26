@@ -17,7 +17,7 @@ typedef struct {
 
 /* Note: keep in sync with esodbc_errors[] */
 typedef enum {
-	/* non-standard, must be 0/first position (calloc'ing) */
+	/* must be 0/first position (calloc'ing) */
 	/* diagnostic meaning: no diag posted */
 	SQL_STATE_00000 = 0,
 
@@ -443,18 +443,12 @@ typedef struct {
 
 
 void init_diagnostic(esodbc_diag_st *dest);
-SQLRETURN post_diagnostic(esodbc_diag_st *dest, esodbc_state_et state,
-	SQLWCHAR *text, SQLINTEGER code);
-SQLRETURN post_c_diagnostic(esodbc_diag_st *dest, esodbc_state_et state,
-	SQLCHAR *text, SQLINTEGER code);
-/* post state into the diagnostic and return state's return code */
-#define RET_DIAG(_d/*est*/, _s/*tate*/, _t/*ext*/, _c/*ode*/) \
-	return post_diagnostic(_d, _s, _t, _c)
-/* same as above, but take C-strings as messages */
-#define RET_CDIAG(_d/*est*/, _s/*tate*/, _t/*char text*/, _c/*ode*/) \
-	RET_DIAG(_d, _s, MK_WPTR(_t), _c)
+SQLRETURN post_diagnostic(SQLHANDLE hnd, esodbc_state_et state,
+	const SQLWCHAR *text, SQLINTEGER code);
+SQLRETURN post_c_diagnostic(SQLHANDLE hnd, esodbc_state_et state,
+	const SQLCHAR *text, SQLINTEGER code);
 
-SQLRETURN post_row_diagnostic(esodbc_diag_st *dest, esodbc_state_et state,
+SQLRETURN post_row_diagnostic(SQLHANDLE hnd, esodbc_state_et state,
 	SQLWCHAR *text, SQLINTEGER code, SQLLEN nrow, SQLINTEGER ncol);
 
 #endif /* __ERROR_H__ */

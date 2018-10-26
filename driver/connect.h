@@ -9,11 +9,15 @@
 
 #include "error.h"
 #include "handles.h"
+#include "dsn.h"
 
 BOOL connect_init();
 void connect_cleanup();
+
 SQLRETURN post_json(esodbc_stmt_st *stmt, const cstr_st *u8body);
 void cleanup_dbc(esodbc_dbc_st *dbc);
+SQLRETURN do_connect(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs);
+SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs);
 
 
 SQLRETURN EsSQLDriverConnectW
@@ -27,7 +31,16 @@ SQLRETURN EsSQLDriverConnectW
 	_Out_opt_ SQLSMALLINT        *pcchConnStrOut,
 	SQLUSMALLINT        fDriverCompletion
 );
-
+SQLRETURN EsSQLConnectW
+(
+	SQLHDBC             hdbc,
+	_In_reads_(cchDSN) SQLWCHAR *szDSN,
+	SQLSMALLINT         cchDSN,
+	_In_reads_(cchUID) SQLWCHAR *szUID,
+	SQLSMALLINT         cchUID,
+	_In_reads_(cchAuthStr) SQLWCHAR *szPWD,
+	SQLSMALLINT         cchPWD
+);
 SQLRETURN EsSQLDisconnect(SQLHDBC ConnectionHandle);
 
 SQLRETURN EsSQLSetConnectAttrW(

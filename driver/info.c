@@ -19,15 +19,16 @@
 #define ORIG_CLASS_ODBC	"ODBC 3.0"
 
 #if defined(_WIN32) || defined (WIN32)
-/* DRV_NAME is a define */
+/* DRV_NAME defined in CMakeLists.txt */
 #define DRIVER_NAME	STR(DRV_NAME) ".dll"
 #else /* win32 */
 #endif /* win32 */
 
 
 
-/* List of supported functions in the driver */
-// FIXME: review at alpha what's implemented
+/* List of supported functions in the driver.
+ * Advertize them as being all implemented and fail at call time, to prevent
+ * an early failure in the client application. */
 static SQLUSMALLINT esodbc_functions[] = {
 	SQL_API_SQLALLOCHANDLE,
 	SQL_API_SQLBINDCOL,
@@ -75,7 +76,7 @@ static SQLUSMALLINT esodbc_functions[] = {
 	SQL_API_SQLSTATISTICS,
 	SQL_API_SQLTABLES,
 	SQL_API_SQLBINDPARAMETER,
-	SQL_API_SQLBROWSECONNECT,
+	/* SQL_API_SQLBROWSECONNECT, */
 	/* SQL_API_SQLBULKOPERATIONS, */
 	SQL_API_SQLCOLUMNPRIVILEGES,
 	SQL_API_SQLDESCRIBEPARAM,
@@ -93,7 +94,6 @@ static SQLUSMALLINT esodbc_functions[] = {
 
 #define ESODBC_FUNC_SIZE \
 	(sizeof(esodbc_functions)/sizeof(esodbc_functions[0]))
-// TODO: are these def'd in sql.h??
 #define SQL_FUNC_SET(pfExists, uwAPI) \
 	*(((UWORD*) (pfExists)) + ((uwAPI) >> 4)) |= (1 << ((uwAPI) & 0x000F))
 #define SQL_API_ODBC2_ALL_FUNCTIONS_SIZE	100
@@ -196,9 +196,6 @@ static SQLRETURN getinfo_driver(
 		case SQL_FILE_USAGE:
 			/* JDBC[0]: usesLocalFilePerTable() */
 			DBGH(dbc, "requested: file usage: table.");
-			/* TODO: JDBC indicates true for file per table; howerver, this
-			 * can be apparently used to ask GUI user to ask 'file' or
-			 * 'table'; elastic uses index => files? */
 			*(SQLUSMALLINT *)InfoValue = SQL_FILE_TABLE;
 			return SQL_SUCCESS;
 		case SQL_GETDATA_EXTENSIONS:
@@ -347,7 +344,6 @@ static SQLRETURN getinfo_data_source(
 			DBGH(dbc, "requested: accessible tables (`Y`).");
 			return write_wstr(dbc, InfoValue, &MK_WSTR("Y"),
 					BufferLength, StringLengthPtr);
-		// FIXME: review along with cursor review
 		case SQL_BOOKMARK_PERSISTENCE:
 			DBGH(dbc, "requested bookmark persistence (none).");
 			*(SQLUINTEGER *)InfoValue = 0; /* no support */
@@ -357,7 +353,6 @@ static SQLRETURN getinfo_data_source(
 			DBGH(dbc, "requested: catalog term (`%s`).", ESODBC_CATALOG_TERM);
 			return write_wstr(dbc, InfoValue, &MK_WSTR(ESODBC_CATALOG_TERM),
 					BufferLength, StringLengthPtr);
-		// FIXME: review at alpha
 		case SQL_COLLATION_SEQ:
 			DBGH(dbc, "requested: collation seq (`UTF8`).");
 			return write_wstr(dbc, InfoValue, &MK_WSTR("UTF8"),
@@ -869,7 +864,7 @@ SQLRETURN EsSQLGetInfoW(
 }
 
 
-/* TODO: see error.h: esodbc_errors definition note (2.x apps support) */
+/* TODO: see error.h: esodbc_errors definition note on 2.x apps support */
 /* Note: with SQL_DIAG_SQLSTATE DM provides a NULL StringLengthPtr */
 SQLRETURN EsSQLGetDiagFieldW(
 	SQLSMALLINT HandleType,
@@ -885,16 +880,14 @@ SQLRETURN EsSQLGetDiagFieldW(
 	esodbc_env_st dummy;
 	SQLSMALLINT used;
 	size_t len;
+	void *srcptr;
 	wstr_st *wstrp, wstr;
 	SQLRETURN ret;
 
 	if (RecNumber <= 0) {
 		ERRH(Handle, "record number must be >=1; received: %d.", RecNumber);
 		return SQL_ERROR;
-	}
-	if (1 < RecNumber) {
-		/* XXX: does it make sense to have error FIFOs? see: EsSQLGetDiagRec */
-		// WARN("no error lists supported (yet).");
+	} else if (1 < RecNumber) {
 		return SQL_NO_DATA;
 	}
 
@@ -902,41 +895,37 @@ SQLRETURN EsSQLGetDiagFieldW(
 		ERR("null handle provided.");
 		return SQL_INVALID_HANDLE;
 	}
-
 	diag = &HDRH(Handle)->diag;
 	/* GetDiagField can't set diagnostics itself, so use a dummy */
 	*HDRH(&dummy) = *HDRH(Handle); /* need a valid hhdr struct */
 
 	/*INDENT-OFF*/
-	switch(DiagIdentifier) {
+	switch (DiagIdentifier) {
 		/* Header Fields */
 		case SQL_DIAG_NUMBER:
-			if (StringLengthPtr) {
-				*StringLengthPtr = sizeof(SQLINTEGER);
+			if (! DiagInfoPtr) {
+				ERRH(Handle, "NULL DiagInfo with SQL_DIAG_NUMBER");
+				return SQL_ERROR;
 			}
-			if (DiagInfoPtr) {
-				// FIXME: check HandleType's record count (1 or 0)
-				*(SQLINTEGER *)DiagInfoPtr = 0;
-				DBGH(Handle, "available diagnostics: %d.",
-						*(SQLINTEGER *)DiagInfoPtr);
-			} else {
-				DBGH(Handle, "no DiagInfo buffer provided - returning ");
-				return SQL_SUCCESS_WITH_INFO;
-			}
-			FIXME; // FIXME
-			break;
+			*(SQLINTEGER *)DiagInfoPtr =
+				(diag->state != SQL_STATE_00000) ? 1 : 0;
+			DBGH(Handle, "available diagnostics count: %ld.",
+					*(SQLINTEGER *)DiagInfoPtr);
+			return SQL_SUCCESS;
+
 		case SQL_DIAG_CURSOR_ROW_COUNT:
 		case SQL_DIAG_DYNAMIC_FUNCTION:
 		case SQL_DIAG_DYNAMIC_FUNCTION_CODE:
 		case SQL_DIAG_ROW_COUNT:
+			/* should be handled by DM */
 			if (HandleType != SQL_HANDLE_STMT) {
 				ERRH(Handle, "DiagIdentifier %d called with non-statement "
 						"handle type %d.", DiagIdentifier, HandleType);
 				return SQL_ERROR;
 			}
-			// FIXME
-			FIXME;
-			//break;
+			ERRH(Handle, "DiagIdentifier %hd is not supported.");
+			return SQL_ERROR;
+
 		/* case SQL_DIAG_RETURNCODE: break; -- DM only */
 
 		/* Record Fields */
@@ -1035,16 +1024,44 @@ SQLRETURN EsSQLGetDiagFieldW(
 			dbc->hdr.diag = bak;
 			return ret;
 
-		case SQL_DIAG_MESSAGE_TEXT: //break;
-		case SQL_DIAG_NATIVE: //break;
-		case SQL_DIAG_COLUMN_NUMBER: //break;
-		case SQL_DIAG_ROW_NUMBER: //break;
-			FIXME; // FIXME
+		case SQL_DIAG_MESSAGE_TEXT:
+			wstr.str = diag->text;
+			wstr.cnt = diag->text_len;
+			return write_wstr(Handle, DiagInfoPtr, &wstr,
+					BufferLength * sizeof(*diag->text), StringLengthPtr);
+
+		do {
+		case SQL_DIAG_NATIVE:
+			len = sizeof(diag->native_code);
+			srcptr = &diag->native_code;
+			break;
+		case SQL_DIAG_COLUMN_NUMBER:
+			len = sizeof(diag->column_number);
+			srcptr = &diag->column_number;
+			break;
+		case SQL_DIAG_ROW_NUMBER:
+			len = sizeof(diag->row_number);
+			srcptr = &diag->row_number;
+			break;
+		} while (0);
+			if (BufferLength != SQL_IS_POINTER) {
+				WARNH(Handle, "BufferLength param not indicating a ptr type.");
+			}
+			if (! DiagInfoPtr) {
+				ERRH(Handle, "integer diagnostic field %hd asked for, but "
+						"NULL destination provided.");
+				RET_HDIAGS(Handle, SQL_STATE_HY009);
+			} else {
+				memcpy(DiagInfoPtr, srcptr, len);
+			}
+			return SQL_SUCCESS;
 
 		case SQL_DIAG_SQLSTATE:
 			if (diag->state == SQL_STATE_00000) {
 				DBGH(Handle, "no diagnostic available for handle type %d.",
 						HandleType);
+				/* "The function also returns SQL_NO_DATA for any positive
+				 * RecNumber if there are no diagnostic records for Handle" */
 				return SQL_NO_DATA;
 			}
 			wstr.str = esodbc_errors[diag->state].code;
@@ -1079,7 +1096,7 @@ SQLRETURN EsSQLGetDiagFieldW(
  * """
  * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/implementing-sqlgetdiagrec-and-sqlgetdiagfield :
  */
-/* TODO: see error.h: esodbc_errors definition note (2.x apps support) */
+/* TODO: see error.h: esodbc_errors definition note on 2.x apps support */
 SQLRETURN EsSQLGetDiagRecW
 (
 	SQLSMALLINT HandleType,
@@ -1143,7 +1160,7 @@ SQLRETURN EsSQLGetDiagRecW
 	}
 
 	wstr.str = diag->text;
-	wstr.cnt = wcslen(wstr.str);
+	wstr.cnt = diag->text_len;
 	*HDRH(&dummy) = *HDRH(Handle); /* need a valid hhdr struct */
 	ret = write_wstr(&dummy, MessageText, &wstr,
 			BufferLength * sizeof(*MessageText), &used);

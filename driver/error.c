@@ -16,11 +16,11 @@ void init_diagnostic(esodbc_diag_st *dest)
 	dest->column_number = SQL_NO_COLUMN_NUMBER;
 }
 
-/* TODO: must the diagnostic be "cleared" after a succesful invokation?? */
-SQLRETURN post_diagnostic(esodbc_diag_st *dest, esodbc_state_et state,
-	SQLWCHAR *text, SQLINTEGER code)
+SQLRETURN post_diagnostic(SQLHANDLE hnd, esodbc_state_et state,
+	const SQLWCHAR *text, SQLINTEGER code)
 {
 	size_t pos, tcnt, ebufsz;
+	esodbc_diag_st *dest = &HDRH(hnd)->diag;
 
 	ebufsz = sizeof(dest->text)/sizeof(dest->text[0]);
 
@@ -46,16 +46,16 @@ SQLRETURN post_diagnostic(esodbc_diag_st *dest, esodbc_state_et state,
 		wcsncpy(dest->text + pos, text, tcnt + /* 0-term */1);
 		dest->text_len = (SQLUSMALLINT)(pos + tcnt);
 	}
-	DBG("diagnostic message: `" LWPD "` [%d], native code: %d.",
+	DBGH(hnd, "diagnostic message: `" LWPD "` [%d], native code: %d.",
 		dest->text, dest->text_len, dest->native_code);
 
 	RET_STATE(state);
 }
 
-SQLRETURN post_c_diagnostic(esodbc_diag_st *dest, esodbc_state_et state,
-	SQLCHAR *text, SQLINTEGER code)
+SQLRETURN post_c_diagnostic(SQLHANDLE hnd, esodbc_state_et state,
+	const SQLCHAR *text, SQLINTEGER code)
 {
-	SQLWCHAR wtext[sizeof(dest->text)/sizeof(*dest->text)], *ptr;
+	SQLWCHAR wtext[SQL_MAX_MESSAGE_LENGTH], *ptr;
 	if (text) {
 		if (ascii_c2w(text, wtext, sizeof(wtext)/sizeof(*wtext)) < 0) {
 			ERR("failed to convert diagnostic message `%s`.", text);
@@ -65,13 +65,14 @@ SQLRETURN post_c_diagnostic(esodbc_diag_st *dest, esodbc_state_et state,
 	} else {
 		ptr = NULL;
 	}
-	return post_diagnostic(dest, state, ptr, code);
+	return post_diagnostic(hnd, state, ptr, code);
 }
 
 
-SQLRETURN post_row_diagnostic(esodbc_diag_st *dest, esodbc_state_et state,
+SQLRETURN post_row_diagnostic(SQLHANDLE hnd, esodbc_state_et state,
 	SQLWCHAR *text, SQLINTEGER code, SQLLEN nrow, SQLINTEGER ncol)
 {
+	esodbc_diag_st *dest = &HDRH(hnd)->diag;
 	dest->row_number = nrow;
 	dest->column_number = ncol;
 	return post_diagnostic(dest, state, text, code);

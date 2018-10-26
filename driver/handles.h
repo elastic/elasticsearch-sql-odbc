@@ -12,6 +12,7 @@
 
 #include "error.h"
 #include "defs.h"
+#include "log.h"
 
 /* forward declarations */
 struct struct_env;
@@ -37,6 +38,9 @@ typedef struct struct_hheader { /* handle header */
 		struct struct_stmt *stmt;
 		void *parent;
 	};
+	/* logging helpers */
+	wstr_st typew; /* ENV/DBC/STMT/DESC as w-string */
+	esodbc_filelog_st *log; /* logger: owned by a DBC; ENV uses global */
 } esodbc_hhdr_st;
 
 /*
@@ -51,7 +55,6 @@ typedef struct struct_hheader { /* handle header */
 typedef struct struct_env {
 	esodbc_hhdr_st hdr;
 	SQLUINTEGER version; /* versions defined as UL (see SQL_OV_ODBC3) */
-	// TODO?: connections
 } esodbc_env_st;
 
 /* meta data types (same for both SQL_C_<t> and SQL_<t> types) */
@@ -146,7 +149,7 @@ typedef struct struct_dbc {
 		char *str; /* as string */
 		char slen; /* string's length (w/o terminator) */
 	} fetch;
-	BOOL pack_json; /* should JSON be used in REST bodies? (vs. CBOR) *///TODO
+	BOOL pack_json; /* should JSON be used in REST bodies? (vs. CBOR) */
 
 	esodbc_estype_st *es_types; /* array with ES types */
 	SQLULEN no_types; /* number of types in array */
@@ -262,8 +265,7 @@ typedef struct struct_desc {
 	SQLULEN			*rows_processed_ptr;
 	/* /header fields */
 
-	/* array of records of .count cardinality
-	 * TODO: list? binding occurs seldomly, compared to execution, tho. */
+	/* array of records of .count cardinality */
 	esodbc_rec_st *recs;
 } esodbc_desc_st;
 
@@ -358,12 +360,13 @@ SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count);
 esodbc_rec_st *get_record(esodbc_desc_st *desc, SQLSMALLINT rec_no, BOOL grow);
 void dump_record(esodbc_rec_st *rec);
 
+void init_dbc(esodbc_dbc_st *dbc, SQLHANDLE InputHandle);
+
 esodbc_desc_st *getdata_set_ard(esodbc_stmt_st *stmt, esodbc_desc_st *gd_ard,
 	SQLUSMALLINT colno, esodbc_rec_st *recs, SQLUSMALLINT count);
 void getdata_reset_ard(esodbc_stmt_st *stmt, esodbc_desc_st *ard,
 	SQLUSMALLINT colno, esodbc_rec_st *recs, SQLUSMALLINT count);
 
-/* TODO: move to some utils.h */
 void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type,
 	SQLSMALLINT *code);
 esodbc_metatype_et concise_to_meta(SQLSMALLINT concise_type,
@@ -465,17 +468,17 @@ SQLRETURN EsSQLSetDescRec(
 #define HND_UNLOCK(_h)	ESODBC_MUX_UNLOCK(&HDRH(_h)->mutex)
 
 
-/* wraper of RET_CDIAG, compatible with any defined handle */
+/* post state into the diagnostic and return state's return code */
 #define RET_HDIAG(_hp/*handle ptr*/, _s/*tate*/, _t/*char text*/, _c/*ode*/) \
-	RET_CDIAG(&(_hp)->hdr.diag, _s, _t, _c)
+	return post_diagnostic(_hp, _s, MK_WPTR(_t), _c)
 /* similar to RET_HDIAG, but only post the state */
 #define RET_HDIAGS(_hp/*handle ptr*/, _s/*tate*/) \
-	RET_DIAG(&(_hp)->hdr.diag, _s, NULL, 0)
+	return post_diagnostic(_hp, _s, NULL, 0)
 /* copy the diagnostics from one handle to the other */
 #define HDIAG_COPY(_s, _d)	(_d)->hdr.diag = (_s)->hdr.diag
 /* set a diagnostic to a(ny) handle */
 #define SET_HDIAG(_hp/*handle ptr*/, _s/*tate*/, _t/*char text*/, _c/*ode*/) \
-	post_diagnostic(&(_hp)->hdr.diag, _s, MK_WPTR(_t), _c)
+	post_diagnostic(_hp, _s, MK_WPTR(_t), _c)
 
 /* return the code associated with the given state (and debug-log) */
 #define RET_STATE(_s)	\
@@ -493,6 +496,27 @@ SQLRETURN EsSQLSetDescRec(
 	(rec)->data_ptr != NULL || \
 	(rec)->indicator_ptr != NULL || \
 	(rec)->octet_length_ptr != NULL)
+
+/*
+ * Logging with handle
+ */
+
+#define LOGH(hnd, lvl, werrn, fmt, ...) \
+	_LOG(HDRH(hnd)->log, lvl, werrn, "[" LWPDL "@0x%p] " fmt, \
+		LWSTR(&HDRH(hnd)->typew), hnd, __VA_ARGS__)
+
+#define ERRNH(hnd, fmt, ...)	LOGH(hnd, LOG_LEVEL_ERR, 1, fmt, __VA_ARGS__)
+#define ERRH(hnd, fmt, ...)		LOGH(hnd, LOG_LEVEL_ERR, 0, fmt, __VA_ARGS__)
+#define WARNH(hnd, fmt, ...)	LOGH(hnd, LOG_LEVEL_WARN, 0, fmt, __VA_ARGS__)
+#define INFOH(hnd, fmt, ...)	LOGH(hnd, LOG_LEVEL_INFO, 0, fmt, __VA_ARGS__)
+#define DBGH(hnd, fmt, ...)		LOGH(hnd, LOG_LEVEL_DBG, 0, fmt, __VA_ARGS__)
+
+#define BUGH(hnd, fmt, ...) \
+	do { \
+		ERRH(hnd, "[BUG] " fmt, __VA_ARGS__); \
+		assert(0); \
+	} while (0)
+
 
 
 #endif /* __HANDLES_H__ */

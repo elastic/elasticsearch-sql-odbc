@@ -79,8 +79,8 @@ typedef struct cstr {
  * Returns negative if conversion fails, OR number of converted wchars,
  * including/plus the 0-term.
  */
-int TEST_API ascii_w2c(SQLWCHAR *src, SQLCHAR *dst, size_t chars);
-int TEST_API ascii_c2w(SQLCHAR *src, SQLWCHAR *dst, size_t chars);
+int TEST_API ascii_w2c(const SQLWCHAR *src, SQLCHAR *dst, size_t chars);
+int TEST_API ascii_c2w(const SQLCHAR *src, SQLWCHAR *dst, size_t chars);
 /*
  * Compare two SQLWCHAR object, case INsensitive.
  */
@@ -114,10 +114,9 @@ typedef struct wstr {
 #ifndef __cplusplus /* no MSVC support for compound literals with /TP */
 #	define MK_WSTR(_s)	((wstr_st){.str = MK_WPTR(_s), .cnt = sizeof(_s) - 1})
 #	define MK_CSTR(_s)	((cstr_st){.str = _s, .cnt = sizeof(_s) - 1})
-#else /* !__cplusplus */
-#	define WSTR_INIT(_s)	{MK_WPTR(_s), sizeof(_s) - 1}
-#	define CSTR_INIT(_s)	{(SQLCHAR *)_s, sizeof(_s) - 1}
 #endif /* !__cplusplus */
+#define WSTR_INIT(_s)	{MK_WPTR(_s), sizeof(_s) - 1}
+#define CSTR_INIT(_s)	{(SQLCHAR *)_s, sizeof(_s) - 1}
 /*
  * Test equality of two wstr_st objects.
  */
@@ -194,7 +193,7 @@ typedef SRWLOCK esodbc_mutex_lt;
 
 #else /* _WIN32 */
 
-#error "unsupported platform" /* TODO */
+#error "unsupported platform"
 /* "[R]eturns the number of bytes written into the multibyte output
  * string, excluding the terminating NULL (if any)".  Copies until \0 is
  * met in wstr or buffer runs out.  If \0 is met, it's copied, but not
@@ -254,7 +253,6 @@ SQLRETURN write_wstr(SQLHANDLE hnd, SQLWCHAR *dest, wstr_st *src,
  * (returned pointer or dst->str).
  * Returns NULL on error.
  */
-//cstr_st* TEST_API wstr_to_utf8(wstr_st *src, cstr_st *dst);
 cstr_st TEST_API *wstr_to_utf8(wstr_st *src, cstr_st *dst);
 
 /*
@@ -266,7 +264,6 @@ cstr_st TEST_API *wstr_to_utf8(wstr_st *src, cstr_st *dst);
  * "WPrintF Wide/Char Pointer _ DESCriptor"
  */
 #ifdef _WIN32
-/* funny M$ 'inverted' logic */
 /* wprintf wide_t pointer descriptor */
 #	define WPFWP_DESC		L"%s"
 #	define WPFWP_LDESC		L"%.*s"
@@ -293,30 +290,6 @@ cstr_st TEST_API *wstr_to_utf8(wstr_st *src, cstr_st *dst);
 #	define PFCP_DESC		"%s"
 #	define PFCP_LDESC		"%.*s"
 #endif /* _WIN32 */
-
-
-/* SNTPRINTF: function to printf into a string */
-#ifdef UNICODE
-#define SNTPRINTF	_snwprintf
-#define TSTRCHR		wcschr
-#else /* UNICODE */
-#define SNTPRINTF	snprintf
-#define TSTRCHR		strchr
-#endif /* UNICODE */
-
-
-/*
- * Descriptors to be used with STPRINTF for TCHAR pointer type.
- * "SNTPRINTF Tchar Pointer Descriptor [with Length]"
- */
-#ifdef UNICODE
-#define STPD	WPFWP_DESC
-#define STPDL	WPFWP_LDESC
-#else /* UNICODE */
-#define STPD	PFCP_DESC
-#define STPDL	PFCP_LDESC
-#endif /* UNICODE */
-
 
 
 #endif /* __UTIL_H__ */

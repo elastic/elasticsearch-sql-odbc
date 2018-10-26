@@ -17,16 +17,19 @@
 #define ESODBC_LOG_FILE_PREFIX		"esodbc"
 #define ESODBC_LOG_FILE_SUFFIX		".log"
 /* Environment variable name holding the log directory name */
-#define ESODBC_ENV_VAR_LOG_DIR		"ESODBC_LOG_DIR"
+#define ESODBC_LOG_DIR_ENV_VAR		"ESODBC_LOG_DIR"
+/* number of consecutive logging failures that will disable logging */
+#define ESODBC_LOG_MAX_RETRY		5
 
-// FIXME: review@alpha
-/* TODO: should there be a max? */
-#define ESODBC_MAX_ROW_ARRAY_SIZE	128
+#define ESODBC_MAX_ROW_ARRAY_SIZE	USHRT_MAX
+/* max number of ES/SQL types supported */
+#define ESODBC_MAX_NO_TYPES			64
 #define ESODBC_DEF_ARRAY_SIZE		1
 /* max cols or args to bind; needs to stay <= SHRT_MAX */
-#define ESODBC_MAX_DESC_COUNT		128
-/* number of static records for SQLGetData() */
-#define ESODBC_GD_DESC_COUNT		ESODBC_MAX_DESC_COUNT
+#define ESODBC_MAX_DESC_COUNT		SHRT_MAX
+/* number of static records for SQLGetData(): if using SQLGetData() with more
+ * columns than this def, recs will be allocated dynamically. */
+#define ESODBC_GD_DESC_COUNT		128
 /* values for SQL_ATTR_MAX_LENGTH statement attribute */
 #define ESODBC_UP_MAX_LENGTH		0 // USHORT_MAX
 #define ESODBC_LO_MAX_LENGTH		0
@@ -45,15 +48,13 @@
 #define ESODBC_QUOTE_CHAR			"\""
 #define ESODBC_PATTERN_ESCAPE		"\\"
 #define ESODBC_CATALOG_SEPARATOR	":"
-#define ESODBC_CATALOG_TERM			"clusterName"
-#define ESODBC_TABLE_TERM			"type" // TODO: or table?
+#define ESODBC_CATALOG_TERM			"catalog"
+#define ESODBC_TABLE_TERM			"table"
 #define ESODBC_SCHEMA_TERM			"schema"
 #define ESODBC_PARAM_MARKER			"?"
 
-/* maximum identifer length */
-/* TODO: review@alpha */
-/* match 'keyword' ES type length */
-#define ESODBC_MAX_IDENTIFIER_LEN			256
+/* maximum identifer length: match ES/Lucene byte max */
+#define ESODBC_MAX_IDENTIFIER_LEN		SHRT_MAX
 /* "the relationship between the columns in the GROUP BY clause and the
  * nonaggregated columns in the select list" */
 #define ESODBC_GROUP_BY						SQL_GB_NO_RELATION
@@ -119,8 +120,8 @@
 /* driver version ex. 7.0.0(b0a34b4,u,d) */
 #define ESODBC_DRIVER_VER	STR(DRV_VERSION) \
 	"(" STR(DRV_SRC_VER) "," STR(DRV_ENCODING) "," STR(DRV_BUILD_TYPE) ")"
-/* TODO: learn it from ES */
-#define ESODBC_ELASTICSEARCH_VER	"7.x"
+/* TODO: POST / (together with cluster "sniffing") */
+#define ESODBC_ELASTICSEARCH_VER	"7.0.0"
 #define ESODBC_ELASTICSEARCH_NAME	"Elasticsearch"
 
 /*
@@ -144,8 +145,11 @@
 #define ESODBC_DEF_FOLLOW			"yes"
 /* packing of REST bodies (JSON or CBOR) */
 #define ESODBC_DEF_PACKING			"JSON"
+/* default tracing activation */
+#define ESODBC_DEF_TRACE_ENABLED	"0"
 /* default tracing level */
 #define ESODBC_DEF_TRACE_LEVEL		"WARN"
+#define ESODBC_PWD_VAL_SUBST		"<original substituted>"
 
 /*
  *
@@ -172,8 +176,7 @@
 #define ESODBC_CATALOG_USAGE					(0 | \
 	SQL_CU_DML_STATEMENTS | SQL_CU_PROCEDURE_INVOCATION)
 /* what's allowed in an identifier name (eg. table, column, index) except
- * [a-zA-Z0-9_], accepted in a delimited specification -> all printable ASCII
- * (assuming ASCII is the limitation?? TODO ), 0x20-0x7E. */
+ * [a-zA-Z0-9_], accepted in a delimited specification. */
 #define ESODBC_SPECIAL_CHARACTERS				" !\"#$%&'()*+,-./" /*[0-9]*/ \
 	";<=>?@" /*[A-Z]*/ "[\\]^" /*[_]*/ "`" /*[a-z]*/ "{|}~"
 /* SQLFetchScroll() and SQLSetPos() capabilities.
@@ -204,37 +207,50 @@
 
 /*
  * String functions support:
- * - supported: none.
- * - not supported: ASCII, BIT_LENGTH, CHAR, CHAR_LENGTH, CHARACTER_LENGTH,
- *   CONCAT, DIFFERENCE, INSERT, LCASE, LEFT, LENGTH, LOCATE, LTRIM,
- *   OCTET_LENGTH, POSITION, REPEAT, REPLACE, RIGHT, RTRIM, SOUNDEX, SPACE,
- *   SUBSTRING, UCASE.
+ * - supported: ASCII, BIT_LENGTH, CHAR, CHAR_LENGTH, CHARACTER_LENGTH,
+ *   CONCAT, INSERT, LCASE, LEFT, LENGTH, LOCATE, LTRIM, OCTET_LENGTH,
+ *   POSITION, REPEAT, REPLACE, RIGHT, RTRIM, SPACE, SUBSTRING, UCASE.
+ * - not supported: DIFFERENCE, SOUNDEX.
  */
-#define ESODBC_STRING_FUNCTIONS					0LU
+#define ESODBC_STRING_FUNCTIONS						(0LU | \
+	SQL_FN_STR_ASCII | SQL_FN_STR_BIT_LENGTH | SQL_FN_STR_CHAR | \
+	SQL_FN_STR_CHAR_LENGTH | SQL_FN_STR_CHARACTER_LENGTH | \
+	SQL_FN_STR_CONCAT | SQL_FN_STR_INSERT | SQL_FN_STR_LCASE | \
+	SQL_FN_STR_LEFT | SQL_FN_STR_LENGTH | SQL_FN_STR_LOCATE | \
+	SQL_FN_STR_LTRIM | SQL_FN_STR_OCTET_LENGTH | SQL_FN_STR_POSITION | \
+	SQL_FN_STR_REPEAT | SQL_FN_STR_REPLACE | SQL_FN_STR_RIGHT | \
+	SQL_FN_STR_RTRIM | SQL_FN_STR_SPACE | SQL_FN_STR_SUBSTRING | \
+	SQL_FN_STR_UCASE)
 /*
  * Numeric functions support:
- * - supported: ABS, ACOS, ASIN, ATAN, CEIL, COS, DEGREES, EXP, FLOOR, LOG,
- *   LOG10, PI, RADIANS, ROUND, SIN, SQRT, TAN;
- * - not supported: ATAN2, COT, MOD, POWER, RAND, SIGN, TRUNCATE.
- * Note: CEIL supported, CEILING not.
+ * - supported: ABS, ACOS, ASIN, ATAN, ATAN2, CEIL, COS, COT, DEGREES, EXP,
+ *   FLOOR, LOG, LOG10, MOD, PI, POWER, RADIANS, RAND, ROUND, SIGN, SIN, SQRT,
+ *   TAN, TRUNCATE;
+ * - not supported: none.
  */
-#define ESODBC_NUMERIC_FUNCTIONS				(0 | \
+#define ESODBC_NUMERIC_FUNCTIONS				(0LU | \
 	SQL_FN_NUM_ABS | SQL_FN_NUM_ACOS | SQL_FN_NUM_ASIN | SQL_FN_NUM_ATAN |\
-	SQL_FN_NUM_CEILING | SQL_FN_NUM_COS | SQL_FN_NUM_DEGREES | \
-	SQL_FN_NUM_EXP | SQL_FN_NUM_FLOOR | SQL_FN_NUM_LOG | \
-	SQL_FN_NUM_LOG10 | SQL_FN_NUM_PI | SQL_FN_NUM_RADIANS | \
-	SQL_FN_NUM_ROUND | SQL_FN_NUM_SIN | SQL_FN_NUM_SQRT | SQL_FN_NUM_TAN)
+	SQL_FN_NUM_ATAN2 | SQL_FN_NUM_CEILING | SQL_FN_NUM_COS | \
+	SQL_FN_NUM_COT | SQL_FN_NUM_DEGREES | SQL_FN_NUM_EXP | \
+	SQL_FN_NUM_FLOOR | SQL_FN_NUM_LOG | SQL_FN_NUM_LOG10 | \
+	SQL_FN_NUM_MOD | SQL_FN_NUM_PI | SQL_FN_NUM_POWER | \
+	SQL_FN_NUM_RADIANS | SQL_FN_NUM_RAND | SQL_FN_NUM_ROUND | \
+	SQL_FN_NUM_SIGN | SQL_FN_NUM_SIN | SQL_FN_NUM_SQRT | SQL_FN_NUM_TAN | \
+	SQL_FN_NUM_TRUNCATE)
 /*
  * Timedate functions support:
- * - supported: EXTRACT, HOUR, MINUTE, MONTH, SECOND, WEEK, YEAR;
+ * - supported: DAYNAME, DAYOFMONTH, DAYOFWEEK, DAYOFYEAR, EXTRACT, HOUR,
+ *   MINUTE, MONTH, MONTHNAME, QUARTER, SECOND, WEEK, YEAR;
  * - not supported: CURRENT_DATE, CURRENT_TIME, CURRENT_TIMESTAMP, CURDATE,
- *   CURTIME, DAYNAME, MONTHNAME, NOW, QUARTER, TIMESTAMPADD, TIMESTAMPDIFF.
- * Wrong `_` name?: DAYOFMONTH, DAYOFWEEK, DAYOFYEAR (mysql, db2, oracle)
+ *   CURTIME, NOW, TIMESTAMPADD, TIMESTAMPDIFF.
  */
-#define ESODBC_TIMEDATE_FUNCTIONS				(0 | \
-	SQL_FN_TD_EXTRACT | SQL_FN_TD_HOUR | SQL_FN_TD_MINUTE | \
-	SQL_FN_TD_MONTH | SQL_FN_TD_SECOND | SQL_FN_TD_WEEK | SQL_FN_TD_YEAR)
-//SQL_FN_TD_DAYOFMONTH | SQL_FN_TD_DAYOFWEEK | SQL_FN_TD_DAYOFYEAR
+#define ESODBC_TIMEDATE_FUNCTIONS				(0LU | \
+	SQL_FN_TD_DAYNAME | SQL_FN_TD_DAYOFMONTH | SQL_FN_TD_DAYOFWEEK | \
+	SQL_FN_TD_DAYOFYEAR | SQL_FN_TD_EXTRACT | SQL_FN_TD_HOUR | \
+	SQL_FN_TD_MINUTE | SQL_FN_TD_MONTH | SQL_FN_TD_MONTHNAME | \
+	SQL_FN_TD_QUARTER | SQL_FN_TD_SECOND | SQL_FN_TD_WEEK | \
+	SQL_FN_TD_YEAR)
+
 /*
  * TIMESTAMPDIFF timestamp intervals:
  * - supported: none.
