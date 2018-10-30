@@ -48,7 +48,7 @@ module Builder =
 
             let sign () =
                 let signToolExe = ToolsDir @@ "signtool/signtool.exe"
-                let args = ["sign"; "/f"; certificate; "/p"; password; "/t"; timestampServer; "/d"; "ODBC Driver"; "/v"; file] |> String.concat " "
+                let args = ["sign"; "/f"; certificate; "/p"; password; "/t"; timestampServer; "/d"; "Elasticsearch ODBC Driver"; "/v"; file] |> String.concat " "
                 let redactedArgs = args.Replace(password, "<redacted>")
 
                 use proc = new Process()

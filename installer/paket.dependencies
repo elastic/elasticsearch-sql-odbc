@@ -10,4 +10,4 @@ group build
     nuget FSharp.Data
 	nuget FSharp.Text.RegexProvider
     nuget FSharp.Configuration
-	nuget DotNetZip
+    nuget DotNetZip
