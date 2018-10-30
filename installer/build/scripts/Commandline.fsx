@@ -41,7 +41,7 @@ Target:
   - when CertFile and PasswordFile are specified, these will be used for signing otherwise the values in ELASTIC_CERT_FILE
     and ELASTIC_CERT_PASSWORD environment variables will be used
 
-  Example: build.bat release <version> C:/path_to_cert_file C:/path_to_password_file
+  Example: build.bat release C:/path_to_cert_file C:/path_to_password_file
 
 * help or ?
   - show this usage summary
