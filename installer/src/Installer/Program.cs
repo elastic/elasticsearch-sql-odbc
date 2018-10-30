@@ -9,10 +9,19 @@ namespace ODBCInstaller
     partial class Program
     {
         static void Main(string[] args)
-		{
+		{          
+			// Get the input files
+			var fullVersionString = args[0];
+			var driverBuildsDir = args[1];
+			var zipFilepath = args[2];
+			var zipDirectory = System.IO.Path.GetFileNameWithoutExtension(zipFilepath);
+			var driverInputFilesPath = System.IO.Path.Combine(driverBuildsDir, zipDirectory);
+			var driverFileInfo = GetDriverFileInfo(driverInputFilesPath);
+			var driverFilePath = System.IO.Path.Combine(driverInputFilesPath, driverFileInfo.FileName);
+
 			// Remove the platform suffix
 			const string platformSuffix = "-windows-x86_64";
-			var releaseString = args[0];
+			var releaseString = fullVersionString;
 			if (string.IsNullOrEmpty(releaseString) == false &&
 				releaseString.EndsWith(platformSuffix))
 			{
@@ -36,19 +45,11 @@ namespace ODBCInstaller
 				var versionSplit = releaseString.Split('-');
 				if (versionSplit.Length > 2)
 				{
-					throw new ArgumentException("Unexpected version string: " + args[0]);
+					throw new ArgumentException("Unexpected version string: " + fullVersionString);
 				}
 
 				preRelease = "-" + versionSplit[1];
 			}
-
-			// Get the input files
-			var driverBuildsDir = args[1];
-			var zipFilepath = args[2];
-			var zipDirectory = new System.IO.FileInfo(zipFilepath).Name.Replace(".zip", string.Empty);
-			var driverInputFilesPath = System.IO.Path.Combine(driverBuildsDir, zipDirectory);
-			var driverFileInfo = GetDriverFileInfo(driverInputFilesPath);
-            var driverFilePath = System.IO.Path.Combine(driverInputFilesPath, driverFileInfo.FileName);
 
 			// Append any prerelease flags onto the version string
 			var msiVersionString = $"{driverFileInfo.ProductVersion}{preRelease}";
@@ -81,7 +82,7 @@ namespace ODBCInstaller
                     UrlInfoAbout = "https://www.elastic.co/products/stack/elasticsearch-sql",
                     HelpLink = "https://discuss.elastic.co/c/elasticsearch"
                 },
-                OutFileName = "esodbc-" + args[0], // Use full version string
+                OutFileName = "esodbc-" + fullVersionString, // Use full version string
 				Properties = new[]
 				{
 					new PropertyRef("NETFRAMEWORK40FULL"),
