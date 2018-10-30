@@ -31,7 +31,8 @@ TEST_F(ConvertC2SQL_Numeric, CStr_Short2Integer)
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"CStr_Short2Integer\", "
-		"\"params\": [{\"type\": \"INTEGER\", \"value\": -12345}]}");
+		"\"params\": [{\"type\": \"INTEGER\", \"value\": -12345}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -85,7 +86,8 @@ TEST_F(ConvertC2SQL_Numeric, CStr_LLong2Long)
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"CStr_LLong2Long\", "
 		"\"params\": [{\"type\": \"LONG\", "
-		"\"value\": 9223372036854775807}]}");
+		"\"value\": 9223372036854775807}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -124,7 +126,8 @@ TEST_F(ConvertC2SQL_Numeric, CStr_Float2Long)
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"CStr_Float2Long\", "
 		"\"params\": [{\"type\": \"LONG\", "
-		"\"value\": 9223372036854775806.12345}]}");
+		"\"value\": 9223372036854775806.12345}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -145,7 +148,8 @@ TEST_F(ConvertC2SQL_Numeric, WStr_Byte2Integer)
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"WStr_Byte2Integer\", "
-		"\"params\": [{\"type\": \"INTEGER\", \"value\": -128}]}");
+		"\"params\": [{\"type\": \"INTEGER\", \"value\": -128}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -167,7 +171,8 @@ TEST_F(ConvertC2SQL_Numeric, WStr_Double2HFloat)
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"WStr_Double2HFloat\", "
 		"\"params\": [{\"type\": \"HALF_FLOAT\", "
-		"\"value\": -12345678901234567890.123456789}]}");
+		"\"value\": -12345678901234567890.123456789}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -189,7 +194,8 @@ TEST_F(ConvertC2SQL_Numeric, WStr_Double2SFloat)
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"WStr_Double2SFloat\", "
 		"\"params\": [{\"type\": \"SCALED_FLOAT\", "
-		"\"value\": -12345678901234567890.123456789}]}");
+		"\"value\": -12345678901234567890.123456789}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -226,7 +232,8 @@ TEST_F(ConvertC2SQL_Numeric, Short2Integer)
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"Short2Integer\", "
-		"\"params\": [{\"type\": \"INTEGER\", \"value\": -12345}]}");
+		"\"params\": [{\"type\": \"INTEGER\", \"value\": -12345}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -248,7 +255,8 @@ TEST_F(ConvertC2SQL_Numeric, LLong2Long)
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"LLong2Long\", "
 		"\"params\": [{\"type\": \"LONG\", "
-		"\"value\": 9223372036854775807}]}");
+		"\"value\": 9223372036854775807}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -287,7 +295,8 @@ TEST_F(ConvertC2SQL_Numeric, Float2Long)
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"Float2Long\", "
 		"\"params\": [{\"type\": \"LONG\", "
-		"\"value\": 9.2233720368548e+18}]}");
+		"\"value\": 9.2233720368548e+18}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -308,7 +317,8 @@ TEST_F(ConvertC2SQL_Numeric, Byte2Integer)
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"Byte2Integer\", "
-		"\"params\": [{\"type\": \"INTEGER\", \"value\": -128}]}");
+		"\"params\": [{\"type\": \"INTEGER\", \"value\": -128}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -330,7 +340,8 @@ TEST_F(ConvertC2SQL_Numeric, Double2HFloat)
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"Double2HFloat\", "
 		"\"params\": [{\"type\": \"HALF_FLOAT\", "
-		"\"value\": -1.23456789e+19}]}"); /* def prec is 8 */
+		"\"value\": -1.23456789e+19}], " /* def prec is 8 */
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -352,7 +363,8 @@ TEST_F(ConvertC2SQL_Numeric, Double2SFloat)
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"Double2SFloat\", "
 		"\"params\": [{\"type\": \"SCALED_FLOAT\", "
-		"\"value\": -1.234567890123456717e+19}]}");
+		"\"value\": -1.234567890123456717e+19}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -391,7 +403,8 @@ TEST_F(ConvertC2SQL_Numeric, Bin_LLong2Long)
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"Bin_LLong2Long\", "
 		"\"params\": [{\"type\": \"LONG\", "
-		"\"value\": 9223372036854775807}]}");
+		"\"value\": 9223372036854775807}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -431,7 +444,8 @@ TEST_F(ConvertC2SQL_Numeric, Bin_Double2SFloat)
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"Bin_Double2SFloat\", "
 		"\"params\": [{\"type\": \"SCALED_FLOAT\", "
-		"\"value\": -1.234567890123456717e+19}]}");
+		"\"value\": -1.234567890123456717e+19}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -458,7 +472,8 @@ TEST_F(ConvertC2SQL_Numeric, Numeric2HFloat)
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"Numeric2HFloat\", "
 		"\"params\": [{\"type\": \"HALF_FLOAT\", "
-		"\"value\": -2.5212e+01}]}");
+		"\"value\": -2.5212e+01}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }

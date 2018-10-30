@@ -33,7 +33,8 @@ TEST_F(ConvertC2SQL_Varchar, CStr2Varchar_empty)
 	cstr_st expect = CSTR_INIT(
 		"{\"query\": \"CStr2Varchar_empty\", "
 		"\"params\": [{\"type\": \"KEYWORD\", "
-		"\"value\": \"\"}]}");
+		"\"value\": \"\"}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -56,7 +57,8 @@ TEST_F(ConvertC2SQL_Varchar, WStr2Varchar_empty)
 	cstr_st expect = CSTR_INIT(
 		"{\"query\": \"WStr2Varchar_empty\", "
 		"\"params\": [{\"type\": \"KEYWORD\", "
-		"\"value\": \"\"}]}");
+		"\"value\": \"\"}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -79,7 +81,8 @@ TEST_F(ConvertC2SQL_Varchar, WStr2Varchar_ansi)
 	cstr_st expect = CSTR_INIT(
 		"{\"query\": \"WStr2Varchar_ansi\", "
 		"\"params\": [{\"type\": \"KEYWORD\", "
-		"\"value\": \"0123abcABC\"}]}");
+		"\"value\": \"0123abcABC\"}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -102,7 +105,8 @@ TEST_F(ConvertC2SQL_Varchar, CStr2Varchar)
 	cstr_st expect = CSTR_INIT(
 		"{\"query\": \"CStr2Varchar\", "
 		"\"params\": [{\"type\": \"KEYWORD\", "
-		"\"value\": \"0123abcABC\"}]}");
+		"\"value\": \"0123abcABC\"}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -125,7 +129,8 @@ TEST_F(ConvertC2SQL_Varchar, WStr2Varchar_ansi_jsonescape)
 	cstr_st expect = CSTR_INIT(
 		"{\"query\": \"WStr2Varchar_ansi_jsonescape\", "
 		"\"params\": [{\"type\": \"KEYWORD\", "
-		"\"value\": \"START_{xxx}=\\\"yyy\\\"\\r__END\"}]}");
+		"\"value\": \"START_{xxx}=\\\"yyy\\\"\\r__END\"}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -148,7 +153,8 @@ TEST_F(ConvertC2SQL_Varchar, CStr2Varchar_jsonescape)
 	cstr_st expect = CSTR_INIT(
 		"{\"query\": \"CStr2Varchar_jsonescape\", "
 		"\"params\": [{\"type\": \"KEYWORD\", "
-		"\"value\": \"START_{xxx}=\\\"yyy\\\"\\r__END\"}]}");
+		"\"value\": \"START_{xxx}=\\\"yyy\\\"\\r__END\"}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -171,7 +177,8 @@ TEST_F(ConvertC2SQL_Varchar, WStr2Varchar_u8_jsonescape)
 	cstr_st expect = CSTR_INIT(
 		"{\"query\": \"WStr2Varchar_u8_jsonescape\", "
 		"\"params\": [{\"type\": \"KEYWORD\", "
-		"\"value\": \"START_\\\"A\u00C4o\u00F6U\u00FC\\\"__END\"}]}");
+		"\"value\": \"START_\\\"A\u00C4o\u00F6U\u00FC\\\"__END\"}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -194,7 +201,8 @@ TEST_F(ConvertC2SQL_Varchar, WStr2Varchar_u8_fullescape)
 	cstr_st expect = CSTR_INIT(
 		"{\"query\": \"WStr2Varchar_u8_fullescape\", "
 		"\"params\": [{\"type\": \"KEYWORD\", "
-		"\"value\": \"\u00E4\u00F6\u00FC\u00C4\u00D6\u00DC\"}]}");
+		"\"value\": \"\u00E4\u00F6\u00FC\u00C4\u00D6\u00DC\"}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -215,7 +223,8 @@ TEST_F(ConvertC2SQL_Varchar, Short2Varchar)
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"Short2Varchar\", "
-		"\"params\": [{\"type\": \"KEYWORD\", \"value\": \"-12345\"}]}");
+		"\"params\": [{\"type\": \"KEYWORD\", \"value\": \"-12345\"}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -237,7 +246,8 @@ TEST_F(ConvertC2SQL_Varchar, Bigint2Varchar)
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"Bigint2Varchar\", "
 		"\"params\": [{\"type\": \"KEYWORD\", "
-		"\"value\": \"9223372036854775807\"}]}");
+		"\"value\": \"9223372036854775807\"}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -276,7 +286,8 @@ TEST_F(ConvertC2SQL_Varchar, Double2Varchar)
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"Double2Varchar\", "
 		"\"params\": [{\"type\": \"KEYWORD\", "
-		"\"value\": \"1.2000e+00\"}]}");
+		"\"value\": \"1.2000e+00\"}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
