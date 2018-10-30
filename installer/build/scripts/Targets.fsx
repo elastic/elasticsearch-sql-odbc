@@ -14,25 +14,21 @@ open Build.Builder
 open Commandline
 open Fake.Runtime.Trace
 
-let productsToBuild = Commandline.parse()
-
-let productDescriptions = productsToBuild.Versions
-                          |> List.map(fun v -> sprintf "%s %s (%s)" productsToBuild.Title v.FullVersion "Compile")
-                          |> String.concat Environment.NewLine
+let versionToBuild = Commandline.parse()
 
 if (getBuildParam "target" |> toLower <> "help") then 
-    traceHeader (sprintf "Products:%s%s%s" Environment.NewLine Environment.NewLine productDescriptions)
+    traceHeader (sprintf "Products:%s%s%s" Environment.NewLine Environment.NewLine versionToBuild.FullVersion)
 
 Target "Clean" (fun _ ->
     CleanDirs [MsiBuildDir; OutDir;]
 )
 
 Target "BuildInstaller" (fun () ->
-    BuildMsi productsToBuild
+    BuildMsi versionToBuild
 )
 
 Target "Release" (fun () ->
-    trace "Build in Release mode. Services and MSIs will be signed."
+    trace "Build in Release mode. MSI will be signed."
 )
 
 Target "Help" (fun () -> trace Commandline.usage)

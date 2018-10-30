@@ -1,6 +1,9 @@
 ﻿#I "../../packages/build/FAKE.x64/tools"
+#I "../../packages/build/DotNetZip/lib/net20"
 
 #r "FakeLib.dll"
+#r "DotNetZip.dll"
+
 #load "Products.fsx"
 
 open System
@@ -34,7 +37,7 @@ module Builder =
              Attribute.InformationalVersion version // Attribute.Version and Attribute.FileVersion normalize the version number, so retain the prelease suffix
             ]
 
-    let Sign file (product : ProductVersions) =
+    let Sign file (version : Version) =
         tracefn "Signing MSI"
         let release = getBuildParam "release" = "1"
         if release then
@@ -45,7 +48,7 @@ module Builder =
 
             let sign () =
                 let signToolExe = ToolsDir @@ "signtool/signtool.exe"
-                let args = ["sign"; "/f"; certificate; "/p"; password; "/t"; timestampServer; "/d"; product.Title; "/v"; file] |> String.concat " "
+                let args = ["sign"; "/f"; certificate; "/p"; password; "/t"; timestampServer; "/d"; "ODBC Driver"; "/v"; file] |> String.concat " "
                 let redactedArgs = args.Replace(password, "<redacted>")
 
                 use proc = new Process()
@@ -78,34 +81,44 @@ module Builder =
                 proc.ExitCode
 
             let exitCode = sign()
-            if exitCode <> 0 then failwithf "Signing %s returned error exit code: %i" product.Title exitCode
+            if exitCode <> 0 then failwithf "Signing returned error exit code: %i" exitCode
+    
+    // Using DotNetZip due to errors with CMAKE zip files: https://github.com/fsharp/FAKE/issues/775
+    let unzipFile(zipFolder: string, unzipFolder: string) =
+        use zip = Ionic.Zip.ZipFile.Read(zipFolder)
+        for e in zip do
+            e.Extract(unzipFolder, Ionic.Zip.ExtractExistingFileAction.OverwriteSilently)
 
-    let BuildMsi (product : ProductVersions) =
+    let BuildMsi (version : Version) =
 
         !! (MsiDir @@ "*.csproj")
         |> MSBuildRelease MsiBuildDir "Build"
         |> ignore
 
-        product.Versions
-        |> List.iter(fun version -> 
+        patchAssemblyInformation (version)
 
-            patchAssemblyInformation (version)
+        let zipfile = DriverBuildsDir
+                      |> directoryInfo
+                      |> filesInDirMatching ("*.zip")
+                      |> Seq.head
+                          
+        unzipFile (zipfile.FullName, DriverBuildsDir)
+        tracefn "Unzipped zip file in %s" zipfile.FullName
 
-            let exitCode = ExecProcess (fun info ->
-                             info.FileName <- sprintf "%sOdbcInstaller" MsiBuildDir
-                             info.WorkingDirectory <- MsiDir
-                             info.Arguments <- [version.FullVersion; System.IO.Path.GetFullPath(DriverFilesDir)] |> String.concat " "
-                            ) <| TimeSpan.FromMinutes 20.
+        let exitCode = ExecProcess (fun info ->
+                         info.FileName <- sprintf "%sOdbcInstaller" MsiBuildDir
+                         info.WorkingDirectory <- MsiDir
+                         info.Arguments <- [version.FullVersion; System.IO.Path.GetFullPath(DriverBuildsDir); zipfile.FullName] |> String.concat " "
+                        ) <| TimeSpan.FromMinutes 20.
     
-            if exitCode <> 0 then failwithf "Error building MSI"
+        if exitCode <> 0 then failwithf "Error building MSI"
 
-            let MsiFile = MsiDir
-                           |> directoryInfo
-                           |> filesInDirMatching ("*.msi")
-                           |> Seq.map (fun f -> f.FullName)
-                           |> Seq.head
-            
-            Sign MsiFile product
-            CopyFile OutDir MsiFile
-            DeleteFile MsiFile
-        )
+        let MsiFile = MsiDir
+                       |> directoryInfo
+                       |> filesInDirMatching ("*.msi")
+                       |> Seq.map (fun f -> f.FullName)
+                       |> Seq.head
+        
+        Sign MsiFile version
+        CopyFile OutDir MsiFile
+        DeleteFile MsiFile
