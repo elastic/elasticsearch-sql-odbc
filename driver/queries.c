@@ -225,8 +225,9 @@ SQLRETURN TEST_API attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 	/* parse the entire JSON answer */
 	obj = UJDecode(buff, blen, NULL, &stmt->rset.state);
 	if (! obj) {
-		ERRH(stmt, "failed to decode JSON answer (`%.*s`): %s.", blen, buff,
-			stmt->rset.state ? UJGetError(stmt->rset.state) : "<none>");
+		ERRH(stmt, "failed to decode JSON answer: %s ([%zu] `%.*s`).",
+			stmt->rset.state ? UJGetError(stmt->rset.state) : "<none>",
+			blen, buff);
 		RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
 	}
 	columns = rows = cursor = NULL;
@@ -1788,6 +1789,7 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 #	define JSON_KEY_REQ_TOUT	", \"request_timeout\": " /* n-th key */
 #	define JSON_KEY_PAGE_TOUT	", \"page_timeout\": " /* n-th key */
 #	define JSON_KEY_TIME_ZONE	", \"time_zone\": " /* n-th key */
+#	define JSON_KEY_VAL_MODE	", \"mode\": \"ODBC\"" /* n-th key */
 
 	SQLRETURN ret = SQL_SUCCESS;
 	size_t bodylen, pos, u8len, len;
@@ -1821,7 +1823,6 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 		bodylen += sizeof(JSON_KEY_CURSOR) - 1; /* "cursor":  */
 		bodylen += json_escape(u8curs, u8len, NULL, 0);
 		bodylen += 2; /* 2x `"` for cursor value */
-		/* TODO: page_timeout */
 	} else { /* eval QUERY object length */
 		bodylen += sizeof(JSON_KEY_QUERY) - 1;
 		bodylen += json_escape(stmt->u8sql.str, stmt->u8sql.cnt, NULL, 0);
@@ -1845,6 +1846,8 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 			bodylen += dbc->fetch.slen;
 		}
 	}
+	/* TODO: request_/page_timeout, time_zone */
+	bodylen += sizeof(JSON_KEY_VAL_MODE) - 1; /* "mode": */
 	bodylen += 1; /* } */
 
 	/* allocate memory for the stringified buffer, if needed */
@@ -1900,6 +1903,9 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 			pos += dbc->fetch.slen;
 		}
 	}
+	/* "mode": */
+	memcpy(body + pos, JSON_KEY_VAL_MODE, sizeof(JSON_KEY_VAL_MODE) - 1);
+	pos += sizeof(JSON_KEY_VAL_MODE) - 1;
 	body[pos ++] = '}';
 
 	buff->cnt = pos;
