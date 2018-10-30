@@ -85,6 +85,9 @@ BOOL WINAPI DllMain(
 #ifndef NDEBUG
 			if (_gf_log) {
 				ERR("dumping tracked leaks:");
+				/* _CrtDumpMemoryLeaks() will always report at least one leak,
+				 * that of the allocated logger itself that the function uses
+				 * to log into. This is freed below, in driver_cleanup(). */
 				ERR("leaks dumped: %d.", _CrtDumpMemoryLeaks());
 			}
 #endif /* !NDEBUG */
