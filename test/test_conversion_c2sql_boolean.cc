@@ -31,7 +31,8 @@ TEST_F(ConvertC2SQL_Boolean, CStr2Boolean) /* note: test name used in test */
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"CStr2Boolean\", "
-		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": true}]}");
+		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": true}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -51,7 +52,8 @@ TEST_F(ConvertC2SQL_Boolean, WStr2Boolean) /* note: test name used in test */
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"WStr2Boolean\", "
-		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": false}]}");
+		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": false}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -71,7 +73,8 @@ TEST_F(ConvertC2SQL_Boolean, Smallint2Boolean) /* note: name used in test */
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"Smallint2Boolean\", "
-		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": true}]}");
+		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": true}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -91,7 +94,8 @@ TEST_F(ConvertC2SQL_Boolean, UShort2Boolean) /* note: name used in test */
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"UShort2Boolean\", "
-		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": false}]}");
+		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": false}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -111,7 +115,8 @@ TEST_F(ConvertC2SQL_Boolean, LongLong2Boolean) /* note: name used in test */
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"LongLong2Boolean\", "
-		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": true}]}");
+		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": true}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -131,7 +136,8 @@ TEST_F(ConvertC2SQL_Boolean, Float2Boolean) /* note: name used in test */
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"Float2Boolean\", "
-		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": true}]}");
+		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": true}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -151,7 +157,8 @@ TEST_F(ConvertC2SQL_Boolean, Double2Boolean) /* note: name used in test */
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"Double2Boolean\", "
-		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": true}]}");
+		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": true}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -176,7 +183,8 @@ TEST_F(ConvertC2SQL_Boolean, Numeric2Boolean) /* note: name used in test */
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"Numeric2Boolean\", "
-		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": true}]}");
+		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": true}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -197,7 +205,8 @@ TEST_F(ConvertC2SQL_Boolean, Binary2Boolean) /* note: name used in test */
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"Binary2Boolean\", "
-		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": false}]}");
+		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": false}], "
+		"\"mode\": \"ODBC\"}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
