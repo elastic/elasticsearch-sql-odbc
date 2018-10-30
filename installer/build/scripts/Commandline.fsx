@@ -2,10 +2,9 @@
 #I @"../../packages/build/Fsharp.Data/lib/net45"
 #I @"../../packages/build/FSharp.Text.RegexProvider/lib/net40"
 
-#r @"FakeLib.dll"
+#r "FakeLib.dll"
 #r "Fsharp.Data.dll"
 #r "Fsharp.Text.RegexProvider.dll"
-#r "System.Xml.Linq.dll"
 
 #load "Products.fsx"
 
@@ -48,14 +47,13 @@ Target:
   - show this usage summary
 
 """
-    type VersionRegex = Regex< @"^(?:\s*(?<Product>.*?)\s*)?((?<Source>\w*)\:)?(?<Version>(?<Major>\d+)\.(?<Minor>\d+)\.(?<Patch>\d+)(?:\-(?<Prerelease>[\w\-]+))?)", noMethodPrefix=true >
+    type VersionRegex = Regex< @"^esodbc\-(?<Version>(?<Major>\d+)\.(?<Minor>\d+)\.(?<Patch>\d+)(?:\-(?<Prerelease>[\w\-]+))?)", noMethodPrefix=true >
 
     let parseVersion version =
         let m = VersionRegex().Match version
         if m.Success |> not then failwithf "Could not parse version from %s" version
 
-        { Product = m.Product.Value;
-          FullVersion = m.Version.Value;
+        { FullVersion = m.Version.Value;
           Major = m.Major.Value |> int;
           Minor = m.Minor.Value |> int;
           Patch = m.Patch.Value |> int;
@@ -63,26 +61,6 @@ Target:
           RawValue = m.Version.Value; }
 
     let private args = getBuildParamOrDefault "cmdline" "buildinstaller" |> split ' '
-
-    let private versionFromCommandArgument (versionString: string) =
-        let version = versionString |> parseVersion
-        [version]
-
-    let private versionFromInDir (product : Product) =
-        let extractVersion (fileInfo:FileInfo) =
-            Regex.Replace(fileInfo.Name, "^" + product.Name + "\-(.*)\.zip$", "$1")
-
-        let zips = InDir
-                   |> directoryInfo
-                   |> filesInDirMatching ("*.zip")
-
-        match zips.Length with
-        | 0 -> failwithf "No %s zip file found in %s" product.Name InDir
-        | 1 ->
-            let version = zips.[0] |> extractVersion |> parseVersion
-            tracefn "Extracted version information %s from %s" version.FullVersion zips.[0].FullName
-            [version]
-        | _ -> failwithf "Expecting one %s zip file in %s but found %i" product.Name InDir zips.Length
 
     let private (|IsTarget|_|) (candidate: string) =
         match candidate.ToLowerInvariant() with
@@ -126,24 +104,38 @@ Target:
         | (false, _) -> failwithf "certificate file does not exist at %s" certFile
         | (_, false) -> failwithf "password file does not exist at %s" passwordFile
 
+    let private versionFromBuildZipFile =
+        let extractVersion (fileInfo:FileInfo) =
+            Regex.Replace(fileInfo.Name, "^(.*)\.zip$", "$1")
+
+        let zips = DriverBuildsDir
+                   |> directoryInfo
+                   |> filesInDirMatching ("*.zip")
+
+        match zips.Length with
+        | 0 -> failwithf "No zip file found in %s" DriverBuildsDir
+        | 1 ->
+            let version = zips.[0] |> extractVersion |> parseVersion
+            tracefn "Extracted version information %s from %s" version.FullVersion zips.[0].FullName
+            version
+        | _ -> failwithf "Expecting one zip file in %s but found %i" DriverBuildsDir zips.Length
+
     let parse () =
         setEnvironVar "FAKEBUILD" "1"
-        let products = match arguments with
-                       | ["release"; version] ->
+        let version = match arguments with
+                       | ["release";] ->
                            setBuildParam "release" "1"
                            certAndPasswordFromEnvVariables ()
-                           ProductVersions.Create (versionFromCommandArgument version)
-                       | ["release"; version; certFile; passwordFile ] ->
+                           versionFromBuildZipFile
+                       | ["release"; certFile; passwordFile ] ->
                            setBuildParam "release" "1"
                            certAndPasswordFromFile certFile passwordFile
-                           ProductVersions.Create (versionFromCommandArgument version)
-                       | [IsTarget target; version] ->
-                           ProductVersions.Create (versionFromCommandArgument version)
-                       | [version] ->
-                           ProductVersions.Create (versionFromCommandArgument version)
+                           versionFromBuildZipFile
+                       | [IsTarget target;] ->
+                           versionFromBuildZipFile
                        | _ ->
                            traceError usage
                            exit 2
 
         setBuildParam "target" target
-        products
+        version
