@@ -19,6 +19,16 @@ namespace ODBCInstaller
 				releaseString = releaseString.Replace(platformSuffix, string.Empty);
 			}
 
+			// Remove the -SNAPSHOT suffix
+			const string snapshotSuffix = "-SNAPSHOT";
+			var isSnapshot = false;
+			if (string.IsNullOrEmpty(releaseString) == false &&
+				releaseString.EndsWith(snapshotSuffix))
+			{
+				isSnapshot = true;
+				releaseString = releaseString.Replace(snapshotSuffix, string.Empty);
+			}
+
 			var preRelease = string.Empty;
 			// Is this a pre-release?
 			if (releaseString.Contains("-"))
@@ -33,7 +43,10 @@ namespace ODBCInstaller
 			}
 
 			// Get the input files
-			var driverInputFilesPath = args[1];
+			var driverBuildsDir = args[1];
+			var zipFilepath = args[2];
+			var zipDirectory = new System.IO.FileInfo(zipFilepath).Name.Replace(".zip", string.Empty);
+			var driverInputFilesPath = System.IO.Path.Combine(driverBuildsDir, zipDirectory);
 			var driverFileInfo = GetDriverFileInfo(driverInputFilesPath);
             var driverFilePath = System.IO.Path.Combine(driverInputFilesPath, driverFileInfo.FileName);
 
@@ -68,7 +81,7 @@ namespace ODBCInstaller
                     UrlInfoAbout = "https://www.elastic.co/products/stack/elasticsearch-sql",
                     HelpLink = "https://discuss.elastic.co/c/elasticsearch"
                 },
-                OutFileName = "esodbc-" + msiVersionString,
+                OutFileName = "esodbc-" + args[0], // Use full version string
 				Properties = new[]
 				{
 					new PropertyRef("NETFRAMEWORK40FULL"),

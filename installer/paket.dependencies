@@ -3,8 +3,6 @@ source https://api.nuget.org/v3/index.json
 nuget WixSharp.bin
 nuget WixSharp.wix.bin
 
-source https://www.nuget.org/api/v2
-
 group build
     source https://www.nuget.org/api/v2
 
@@ -12,3 +10,4 @@ group build
     nuget FSharp.Data
 	nuget FSharp.Text.RegexProvider
     nuget FSharp.Configuration
+	nuget DotNetZip
