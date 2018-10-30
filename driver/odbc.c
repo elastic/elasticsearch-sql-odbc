@@ -26,12 +26,26 @@
 
 static BOOL driver_init()
 {
-	if (log_init()) {
-		INFO("initializing driver.");
-		convert_init();
-		return connect_init();
+	if (! log_init()) {
+		return FALSE;
 	}
-	return FALSE;
+	INFO("initializing driver.");
+	convert_init();
+	if (! connect_init()) {
+		return FALSE;
+	}
+#ifndef NDEBUG
+	if (_gf_log) {
+		ERR("leak reporting: on."); /* force create the log handle */
+		_CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_FILE);
+		_CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
+		_CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+		_CrtSetReportFile(_CRT_WARN, _gf_log->handle);
+		_CrtSetReportFile(_CRT_ERROR, _gf_log->handle);
+		_CrtSetReportFile(_CRT_ASSERT, _gf_log->handle);
+	}
+#endif /* !NDEBUG */
+	return TRUE;
 }
 
 static void driver_cleanup()
@@ -68,6 +82,15 @@ BOOL WINAPI DllMain(
 
 		// Perform any necessary cleanup.
 		case DLL_PROCESS_DETACH:
+#ifndef NDEBUG
+			if (_gf_log) {
+				ERR("dumping tracked leaks:");
+				/* _CrtDumpMemoryLeaks() will always report at least one leak,
+				 * that of the allocated logger itself that the function uses
+				 * to log into. This is freed below, in driver_cleanup(). */
+				ERR("leaks dumped: %d.", _CrtDumpMemoryLeaks());
+			}
+#endif /* !NDEBUG */
 			INFO("process %u detaching.", GetCurrentProcessId());
 			driver_cleanup();
 			break;

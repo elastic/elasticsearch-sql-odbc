@@ -10,6 +10,9 @@
 /* NOTE: this must be included in "top level" file (wherever SQL types are
  * used  */
 #if defined(_WIN32) || defined (WIN32)
+#define _CRTDBG_MAP_ALLOC
+#include <stdlib.h>
+#include <crtdbg.h>
 /* FIXME: why isn't this included in sql/~ext.h? */
 /* win function parameter attributes */
 #include <windows.h>
