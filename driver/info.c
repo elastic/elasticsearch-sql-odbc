@@ -752,6 +752,46 @@ static SQLRETURN getinfo_scalars(
 	return SQL_ERROR;
 }
 
+/* accepted conversion destination types */
+static inline SQLUINTEGER conv_exclude(SQLUINTEGER exclude)
+{
+	static SQLUINTEGER all_types = 0 |
+		SQL_CVT_CHAR |
+		SQL_CVT_NUMERIC |
+		SQL_CVT_DECIMAL |
+		SQL_CVT_INTEGER |
+		SQL_CVT_SMALLINT |
+		SQL_CVT_FLOAT |
+		SQL_CVT_REAL |
+		SQL_CVT_DOUBLE |
+		SQL_CVT_VARCHAR |
+		SQL_CVT_LONGVARCHAR |
+		SQL_CVT_BINARY |
+		SQL_CVT_VARBINARY |
+		SQL_CVT_BIT |
+		SQL_CVT_TINYINT |
+		SQL_CVT_BIGINT |
+		SQL_CVT_DATE |
+		SQL_CVT_TIME |
+		SQL_CVT_TIMESTAMP |
+		SQL_CVT_LONGVARBINARY |
+		SQL_CVT_INTERVAL_YEAR_MONTH |
+		SQL_CVT_INTERVAL_DAY_TIME |
+		SQL_CVT_WCHAR |
+		SQL_CVT_WLONGVARCHAR |
+		SQL_CVT_WVARCHAR |
+		SQL_CVT_GUID;
+
+	/* intervals not yet supported */
+	exclude |= SQL_CVT_INTERVAL_YEAR_MONTH | SQL_CVT_INTERVAL_DAY_TIME;
+	/* GUID not convertible */
+	exclude |= SQL_CVT_GUID;
+	/* binary not convertible */
+	exclude |= SQL_CVT_BINARY | SQL_CVT_VARBINARY | SQL_CVT_LONGVARBINARY;
+
+	return all_types & ~exclude;
+}
+
 static SQLRETURN getinfo_conversion(
 	BOOL *handled,
 	SQLHDBC ConnectionHandle,
@@ -763,34 +803,43 @@ static SQLRETURN getinfo_conversion(
 	esodbc_dbc_st *dbc = DBCH(ConnectionHandle);
 
 	*handled = TRUE;
-	switch(InfoType) {
+	switch(InfoType) { /* source type */
 		case SQL_CONVERT_BIGINT:
-		case SQL_CONVERT_BINARY:
-		case SQL_CONVERT_BIT:
-		case SQL_CONVERT_CHAR:
-		case SQL_CONVERT_DATE:
-		case SQL_CONVERT_DECIMAL:
-		case SQL_CONVERT_DOUBLE:
-		case SQL_CONVERT_FLOAT:
-		case SQL_CONVERT_GUID:
 		case SQL_CONVERT_INTEGER:
-		case SQL_CONVERT_INTERVAL_YEAR_MONTH:
-		case SQL_CONVERT_INTERVAL_DAY_TIME:
-		case SQL_CONVERT_LONGVARBINARY:
-		case SQL_CONVERT_LONGVARCHAR:
-		case SQL_CONVERT_NUMERIC:
-		case SQL_CONVERT_REAL:
 		case SQL_CONVERT_SMALLINT:
-		case SQL_CONVERT_TIME:
-		case SQL_CONVERT_TIMESTAMP:
 		case SQL_CONVERT_TINYINT:
-		case SQL_CONVERT_VARBINARY:
+
+		case SQL_CONVERT_BIT:
+
+		case SQL_CONVERT_CHAR:
+		case SQL_CONVERT_LONGVARCHAR:
 		case SQL_CONVERT_VARCHAR:
 		case SQL_CONVERT_WCHAR:
 		case SQL_CONVERT_WLONGVARCHAR:
 		case SQL_CONVERT_WVARCHAR:
-			DBGH(dbc, "requested: convert data-type support (0).");
-			INFOH(dbc, "no CONVERT scalar function support.");
+
+		case SQL_CONVERT_DATE:
+		case SQL_CONVERT_TIME:
+		case SQL_CONVERT_TIMESTAMP:
+
+		case SQL_CONVERT_DECIMAL:
+		case SQL_CONVERT_DOUBLE:
+		case SQL_CONVERT_FLOAT:
+		case SQL_CONVERT_NUMERIC:
+		case SQL_CONVERT_REAL:
+			*(SQLUINTEGER *)InfoValue = conv_exclude(0LU);
+			DBGH(dbc, "convert from %lu type: 0x%lx.", InfoType,
+				*(SQLUINTEGER *)InfoValue);
+			return SQL_SUCCESS;
+
+		case SQL_CONVERT_BINARY:
+		case SQL_CONVERT_VARBINARY:
+		case SQL_CONVERT_LONGVARBINARY:
+		case SQL_CONVERT_INTERVAL_YEAR_MONTH:
+		case SQL_CONVERT_INTERVAL_DAY_TIME:
+		case SQL_CONVERT_GUID:
+			DBGH(dbc, "convert from type %lu: 0 "
+				"(source type not convertible).", InfoType);
 			*(SQLUINTEGER *)InfoValue = 0;
 			return SQL_SUCCESS;
 	}

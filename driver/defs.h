@@ -276,7 +276,8 @@
  * - supported: CAST.
  * - not supported: CONVERT.
  */
-#define ESODBC_CONVERT_FUNCTIONS				SQL_FN_CVT_CAST
+#define ESODBC_CONVERT_FUNCTIONS				(0LU | \
+	SQL_FN_CVT_CONVERT | SQL_FN_CVT_CAST)
 /*
  * Aggregate functions support:
  * - supported: ALL, AVG, COUNT, MAX, MIN, SUM.
