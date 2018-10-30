@@ -23,6 +23,8 @@
 #define HTTP_TEST_JSON			"{\"query\": \"SELECT 0\"}"
 
 /* Elasticsearch/SQL data types */
+/* 2 */
+#define JSON_COL_IP				"ip"
 /* 4 */
 #define JSON_COL_BYTE			"byte"
 #define JSON_COL_LONG			"long"
@@ -1020,7 +1022,22 @@ SQLRETURN do_connect(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 static BOOL elastic_name2types(wstr_st *type_name,
 	SQLSMALLINT *c_sql, SQLSMALLINT *sql)
 {
+	assert(0 < type_name->cnt);
 	switch (type_name->cnt) {
+		/* 2: IP */
+		case sizeof(JSON_COL_IP) - 1:
+			switch (tolower(type_name->str[0])) {
+				case (SQLWCHAR)'i':
+					if (! wmemncasecmp(type_name->str,
+							MK_WPTR(JSON_COL_IP), type_name->cnt)) {
+						*c_sql = ESODBC_ES_TO_CSQL_IP;
+						*sql = ESODBC_ES_TO_SQL_IP;
+						return TRUE;
+					}
+					break;
+			}
+			break;
+
 		/* 4: BYTE, LONG, TEXT, DATE, NULL */
 		case sizeof(JSON_COL_BYTE) - 1:
 			switch (tolower(type_name->str[0])) {
