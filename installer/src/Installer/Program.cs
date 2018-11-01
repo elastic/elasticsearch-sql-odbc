@@ -100,11 +100,11 @@ namespace ODBCInstaller
 						Windows Server 2016:	VersionNT64 = 1000 AND MsiNTProductType <> 1 
 					*/
 					new LaunchCondition(
-						"NOT ((VersionNT64 = 1000 AND MsiNTProductType = 1) OR (VersionNT64 = 1000 AND MsiNTProductType <> 1))",
+						"Installed OR (NOT ((VersionNT64 = 1000 AND MsiNTProductType = 1) OR (VersionNT64 = 1000 AND MsiNTProductType <> 1)))",
 						"This installer requires at least Windows 10 or Windows Server 2016."
 					),
 					new LaunchCondition(
-						"VS2017REDISTINSTALLED",
+						"Installed OR VS2017REDISTINSTALLED",
 						"This installer requires the Visual C++ 2017 Redistributable. " +
 						"Please install Visual C++ 2017 Redistributable and then run this installer again."
 					),

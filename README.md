@@ -12,8 +12,15 @@ subject to the Elastic License are in the [libs](libs) directory.
 
 ## Supported platforms
 
-The current target platform is Microsoft Windows, past and including version 7.
+The desired target platform is Microsoft Windows, past and including version 7.
 Full support will include Linux and OSX, on both x86 and amd64 architectures.
+
+For `alpha` release the supported platforms are:
+
+- Windows 10
+- Windows Server 2016
+
+The installer will check the platform using `winver` and abort installation if not running on a supported platform.
 
 ## Running Requirements
 
