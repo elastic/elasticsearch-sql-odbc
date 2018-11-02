@@ -88,6 +88,14 @@ module Builder =
         use zip = Ionic.Zip.ZipFile.Read(zipFolder)
         for e in zip do
             e.Extract(unzipFolder, Ionic.Zip.ExtractExistingFileAction.OverwriteSilently)
+    
+    let copyAndLog target source =
+        tracefn "Copying from %s to %s" source target
+        CopyFile target source
+
+    let rec fileAndDirVisitor dir = 
+        seq { yield! Directory.GetFiles(dir)
+              for subdir in Directory.GetDirectories(dir) do yield! fileAndDirVisitor subdir } 
 
     let BuildMsi (version : Version) =
 
@@ -105,6 +113,13 @@ module Builder =
         unzipFile (zipfile.FullName, DriverBuildsDir)
         tracefn "Unzipped zip file in %s" zipfile.FullName
 
+        // Flatten any subdirectories
+        let pathname = Path.GetFileNameWithoutExtension(zipfile.FullName)        
+        (DriverBuildsDir @@ pathname)
+            |> Directory.GetDirectories
+            |> Seq.iter (fun dd -> fileAndDirVisitor dd
+                                    |> Seq.iter (fun s -> copyAndLog (DriverBuildsDir @@ pathname) s))
+
         let exitCode = ExecProcess (fun info ->
                          info.FileName <- sprintf "%sOdbcInstaller" MsiBuildDir
                          info.WorkingDirectory <- MsiDir
@@ -120,5 +135,5 @@ module Builder =
                        |> Seq.head
         
         Sign MsiFile version
-        CopyFile OutDir MsiFile
+        copyAndLog OutDir MsiFile
         DeleteFile MsiFile
