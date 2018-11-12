@@ -234,7 +234,7 @@ This action closes the previously opened second window and open a new one instea
 
 [[dsn_editor]]
 .{es} ODBC DSN Editor
-image:images/dsn_editor.png[]
+image:images/dsn_editor_basic.png[]
 
 This new window has three tabs, each responsible for a set of configuration parameters, as follows.
 
@@ -250,7 +250,7 @@ NOTE: The characters available for this field are limited to the set permitted f
 Example: _localhost_
 * Description
 +
-This field allows a user arbitrary text; generally used for short notes about the configured connection.
+This field allows a arbitrary text; generally used for short notes about the configured connection.
 +
 Example: _Clear-text connection to the local [::1]:9200._
 * Hostname
@@ -271,10 +271,147 @@ If security is enabled, these fields will need to contain the credentials of the
 NOTE: At a minimum, the _Name_ and _Hostname_ fields must be provisioned, before the DSN can be saved.
 
 WARNING: Connection encryption is enabled by default. This needs to be changed if connecting to an instance with no cryptography enabled
-on the SQL API.
+on the SQL API. Consult the following section.
 
 ===== 2.3 Cryptography parameters
+One of the following SSL options can be chosen:
+
+* Disabled. All communications unencrypted.
++
+The communication between the driver and the {es} instance is performed over a clear-text connection.
++
+WARNING: This setting can expose the access credentials to a 3rd party intercepting the network traffic and thus not recommended when
+authentication is enabled.
+* Enabled. Certificate not validated.
++
+The connection encryption is enabled, but the certificate of the server is not validated.
++
+NOTE: This is currently the default setting.
++
+WARNING: This setting allows a 3rd party to act with ease as a man-in-the-middle and thus intercept all the communications.
+* Enabled. Certificate is validated; hostname not validated.
++
+The connection encryption is enabled and the driver verifies that server's certificate is valid, but it does *not* verify if the
+certificate is running on the server it was meant for.
++
+WARNING: This setting allows a 3rd party that had access to server's certificate to act as a man-in-the-middle and thus intercept all the
+communications.
+* Enabled. Certificate is validated; hostname validated.
++
+The connection encryption is enabled and the driver verifies that both the certificate is valid, as well as that it is being deployed on
+the server that the certificate was meant for.
+* Enabled. Certificate identity chain validated.
++
+This setting is equivalent to the previous one, with one additional check against certificate's revocation. This offers the strongest
+security option and is the recommended setting for production deployments.
++
++
+* Certificate File
++
+In case the server uses a certificate that is not part of the PKI - like a self-signed certificate - one can configure the path to a X.509
+certificate file that will be used by the driver to validate server's offered certificate.
+
+NOTE: The driver will only read the contents of the file just before a connection is attempted. See <<connection_testing>> section further
+on how to check the validity of the provided parameters.
+
+NOTE: If using the file browser to locate the certificate - by pressing the _Browse..._ button - only files with _.pem_ and _.der_
+extensions will be considered by default. Choose _All Files (\*.*)_ from the drop down, if your file ends with a different extension:
+
+[[dsn_editor_cert]]
+.Certificate file browser
+image:images/dsn_editor_security_cert.png[]
+
+
 ===== 2.4 Logging parameters
+For troubleshooting purposes ODBC offers the functionality to log the API calls that an application makes; this is enabled in the
+Administrator application:
+
+[[administrator_tracing]]
+.Enable Application ODBC API logging
+image:images/administrator_tracing.png[]
+
+However, this only logs the ODBC API calls made by the application into the _Driver Manager_ and not those made by the _Driver Manager_
+into the driver itself. To enable logging of the calls that the driver receives, as well as internal driver processing events, one can
+enable driver's logging on Editor's _Logging_ tab:
+
+* Enable Logging?
++
+Ticking this will enable driver's logging. A logging directory is also mandatory when this option is enabled (see the next option).
+However the specified logging directory will be saved in the DSN if provided, even if logging is disabled.
+* Log Directory
++
+Here is to specify which directory to write the log files in.
++
+NOTE: The driver will create *one log file per connection*, for those connections that generate logging messages.
+* Log Level
++
+Configure the verbosity of the logs.
+
+[[administrator_logging]]
+.Enable driver logging
+image:images/dsn_editor_logging.png[]
+
+NOTE: When authentication is enabled, the password will be redacted from the logs.
+
+WARNING: Debug-logging can quickly lead to the creation of many very large files, besides generating additional processing overhead. Only
+enable it if instructed so and preferably only when fetching low volumes of data.
+
+[[connection_testing]]
 ===== 2.5 Testing the connection
+Once the _Hostname_, the _Port_ (if different from implicit default) and the SSL options are configured, one can test if the provided
+parameters are correct by pressing the _Test Connection_ button. This will instruct the driver to connect to the {es} instance and perform
+a simple SQL test query. (This will thus require a running {es} instance with the SQL plugin enabled.)
+
+[[dsn_editor_conntest]]
+.Connection testing
+image:images/dsn_editor_conntest.png[]
+
+NOTE: When connection testing, all the configured parameters are taken into account, including the logging configuration. This will allow
+early detection of potential file/directory access rights conflicts.
+
+See <<alternative_logging>> section further for an alternative way of configuring the logging.
+
 
 ==== 3. DSN is available
+Once everything is in place, pressing the _Save_ button will store the configuration into the chosen destination (Registry or file).
+
+WARNING: Before saving a DSN configuration the provided file/directory paths are verified to be valid on the current system. The DSN editor
+will however not verify in any way the validity or reachability of the configured _Hostname_ : _Port_. See <<connection_testing>>
+for an exhaustive check.
+
+If everything is correct, the name of the newly created DSN will be listed as available to use:
+
+[[system_added]]
+.Connection added
+image:images/administrator_system_added.png[]
+
+[[alternative_logging]]
+==== Alternative logging configuration
+
+Due to the specification of the ODBC API, the driver will receive the configured DSN parameters - including the logging ones - only once a
+connection API is invoked (such as _SQLConnect_ or _SQLDriverConnect_). The _Driver Manager_ will however always make a set of API calls
+into the driver before attempting to establish a connection. To capture those calls as well, one needs to pass logging configuration
+parameters in an alternative way. The {es} ODBC driver will use an environment variable for this purpose.
+
+Configuring an environment variable is OS specific and not detailed in this guide. Whether the variable should be configured system-wide
+or user-specific depends on the way the ODBC-enabled application is being run and if logging should affect the current user only or not.
+
+The definition of the environment variable needs to be done as follows:
+
+* Name: _ESODBC_LOG_DIR_
+
+* Value: [path](?[level]), where:
++
+[path] is the path to the directory where the log files will be written into;
++
+[level] is optional and can take one of the following values: _debug_, _info_, _warn_, _error_; if not provided, _debug_ is assumed.
+
+[[env_var_logging]]
+.Logging environment variable
+image:images/env_var_log.png[]
+
+NOTE: When enabling the logging through the environment variable, the driver will create *one log file per process*.
+
+Both ways of configuring the logging can coexist and both can use the same destination logging directory. However, one logging message
+will only be logged once, the connection logging taking precedence over the environment variable logging.
+
