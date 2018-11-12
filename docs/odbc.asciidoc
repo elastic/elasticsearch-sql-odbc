@@ -5,14 +5,14 @@
 
 WARNING: This functionality is in prerelease and is subject to change. The design and code is less mature than official GA features and is being provided as-is with no warranties. Prerelease features are not subject to the support SLA of official GA features.
 
-The Elasticsearch SQL ODBC Driver can be installed on Windows using the MSI package. The installation process is simple and is composed of standard MSI wizard steps.
-
 {es}'s SQL ODBC driver is a rich, fully featured ODBC driver for {es}.
 It is a core level driver, exposing all the functionality accessible through ODBC API that {es}'s SQL implementation offers, converting
 ODBC calls to {es-sql}.
 
+The Elasticsearch SQL ODBC Driver can be installed on Windows using the MSI package. The installation process is simple and is composed of standard MSI wizard steps.
+
 [[prerequisites]]
-== Prerequisites
+== Install Prerequisites
 
 Before you install the ODBC driver you need to meet the following prerequisites;
 
@@ -29,7 +29,7 @@ NOTE: At present it is not possible to inline upgrade using a newer version of t
 == Download the `.msi` package
 
 Download the `.msi` package for Elasticsearch ODBC Driver Installler {version} from:
-[DOWNLOADLINK HERE].
+https://www.elastic.co/downloads/odbc-client
 
 [[installation-gui]]
 == Installation using the graphical user interface (GUI)
@@ -54,11 +54,12 @@ You are now ready to install the driver.
 
 NOTE: You will require elevated privileges (administrator) for installation.
 
-image::images/installer_screen_4.png[Installer Begin]
+image::images/installer_ready_install.png[Installer Begin]
 
-Assuming the installation took place without error you should see the completed screen:
+Assuming the installation took place without error you should see progress screen, followed by the completed screen:
 
-image::images/installer_screen_5.png[Installer Complete]
+image::images/installer_installing.png[Installer Installing]
+image::images/installer_finish.png[Installer Complete]
 
 As with any MSI installation package, a log file for the installation process can be found within the `%TEMP%` directory, with a randomly generated name adhering to the format `MSI<random>.LOG`. 
 
@@ -158,29 +159,6 @@ be passed using the `/l` command line argument
 --------------------------------------------
 start /wait msiexec.exe /x esodbc-{version}-windows-x86_64.msi /qn /l uninstall.log
 --------------------------------------------
-
-[[sql-odbc-installation]]
-[float]
-=== Installation
-
-The ODBC driver can be obtained from:
-
-Dedicated page::
-https://www.elastic.co/downloads/odbc-client[elastic.co] provides the links for the manual downloads.
-
-==== Prerequisites
-[[sql-odbc-prerequisites]]
-[Note]
-===================
-The {es} ODBC driver is currently available on *Windows 10 64bit* platform only, although it could work on older supported Windows 64bit
-releases as well.
-
-The driver requires _Microsoft Visual C++ Redistributable for Visual Studio 2017_ software package *pre-installed*.
-===================
-
-
-TODO: installer walk-through.
-
 
 [[odbc-setup]]
 [float]
