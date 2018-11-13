@@ -161,39 +161,41 @@ Once the driver has been installed, in order for an application to be able to co
 * using a User or a System DSN;
 * through a File DSN.
 
-DSN (_data source name_) is a generic name given to the set of parameters an ODBC driver needs to connect to its database.
+DSN (_data source name_) is a generic name given to the set of parameters an ODBC driver needs to connect to a database.
 
-From here on this set of parameters will be colloquially called _connection parameters_ (despite some of these parameters configuring some other aspects of a driver's functions, like logging, buffer sizes etc.), or simply _DSN_.
+We will refer to these parameters as _connection parameters or DSN_ (despite some of these parameters configuring some other aspects of a driver's functions; e.g. logging, buffer sizes...).
 
-Configuration through a DSN is the most widely used, simplest and safest way of performing the driver configuration. Constructing a connection string on the other hand is the most spartan way and consequently the least common one as well. For the reminder of these
-section we will focus on DSN usage only.
+Using a DSN is the most widely used, simplest and safest way of performing the driver configuration. Constructing a connection string, on the other hand, is the most spartan way and consequently the least common method.
+
+We will focus on DSN usage only.
 
 ==== 1. Launching ODBC Data Source Administrator
+
 For DSN management, ODBC provides the _ODBC Data Source Administrator_ application, readily installed on all recent desktop Windows OSes.
-To launch it, open the search menu - _Win + S_ - and type "ODBC Data Sources (64-bit)", _Enter_:
+
+To launch it, open the search menu - _Win + S_ - and type "ODBC Data Sources (64-bit)" an press _Enter_:
 
 [[launch_administrator]]
 .Launching ODBC Data Source Administrator
 image:images/launch_administrator.png[]
 
-Once launched, one can verify that the driver installed correctly by clicking on the _Drivers_ tab of the Administrator and checking that
-_Elasticsearch Driver_ is present in the list of installed drivers:
+Once launched, you can verify that the driver was installed correctly by clicking on the _Drivers_ tab of the Administrator and checking that _Elasticsearch Driver_ is present in the list of installed drivers.
+
+You should also see the version number of the installed driver.
 
 [[administrator_drivers]]
 .Drivers tab
 image:images/administrator_drivers.png[]
 
 ==== 2. Configure a DSN
-The next step is to configure a DSN. One can choose between the following options mapped on the first three tabs of the Administrator
+The next step is to configure a DSN. You can choose between the following options mapped on the first three tabs of the Administrator
 application:
 
 * User DSN
 +
-The connections configured under this tab are only available to the currently logged in user. Each of these DSNs are referred to by a
-chosen arbitrary name (typically a host or cluster name).
+The connections configured under this tab are only available to the currently logged in user. Each of these DSNs are referred to by a chosen arbitrary name (typically a host or cluster name).
 +
-The actual set of parameters making up the DSN is stored through the driver in system's Registry. Thus, a user will later only need to
-provide an application with the DSN name in order to connect to the configured {es} instance.
+The actual set of parameters making up the DSN is stored through the driver in system's Registry. Thus, a user will later only need to provide an application with the DSN name in order to connect to the configured {es} instance.
 * System DSN
 +
 Similar to a User DSN, except that the connections configured under this tab will be available to all the users configured on the system.
@@ -201,8 +203,7 @@ Similar to a User DSN, except that the connections configured under this tab wil
 +
 This tab contains functionality that will allow to have one set of connection parameters written into a file, rather then the Registry.
 +
-Such a file can be then shared among multiple systems and the user will need to specify the path to it, in order to have the application
-connect to the configured {es} instance.
+Such a file can be then shared among multiple systems and the user will need to specify the path to it, in order to have the application connect to the configured {es} instance.
 
 The configuration steps are similar for all the above points. Following is an example of configuring a System DSN.
 
@@ -256,11 +257,9 @@ NOTE: If left empty, the default *9200* port number will be used.
 +
 If security is enabled, these fields will need to contain the credentials of the user configured to access the REST SQL endpoint.
 
-
 NOTE: At a minimum, the _Name_ and _Hostname_ fields must be provisioned, before the DSN can be saved.
 
-WARNING: Connection encryption is enabled by default. This needs to be changed if connecting to an instance with no cryptography enabled
-on the SQL API. Consult the following section.
+WARNING: Connection encryption is enabled by default. This will need to be changed if connecting to a SQL API endpoint with no cryptography enabled.
 
 ===== 2.3 Cryptography parameters
 One of the following SSL options can be chosen:
@@ -269,59 +268,45 @@ One of the following SSL options can be chosen:
 +
 The communication between the driver and the {es} instance is performed over a clear-text connection.
 +
-WARNING: This setting can expose the access credentials to a 3rd party intercepting the network traffic and thus not recommended when
-authentication is enabled.
+WARNING: This setting can expose the access credentials to a 3rd party intercepting the network traffic and is not recommended.
 * Enabled. Certificate not validated.
 +
 The connection encryption is enabled, but the certificate of the server is not validated.
 +
 NOTE: This is currently the default setting.
 +
-WARNING: This setting allows a 3rd party to act with ease as a man-in-the-middle and thus intercept all the communications.
+WARNING: This setting allows a 3rd party to act with ease as a man-in-the-middle and thus intercept all communications.
 * Enabled. Certificate is validated; hostname not validated.
 +
-The connection encryption is enabled and the driver verifies that server's certificate is valid, but it does *not* verify if the
-certificate is running on the server it was meant for.
+The connection encryption is enabled and the driver verifies that server's certificate is valid, but it does *not* verify if the certificate is running on the server it was meant for.
 +
-WARNING: This setting allows a 3rd party that had access to server's certificate to act as a man-in-the-middle and thus intercept all the
-communications.
+WARNING: This setting allows a 3rd party that had access to server's certificate to act as a man-in-the-middle and thus intercept all the communications.
 * Enabled. Certificate is validated; hostname validated.
 +
-The connection encryption is enabled and the driver verifies that both the certificate is valid, as well as that it is being deployed on
-the server that the certificate was meant for.
+The connection encryption is enabled and the driver verifies that both the certificate is valid, as well as that it is being deployed on the server that the certificate was meant for.
 * Enabled. Certificate identity chain validated.
 +
-This setting is equivalent to the previous one, with one additional check against certificate's revocation. This offers the strongest
-security option and is the recommended setting for production deployments.
-+
-+
+This setting is equivalent to the previous one, with one additional check against certificate's revocation. This offers the strongest security option and is the recommended setting for production deployments.
 * Certificate File
 +
-In case the server uses a certificate that is not part of the PKI - like a self-signed certificate - one can configure the path to a X.509
-certificate file that will be used by the driver to validate server's offered certificate.
+In case the server uses a certificate that is not part of the PKI, for example usaing a self-signed certificate, you can configure the path to a X.509 certificate file that will be used by the driver to validate server's offered certificate.
 
-NOTE: The driver will only read the contents of the file just before a connection is attempted. See <<connection_testing>> section further
-on how to check the validity of the provided parameters.
+NOTE: The driver will only read the contents of the file just before a connection is attempted. See <<connection_testing>> section further on how to check the validity of the provided parameters.
 
-NOTE: If using the file browser to locate the certificate - by pressing the _Browse..._ button - only files with _.pem_ and _.der_
-extensions will be considered by default. Choose _All Files (\*.*)_ from the drop down, if your file ends with a different extension:
+NOTE: If using the file browser to locate the certificate - by pressing the _Browse..._ button - only files with _.pem_ and _.der_ extensions will be considered by default. Choose _All Files (\*.*)_ from the drop down, if your file ends with a different extension:
 
 [[dsn_editor_cert]]
 .Certificate file browser
 image:images/dsn_editor_security_cert.png[]
 
-
 ===== 2.4 Logging parameters
-For troubleshooting purposes ODBC offers the functionality to log the API calls that an application makes; this is enabled in the
-Administrator application:
+For troubleshooting purposes, the {product} offers functionality to log the API calls that an application makes; this is enabled in the Administrator application:
 
 [[administrator_tracing]]
 .Enable Application ODBC API logging
 image:images/administrator_tracing.png[]
 
-However, this only logs the ODBC API calls made by the application into the _Driver Manager_ and not those made by the _Driver Manager_
-into the driver itself. To enable logging of the calls that the driver receives, as well as internal driver processing events, one can
-enable driver's logging on Editor's _Logging_ tab:
+However, this only logs the ODBC API calls made by the application into the _Driver Manager_ and not those made by the _Driver Manager_ into the driver itself. To enable logging of the calls that the driver receives, as well as internal driver processing events, you can enable driver's logging on Editor's _Logging_ tab:
 
 * Enable Logging?
 +
@@ -347,7 +332,7 @@ enable it if instructed so and preferably only when fetching low volumes of data
 
 [[connection_testing]]
 ===== 2.5 Testing the connection
-Once the _Hostname_, the _Port_ (if different from implicit default) and the SSL options are configured, one can test if the provided
+Once the _Hostname_, the _Port_ (if different from implicit default) and the SSL options are configured, you can test if the provided
 parameters are correct by pressing the _Test Connection_ button. This will instruct the driver to connect to the {es} instance and perform
 a simple SQL test query. (This will thus require a running {es} instance with the SQL plugin enabled.)
 
