@@ -48,7 +48,7 @@ image:images/apps_excel_cred.png[]
 Once connected, Excel will read data source's catalog and offer the user a choice of tables to load. Clicking on one of the tables will
 load a preview of the data within:
 
-[[apps_excel_cred]]
+[[apps_excel_picktable]]
 .Pick table to load
 image:images/apps_excel_picktable.png[]
 

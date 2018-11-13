@@ -15,7 +15,7 @@ within them.
 NOTE: Each application has its own requirements and licensing; these are outside the scope of this documentation which only covers the
 configuration aspect of integration with {es-sql}.
 
-NOTE: The support for applications implementing the ODBC 2.x standard and prior is currently limited.
+WARNING: The support for applications implementing the ODBC 2.x standard and prior is currently limited.
 
 include::applications-excel.asciidoc[]
 include::applications-powerbi.asciidoc[]
