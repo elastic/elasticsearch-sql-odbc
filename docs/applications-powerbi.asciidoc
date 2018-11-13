@@ -1,0 +1,20 @@
+[role="xpack"]
+[testenv="platinum"]
+[[sql-odbc-applications-powerbi]]
+[float]
+=== Microsoft Power BI Desktop
+
+[quote, https://powerbi.microsoft.com/en-us/what-is-power-bi/]
+____
+https://powerbi.microsoft.com/en-us/desktop/[Power BI] is a business analytics solution that lets you visualize your data and share
+insights across your organization, or embed them in your app or website.
+____
+
+==== Prerequisites
+
+* Microsoft Power BI Desktop 2.63 or higher;
+* {es-sql} <<sql-odbc, ODBC driver>>;
+* A preconfigured User or System DSN (see <<sql-odbc-setup>> section on how to configure a DSN).
+
+
+// vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 tw=138 columns=140
