@@ -1,34 +1,33 @@
-[role="xpack"]
+// [role="xpack"]
 [testenv="platinum"]
 [[sql-odbc]]
-= Elasticsearch SQL ODBC Driver
+:product: Elasticsearch SQL ODBC Driver
+= {product}
 
 WARNING: This functionality is in prerelease and is subject to change. The design and code is less mature than official GA features and is being provided as-is with no warranties. Prerelease features are not subject to the support SLA of official GA features.
 
-{es}'s SQL ODBC driver is a rich, fully featured ODBC driver for {es}.
-It is a core level driver, exposing all the functionality accessible through ODBC API that {es}'s SQL implementation offers, converting
-ODBC calls to {es-sql}.
+{product} is a rich, fully featured ODBC driver for {es}. It is a core level driver, exposing all of the functionality accessible through the {es}'s SQL ODBC API, converting ODBC calls into {es-sql}.
 
-The Elasticsearch SQL ODBC Driver can be installed on Windows using the MSI package. The installation process is simple and is composed of standard MSI wizard steps.
+The {product} can be installed on Windows using the MSI package. The installation process is simple and is composed of standard MSI wizard steps.
 
 [[prerequisites]]
-== Install Prerequisites
+== Installation Prerequisites
 
-Before you install the ODBC driver you need to meet the following prerequisites;
+Before you install the {product} you need to meet the following prerequisites;
 
-. Windows 10 64 bit _or_ Windows Server 2016 64 bit operating system
-. .NET Framework 4.0 full - https://www.microsoft.com/en-au/download/details.aspx?id=17718
-. Microsoft Visual C++ Redistributable for Visual Studio 2017 - https://support.microsoft.com/en-au/help/2977003/the-latest-supported-visual-c-downloads
-. Elevated privileges (administrator) for the User performing installation
+* Windows 10 64 bit _or_ Windows Server 2016 64 bit operating system
+* .NET Framework 4.0 full - https://www.microsoft.com/en-au/download/details.aspx?id=17718
+* Microsoft Visual C++ Redistributable for Visual Studio 2017 - https://support.microsoft.com/en-au/help/2977003/the-latest-supported-visual-c-downloads
+* Elevated privileges (administrator) for the User performing the installation
 
-If you fail to meet any of the prerequisites the installer will report an error and abort the installation.
+If you fail to meet any of the prerequisites the installer will show an error message and abort the installation.
 
-NOTE: At present it is not possible to inline upgrade using a newer version of the MSI. In order to upgrade, you will first have to uninstall the old driver and then reinstall the new driver.
+NOTE: It is not possible to inline upgrade using the MSI. In order to upgrade, you will first have to uninstall the old driver and then reinstall the new driver.
 
 [[download]]
 == Download the `.msi` package
 
-Download the `.msi` package for Elasticsearch ODBC Driver Installler {version} from:
+Download the `.msi` package for {product} {version} from:
 https://www.elastic.co/downloads/odbc-client
 
 [[installation-gui]]
@@ -44,7 +43,7 @@ Clicking  *Next* will present the End User License Agreement. You will need to a
 
 image::images/installer_accept_license.png[Installer EULA Screen]
 
-The next screen allows you to customise the installation path for the Elasticsearch ODBC driver files.
+The following screen allows you to customise the installation path for the Elasticsearch ODBC driver files.
 
 NOTE: The default installation path is of the format: *%ProgramFiles%\Elastic\ODBCDriver{backslash}{version}*
 
@@ -56,7 +55,7 @@ NOTE: You will require elevated privileges (administrator) for installation.
 
 image::images/installer_ready_install.png[Installer Begin]
 
-Assuming the installation took place without error you should see progress screen, followed by the completed screen:
+Assuming the installation takes place without error you should see progress screen, followed by the completed screen:
 
 image::images/installer_installing.png[Installer Installing]
 image::images/installer_finish.png[Installer Complete]
@@ -68,14 +67,14 @@ If you encounter an error during installation we would encourage you to open an 
 [[installation-cmd]]
 == Installation using the command line
 
-The `.msi` can also install the Elasticsearch ODBC Driver using the command line. The simplest installation using the same defaults as the GUI is achieved by first navigating to the download directory, then running:
+The `.msi` can also be installed via the command line. The simplest installation using the same defaults as the GUI is achieved by first navigating to the download directory, then running:
 
 ["source","sh",subs="attributes,callouts"]
 --------------------------------------------
 msiexec.exe /i esodbc-{version}-windows-x86_64.msi /qn
 --------------------------------------------
 
-By default, `msiexec.exe` does not wait for the installation process to complete, since it runs in the Windows subsystem. To wait on the process to finish and ensure that `%ERRORLEVEL%` is set accordingly, it is recommended to use `start /wait` to create a process and wait for it to exit
+By default, `msiexec.exe` does not wait for the installation process to complete, since it runs in the Windows subsystem. To wait on the process to finish and ensure that `%ERRORLEVEL%` is set accordingly, it is recommended to use `start /wait` to create a process and wait for it to exit:
 
 ["source","sh",subs="attributes,callouts"]
 --------------------------------------------
@@ -89,7 +88,7 @@ As with any MSI installation package, a log file for the installation process ca
 start /wait msiexec.exe /i esodbc-{version}-windows-x86_64.msi /qn /l install.log
 --------------------------------------------
 
-Supported Windows Installer command line arguments can be viewed using
+Supported Windows Installer command line arguments can be viewed using:
 
 ["source","sh",subs="attributes,callouts"]
 --------------------------------------------
@@ -101,8 +100,7 @@ msiexec.exe /help
 [[msi-command-line-options]]
 ==== Command line options
 
-All settings exposed within the GUI are also available as command line arguments (referred to
-as _properties_ within Windows Installer documentation) that can be passed to `msiexec.exe`:
+All settings exposed within the GUI are also available as command line arguments (referred to as _properties_ within Windows Installer documentation) that can be passed to `msiexec.exe`:
 
 [horizontal]
 `INSTALLDIR`::
@@ -110,36 +108,30 @@ as _properties_ within Windows Installer documentation) that can be passed to `m
   The installation directory.
   Defaults to ++%ProgramFiles%\Elastic\ODBCDriver{backslash}{version}++.
 
-
 To pass a value, simply append the property name and value using the format `<PROPERTYNAME>="<VALUE>"` to
 the installation command. For example, to use a different installation directory to the default one:
 
 ["source","sh",subs="attributes,callouts"]
 --------------------------------------------
-start /wait msiexec.exe /i esodbc-{version}-windows-x86_64.msi /qn INSTALLDIR=c:\CustomDirectory
+start /wait msiexec.exe /i esodbc-{version}-windows-x86_64.msi /qn INSTALLDIR="c:\CustomDirectory"
 --------------------------------------------
 
 Consult the https://msdn.microsoft.com/en-us/library/windows/desktop/aa367988(v=vs.85).aspx[Windows Installer SDK Command-Line Options]
 for additional rules related to values containing quotation marks.
-
 
 [[uninstall-msi-gui]]
 ==== Uninstall using Add/Remove Programs
 
 The `.msi` package handles uninstallation of all directories and files added as part of installation.
 
-WARNING: Uninstallation will remove **all** contents created as part of
-installation.
+WARNING: Uninstallation will remove **all** contents created as part of installation.
 
-MSI installer packages do not provide a GUI for uninstallation. An installed program can be uninstalled by pressing the Windows key and typing `add or remove programs` to open the system settings.
+An installed program can be uninstalled by pressing the Windows key and typing `add or remove programs` to open the system settings.
 
-Once opened, find the Elasticsearch 
-ODBC Driver installation within the list of installed applications, click
-and choose `Uninstall`:
+Once opened, find the Elasticsearch ODBC Driver installation within the list of installed applications, click and choose `Uninstall`:
 
 [[msi-installer-uninstall]]
 image::images/uninstall.png[]
-
 
 [[uninstall-msi-command-line]]
 ==== Uninstall using the command line
@@ -152,8 +144,7 @@ containing the `.msi` package and running:
 start /wait msiexec.exe /x esodbc-{version}-windows-x86_64.msi /qn
 --------------------------------------------
 
-Similar to the install process, a path to a log file for the uninstallation process can
-be passed using the `/l` command line argument
+Similar to the install process, a path for a log file for the uninstallation process can be passed using the `/l` command line argument
 
 ["source","sh",subs="attributes,callouts"]
 --------------------------------------------
@@ -164,19 +155,17 @@ start /wait msiexec.exe /x esodbc-{version}-windows-x86_64.msi /qn /l uninstall.
 [float]
 === Configuration
 
-Once the driver has been installed, in order for an application to be able to connect to {es} through ODBC, a set of configuration
-parameters must be provided to the driver. Depending on the application, there are generally three ways of providing this parameters set:
+Once the driver has been installed, in order for an application to be able to connect to {es} through ODBC, a set of configuration parameters must be provided to the driver. Depending on the application, there are generally three ways of providing these parameters:
 
 * through a connection string;
 * using a User or a System DSN;
 * through a File DSN.
 
-_DSN_ stands for _data source name_ and is a generic name given to the set of parameters an ODBC driver needs to connect to its data base.
-From here on this set of parameters will be colloquially called _connection parameters_ (despite some of these parameters configuring some
-other aspects of a driver's functions, like logging, buffer sizes etc.), or simply _DSN_.
+DSN (_data source name_) is a generic name given to the set of parameters an ODBC driver needs to connect to its database.
 
-Configuration through a DSN is the most widely used, simplest and safest way of performing the driver configuration. Constructing a
-connection string on the other hand is the most spartan way and consequently the least common one as well. For the reminder of these
+From here on this set of parameters will be colloquially called _connection parameters_ (despite some of these parameters configuring some other aspects of a driver's functions, like logging, buffer sizes etc.), or simply _DSN_.
+
+Configuration through a DSN is the most widely used, simplest and safest way of performing the driver configuration. Constructing a connection string on the other hand is the most spartan way and consequently the least common one as well. For the reminder of these
 section we will focus on DSN usage only.
 
 ==== 1. Launching ODBC Data Source Administrator
