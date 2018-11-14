@@ -1,7 +1,6 @@
 [role="xpack"]
 [testenv="platinum"]
 [[sql-odbc-applications-tableau]]
-[float]
 === Tableau Desktop
 
 [quote, https://www.tableau.com/products/what-is-tableau]
@@ -12,8 +11,8 @@ ____
 
 ==== Prerequisites
 
-* Tableau 2018 or higher;
-* {es-sql} <<sql-odbc, ODBC driver>>;
+* Tableau 2018 or higher
+* {product}
 * A preconfigured User or System DSN (see <<sql-odbc-setup>> section on how to configure a DSN).
 
 ==== Data loading

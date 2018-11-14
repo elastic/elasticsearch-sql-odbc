@@ -1,7 +1,6 @@
 [role="xpack"]
 [testenv="platinum"]
 [[sql-odbc-applications-excel]]
-[float]
 === Microsoft Excel
 
 [quote, https://www.techopedia.com/definition/5430/microsoft-excel]
@@ -12,8 +11,8 @@ ____
 
 ==== Prerequisites
 
-* Microsoft Office 2016 or higher;
-* {es-sql} <<sql-odbc, ODBC driver>>;
+* Microsoft Office 2016 or higher
+* {product}
 * A preconfigured User or System DSN (see <<sql-odbc-setup>> section on how to configure a DSN).
 
 ==== Load data into a spreadsheet

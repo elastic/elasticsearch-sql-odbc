@@ -1,7 +1,6 @@
 [role="xpack"]
 [testenv="platinum"]
 [[sql-odbc-applications-powerbi]]
-[float]
 === Microsoft Power BI Desktop
 
 [quote, https://powerbi.microsoft.com/en-us/what-is-power-bi/]
@@ -12,8 +11,8 @@ ____
 
 ==== Prerequisites
 
-* Microsoft Power BI Desktop 2.63 or higher;
-* {es-sql} <<sql-odbc, ODBC driver>>;
+* Microsoft Power BI Desktop 2.63 or higher
+* {product}
 * A preconfigured User or System DSN (see <<sql-odbc-setup>> section on how to configure a DSN).
 
 ==== Data loading
