@@ -1,10 +1,11 @@
-//[role="xpack"]
+[role="xpack"]
 [testenv="platinum"]
 [[sql-odbc-installation]]
 == Driver installation
 
 The {product} can be installed on Windows using the MSI package. The installation process is simple and is composed of standard MSI wizard steps.
 
+[float]
 [[prerequisites]]
 === Installation Prerequisites
 
@@ -19,12 +20,14 @@ If you fail to meet any of the prerequisites the installer will show an error me
 
 NOTE: It is not possible to inline upgrade using the MSI. In order to upgrade, you will first have to uninstall the old driver and then reinstall the new driver.
 
+[float]
 [[download]]
 === Download the `.msi` package
 
 Download the `.msi` package for {product} {version} from:
 https://www.elastic.co/downloads/odbc-client
 
+[float]
 [[installation-gui]]
 === Installation using the graphical user interface (GUI)
 
@@ -55,10 +58,11 @@ Assuming the installation takes place without error you should see progress scre
 image::images/installer_installing.png[Installer Installing]
 image::images/installer_finish.png[Installer Complete]
 
-As with any MSI installation package, a log file for the installation process can be found within the `%TEMP%` directory, with a randomly generated name adhering to the format `MSI<random>.LOG`. 
+As with any MSI installation package, a log file for the installation process can be found within the `%TEMP%` directory, with a randomly generated name adhering to the format `MSI<random>.LOG`.
 
 If you encounter an error during installation we would encourage you to open an issue [ISSUE LINK HERE], attach your installation log file and provide details so we can investigate.
 
+[float]
 [[installation-cmd]]
 === Installation using the command line
 
@@ -92,6 +96,7 @@ msiexec.exe /help
 
 ...or by consulting the https://msdn.microsoft.com/en-us/library/windows/desktop/aa367988(v=vs.85).aspx[Windows Installer SDK Command-Line Options].
 
+[float]
 [[msi-command-line-options]]
 ==== Command line options
 
@@ -114,6 +119,7 @@ start /wait msiexec.exe /i esodbc-{version}-windows-x86_64.msi /qn INSTALLDIR="c
 Consult the https://msdn.microsoft.com/en-us/library/windows/desktop/aa367988(v=vs.85).aspx[Windows Installer SDK Command-Line Options]
 for additional rules related to values containing quotation marks.
 
+[float]
 [[uninstall-msi-gui]]
 ==== Uninstall using Add/Remove Programs
 
@@ -128,6 +134,7 @@ Once opened, find the Elasticsearch ODBC Driver installation within the list of 
 [[msi-installer-uninstall]]
 image::images/uninstall.png[]
 
+[float]
 [[uninstall-msi-command-line]]
 ==== Uninstall using the command line
 
@@ -145,5 +152,3 @@ Similar to the install process, a path for a log file for the uninstallation pro
 --------------------------------------------
 start /wait msiexec.exe /x esodbc-{version}-windows-x86_64.msi /qn /l uninstall.log
 --------------------------------------------
-
-

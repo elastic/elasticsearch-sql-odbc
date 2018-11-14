@@ -1,21 +1,19 @@
-// [role="xpack"]
-[testenv="platinum"]
-
-// TODO: remove these when integrating
 :es: Elasticsearch
 :es-sql: {es} SQL
 :version: 6.5.0
+:product: {es-sql} ODBC Driver
 
 [[sql-odbc]]
-:product: {es-sql} ODBC Driver
+
 = {product}
 
-WARNING: This functionality is in prerelease and is subject to change. The design and code is less mature than official GA features and is
-being provided as-is with no warranties. Prerelease features are not subject to the support SLA of official GA features.
-
+== Overview
 {product} is a feature-rich 3.80 ODBC driver for {es}.
 It is a core level driver, exposing all of the functionality accessible through the {es}'s SQL ODBC API, converting ODBC calls into
 {es-sql}.
+
+WARNING: This functionality is in prerelease and is subject to change. The design and code is less mature than official GA features and is
+being provided as-is with no warranties. Prerelease features are not subject to the support SLA of official GA features.
 
 
 include::installation.asciidoc[]

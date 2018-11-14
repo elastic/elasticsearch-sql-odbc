@@ -1,7 +1,6 @@
 [role="xpack"]
 [testenv="platinum"]
 [[sql-odbc-applications-ps1]]
-[float]
 === Microsoft PowerShell
 
 [quote, https://docs.microsoft.com/en-us/powershell/scripting/powershell-scripting]
@@ -14,8 +13,8 @@ connect to {es}.
 
 ==== Prerequisites
 
-* Microsoft PowerShell;
-* {es-sql} <<sql-odbc, ODBC driver>>;
+* Microsoft PowerShell
+* {product}
 * A preconfigured User or System DSN (see <<sql-odbc-setup>> section on how to configure a DSN).
 
 ==== Writing a script

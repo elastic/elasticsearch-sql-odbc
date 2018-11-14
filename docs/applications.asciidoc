@@ -1,9 +1,8 @@
 [role="xpack"]
 [testenv="platinum"]
 [[sql-odbc-applications]]
-[float]
 == ODBC client applications
-Thanks to a standardized API, a broad range of third-party ODBC-enabled applications can now have access to {es} by using <<sql-odbc>>.
+Thanks to a standardized API, a broad range of third-party ODBC-enabled applications can access {es} using {product}.
 This section will collect alphabetically an increasing list of such applications along with the configuration steps that need to be taken
 within them.
 
@@ -24,4 +23,3 @@ include::applications-tableau.asciidoc[]
 
 
 // vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 tw=138 columns=140
-
