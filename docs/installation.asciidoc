@@ -1,0 +1,154 @@
+[role="xpack"]
+[testenv="platinum"]
+[[sql-odbc-installation]]
+== Driver installation
+
+The {product} can be installed on Windows using the MSI package. The installation process is simple and is composed of standard MSI wizard steps.
+
+[float]
+[[prerequisites]]
+=== Installation Prerequisites
+
+Before you install the {product} you need to meet the following prerequisites;
+
+* Windows 10 64 bit _or_ Windows Server 2016 64 bit operating system
+* .NET Framework 4.0 full - https://www.microsoft.com/en-au/download/details.aspx?id=17718
+* Microsoft Visual C++ Redistributable for Visual Studio 2017 - https://support.microsoft.com/en-au/help/2977003/the-latest-supported-visual-c-downloads
+* Elevated privileges (administrator) for the User performing the installation
+
+If you fail to meet any of the prerequisites the installer will show an error message and abort the installation.
+
+NOTE: It is not possible to inline upgrade using the MSI. In order to upgrade, you will first have to uninstall the old driver and then reinstall the new driver.
+
+[float]
+[[download]]
+=== Download the `.msi` package
+
+Download the `.msi` package for {product} {version} from:
+https://www.elastic.co/downloads/odbc-client
+
+[float]
+[[installation-gui]]
+=== Installation using the graphical user interface (GUI)
+
+Double-click the downloaded `.msi` package to launch a GUI wizard that will guide you through the installation process.
+
+You will first be presented with a welcome screen:
+
+image::images/installer_started.png[Installer Welcome Screen]
+
+Clicking  *Next* will present the End User License Agreement. You will need to accept the license agreement in order to continue the installation.
+
+image::images/installer_accept_license.png[Installer EULA Screen]
+
+The following screen allows you to customise the installation path for the Elasticsearch ODBC driver files.
+
+NOTE: The default installation path is of the format: *%ProgramFiles%\Elastic\ODBCDriver{backslash}{version}*
+
+image::images/installer_choose_destination.png[Installer Driver Path]
+
+You are now ready to install the driver.
+
+NOTE: You will require elevated privileges (administrator) for installation.
+
+image::images/installer_ready_install.png[Installer Begin]
+
+Assuming the installation takes place without error you should see progress screen, followed by the completed screen:
+
+image::images/installer_installing.png[Installer Installing]
+image::images/installer_finish.png[Installer Complete]
+
+As with any MSI installation package, a log file for the installation process can be found within the `%TEMP%` directory, with a randomly generated name adhering to the format `MSI<random>.LOG`.
+
+If you encounter an error during installation we would encourage you to open an issue [ISSUE LINK HERE], attach your installation log file and provide details so we can investigate.
+
+[float]
+[[installation-cmd]]
+=== Installation using the command line
+
+The `.msi` can also be installed via the command line. The simplest installation using the same defaults as the GUI is achieved by first navigating to the download directory, then running:
+
+["source","sh",subs="attributes,callouts"]
+--------------------------------------------
+msiexec.exe /i esodbc-{version}-windows-x86_64.msi /qn
+--------------------------------------------
+
+By default, `msiexec.exe` does not wait for the installation process to complete, since it runs in the Windows subsystem. To wait on the process to finish and ensure that `%ERRORLEVEL%` is set accordingly, it is recommended to use `start /wait` to create a process and wait for it to exit:
+
+["source","sh",subs="attributes,callouts"]
+--------------------------------------------
+start /wait msiexec.exe /i esodbc-{version}-windows-x86_64.msi /qn
+--------------------------------------------
+
+As with any MSI installation package, a log file for the installation process can be found within the `%TEMP%` directory, with a randomly generated name adhering to the format `MSI<random>.LOG`. The path to a log file can be supplied using the `/l` command line argument
+
+["source","sh",subs="attributes,callouts"]
+--------------------------------------------
+start /wait msiexec.exe /i esodbc-{version}-windows-x86_64.msi /qn /l install.log
+--------------------------------------------
+
+Supported Windows Installer command line arguments can be viewed using:
+
+["source","sh",subs="attributes,callouts"]
+--------------------------------------------
+msiexec.exe /help
+--------------------------------------------
+
+...or by consulting the https://msdn.microsoft.com/en-us/library/windows/desktop/aa367988(v=vs.85).aspx[Windows Installer SDK Command-Line Options].
+
+[float]
+[[msi-command-line-options]]
+==== Command line options
+
+All settings exposed within the GUI are also available as command line arguments (referred to as _properties_ within Windows Installer documentation) that can be passed to `msiexec.exe`:
+
+[horizontal]
+`INSTALLDIR`::
+
+  The installation directory.
+  Defaults to ++%ProgramFiles%\Elastic\ODBCDriver{backslash}{version}++.
+
+To pass a value, simply append the property name and value using the format `<PROPERTYNAME>="<VALUE>"` to
+the installation command. For example, to use a different installation directory to the default one:
+
+["source","sh",subs="attributes,callouts"]
+--------------------------------------------
+start /wait msiexec.exe /i esodbc-{version}-windows-x86_64.msi /qn INSTALLDIR="c:\CustomDirectory"
+--------------------------------------------
+
+Consult the https://msdn.microsoft.com/en-us/library/windows/desktop/aa367988(v=vs.85).aspx[Windows Installer SDK Command-Line Options]
+for additional rules related to values containing quotation marks.
+
+[float]
+[[uninstall-msi-gui]]
+==== Uninstall using Add/Remove Programs
+
+The `.msi` package handles uninstallation of all directories and files added as part of installation.
+
+WARNING: Uninstallation will remove **all** contents created as part of installation.
+
+An installed program can be uninstalled by pressing the Windows key and typing `add or remove programs` to open the system settings.
+
+Once opened, find the Elasticsearch ODBC Driver installation within the list of installed applications, click and choose `Uninstall`:
+
+[[msi-installer-uninstall]]
+image::images/uninstall.png[]
+
+[float]
+[[uninstall-msi-command-line]]
+==== Uninstall using the command line
+
+Uninstallation can also be performed from the command line by navigating to the directory
+containing the `.msi` package and running:
+
+["source","sh",subs="attributes,callouts"]
+--------------------------------------------
+start /wait msiexec.exe /x esodbc-{version}-windows-x86_64.msi /qn
+--------------------------------------------
+
+Similar to the install process, a path for a log file for the uninstallation process can be passed using the `/l` command line argument
+
+["source","sh",subs="attributes,callouts"]
+--------------------------------------------
+start /wait msiexec.exe /x esodbc-{version}-windows-x86_64.msi /qn /l uninstall.log
+--------------------------------------------
