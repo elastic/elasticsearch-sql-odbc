@@ -3,6 +3,8 @@
 [[sql-odbc-applications-excel]]
 === Microsoft Excel
 
+experimental[]
+
 [quote, https://www.techopedia.com/definition/5430/microsoft-excel]
 ____
 https://products.office.com/en/excel[Microsoft Excel] is a software program [...] that allows users to organize, format and calculate data

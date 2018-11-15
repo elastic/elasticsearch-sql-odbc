@@ -3,6 +3,8 @@
 [[sql-odbc-applications-tableau]]
 === Tableau Desktop
 
+experimental[]
+
 [quote, https://www.tableau.com/products/what-is-tableau]
 ____
 https://www.tableau.com/products/desktop[Tableau] is the most powerful, secure, and flexible end-to-end analytics platform

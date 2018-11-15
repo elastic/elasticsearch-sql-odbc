@@ -3,6 +3,8 @@
 [[sql-odbc-installation]]
 == Driver installation
 
+experimental[]
+
 The {product} can be installed on Windows using the MSI package. The installation process is simple and is composed of standard MSI wizard steps.
 
 [float]
