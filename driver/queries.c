@@ -29,10 +29,10 @@
 
 
 
-void clear_resultset(esodbc_stmt_st *stmt)
+void clear_resultset(esodbc_stmt_st *stmt, BOOL on_close)
 {
-	DBGH(stmt, "clearing result set; vrows=%zd, nrows=%zd, frows=%zd.",
-		stmt->rset.vrows, stmt->rset.nrows, stmt->rset.frows);
+	DBGH(stmt, "clearing result set; vrows=%zu, nrows=%zu.",
+		stmt->rset.vrows, stmt->rset.nrows);
 	if (stmt->rset.buff) {
 		free(stmt->rset.buff);
 	}
@@ -40,6 +40,11 @@ void clear_resultset(esodbc_stmt_st *stmt)
 		UJFree(stmt->rset.state);
 	}
 	memset(&stmt->rset, 0, sizeof(stmt->rset));
+
+	if (on_close) {
+		DBGH(stmt, "on close, total fetched rows=%zu.", stmt->tf_rows);
+		STMT_TFROWS_RESET(stmt);
+	}
 
 	/* reset SQLGetData state to detect sequence "SQLExec*(); SQLGetData();" */
 	STMT_GD_RESET(stmt);
@@ -214,7 +219,7 @@ SQLRETURN TEST_API attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 
 	/* clear any previous result set */
 	if (STMT_HAS_RESULTSET(stmt)) {
-		clear_resultset(stmt);
+		clear_resultset(stmt, /*on_close*/FALSE);
 	}
 
 	/* the statement takes ownership of mem obj */
@@ -261,6 +266,7 @@ SQLRETURN TEST_API attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 	} else {
 		/* the cast is made safe by the decoding format indicator for array  */
 		stmt->rset.nrows = (size_t)UJLengthArray(rows);
+		stmt->tf_rows += stmt->rset.nrows;
 	}
 	DBGH(stmt, "rows received in result set: %zd.", stmt->rset.nrows);
 
@@ -480,6 +486,10 @@ SQLRETURN TEST_API attach_sql(esodbc_stmt_st *stmt,
 		RET_HDIAG(stmt, SQL_STATE_HY000, "UCS2/UTF8 conversion failure", 0);
 	}
 
+	/* if the app correctly SQL_CLOSE'es the statement, this would not be
+	 * needed. but just in case: re-init counter of total # of rows */
+	STMT_TFROWS_RESET(stmt);
+
 	return SQL_SUCCESS;
 }
 
@@ -658,14 +668,15 @@ SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos)
 	esodbc_desc_st *ard, *ird;
 	esodbc_rec_st *arec, *irec;
 
-	rowno = stmt->rset.frows + pos + /*1-based*/1;
+	rowno = (SQLLEN)STMT_CRR_ROW_NUMBER(stmt);
 	ard = stmt->ard;
 	ird = stmt->ird;
 
 #define RET_ROW_DIAG(_state, _message, _colno) \
 	do { \
-		if (ard->array_status_ptr) \
-			ard->array_status_ptr[pos] = SQL_ROW_ERROR; \
+		if (ird->array_status_ptr) { \
+			ird->array_status_ptr[pos] = SQL_ROW_ERROR; \
+		} \
 		return post_row_diagnostic(stmt, _state, MK_WPTR(_message), \
 				0, rowno, _colno); \
 	} while (0)
@@ -680,14 +691,14 @@ SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos)
 		ERRH(stmt, "one '%s' element (#%zd) in result set not an array; type:"
 			" %d.", JSON_ANSWER_ROWS, stmt->rset.vrows,
 			UJGetType(stmt->rset.row_array));
-		RET_ROW_DIAG(SQL_STATE_01S01, MSG_INV_SRV_ANS, SQL_NO_COLUMN_NUMBER);
+		RET_ROW_DIAG(SQL_STATE_HY000, MSG_INV_SRV_ANS, SQL_NO_COLUMN_NUMBER);
 	}
 	/* are there elements in this row array to at least match the number of
 	 * columns? */
 	if (UJLengthArray(stmt->rset.row_array) < ird->count) {
 		ERRH(stmt, "current row counts less elements (%d) than columns (%hd)",
 			UJLengthArray(stmt->rset.row_array), ird->count);
-		RET_ROW_DIAG(SQL_STATE_01S01, MSG_INV_SRV_ANS, SQL_NO_COLUMN_NUMBER);
+		RET_ROW_DIAG(SQL_STATE_HY000, MSG_INV_SRV_ANS, SQL_NO_COLUMN_NUMBER);
 	} else if (ird->count < UJLengthArray(stmt->rset.row_array)) {
 		WARNH(stmt, "current row counts more elements (%d) than columns (%hd)",
 			UJLengthArray(stmt->rset.row_array), ird->count);
@@ -696,7 +707,7 @@ SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos)
 	if (! (iter_row = UJBeginArray(stmt->rset.row_array))) {
 		ERRH(stmt, "Failed to obtain iterator on row (#%zd): %s.", rowno,
 			UJGetError(stmt->rset.state));
-		RET_ROW_DIAG(SQL_STATE_01S01, MSG_INV_SRV_ANS, SQL_NO_COLUMN_NUMBER);
+		RET_ROW_DIAG(SQL_STATE_HY000, MSG_INV_SRV_ANS, SQL_NO_COLUMN_NUMBER);
 	}
 
 	with_info = FALSE;
@@ -714,9 +725,9 @@ SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos)
 
 		switch (UJGetType(obj)) {
 			default:
-				ERRH(stmt, "unexpected object of type %d in row L#%zd/T#%zd.",
-					UJGetType(obj), stmt->rset.vrows, stmt->rset.frows);
-				RET_ROW_DIAG(SQL_STATE_01S01, MSG_INV_SRV_ANS, i + 1);
+				ERRH(stmt, "unexpected object of type %d in row L#%zu/T#%zd.",
+					UJGetType(obj), stmt->rset.vrows, rowno);
+				RET_ROW_DIAG(SQL_STATE_HY000, MSG_INV_SRV_ANS, i + 1);
 			/* RET_.. returns */
 
 			case UJT_Null:
@@ -785,7 +796,7 @@ SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos)
 	if (ird->array_status_ptr) {
 		ird->array_status_ptr[pos] = with_info ? SQL_ROW_SUCCESS_WITH_INFO :
 			SQL_ROW_SUCCESS;
-		DBGH(stmt, "status array @0x%p#%d set to %d.", ird->array_status_ptr,
+		DBGH(stmt, "status array @0x%p#%d set to %hu.", ird->array_status_ptr,
 			pos, ird->array_status_ptr[pos]);
 	}
 
@@ -912,47 +923,56 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 	/* reset SQLGetData state, to reset fetch position */
 	STMT_GD_RESET(stmt);
 
-	DBGH(stmt, "rowset max size: %d.", ard->array_size);
+	DBGH(stmt, "rowset max size: %zu.", ard->array_size);
 	errors = 0;
+	i = 0;
 	/* for all rows in rowset/array, iterate over rows in current resultset */
-	for (i = stmt->rset.array_pos; i < ard->array_size; i ++) {
+	while (i < ard->array_size) {
 		if (! UJIterArray(&stmt->rset.rows_iter, &stmt->rset.row_array)) {
 			DBGH(stmt, "ran out of rows in current result set: nrows=%zd, "
 				"vrows=%zd.", stmt->rset.nrows, stmt->rset.vrows);
 			if (stmt->rset.ecurs.cnt) { /* is there an Elastic cursor? */
-				stmt->rset.array_pos = i;
 				ret = EsSQLExecute(stmt);
 				if (! SQL_SUCCEEDED(ret)) {
 					ERRH(stmt, "failed to fetch next results.");
 					return ret;
+				} else {
+					assert(STMT_HAS_RESULTSET(stmt));
 				}
-				return EsSQLFetch(StatementHandle);
-			} else {
-				DBGH(stmt, "reached end of entire result set. fetched=%zd.",
-					stmt->rset.frows);
-				/* indicate the non-processed rows in rowset */
-				if (ard->array_status_ptr)
-					for (j = i; j < ard->array_size; j ++) {
-						ard->array_status_ptr[j] = SQL_ROW_NOROW;
-					}
+				if (! STMT_NODATA_FORCED(stmt)) {
+					/* resume copying from the new resultset, staying on the
+					 * same position in rowset. */
+					continue;
+				}
 			}
+
+			DBGH(stmt, "reached end of entire result set. fetched=%zd.",
+				stmt->tf_rows);
+			/* indicate the non-processed rows in rowset */
+			if (ird->array_status_ptr) {
+				DBGH(stmt, "setting rest of %zu rows in status array to "
+					"'no row' (%hu).", ard->array_size - i, SQL_ROW_NOROW);
+				for (j = i; j < ard->array_size; j ++) {
+					ird->array_status_ptr[j] = SQL_ROW_NOROW;
+				}
+			}
+
+			/* stop the copying loop */
 			break;
 		}
 		ret = copy_one_row(stmt, i);
 		if (! SQL_SUCCEEDED(ret)) {
-			ERRH(stmt, "copying row %zd failed.", stmt->rset.vrows + i + 1);
+			ERRH(stmt, "copying row %zu failed.", stmt->rset.vrows + 1);
 			errors ++;
 		}
+		i ++;
+		/* account for processed rows */
+		stmt->rset.vrows ++;
 	}
-	stmt->rset.array_pos = 0;
-
-	/* account for processed rows */
-	stmt->rset.vrows += i;
-	stmt->rset.frows += i;
 
 	/* return number of processed rows (even if 0) */
 	if (ird->rows_processed_ptr) {
-		DBGH(stmt, "setting number of processed rows to: %u.", i);
+		DBGH(stmt, "setting number of processed rows to: %lu.", i);
 		*ird->rows_processed_ptr = i;
 	}
 

@@ -9,7 +9,7 @@
 #include "error.h"
 #include "handles.h"
 
-void clear_resultset(esodbc_stmt_st *stmt);
+void clear_resultset(esodbc_stmt_st *stmt, BOOL on_close);
 SQLRETURN TEST_API attach_answer(esodbc_stmt_st *stmt, char *buff,
 	size_t blen);
 SQLRETURN TEST_API attach_error(SQLHANDLE hnd, cstr_st *body, int code);

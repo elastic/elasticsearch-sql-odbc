@@ -128,7 +128,7 @@ static void clear_desc(esodbc_desc_st *desc, BOOL reinit)
 
 		case DESC_TYPE_IRD:
 			if (STMT_HAS_RESULTSET(desc->hdr.stmt)) {
-				clear_resultset(desc->hdr.stmt);
+				clear_resultset(desc->hdr.stmt, reinit);
 			}
 			break;
 		default:
@@ -940,8 +940,8 @@ SQLRETURN EsSQLGetStmtAttrW(
 
 		/* "determine the number of the current row in the result set" */
 		case SQL_ATTR_ROW_NUMBER:
-			DBGH(stmt, "getting row number: %llu", (SQLULEN)stmt->rset.frows);
-			*(SQLULEN *)ValuePtr = (SQLULEN)stmt->rset.frows;
+			*(SQLULEN *)ValuePtr = (SQLULEN)STMT_CRR_ROW_NUMBER(stmt);
+			DBGH(stmt, "getting row number: %llu", *(SQLULEN *)ValuePtr);
 			break;
 
 		case SQL_ATTR_CURSOR_TYPE:
