@@ -691,14 +691,14 @@ SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos)
 		ERRH(stmt, "one '%s' element (#%zd) in result set not an array; type:"
 			" %d.", JSON_ANSWER_ROWS, stmt->rset.vrows,
 			UJGetType(stmt->rset.row_array));
-		RET_ROW_DIAG(SQL_STATE_01S01, MSG_INV_SRV_ANS, SQL_NO_COLUMN_NUMBER);
+		RET_ROW_DIAG(SQL_STATE_HY000, MSG_INV_SRV_ANS, SQL_NO_COLUMN_NUMBER);
 	}
 	/* are there elements in this row array to at least match the number of
 	 * columns? */
 	if (UJLengthArray(stmt->rset.row_array) < ird->count) {
 		ERRH(stmt, "current row counts less elements (%d) than columns (%hd)",
 			UJLengthArray(stmt->rset.row_array), ird->count);
-		RET_ROW_DIAG(SQL_STATE_01S01, MSG_INV_SRV_ANS, SQL_NO_COLUMN_NUMBER);
+		RET_ROW_DIAG(SQL_STATE_HY000, MSG_INV_SRV_ANS, SQL_NO_COLUMN_NUMBER);
 	} else if (ird->count < UJLengthArray(stmt->rset.row_array)) {
 		WARNH(stmt, "current row counts more elements (%d) than columns (%hd)",
 			UJLengthArray(stmt->rset.row_array), ird->count);
@@ -707,7 +707,7 @@ SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos)
 	if (! (iter_row = UJBeginArray(stmt->rset.row_array))) {
 		ERRH(stmt, "Failed to obtain iterator on row (#%zd): %s.", rowno,
 			UJGetError(stmt->rset.state));
-		RET_ROW_DIAG(SQL_STATE_01S01, MSG_INV_SRV_ANS, SQL_NO_COLUMN_NUMBER);
+		RET_ROW_DIAG(SQL_STATE_HY000, MSG_INV_SRV_ANS, SQL_NO_COLUMN_NUMBER);
 	}
 
 	with_info = FALSE;
