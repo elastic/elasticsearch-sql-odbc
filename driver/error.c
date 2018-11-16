@@ -75,5 +75,5 @@ SQLRETURN post_row_diagnostic(SQLHANDLE hnd, esodbc_state_et state,
 	esodbc_diag_st *dest = &HDRH(hnd)->diag;
 	dest->row_number = nrow;
 	dest->column_number = ncol;
-	return post_diagnostic(dest, state, text, code);
+	return post_diagnostic(hnd, state, text, code);
 }

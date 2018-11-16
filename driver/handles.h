@@ -286,10 +286,6 @@ typedef struct struct_resultset {
 
 	size_t nrows; /* (count of) rows in current result set */
 	size_t vrows; /* (count of) visited rows in current result set  */
-	size_t frows; /* (count of) fetched rows across *entire* result set  */
-
-	/* position in ARD array to write_in/resume_at with cursors */
-	SQLULEN array_pos;
 } resultset_st;
 
 /*
@@ -327,8 +323,10 @@ typedef struct struct_stmt {
 	 * returning to the application." */
 	SQLULEN query_timeout;
 
-	/* result set */
+	/* [current] result set (= one answer from ES/SQL; can contain a cursor) */
 	resultset_st rset;
+	/* total count of fetched rows for one statement (sum(resultset.nrows)) */
+	size_t tf_rows;
 	/* SQL data types conversion to SQL C compatibility (IRD.SQL -> ARD.C) */
 	enum {
 		CONVERSION_VIOLATION = -2, /* specs disallowed */
@@ -345,6 +343,16 @@ typedef struct struct_stmt {
 
 } esodbc_stmt_st;
 
+/* reset total number of fetched rows for a statement */
+#define STMT_TFROWS_RESET(_stmt)	\
+	do {  \
+		(_stmt)->tf_rows = 0; \
+	} while (0)
+
+/* 1-based current row number */
+#define STMT_CRR_ROW_NUMBER(_stmt)	\
+	((_stmt)->tf_rows - (_stmt)->rset.nrows + \
+		(_stmt)->rset.vrows + /*1-based*/1)
 
 /* SQLGetData() state reset */
 #define STMT_GD_RESET(_stmt)		\
