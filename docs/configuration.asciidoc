@@ -3,6 +3,8 @@
 [[sql-odbc-setup]]
 == Configuration
 
+experimental[]
+
 Once the driver has been installed, in order for an application to be able to connect to {es} through ODBC, a set of configuration parameters must be provided to the driver. Depending on the application, there are generally three ways of providing these parameters:
 
 * through a connection string;
