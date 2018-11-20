@@ -54,10 +54,11 @@ BOOL log_init()
 
 	cnt = GetEnvironmentVariable(MK_WPTR(ESODBC_LOG_DIR_ENV_VAR),
 			dpath.str, (DWORD)dpath.cnt);
+	assert(0 <= cnt);
 	if (! cnt) { /* 0 means error */
 		/* env var wasn't defined OR error occured (which we can't log). */
 		return GetLastError() == ERROR_ENVVAR_NOT_FOUND;
-	} else if (dpath.cnt <= cnt) {
+	} else if (dpath.cnt <= (size_t)cnt) {
 		/* path buffer too small */
 		assert(0);
 		return FALSE;
@@ -157,7 +158,7 @@ BOOL filelog_print_path(wstr_st *dest, wstr_st *dir_path, wstr_st *ident)
 			(int)ident->cnt, ident->str,
 			MK_WPTR(ESODBC_LOG_FILE_SUFFIX));
 
-	if (cnt <= 0 || dest->cnt <= cnt) {
+	if (cnt <= 0 || dest->cnt <= (size_t)cnt) {
 		/* fpath buffer is too small */
 		return FALSE;
 	} else {

@@ -675,7 +675,7 @@ static BOOL config_dbc_logging(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 			WPFWP_LDESC "_" WPFWP_LDESC "_" "%d-%u",
 			LWSTR(&attrs->server), LWSTR(&attrs->port),
 			GetCurrentProcessId(), InterlockedIncrement(&filelog_cnt));
-	if (cnt <= 0 || ident.cnt <= cnt) {
+	if (cnt <= 0 || ident.cnt <= (size_t)cnt) {
 		ERRH(dbc, "failed to print log file identifier.");
 		SET_HDIAG(dbc, SQL_STATE_HY000, "failed to print log file ID", 0);
 		return FALSE;
@@ -683,7 +683,7 @@ static BOOL config_dbc_logging(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 		ident.cnt = cnt;
 	}
 	/* replace reserved characters that could raise issues with the FS */
-	for (cnt = 0; cnt < ident.cnt; cnt ++) {
+	for (cnt = 0; (size_t)cnt < ident.cnt; cnt ++) {
 		if (ident.str[cnt] < 31) {
 			ident.str[cnt] = L'_';
 		} else {
