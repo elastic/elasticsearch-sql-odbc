@@ -79,9 +79,9 @@ namespace ODBCInstaller
                 {
                     ProductIcon = "ODBC.ico",
                     Manufacturer = driverFileInfo.CompanyName,
-                    UrlInfoAbout = "https://www.elastic.co/products/stack/elasticsearch-sql",
-                    HelpLink = "https://discuss.elastic.co/c/elasticsearch"
-                },
+                    UrlInfoAbout = "https://www.elastic.co/guide/en/elasticsearch/sql-odbc/index.html",
+                    HelpLink = "https://discuss.elastic.co/tags/c/elasticsearch/sql"
+				},
                 OutFileName = "esodbc-" + fullVersionString, // Use full version string
 				Properties = new[]
 				{
