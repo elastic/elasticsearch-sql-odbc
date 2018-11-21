@@ -241,6 +241,7 @@ SQLRETURN TEST_API attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 	if (unpacked < /* 'rows' must always be present */1) {
 		ERRH(stmt, "failed to unpack JSON answer (`%.*s`): %s.",
 			blen, buff, UJGetError(stmt->rset.state));
+		assert(0);
 		RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
 	}
 
