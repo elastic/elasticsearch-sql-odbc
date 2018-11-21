@@ -44,6 +44,59 @@
 	" CATALOG " ESODBC_STRING_DELIM WPFWP_LDESC ESODBC_STRING_DELIM
 
 
+static SQLRETURN fake_answer(SQLHSTMT hstmt, const char *src, size_t cnt)
+{
+	char *dup;
+
+	if (! (dup = strdup(src))) {
+		ERRNH(hstmt, "OOM with %zu.", cnt);
+		RET_HDIAGS(hstmt, SQL_STATE_HY001);
+	}
+	return attach_answer(STMH(hstmt), dup, cnt);
+
+}
+
+SQLRETURN EsSQLStatisticsW(
+	SQLHSTMT           hstmt,
+	_In_reads_opt_(cchCatalogName) SQLWCHAR    *szCatalogName,
+	SQLSMALLINT        cchCatalogName,
+	_In_reads_opt_(cchSchemaName) SQLWCHAR     *szSchemaName,
+	SQLSMALLINT        cchSchemaName,
+	_In_reads_opt_(cchTableName) SQLWCHAR      *szTableName,
+	SQLSMALLINT        cchTableName,
+	SQLUSMALLINT       fUnique,
+	SQLUSMALLINT       fAccuracy)
+{
+	/*INDENT-OFF*/
+#	define STATISTICS_EMPTY \
+	"{" \
+		"\"columns\":[" \
+			"{\"name\":\"TABLE_CAT\","			"\"type\":\"TEXT\"}," \
+			"{\"name\":\"TABLE_SCHEM\","		"\"type\":\"TEXT\"}," \
+			"{\"name\":\"TABLE_NAME\","			"\"type\":\"TEXT\"}," \
+			"{\"name\":\"NON_UNIQUE\","			"\"type\":\"SHORT\"}," \
+			"{\"name\":\"INDEX_QUALIFIER\","	"\"type\":\"TEXT\"}," \
+			"{\"name\":\"INDEX_NAME\","			"\"type\":\"TEXT\"}," \
+			"{\"name\":\"TYPE\","				"\"type\":\"SHORT\"}," \
+			"{\"name\":\"ORDINAL_POSITION\","	"\"type\":\"SHORT\"}," \
+			"{\"name\":\"COLUMN_NAME \","		"\"type\":\"TEXT\"}," \
+			"{\"name\":\"ASC_OR_DESC\","		"\"type\":\"BYTE\"}," \
+			"{\"name\":\"CARDINALITY\","		"\"type\":\"INTEGER\"}," \
+			"{\"name\":\"PAGES\","				"\"type\":\"INTEGER\"}," \
+			"{\"name\":\"FILTER_CONDITION\","	"\"type\":\"TEXT\"}" \
+		"]," \
+		"\"rows\":[]" \
+	"}"
+	/*INDENT-ON*/
+
+	INFOH(hstmt, "no statistics available.");
+	return fake_answer(hstmt, STATISTICS_EMPTY,
+			sizeof(STATISTICS_EMPTY) - /*\0*/1);
+
+#	undef STATISTICS_EMPTY
+}
+
+
 /* writes into 'dest', of size 'room', the current catalog of 'dbc'.
  * returns negative on error, or the char count written otherwise */
 SQLSMALLINT copy_current_catalog(esodbc_dbc_st *dbc, SQLWCHAR *dest,
@@ -466,11 +519,29 @@ SQLRETURN EsSQLSpecialColumnsW
 	SQLUSMALLINT       fNullable
 )
 {
-	// TODO: is there a "rowid" equivalent: ID uniquely a ROW in the table?
-	// or unique indexes equivalents
-	WARNH(hstmt, "no special columns available.");
-	STMT_FORCE_NODATA(STMH(hstmt));
-	return SQL_SUCCESS;
+	/*INDENT-OFF*/
+#	define SPECIAL_COLUMNS_EMPTY \
+	"{" \
+		"\"columns\":[" \
+			"{\"name\":\"SCOPE\","			"\"type\":\"SHORT\"}," \
+			"{\"name\":\"COLUMN_NAME\","	"\"type\":\"TEXT\"}," \
+			"{\"name\":\"DATA_TYPE\","		"\"type\":\"SHORT\"}," \
+			"{\"name\":\"TYPE_NAME\","		"\"type\":\"TEXT\"}," \
+			"{\"name\":\"COLUMN_SIZE\","	"\"type\":\"INTEGER\"}," \
+			"{\"name\":\"BUFFER_LENGTH\","	"\"type\":\"INTEGER\"}," \
+			"{\"name\":\"DECIMAL_DIGITS\","	"\"type\":\"SHORT\"}," \
+			"{\"name\":\"PSEUDO_COLUMN\","	"\"type\":\"SHORT\"}" \
+		"]," \
+		"\"rows\":[]" \
+	"}"
+	/*INDENT-ON*/
+
+
+	INFOH(hstmt, "no special columns available.");
+	return fake_answer(hstmt, SPECIAL_COLUMNS_EMPTY,
+			sizeof(SPECIAL_COLUMNS_EMPTY) - /*\0*/1);
+
+#	undef SPECIAL_COLUMNS_EMPTY
 }
 
 
@@ -489,9 +560,34 @@ SQLRETURN EsSQLForeignKeysW(
 	_In_reads_opt_(cchFkTableName) SQLWCHAR      *szFkTableName,
 	SQLSMALLINT        cchFkTableName)
 {
-	WARNH(hstmt, "no foreign keys supported.");
-	STMT_FORCE_NODATA(STMH(hstmt));
-	return SQL_SUCCESS;
+	/*INDENT-OFF*/
+#	define FOREIGN_KEYS_EMPTY \
+	"{" \
+		"\"columns\":[" \
+			"{\"name\":\"PKTABLE_CAT\","	"\"type\":\"TEXT\"}," \
+			"{\"name\":\"PKTABLE_SCHEM\","	"\"type\":\"TEXT\"}," \
+			"{\"name\":\"PKTABLE_NAME\","	"\"type\":\"TEXT\"}," \
+			"{\"name\":\"PKCOLUMN_NAME\","	"\"type\":\"TEXT\"}," \
+			"{\"name\":\"FKTABLE_CAT\","	"\"type\":\"TEXT\"}," \
+			"{\"name\":\"FKTABLE_SCHEM\","	"\"type\":\"TEXT\"}," \
+			"{\"name\":\"FKTABLE_NAME\","	"\"type\":\"TEXT\"}," \
+			"{\"name\":\"FKCOLUMN_NAME\","	"\"type\":\"TEXT\"}," \
+			"{\"name\":\"KEY_SEQ\","		"\"type\":\"SHORT\"}," \
+			"{\"name\":\"UPDATE_RULE\","	"\"type\":\"SHORT\"}," \
+			"{\"name\":\"DELETE_RULE\","	"\"type\":\"SHORT\"}," \
+			"{\"name\":\"FK_NAME\","		"\"type\":\"TEXT\"}," \
+			"{\"name\":\"PK_NAME\","		"\"type\":\"TEXT\"}," \
+			"{\"name\":\"DEFERRABILITY\","	"\"type\":\"SHORT\"}" \
+		"]," \
+		"\"rows\":[]" \
+	"}"
+	/*INDENT-ON*/
+
+	INFOH(hstmt, "no foreign keys supported.");
+	return fake_answer(hstmt, FOREIGN_KEYS_EMPTY,
+			sizeof(FOREIGN_KEYS_EMPTY) - /*\0*/1);
+
+#	undef FOREIGN_KEYS_EMPTY
 }
 
 SQLRETURN EsSQLPrimaryKeysW(
@@ -503,9 +599,26 @@ SQLRETURN EsSQLPrimaryKeysW(
 	_In_reads_opt_(cchTableName) SQLWCHAR      *szTableName,
 	SQLSMALLINT        cchTableName)
 {
+	/*INDENT-OFF*/
+#	define PRIMARY_KEYS_EMPTY \
+	"{" \
+		"\"columns\":[" \
+			"{\"name\":\"TABLE_CAT\","		"\"type\":\"TEXT\"}," \
+			"{\"name\":\"TABLE_SCHEM\","	"\"type\":\"TEXT\"}," \
+			"{\"name\":\"TABLE_NAME\","		"\"type\":\"TEXT\"}," \
+			"{\"name\":\"COLUMN_NAME\","	"\"type\":\"TEXT\"}," \
+			"{\"name\":\"KEY_SEQ\","		"\"type\":\"SHORT\"}," \
+			"{\"name\":\"PK_NAME\","		"\"type\":\"TEXT\"}" \
+		"]," \
+		"\"rows\":[]" \
+	"}"
+	/*INDENT-ON*/
+
 	INFOH(hstmt, "no primary keys supported.");
-	STMT_FORCE_NODATA(STMH(hstmt));
-	return SQL_SUCCESS;
+	return fake_answer(hstmt, PRIMARY_KEYS_EMPTY,
+			sizeof(PRIMARY_KEYS_EMPTY) - /*\0*/1);
+
+#	undef PRIMARY_KEYS_EMPTY
 }
 
-/* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */
+/* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 tw=78 : */

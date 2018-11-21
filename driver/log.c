@@ -187,6 +187,8 @@ BOOL filelog_reset(esodbc_filelog_st *log)
 			FILE_ATTRIBUTE_NORMAL, /* flags & attributes */
 			NULL /* template */);
 	if (log->handle == INVALID_HANDLE_VALUE) {
+		/* log into general logger, if available */
+		ERRN("failed to open log file `" LWPD "`.", log->path);
 		log->fails ++;
 		return FALSE;
 	}
@@ -196,6 +198,29 @@ BOOL filelog_reset(esodbc_filelog_st *log)
 esodbc_filelog_st *filelog_new(wstr_st *path, int level)
 {
 	esodbc_filelog_st *log;
+	DWORD attrs;
+	size_t i;
+
+	assert (0 < path->cnt);
+	/* find the last separator in path */
+	for (i = path->cnt - 1; i && path->str[i] != MK_WPTR(FILE_PATH_SEPARATOR);
+		i --) {
+		;
+	}
+	assert(0 < i);
+	path->str[i] = L'\0';
+	attrs = GetFileAttributes(path->str);
+	path->str[i] = MK_WPTR(FILE_PATH_SEPARATOR);
+	/* minimum validation (dir could still not be writable for user); but
+	 * acceptable tradeoff to (1) only creating files if needed; and (2) not
+	 * creating and deleting a file for connections that might eventually not
+	 * log one message */
+	if ((attrs == INVALID_FILE_ATTRIBUTES) ||
+		(attrs & FILE_ATTRIBUTE_DIRECTORY) == 0) {
+		/* log into general logger, if available */
+		ERR("invalid directory in log file path `" LWPDL "`.", LWSTR(path));
+		return NULL;
+	}
 
 	if (! (log = malloc(sizeof(*log) +
 					(path->cnt + /*\0*/1) * sizeof(*log->path)))) {
@@ -247,6 +272,10 @@ static BOOL filelog_write(esodbc_filelog_st *log, char *buff, size_t cnt)
 			&written /* bytes written */,
 			NULL /*overlap*/)) {
 		log->fails ++;
+		/* log into general logger, if available */
+		if (log != _gf_log) { /* avoid spin for general logger's first msg */
+			ERRN("failed writing into log file `" LWPD "`.", log->path);
+		}
 		if (filelog_reset(log)) {
 			/* reattempt the write, if reset is successfull */
 			if (filelog_write(log, buff, cnt)) {
@@ -361,4 +390,4 @@ void _esodbc_log(esodbc_filelog_st *log, int lvl, int werrno,
 }
 
 
-/* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */
+/* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 tw=78 : */

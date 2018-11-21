@@ -24,10 +24,6 @@ REM
 if [%BUILD_DIR%] == [] (
 	SET BUILD_DIR=%SRC_PATH%\builds
 )
-if not [%ESODBC_LOG_DIR%] == [] (
-	REM Strip the log level, if any present (format: path?level)
-	for /f "tokens=1 delims=?" %%a in ("%ESODBC_LOG_DIR%") do set LOGGING_DIR=%%a
-)
 
 REM
 REM  Perform the building steps

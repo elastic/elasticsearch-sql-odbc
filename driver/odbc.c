@@ -1226,7 +1226,20 @@ SQLRETURN SQL_API SQLStatisticsW
 	SQLUSMALLINT       fAccuracy
 )
 {
-	RET_NOT_IMPLEMENTED(hstmt);
+	SQLRETURN ret;
+	TRACE9(_IN, hstmt, "pWhWhWhHH", hstmt,
+		szCatalogName, cchCatalogName, szSchemaName, cchSchemaName,
+		szTableName, cchTableName, fUnique, fAccuracy);
+	HND_LOCK(hstmt);
+	ret = EsSQLStatisticsW(hstmt,
+			szCatalogName, cchCatalogName,
+			szSchemaName, cchSchemaName, szTableName, cchTableName,
+			fUnique, fAccuracy);
+	HND_UNLOCK(hstmt);
+	TRACE10(_OUT, hstmt, "dpWhWhWhHH", ret, hstmt,
+		szCatalogName, cchCatalogName, szSchemaName, cchSchemaName,
+		szTableName, cchTableName, fUnique, fAccuracy);
+	return ret;
 }
 
 SQLRETURN SQL_API SQLTablePrivilegesW
@@ -1365,4 +1378,4 @@ SQLRETURN  SQL_API SQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 }
 
 
-/* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */
+/* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 tw=78 : */

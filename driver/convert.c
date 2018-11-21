@@ -501,7 +501,15 @@ static inline void write_out_octets(
 	DBGH(stmt, "length of data available for transfer: %ld", *octet_len_ptr);
 }
 
-/* if an application doesn't specify the conversion, use column's type */
+/*
+ * If an application doesn't specify the conversion, use column's type.
+ *
+ * Note: in case the ARD binds a SQL_C_DEFAULT, the driver won't check the
+ * size of the bound buffer for fixed types: "SQLFetch never truncates data
+ * converted to fixed-length data types; it always assumes that the length of
+ * the data buffer is the size of the data type."
+ * TODO: accommodate apps that do?
+ */
 static inline SQLSMALLINT get_rec_c_type(esodbc_rec_st *arec,
 	esodbc_rec_st *irec)
 {
@@ -2890,4 +2898,4 @@ SQLRETURN c2sql_varchar(esodbc_rec_st *arec, esodbc_rec_st *irec,
 }
 
 
-/* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */
+/* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 tw=78 : */
