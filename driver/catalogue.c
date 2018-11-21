@@ -56,6 +56,47 @@ static SQLRETURN fake_answer(SQLHSTMT hstmt, const char *src, size_t cnt)
 
 }
 
+SQLRETURN EsSQLStatisticsW(
+	SQLHSTMT           hstmt,
+	_In_reads_opt_(cchCatalogName) SQLWCHAR    *szCatalogName,
+	SQLSMALLINT        cchCatalogName,
+	_In_reads_opt_(cchSchemaName) SQLWCHAR     *szSchemaName,
+	SQLSMALLINT        cchSchemaName,
+	_In_reads_opt_(cchTableName) SQLWCHAR      *szTableName,
+	SQLSMALLINT        cchTableName,
+	SQLUSMALLINT       fUnique,
+	SQLUSMALLINT       fAccuracy)
+{
+	/*INDENT-OFF*/
+#	define STATISTICS_EMPTY \
+	"{" \
+		"\"columns\":[" \
+			"{\"name\":\"TABLE_CAT\","			"\"type\":\"TEXT\"}," \
+			"{\"name\":\"TABLE_SCHEM\","		"\"type\":\"TEXT\"}," \
+			"{\"name\":\"TABLE_NAME\","			"\"type\":\"TEXT\"}," \
+			"{\"name\":\"NON_UNIQUE\","			"\"type\":\"SHORT\"}," \
+			"{\"name\":\"INDEX_QUALIFIER\","	"\"type\":\"TEXT\"}," \
+			"{\"name\":\"INDEX_NAME\","			"\"type\":\"TEXT\"}," \
+			"{\"name\":\"TYPE\","				"\"type\":\"SHORT\"}," \
+			"{\"name\":\"ORDINAL_POSITION\","	"\"type\":\"SHORT\"}," \
+			"{\"name\":\"COLUMN_NAME \","		"\"type\":\"TEXT\"}," \
+			"{\"name\":\"ASC_OR_DESC\","		"\"type\":\"BYTE\"}," \
+			"{\"name\":\"CARDINALITY\","		"\"type\":\"INTEGER\"}," \
+			"{\"name\":\"PAGES\","				"\"type\":\"INTEGER\"}," \
+			"{\"name\":\"FILTER_CONDITION\","	"\"type\":\"TEXT\"}" \
+		"]," \
+		"\"rows\":[]" \
+	"}"
+	/*INDENT-ON*/
+
+	INFOH(hstmt, "no statistics available.");
+	return fake_answer(hstmt, STATISTICS_EMPTY,
+			sizeof(STATISTICS_EMPTY) - /*\0*/1);
+
+#	undef STATISTICS_EMPTY
+}
+
+
 /* writes into 'dest', of size 'room', the current catalog of 'dbc'.
  * returns negative on error, or the char count written otherwise */
 SQLSMALLINT copy_current_catalog(esodbc_dbc_st *dbc, SQLWCHAR *dest,
