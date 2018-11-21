@@ -1,5 +1,7 @@
 @echo off
 
+cd %~dp0
+
 .paket\paket.bootstrapper.exe
 IF %ERRORLEVEL% NEQ 0 EXIT /B %ERRORLEVEL%
 
