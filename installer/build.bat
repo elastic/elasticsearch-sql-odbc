@@ -11,4 +11,5 @@ IF EXIST paket.lock (
 	IF %ERRORLEVEL% NEQ 0 EXIT /B %ERRORLEVEL%
 )
 
+SET FAKE_NO_LEGACY_WARNING=true
 "packages\build\FAKE.x64\tools\FAKE.exe" "build\\scripts\\Targets.fsx" "cmdline=%*"
