@@ -2,7 +2,9 @@
 using System.Linq;
 using System.Collections.Generic;
 using System.Diagnostics;
+
 using WixSharp;
+using WixSharp.Controls;
 
 namespace ODBCInstaller
 {
@@ -70,7 +72,7 @@ namespace ODBCInstaller
                 InstallScope = InstallScope.perMachine,
                 Version = new Version(driverFileInfo.ProductMajorPart, driverFileInfo.ProductMinorPart, driverFileInfo.ProductBuildPart, driverFileInfo.ProductPrivatePart),
                 GUID = new Guid("e87c5d53-fddf-4539-9447-49032ed527bb"),
-                UI = WUI.WixUI_InstallDir,
+                UI = WUI.WixUI_Common,
                 BannerImage = "topbanner.bmp",
                 BackgroundImage = "leftbanner.bmp",
                 Name = "Elasticsearch ODBC Driver",
@@ -82,9 +84,12 @@ namespace ODBCInstaller
                     UrlInfoAbout = "https://www.elastic.co/products/stack/elasticsearch-sql",
                     HelpLink = "https://discuss.elastic.co/c/elasticsearch"
                 },
-                OutFileName = "esodbc-" + fullVersionString, // Use full version string
+                OutFileName = $"esodbc-{fullVersionString}", // Use full version string
 				Properties = new[]
 				{
+					new Property("WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT", "Launch ODBC Data Source Administrator"),
+					new Property("WIXUI_EXITDIALOGOPTIONALCHECKBOX", "1"),
+
 					new PropertyRef("NETFRAMEWORK40FULL"),
 
 					// Perform registry search for redist key
@@ -123,17 +128,22 @@ namespace ODBCInstaller
                     Disallow = true,
                     DisallowUpgradeErrorMessage = "An existing version is already installed, please uninstall before continuing.",
                     DowngradeErrorMessage = "A more recent version is already installed, please uninstall before continuing.",
-                }
-            };
+                },
+				CustomUI = UIHelper.BuildCustomUI(),
+				Actions = new WixSharp.Action[]
+				{
+					new PathFileAction(@"odbcad32.exe", "", @"%WindowsFolder%", Return.asyncNoWait, When.After, Step.InstallFinalize, new Condition("WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed"))
+				}
+			};
 
 			const string wixLocation = @"..\..\packages\WixSharp.wix.bin\tools\bin";
 			if (!System.IO.Directory.Exists(wixLocation))
 				throw new Exception($"The directory '{wixLocation}' could not be found");
-			//Compiler.LightOptions = "-sw1076 -sw1079 -sval";
 			Compiler.WixLocation = wixLocation;
 
             project.WixVariables.Add("WixUILicenseRtf", System.IO.Path.Combine(driverInputFilesPath, "LICENSE.rtf"));
 			project.Include(WixExtension.NetFx);
+
 			project.BuildMsi();
         }
 
@@ -143,6 +153,42 @@ namespace ODBCInstaller
 						 .Where(f => f.EndsWith(".dll"))
 						 .Select(f => FileVersionInfo.GetVersionInfo(f))
 						 .Single(f => f.FileDescription == "ODBC Unicode driver for Elasticsearch");
+		}
+	}
+
+	public class UIHelper
+	{
+		public static CustomUI BuildCustomUI()
+		{
+			var customUI = new CustomUI();
+			
+			customUI.On(NativeDialogs.WelcomeDlg, Buttons.Next, new ShowDialog(NativeDialogs.LicenseAgreementDlg));
+
+			customUI.On(NativeDialogs.LicenseAgreementDlg, Buttons.Back, new ShowDialog(NativeDialogs.WelcomeDlg));
+			customUI.On(NativeDialogs.LicenseAgreementDlg, Buttons.Next, new ShowDialog(NativeDialogs.InstallDirDlg));
+
+			customUI.On(NativeDialogs.InstallDirDlg, Buttons.Back, new ShowDialog(NativeDialogs.LicenseAgreementDlg));
+			customUI.On(NativeDialogs.InstallDirDlg, Buttons.Next, new SetTargetPath(),
+															 new ShowDialog(NativeDialogs.VerifyReadyDlg));
+
+			customUI.On(NativeDialogs.InstallDirDlg, Buttons.ChangeFolder,
+															 new SetProperty("_BrowseProperty", "[WIXUI_INSTALLDIR]"),
+															 new ShowDialog(CommonDialogs.BrowseDlg));
+
+			customUI.On(NativeDialogs.VerifyReadyDlg, Buttons.Back, new ShowDialog(NativeDialogs.InstallDirDlg, Condition.NOT_Installed),
+															  new ShowDialog(NativeDialogs.MaintenanceTypeDlg, Condition.Installed));
+
+			customUI.On(NativeDialogs.MaintenanceWelcomeDlg, Buttons.Next, new ShowDialog(NativeDialogs.MaintenanceTypeDlg));
+
+			customUI.On(NativeDialogs.MaintenanceTypeDlg, Buttons.Back, new ShowDialog(NativeDialogs.MaintenanceWelcomeDlg));
+			customUI.On(NativeDialogs.MaintenanceTypeDlg, Buttons.Repair, new ShowDialog(NativeDialogs.VerifyReadyDlg));
+			customUI.On(NativeDialogs.MaintenanceTypeDlg, Buttons.Remove, new ShowDialog(NativeDialogs.VerifyReadyDlg));
+
+			customUI.On(NativeDialogs.ExitDialog , Buttons.Finish, new CloseDialog() {
+				Order = 9999,
+			});
+
+			return customUI;
 		}
 	}
 }
