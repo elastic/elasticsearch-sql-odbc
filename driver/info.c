@@ -1194,33 +1194,44 @@ SQLRETURN EsSQLGetFunctions(SQLHDBC ConnectionHandle,
  */
 SQLRETURN EsSQLGetTypeInfoW(SQLHSTMT StatementHandle, SQLSMALLINT DataType)
 {
+#define SQL_TYPES_STMT		"SYS TYPES"
+#define SQL_TYPES_TYPE_SEL	"TYPE"
+
 	SQLRETURN ret;
 	esodbc_stmt_st *stmt = STMH(StatementHandle);
-
-#define SQL_TYPES_STATEMENT	"SYS TYPES"
+	SQLWCHAR wbuff[sizeof(SQL_TYPES_STMT " " SQL_TYPES_TYPE_SEL " 32767")];
+	size_t cnt;
 
 	switch (DataType) {
 		case SQL_ALL_TYPES:
 			DBGH(stmt, "requested type description for all supported types.");
+			wcscpy(wbuff, MK_WPTR(SQL_TYPES_STMT));
+			cnt = sizeof(SQL_TYPES_STMT) - 1;
 			break;
 
 		/* "If the DataType argument specifies a data type which is valid for
 		 * the version of ODBC supported by the driver, but is not supported
 		 * by the driver, then it will return an empty result set." */
 		default:
-			ERRH(stmt, "invalid DataType: %d.", DataType);
-			FIXME; // FIXME : implement filtering..
-			RET_HDIAGS(STMH(StatementHandle), SQL_STATE_HY004);
+			cnt = swprintf(wbuff, sizeof(wbuff)/sizeof(*wbuff),
+					MK_WPTR(SQL_TYPES_STMT " " SQL_TYPES_TYPE_SEL " %hd"),
+					DataType);
+			if (cnt <= 0) {
+				ERRNH(stmt, "failed to print catalog query.");
+				RET_HDIAGS(stmt, SQL_STATE_HY000);
+			}
 	}
 
 	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
 	assert(SQL_SUCCEEDED(ret)); /* can't return error */
-	ret = attach_sql(stmt, MK_WPTR(SQL_TYPES_STATEMENT),
-			sizeof(SQL_TYPES_STATEMENT) - 1);
+	ret = attach_sql(stmt, wbuff, cnt);
 	if (SQL_SUCCEEDED(ret)) {
 		ret = EsSQLExecute(stmt);
 	}
 	return ret;
+
+#	undef SQL_TYPES_STMT
+#	undef SQL_TYPES_TYPE_SEL
 }
 
-/* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */
+/* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 tw=78 : */
