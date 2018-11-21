@@ -163,10 +163,27 @@
  * respect yet (ex., see CURRENT_ functions). */
 #define ESODBC_SQL_CONFORMANCE					SQL_SC_SQL92_ENTRY
 /* Driver conformance level: CORE.
- * No scrollabe cursors et al. just yet */
+ * No scrollabe cursors et al. just yet.
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/interface-conformance-levels
+ */
 #define ESODBC_ODBC_INTERFACE_CONFORMANCE		SQL_OIC_CORE
 #define ESODBC_GETDATA_EXTENSIONS				(0 | \
 	SQL_GD_ANY_COLUMN | SQL_GD_ANY_ORDER | SQL_GD_BOUND)
+
+/*
+ * Deprecated info types.
+ */
+#define ESODBC_FETCH_DIRECTION					SQL_FD_FETCH_NEXT
+#define ESODBC_POS_OPERATIONS					0L
+#define ESODBC_LOCK_TYPES						0L
+#define ESODBC_POSITIONED_STATEMENTS			0L
+/* equivalent to ESODBC_ODBC_INTERFACE_CONFORMANCE above */
+#define ESODBC_ODBC_API_CONFORMANCE				SQL_OAC_LEVEL1
+#define ESODBC_SCROLL_CONCURRENCY				SQL_SCCO_READ_ONLY
+/* equivalent to ESODBC_SQL_CONFORMANCE above */
+#define ESODBC_ODBC_SQL_CONFORMANCE				SQL_OSC_MINIMUM
+//#define ESODBC_ODBC_SQL_CONFORMANCE				SQL_OSC_CORE
+#define ESODBC_STATIC_SENSITIVITY				0L
 
 /*
  * Catalog support:
@@ -403,3 +420,5 @@
 #define ESODBC_ES_TO_SQL_NESTED			ESODBC_SQL_NESTED
 
 #endif /* __DEFS_H__ */
+
+/* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 tw=78 : */

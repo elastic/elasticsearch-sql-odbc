@@ -2056,7 +2056,7 @@ SQLRETURN EsSQLSetConnectAttrW(
 			INFOH(dbc, "no ANSI/Unicode specific behaviour (app is: %s).",
 				(uintptr_t)Value == SQL_AA_TRUE ? "ANSI" : "Unicode");
 			//state = SQL_STATE_IM001;
-			return SQL_ERROR; /* error means ANSI */
+			return SQL_ERROR; /* error means same ANSI/Unicode behavior */
 
 		/* https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/automatic-population-of-the-ipd */
 		case SQL_ATTR_AUTO_IPD:
@@ -2128,6 +2128,7 @@ SQLRETURN EsSQLSetConnectAttrW(
 			break;
 
 		case SQL_ATTR_CONNECTION_DEAD:
+			/* read only attribute */
 			RET_HDIAGS(dbc, SQL_STATE_HY092);
 			break;
 
@@ -2152,6 +2153,14 @@ SQLRETURN EsSQLSetConnectAttrW(
 			ERRH(dbc, "no traslation support available.");
 			RET_HDIAGS(dbc, SQL_STATE_IM009);
 
+		case SQL_ATTR_CURRENT_CATALOG:
+			DBGH(dbc, "setting current catalog to: `" LWPDL "`.",
+				/* string should be 0-term'd */
+				0 <= StringLength ? StringLength : SHRT_MAX,
+				(SQLWCHAR *)Value);
+			ERRH(dbc, "setting catalog name not supported.");
+			RET_HDIAGS(dbc, SQL_STATE_HYC00);
+
 		case SQL_ATTR_TRACE:
 		case SQL_ATTR_TRACEFILE: /* DM-only */
 		case SQL_ATTR_ENLIST_IN_DTC:
@@ -2161,8 +2170,17 @@ SQLRETURN EsSQLSetConnectAttrW(
 			ERRH(dbc, "unsupported attribute %ld.", Attribute);
 			RET_HDIAGS(dbc, SQL_STATE_HYC00);
 
+#ifndef NDEBUG
+		/* MS Access/Jet proprietary info type */
+		case 30002:
+			ERRH(dbc, "unsupported info type.");
+			RET_HDIAGS(DBCH(ConnectionHandle), SQL_STATE_HY092);
+#endif
+
 		default:
 			ERRH(dbc, "unknown Attribute: %d.", Attribute);
+			// FIXME: add the other attributes
+			FIXME;
 			RET_HDIAGS(dbc, SQL_STATE_HY092);
 	}
 
@@ -2270,14 +2288,21 @@ SQLRETURN EsSQLGetConnectAttrW(
 			ERRH(dbc, "unsupported attribute %ld.", Attribute);
 			RET_HDIAGS(dbc, SQL_STATE_HY000);
 
+#ifndef NDEBUG
+		/* MS Access/Jet proprietary info type */
+		case 30002:
+			ERRH(dbc, "unsupported info type.");
+			RET_HDIAGS(DBCH(ConnectionHandle), SQL_STATE_HY092);
+#endif
+
 		default:
+			ERRH(dbc, "unknown Attribute type %ld.", Attribute);
 			// FIXME: add the other attributes
 			FIXME;
-			ERRH(dbc, "unknown Attribute type %d.", Attribute);
 			RET_HDIAGS(DBCH(ConnectionHandle), SQL_STATE_HY092);
 	}
 
 	return SQL_SUCCESS;
 }
 
-/* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */
+/* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 tw=78 : */

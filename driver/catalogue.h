@@ -15,6 +15,16 @@ SQLSMALLINT copy_current_catalog(esodbc_dbc_st *dbc, SQLWCHAR *dest,
 	SQLSMALLINT room);
 
 
+SQLRETURN EsSQLStatisticsW(
+	SQLHSTMT           hstmt,
+	_In_reads_opt_(cchCatalogName) SQLWCHAR    *szCatalogName,
+	SQLSMALLINT        cchCatalogName,
+	_In_reads_opt_(cchSchemaName) SQLWCHAR     *szSchemaName,
+	SQLSMALLINT        cchSchemaName,
+	_In_reads_opt_(cchTableName) SQLWCHAR      *szTableName,
+	SQLSMALLINT        cchTableName,
+	SQLUSMALLINT       fUnique,
+	SQLUSMALLINT       fAccuracy);
 SQLRETURN  EsSQLTablesW(
 	SQLHSTMT StatementHandle,
 	_In_reads_opt_(NameLength1) SQLWCHAR *CatalogName,
@@ -80,4 +90,4 @@ SQLRETURN EsSQLPrimaryKeysW(
 #endif /* __CATALOGUE_H__ */
 
 
-/* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */
+/* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 tw=78 : */
