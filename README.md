@@ -86,12 +86,16 @@ Required packages:
 
  * MSBuild
    - as the build tool;
- * Windows SDK for UWP: C++
-   - for the CRT headers;
+ * Windows 10 SDK
+   - headers and libraries;
  * VC++ toolset
    - for the compiler;
  * C++/CLI support
-   - for the command line environment and building.
+   - for the DSN editor C to C# CLI binding;
+ * C# support
+   - for the DSN editor C# form;
+ * F# support
+   - for the MSI packaging.
 
 Optional packages:
 
