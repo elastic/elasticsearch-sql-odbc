@@ -89,7 +89,7 @@ namespace ODBCInstaller
                 OutFileName = $"esodbc-{fullVersionString}", // Use full version string
 				Properties = new[]
 				{
-					new Property("WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT", "Launch ODBC Data Source Administrator"),
+					new Property("WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT", "Launch ODBC Data Source Administrator after installation"),
 					new Property("WIXUI_EXITDIALOGOPTIONALCHECKBOX", "1"),
 
 					new PropertyRef("NETFRAMEWORK40FULL"),
