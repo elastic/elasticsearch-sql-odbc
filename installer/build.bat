@@ -4,6 +4,8 @@ REM you may not use this file except in compliance with the Elastic License.
 
 @echo off
 
+cd %~dp0
+
 .paket\paket.bootstrapper.exe
 IF %ERRORLEVEL% NEQ 0 EXIT /B %ERRORLEVEL%
 
