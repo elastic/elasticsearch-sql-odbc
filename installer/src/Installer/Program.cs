@@ -5,6 +5,7 @@ using System.Diagnostics;
 
 using WixSharp;
 using WixSharp.Controls;
+using System.Xml.Linq;
 
 namespace ODBCInstaller
 {
@@ -65,6 +66,7 @@ namespace ODBCInstaller
 
             var installDirectory = $@"%ProgramFiles%\Elastic\ODBCDriver\{msiVersionString}";
             var components = new Dir(installDirectory, files);
+			var finishActionName = "LaunchODBCDataSourceAdmin";
 
             var project = new Project("ODBCDriverInstaller", components)
             {
@@ -96,7 +98,9 @@ namespace ODBCInstaller
 					new Property("VS2017REDISTINSTALLED",
 						new RegistrySearch(RegistryHive.LocalMachine, @"SOFTWARE\WOW6432Node\Microsoft\VisualStudio\14.0\VC\Runtimes\x64", "Installed", RegistrySearchType.raw){
 							Win64 = true
-						})
+						}),
+
+					new Property("WixShellExecTarget", "odbcad32.exe")
 				},
 				LaunchConditions = new List<LaunchCondition>
 				{
@@ -129,11 +133,7 @@ namespace ODBCInstaller
                     DisallowUpgradeErrorMessage = "An existing version is already installed, please uninstall before continuing.",
                     DowngradeErrorMessage = "A more recent version is already installed, please uninstall before continuing.",
                 },
-				CustomUI = UIHelper.BuildCustomUI(),
-				Actions = new WixSharp.Action[]
-				{
-					new PathFileAction(@"odbcad32.exe", "", @"%WindowsFolder%", Return.asyncNoWait, When.After, Step.InstallFinalize, new Condition("WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed"))
-				}
+				CustomUI = UIHelper.BuildCustomUI(finishActionName),
 			};
 
 			const string wixLocation = @"..\..\packages\WixSharp.wix.bin\tools\bin";
@@ -143,9 +143,28 @@ namespace ODBCInstaller
 
             project.WixVariables.Add("WixUILicenseRtf", System.IO.Path.Combine(driverInputFilesPath, "LICENSE.rtf"));
 			project.Include(WixExtension.NetFx);
+			project.Include(WixExtension.Util);
+			project.Include(WixExtension.UI);
+			project.WixSourceGenerated += document => Project_WixSourceGenerated(finishActionName, document);
 
 			project.BuildMsi();
         }
+
+		private static void Project_WixSourceGenerated(string finishActionName, XDocument document)
+		{
+			var documentRoot = document.Root;
+			var ns = documentRoot.Name.Namespace;
+			var product = documentRoot.Descendants(ns + "Product").Single();
+
+			// executes what's defined in WixShellExecTarget Property.
+			// WixSharp does not have an element for WixShellExec custom action
+			product.Add(new XElement(ns + "CustomAction",
+				new XAttribute("Id", finishActionName),
+				new XAttribute("BinaryKey", "WixCA"),
+				new XAttribute("DllEntry", "WixShellExec"),
+				new XAttribute("Impersonate", "yes")
+			));
+		}
 
 		private static FileVersionInfo GetDriverFileInfo(string zipContentsDirectory)
 		{
@@ -158,7 +177,7 @@ namespace ODBCInstaller
 
 	public class UIHelper
 	{
-		public static CustomUI BuildCustomUI()
+		public static CustomUI BuildCustomUI(string finishActionName)
 		{
 			var customUI = new CustomUI();
 			
@@ -184,7 +203,8 @@ namespace ODBCInstaller
 			customUI.On(NativeDialogs.MaintenanceTypeDlg, Buttons.Repair, new ShowDialog(NativeDialogs.VerifyReadyDlg));
 			customUI.On(NativeDialogs.MaintenanceTypeDlg, Buttons.Remove, new ShowDialog(NativeDialogs.VerifyReadyDlg));
 
-			customUI.On(NativeDialogs.ExitDialog , Buttons.Finish, new CloseDialog() {
+			customUI.On(NativeDialogs.ExitDialog , Buttons.Finish, new ExecuteCustomAction(finishActionName, "WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed"), new CloseDialog()
+			{
 				Order = 9999,
 			});
 
