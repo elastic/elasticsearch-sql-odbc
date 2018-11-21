@@ -561,7 +561,7 @@ SQLRETURN EsSQLForeignKeysW(
 	SQLSMALLINT        cchFkTableName)
 {
 	/*INDENT-OFF*/
-#	define SPECIAL_COLUMNS_EMPTY \
+#	define FOREIGN_KEYS_EMPTY \
 	"{" \
 		"\"columns\":[" \
 			"{\"name\":\"PKTABLE_CAT\","	"\"type\":\"TEXT\"}," \
@@ -584,10 +584,10 @@ SQLRETURN EsSQLForeignKeysW(
 	/*INDENT-ON*/
 
 	INFOH(hstmt, "no foreign keys supported.");
-	return fake_answer(hstmt, SPECIAL_COLUMNS_EMPTY,
-			sizeof(SPECIAL_COLUMNS_EMPTY) - /*\0*/1);
+	return fake_answer(hstmt, FOREIGN_KEYS_EMPTY,
+			sizeof(FOREIGN_KEYS_EMPTY) - /*\0*/1);
 
-#	undef SPECIAL_COLUMNS_EMPTY
+#	undef FOREIGN_KEYS_EMPTY
 }
 
 SQLRETURN EsSQLPrimaryKeysW(
