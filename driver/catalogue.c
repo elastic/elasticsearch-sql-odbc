@@ -106,12 +106,19 @@ SQLSMALLINT copy_current_catalog(esodbc_dbc_st *dbc, SQLWCHAR *dest,
 	SQLSMALLINT used = -1; /*failure*/
 	SQLLEN row_cnt;
 	SQLLEN ind_len = SQL_NULL_DATA;
-	SQLWCHAR buff[ESODBC_MAX_IDENTIFIER_LEN + /*\0*/1];
+	SQLWCHAR *buff;
+	static const size_t buff_cnt = ESODBC_MAX_IDENTIFIER_LEN + /*\0*/1;
 	wstr_st catalog;
+
+	buff = malloc(sizeof(*buff) * buff_cnt);
+	if (! buff) {
+		ERRH(dbc, "OOM: %zu wchar_t.", buff_cnt);
+		return -1;
+	}
 
 	if (! SQL_SUCCEEDED(EsSQLAllocHandle(SQL_HANDLE_STMT, dbc, &stmt))) {
 		ERRH(dbc, "failed to alloc a statement handle.");
-		return -1;
+		goto end;
 	}
 	assert(stmt);
 
@@ -141,7 +148,7 @@ SQLSMALLINT copy_current_catalog(esodbc_dbc_st *dbc, SQLWCHAR *dest,
 		}
 
 		if (! SQL_SUCCEEDED(EsSQLBindCol(stmt, /*col#*/1, SQL_C_WCHAR, buff,
-					sizeof(buff), &ind_len))) {
+					sizeof(*buff) * buff_cnt, &ind_len))) {
 			ERRH(dbc, "failed to bind first column.");
 			goto end;
 		}
@@ -168,14 +175,17 @@ SQLSMALLINT copy_current_catalog(esodbc_dbc_st *dbc, SQLWCHAR *dest,
 	}
 
 end:
-	/* safe even if no binding occured */
-	if (! SQL_SUCCEEDED(EsSQLFreeStmt(stmt, SQL_UNBIND))) {
-		ERRH(stmt, "failed to unbind statement");
-		used = -1;
+	if (stmt) {
+		/* safe even if no binding occured */
+		if (! SQL_SUCCEEDED(EsSQLFreeStmt(stmt, SQL_UNBIND))) {
+			ERRH(stmt, "failed to unbind statement");
+			used = -1;
+		}
+		if (! SQL_SUCCEEDED(EsSQLFreeHandle(SQL_HANDLE_STMT, stmt))) {
+			ERRH(dbc, "failed to free statement handle!");
+		}
 	}
-	if (! SQL_SUCCEEDED(EsSQLFreeHandle(SQL_HANDLE_STMT, stmt))) {
-		ERRH(dbc, "failed to free statement handle!");
-	}
+	free(buff);
 	return used;
 }
 
@@ -242,22 +252,33 @@ SQLRETURN EsSQLTablesW(
 	SQLSMALLINT NameLength4)
 {
 	esodbc_stmt_st *stmt = STMH(StatementHandle);
-	SQLRETURN ret;
-	/* b/c declaring an array with a const doesn't work with MSVC's compiler */
-	enum wbuf_len { wbuf_len = sizeof(SQL_TABLES)
+	SQLRETURN ret = SQL_ERROR;
+	enum {
+		wbuf_cnt = sizeof(SQL_TABLES)
 			+ sizeof(SQL_TABLES_CAT)
 			+ sizeof(SQL_TABLES_TAB)
 			+ sizeof(SQL_TABLES_TYP)
-			+ 3 * ESODBC_MAX_IDENTIFIER_LEN /* it has 4x 0-term space */
+			+ 3 * ESODBC_MAX_IDENTIFIER_LEN /* it has 4x 0-term space */,
+		/* 2x: "a,b,c" -> "'a','b','c'" : each "x," => "'x'," */
+		tbuf_cnt = 2 * ESODBC_MAX_IDENTIFIER_LEN
 	};
-	SQLWCHAR wbuf[wbuf_len];
+	SQLWCHAR *wbuf;
 	SQLWCHAR *table, *schema, *catalog, *type;
 	size_t cnt_tab, cnt_sch, cnt_cat, cnt_typ, pos;
-	/* 2x: "a,b,c" -> "'a','b','c'" : each "x," => "'x'," */
-	SQLWCHAR typ_buf[2 * ESODBC_MAX_IDENTIFIER_LEN];
+	SQLWCHAR *typ_buf;
+	void *ptr;
 
 	if (stmt->metadata_id == SQL_TRUE) {
 		FIXME;    // FIXME
+	}
+
+	ptr = malloc((wbuf_cnt + tbuf_cnt) * sizeof(SQLWCHAR));
+	if (! ptr) {
+		ERRNH(stmt, "OOM: %zu wbuf_t.", wbuf_cnt + tbuf_cnt);
+		RET_HDIAGS(stmt, SQL_STATE_HY001);
+	} else {
+		wbuf = (SQLWCHAR *)ptr;
+		typ_buf = &wbuf[wbuf_cnt + 1];
 	}
 
 	pos = sizeof(SQL_TABLES) - 1;
@@ -271,17 +292,19 @@ SQLRETURN EsSQLTablesW(
 				ERRH(stmt, "catalog identifier name '" LTPDL "' too long "
 					"(%zd. max=%d).", (int)cnt_cat, catalog, cnt_cat,
 					ESODBC_MAX_IDENTIFIER_LEN);
-				RET_HDIAG(stmt, SQL_STATE_HY090, "catalog name too long", 0);
+				SET_HDIAG(stmt, SQL_STATE_HY090, "catalog name too long", 0);
+				goto end;
 			}
 		} else {
 			cnt_cat = NameLength1;
 		}
 
-		cnt_cat = swprintf(wbuf + pos, wbuf_len - pos, SQL_TABLES_CAT,
+		cnt_cat = swprintf(wbuf + pos, wbuf_cnt - pos, SQL_TABLES_CAT,
 				(int)cnt_cat, catalog);
 		if (cnt_cat <= 0) {
 			ERRH(stmt, "failed to print 'catalog' for tables catalog SQL.");
-			RET_HDIAGS(stmt, SQL_STATE_HY000);
+			SET_HDIAG(stmt, SQL_STATE_HY000, "internal printing error", 0);
+			goto end;
 		} else {
 			pos += cnt_cat;
 		}
@@ -295,7 +318,8 @@ SQLRETURN EsSQLTablesW(
 				ERRH(stmt, "schema identifier name '" LTPDL "' too long "
 					"(%zd. max=%d).", (int)cnt_sch, schema, cnt_sch,
 					ESODBC_MAX_IDENTIFIER_LEN);
-				RET_HDIAG(stmt, SQL_STATE_HY090, "schema name too long", 0);
+				SET_HDIAG(stmt, SQL_STATE_HY090, "schema name too long", 0);
+				goto end;
 			}
 		} else {
 			cnt_sch = NameLength2;
@@ -304,8 +328,9 @@ SQLRETURN EsSQLTablesW(
 		/* TODO: server support needed for sch. name filtering */
 		if (wszmemcmp(schema, MK_WPTR(SQL_ALL_SCHEMAS), (long)cnt_sch)) {
 			ERRH(stmt, "filtering by schemas is not supported.");
-			RET_HDIAG(stmt, SQL_STATE_IM001, "schema filtering not supported",
+			SET_HDIAG(stmt, SQL_STATE_IM001, "schema filtering not supported",
 				0);
+			goto end;
 		}
 	}
 
@@ -318,17 +343,19 @@ SQLRETURN EsSQLTablesW(
 				ERRH(stmt, "table identifier name '" LTPDL "' too long "
 					"(%zd. max=%d).", (int)cnt_tab, table, cnt_tab,
 					ESODBC_MAX_IDENTIFIER_LEN);
-				RET_HDIAG(stmt, SQL_STATE_HY090, "table name too long", 0);
+				SET_HDIAG(stmt, SQL_STATE_HY090, "table name too long", 0);
+				goto end;
 			}
 		} else {
 			cnt_tab = NameLength3;
 		}
 
-		cnt_tab = swprintf(wbuf + pos, wbuf_len - pos, SQL_TABLES_TAB,
+		cnt_tab = swprintf(wbuf + pos, wbuf_cnt - pos, SQL_TABLES_TAB,
 				(int)cnt_tab, table);
 		if (cnt_tab <= 0) {
 			ERRH(stmt, "failed to print 'table' for tables catalog SQL.");
-			RET_HDIAGS(stmt, SQL_STATE_HY000);
+			SET_HDIAG(stmt, SQL_STATE_HY000, "internal printing error", 0);
+			goto end;
 		} else {
 			pos += cnt_tab;
 		}
@@ -342,26 +369,33 @@ SQLRETURN EsSQLTablesW(
 				ERRH(stmt, "type identifier name '" LTPDL "' too long "
 					"(%zd. max=%d).", (int)cnt_typ, type, cnt_typ,
 					ESODBC_MAX_IDENTIFIER_LEN);
-				RET_HDIAG(stmt, SQL_STATE_HY090, "type name too long", 0);
+				SET_HDIAG(stmt, SQL_STATE_HY090, "type name too long", 0);
+				goto end;
 			}
 		} else {
 			cnt_typ = NameLength4;
 		}
 
-		/* In this argument, "each value can be enclosed in single quotation
-		 * marks (') or unquoted" => quote if not quoted (see GH#30398). */
-		if (! wcsnstr(type, cnt_typ, L'\'')) {
-			cnt_typ = quote_tokens(type, cnt_typ, typ_buf);
-			type = typ_buf;
-		}
+		/* Only print TYPE if non-empty. This is be incorrect, by the book,
+		 * but there's little use to specifying an empty string as the type
+		 * (vs NULL), so this should hopefully be safe. -- Qlik */
+		if (0 < cnt_typ) {
+			/* Here, "each value can be enclosed in single quotation marks (')
+			 * or unquoted" => quote if not quoted (see GH#30398). */
+			if (! wcsnstr(type, cnt_typ, L'\'')) {
+				cnt_typ = quote_tokens(type, cnt_typ, typ_buf);
+				type = typ_buf;
+			}
 
-		cnt_typ = swprintf(wbuf + pos, wbuf_len - pos, SQL_TABLES_TYP,
-				(int)cnt_typ, type);
-		if (cnt_typ <= 0) {
-			ERRH(stmt, "failed to print 'type' for tables catalog SQL.");
-			RET_HDIAGS(stmt, SQL_STATE_HY000);
-		} else {
-			pos += cnt_typ;
+			cnt_typ = swprintf(wbuf + pos, wbuf_cnt - pos, SQL_TABLES_TYP,
+					(int)cnt_typ, type);
+			if (cnt_typ <= 0) {
+				ERRH(stmt, "failed to print 'type' for tables catalog SQL.");
+				SET_HDIAG(stmt, SQL_STATE_HY000, "internal printing error", 0);
+				goto end;
+			} else {
+				pos += cnt_typ;
+			}
 		}
 	}
 
@@ -373,6 +407,8 @@ SQLRETURN EsSQLTablesW(
 	if (SQL_SUCCEEDED(ret)) {
 		ret = EsSQLExecute(stmt);
 	}
+end:
+	free(ptr);
 	return ret;
 }
 
@@ -390,9 +426,10 @@ SQLRETURN EsSQLColumnsW
 )
 {
 	esodbc_stmt_st *stmt = STMH(hstmt);
-	SQLRETURN ret;
-	SQLWCHAR wbuf[sizeof(SQL_COLUMNS(SQL_COL_CAT))
-		+ 3 * ESODBC_MAX_IDENTIFIER_LEN];
+	SQLRETURN ret = SQL_ERROR;
+	SQLWCHAR *wbuf;
+	static const size_t wbuf_cnt = sizeof(SQL_COLUMNS(SQL_COL_CAT)) +
+		3 * ESODBC_MAX_IDENTIFIER_LEN;
 	SQLWCHAR *catalog, *schema, *table, *column;
 	size_t cnt_cat, cnt_sch, cnt_tab, cnt_col, pos;
 
@@ -481,19 +518,23 @@ SQLRETURN EsSQLColumnsW
 		cnt_col = sizeof(ESODBC_ALL_COLUMNS) - /*0-term*/1;
 	}
 
+	wbuf = malloc(wbuf_cnt * sizeof(*wbuf));
+	if (! wbuf) {
+		ERRNH(stmt, "OOM: %zu wbuf_t.", wbuf_cnt);
+		RET_HDIAGS(stmt, SQL_STATE_HY001);
+	}
 	/* print SQL to send to server */
 	if (catalog) {
-		pos = swprintf(wbuf, sizeof(wbuf)/sizeof(wbuf[0]),
-				SQL_COLUMNS(SQL_COL_CAT), (int)cnt_cat, catalog,
-				(int)cnt_tab, table, (int)cnt_col, column);
+		pos = swprintf(wbuf, wbuf_cnt, SQL_COLUMNS(SQL_COL_CAT), (int)cnt_cat,
+				catalog, (int)cnt_tab, table, (int)cnt_col, column);
 	} else {
-		pos = swprintf(wbuf, sizeof(wbuf)/sizeof(wbuf[0]),
-				SQL_COLUMNS(),
-				(int)cnt_tab, table, (int)cnt_col, column);
+		pos = swprintf(wbuf, wbuf_cnt, SQL_COLUMNS(), (int)cnt_tab, table,
+				(int)cnt_col, column);
 	}
 	if (pos <= 0) {
 		ERRH(stmt, "failed to print 'columns' catalog SQL.");
-		RET_HDIAGS(stmt, SQL_STATE_HY000);
+		SET_HDIAG(stmt, SQL_STATE_HY000, "internal printing error", 0);
+		goto end;
 	}
 
 	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
@@ -502,6 +543,8 @@ SQLRETURN EsSQLColumnsW
 	if (SQL_SUCCEEDED(ret)) {
 		ret = EsSQLExecute(stmt);
 	}
+end:
+	free(wbuf);
 	return ret;
 }
 
