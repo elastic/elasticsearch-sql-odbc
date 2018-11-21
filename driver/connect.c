@@ -479,6 +479,7 @@ err:
 static BOOL dbc_curl_prepare(esodbc_dbc_st *dbc, SQLULEN tout,
 	const cstr_st *u8body)
 {
+	curl_off_t post_size = u8body->cnt;
 	assert(dbc->curl);
 
 	dbc->curl_err = CURLE_OK;
@@ -492,21 +493,9 @@ static BOOL dbc_curl_prepare(esodbc_dbc_st *dbc, SQLULEN tout,
 		}
 	}
 
-	/* curl will always expect a 64bit value (curl_off_t), while size_t
-	 * remains a 32bit type of 32bit platforms (where a long is needed). */
-#if defined(_WIN64) || defined (WIN64)
 	/* len of the body */
 	dbc->curl_err = curl_easy_setopt(dbc->curl, CURLOPT_POSTFIELDSIZE_LARGE,
-			u8body->cnt);
-#else /* 64b */
-	if (LONG_MAX < u8body->cnt) {
-		ERRH(dbc, "libcurl: post fieldsize %zu too large; max: %ld.",
-			u8body->cnt, LONG_MAX);
-		goto err;
-	}
-	dbc->curl_err = curl_easy_setopt(dbc->curl, CURLOPT_POSTFIELDSIZE,
-			u8body->cnt);
-#endif /* 64b */
+			post_size);
 	if (dbc->curl_err != CURLE_OK) {
 		ERRH(dbc, "libcurl: failed to set post fieldsize: %zu.", u8body->cnt);
 		goto err;

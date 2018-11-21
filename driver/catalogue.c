@@ -199,7 +199,7 @@ SQLRETURN EsSQLTablesW(
 	SQLSMALLINT NameLength4)
 {
 	esodbc_stmt_st *stmt = STMH(StatementHandle);
-	SQLRETURN ret = SQL_ERROR;;
+	SQLRETURN ret = SQL_ERROR;
 	enum {
 		wbuf_cnt = sizeof(SQL_TABLES)
 			+ sizeof(SQL_TABLES_CAT)
