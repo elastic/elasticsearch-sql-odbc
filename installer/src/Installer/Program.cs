@@ -10,9 +10,9 @@ using WixSharp;
 
 namespace ODBCInstaller
 {
-    partial class Program
-    {
-        static void Main(string[] args)
+	partial class Program
+	{
+		static void Main(string[] args)
 		{
 			// Arguments
 			var fullVersionString = args[0];
@@ -60,35 +60,35 @@ namespace ODBCInstaller
 			// Append any prerelease flags onto the version string
 			var msiVersionString = $"{driverFileInfo.ProductVersion}{preRelease}";
 
-            var files = System.IO.Directory.GetFiles(driverInputFilesPath)
-                              .Where(f => f.EndsWith(driverFilePath) == false)
-                              .Select(f => new File(f))
-                              .Concat(new[] { new File(driverFilePath, new ODBCDriver("Elasticsearch Driver")) })
-                              .Cast<WixEntity>()
-                              .ToArray();
+			var files = System.IO.Directory.GetFiles(driverInputFilesPath)
+							  .Where(f => f.EndsWith(driverFilePath) == false)
+							  .Select(f => new File(f))
+							  .Concat(new[] { new File(driverFilePath, new ODBCDriver("Elasticsearch Driver")) })
+							  .Cast<WixEntity>()
+							  .ToArray();
 
-            var installDirectory = $@"%ProgramFiles%\Elastic\ODBCDriver\{msiVersionString}";
-            var components = new Dir(installDirectory, files);
+			var installDirectory = $@"%ProgramFiles%\Elastic\ODBCDriver\{msiVersionString}";
+			var components = new Dir(installDirectory, files);
 
-            var project = new Project("ODBCDriverInstaller", components)
-            {
-                Platform = Platform.x64,
-                InstallScope = InstallScope.perMachine,
-                Version = new Version(driverFileInfo.ProductMajorPart, driverFileInfo.ProductMinorPart, driverFileInfo.ProductBuildPart, driverFileInfo.ProductPrivatePart),
-                GUID = new Guid("e87c5d53-fddf-4539-9447-49032ed527bb"),
-                UI = WUI.WixUI_InstallDir,
-                BannerImage = "topbanner.bmp",
-                BackgroundImage = "leftbanner.bmp",
-                Name = "Elasticsearch ODBC Driver",
-                Description = $"{driverFileInfo.FileDescription} ({msiVersionString})",
-                ControlPanelInfo = new ProductInfo
-                {
-                    ProductIcon = "ODBC.ico",
-                    Manufacturer = driverFileInfo.CompanyName,
-                    UrlInfoAbout = "https://www.elastic.co/products/stack/elasticsearch-sql",
-                    HelpLink = "https://discuss.elastic.co/c/elasticsearch"
-                },
-                OutFileName = "esodbc-" + fullVersionString, // Use full version string
+			var project = new Project("ODBCDriverInstaller", components)
+			{
+				Platform = Platform.x64,
+				InstallScope = InstallScope.perMachine,
+				Version = new Version(driverFileInfo.ProductMajorPart, driverFileInfo.ProductMinorPart, driverFileInfo.ProductBuildPart, driverFileInfo.ProductPrivatePart),
+				GUID = new Guid("e87c5d53-fddf-4539-9447-49032ed527bb"),
+				UI = WUI.WixUI_InstallDir,
+				BannerImage = "topbanner.bmp",
+				BackgroundImage = "leftbanner.bmp",
+				Name = "Elasticsearch ODBC Driver",
+				Description = $"{driverFileInfo.FileDescription} ({msiVersionString})",
+				ControlPanelInfo = new ProductInfo
+				{
+					ProductIcon = "ODBC.ico",
+					Manufacturer = driverFileInfo.CompanyName,
+					UrlInfoAbout = "https://www.elastic.co/products/stack/elasticsearch-sql",
+					HelpLink = "https://discuss.elastic.co/c/elasticsearch"
+				},
+				OutFileName = $"esodbc-{fullVersionString}", // Use full version string
 				Properties = new[]
 				{
 					new PropertyRef("NETFRAMEWORK40FULL"),
@@ -123,25 +123,24 @@ namespace ODBCInstaller
 
 				// http://wixtoolset.org/documentation/manual/v3/xsd/wix/majorupgrade.html
 				MajorUpgrade = new MajorUpgrade
-                {
-                    AllowDowngrades = false,
-                    AllowSameVersionUpgrades = false,
-                    Disallow = true,
-                    DisallowUpgradeErrorMessage = "An existing version is already installed, please uninstall before continuing.",
-                    DowngradeErrorMessage = "A more recent version is already installed, please uninstall before continuing.",
-                }
-            };
+				{
+					AllowDowngrades = false,
+					AllowSameVersionUpgrades = false,
+					Disallow = true,
+					DisallowUpgradeErrorMessage = "An existing version is already installed, please uninstall before continuing.",
+					DowngradeErrorMessage = "A more recent version is already installed, please uninstall before continuing.",
+				}
+			};
 
 			const string wixLocation = @"..\..\packages\WixSharp.wix.bin\tools\bin";
 			if (!System.IO.Directory.Exists(wixLocation))
 				throw new Exception($"The directory '{wixLocation}' could not be found");
-			//Compiler.LightOptions = "-sw1076 -sw1079 -sval";
 			Compiler.WixLocation = wixLocation;
 
-            project.WixVariables.Add("WixUILicenseRtf", System.IO.Path.Combine(driverInputFilesPath, "LICENSE.rtf"));
+			project.WixVariables.Add("WixUILicenseRtf", System.IO.Path.Combine(driverInputFilesPath, "LICENSE.rtf"));
 			project.Include(WixExtension.NetFx);
 			project.BuildMsi();
-        }
+		}
 
 		private static FileVersionInfo GetDriverFileInfo(string zipContentsDirectory)
 		{
