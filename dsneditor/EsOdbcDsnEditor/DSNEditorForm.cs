@@ -227,8 +227,14 @@ namespace EsOdbcDsnEditor
             Builder["traceenabled"] = checkLoggingEnabled.Checked ? "1" : "0";
 
             // Validations
+            var keynameOK = true;
             var certificateFileOK = true;
             var logDirectoryOK = true;
+            
+            if (!string.IsNullOrEmpty(textName.Text))
+            {
+                keynameOK = ValidateKeyName(textName.Text);
+            }
 
             if (!string.IsNullOrEmpty(textCertificatePath.Text))
             {
@@ -240,9 +246,9 @@ namespace EsOdbcDsnEditor
                 logDirectoryOK = ValidateLogFolderPath(textLogDirectoryPath.Text);
             }
 
-            return certificateFileOK && logDirectoryOK;
+            return keynameOK && certificateFileOK && logDirectoryOK;
         }
-        
+
         private void LogDirectoryPathButton_Click(object sender, EventArgs e)
         {
             var result = folderLogDirectoryDialog.ShowDialog();
@@ -278,6 +284,23 @@ namespace EsOdbcDsnEditor
                     textCertificatePath.Text = file;
                 }
             }
+        }
+        
+        private bool ValidateKeyName(string keyname)
+        {
+            if (keyname.Length > 255)
+            {
+                MessageBox.Show("Name must be less than 255 characters", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+
+            if (keyname.Contains("\\"))
+            {
+                MessageBox.Show("Name cannot contain backslash \\ characters", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+
+            return true;
         }
 
         private bool ValidateCertificateFile(string file)
