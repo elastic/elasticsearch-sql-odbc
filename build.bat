@@ -537,7 +537,11 @@ REM PACKAGE_DO function: generate deliverable package
 	if ERRORLEVEL 1 (
 		goto END
 	)
-	!SRC_PATH!\installer\build.bat release !SIGN_CERT! !SIGN_PASS!
+	if not [!SIGN_CERT!] == [] (
+		!SRC_PATH!\installer\build.bat release !SIGN_CERT! !SIGN_PASS!
+	) else (
+		!SRC_PATH!\installer\build.bat
+	)
 
 	goto:eof
 
