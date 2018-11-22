@@ -1,4 +1,8 @@
-﻿using System;
+﻿// Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+// or more contributor license agreements. Licensed under the Elastic License;
+// you may not use this file except in compliance with the Elastic License.
+
+using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -9,11 +13,13 @@ namespace ODBCInstaller
     partial class Program
     {
         static void Main(string[] args)
-		{          
-			// Get the input files
+		{
+			// Arguments
 			var fullVersionString = args[0];
 			var driverBuildsDir = args[1];
 			var zipFilepath = args[2];
+
+			// Get the input files
 			var zipDirectory = System.IO.Path.GetFileNameWithoutExtension(zipFilepath);
 			var driverInputFilesPath = System.IO.Path.Combine(driverBuildsDir, zipDirectory);
 			var driverFileInfo = GetDriverFileInfo(driverInputFilesPath);
