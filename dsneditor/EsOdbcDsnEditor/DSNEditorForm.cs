@@ -288,12 +288,6 @@ namespace EsOdbcDsnEditor
         
         private bool ValidateKeyName(string keyname)
         {
-            if (string.IsNullOrEmpty(keyname))
-            {
-                MessageBox.Show("Name must contain characters", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return false;
-            }
-
             if (keyname.Length > 255)
             {
                 MessageBox.Show("Name must be less than 255 characters", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
