@@ -34,6 +34,7 @@ namespace EsOdbcDsnEditor
         /// </summary>
         private void InitializeComponent()
         {
+            this.components = new System.ComponentModel.Container();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(DsnEditorForm));
             this.saveButton = new System.Windows.Forms.Button();
             this.cancelButton = new System.Windows.Forms.Button();
@@ -72,6 +73,21 @@ namespace EsOdbcDsnEditor
             this.textLogDirectoryPath = new System.Windows.Forms.TextBox();
             this.labelLogDirectory = new System.Windows.Forms.Label();
             this.folderLogDirectoryDialog = new System.Windows.Forms.FolderBrowserDialog();
+            this.toolTipName = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipDescription = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipHostname = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipPort = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipUsername = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipPassword = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipDisabled = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipEnabledNoValidation = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipEnabledNoHostname = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipEnabledHostname = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipEnabledFull = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipCertificatePath = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipLogDirectoryPath = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipLoggingEnabled = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipLogLevel = new System.Windows.Forms.ToolTip(this.components);
             ((System.ComponentModel.ISupportInitialize)(this.header)).BeginInit();
             this.groupSSL.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDownPort)).BeginInit();
@@ -552,6 +568,21 @@ namespace EsOdbcDsnEditor
         private System.Windows.Forms.FolderBrowserDialog folderLogDirectoryDialog;
         private System.Windows.Forms.ComboBox comboLogLevel;
         private System.Windows.Forms.CheckBox checkLoggingEnabled;
-    }
+		private System.Windows.Forms.ToolTip toolTipName;
+		private System.Windows.Forms.ToolTip toolTipDescription;
+		private System.Windows.Forms.ToolTip toolTipHostname;
+		private System.Windows.Forms.ToolTip toolTipPort;
+		private System.Windows.Forms.ToolTip toolTipUsername;
+		private System.Windows.Forms.ToolTip toolTipPassword;
+		private System.Windows.Forms.ToolTip toolTipDisabled;
+		private System.Windows.Forms.ToolTip toolTipEnabledNoValidation;
+		private System.Windows.Forms.ToolTip toolTipEnabledNoHostname;
+		private System.Windows.Forms.ToolTip toolTipEnabledHostname;
+		private System.Windows.Forms.ToolTip toolTipEnabledFull;
+		private System.Windows.Forms.ToolTip toolTipCertificatePath;
+		private System.Windows.Forms.ToolTip toolTipLogDirectoryPath;
+		private System.Windows.Forms.ToolTip toolTipLoggingEnabled;
+		private System.Windows.Forms.ToolTip toolTipLogLevel;
+	}
 }
 

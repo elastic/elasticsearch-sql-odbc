@@ -64,6 +64,13 @@ namespace EsOdbcDsnEditor {
 			textHostname.Text = Builder.ContainsKey("server") ? Builder["server"].ToString().StripBraces() : string.Empty;
 			numericUpDownPort.Text = Builder.ContainsKey("port") ? Builder["port"].ToString().StripBraces() : string.Empty;
 
+			toolTipName.SetToolTip(textName, "The name the DSN will be referred by.");
+			toolTipDescription.SetToolTip(textDescription, "Allows arbitrary text, generally used for short notes about the configured connection.");
+			toolTipHostname.SetToolTip(textHostname, "IP address or a resolvable DNS name of the Elasticsearch instance that the driver will connect to.");
+			toolTipPort.SetToolTip(numericUpDownPort, "The port which the Elasticsearch listens on.");
+			toolTipUsername.SetToolTip(textUsername, "If security is enabled, the username configured to access the REST SQL endpoint.");
+			toolTipPassword.SetToolTip(textPassword, "If security is enabled, the password configured to access the REST SQL endpoint.");
+
 			// Security Panel
 			textCertificatePath.Text = Builder.ContainsKey("capath") ? Builder["capath"].ToString().StripBraces() : string.Empty;
 			radioEnabledNoValidation.Checked = true; // Default setting
@@ -79,6 +86,32 @@ namespace EsOdbcDsnEditor {
 					}
 				}
 			}
+
+			toolTipDisabled.SetToolTip(radioButtonDisabled,
+				"The communication between the driver and the Elasticsearch instance is performed over a clear-text connection." + Environment.NewLine
+				+ "This setting can expose the access credentials to a 3rd party intercepting the network traffic and is not recommended.");
+
+			toolTipEnabledNoValidation.SetToolTip(radioEnabledNoValidation,
+				"The connection encryption is enabled, but the certificate of the server is not validated." + Environment.NewLine
+				+ "This setting allows a 3rd party to act with ease as a man-in-the-middle and thus intercept all communications.");
+
+			toolTipEnabledNoHostname.SetToolTip(radioEnabledNoHostname,
+				"The connection encryption is enabled and the driver verifies that server's certificate is valid," + Environment.NewLine
+				+ "but it does not verify if the certificate is running on the server it was meant for." + Environment.NewLine
+				+ "This setting allows a 3rd party that had access to server's certificate to act as a man-in-the-middle" + Environment.NewLine
+				+ "and thus intercept all the communications.");
+
+			toolTipEnabledHostname.SetToolTip(radioEnabledHostname,
+				"The connection encryption is enabled and the driver verifies that both the certificate is valid," + Environment.NewLine
+				+ "as well as that it is being deployed on the server that the certificate was meant for.");
+
+			toolTipEnabledFull.SetToolTip(radioEnabledFull,
+				"This setting is equivalent to the previous one, with one additional check against certificate's revocation." + Environment.NewLine
+				+ "This offers the strongest security option and is the recommended setting for production deployments.");
+
+			toolTipCertificatePath.SetToolTip(textCertificatePath,
+				"In case the server uses a certificate that is not part of the PKI, for example using a self-signed certificate," + Environment.NewLine
+				+ "you can configure the path to a X509 certificate file that will be used by the driver to validate server's offered certificate.");
 
 			// Logging Panel
 			textLogDirectoryPath.Text = Builder.ContainsKey("tracefile") ? Builder["tracefile"].ToString().StripBraces() : string.Empty;
@@ -104,6 +137,13 @@ namespace EsOdbcDsnEditor {
 			else {
 				checkLoggingEnabled.Checked = false;
 			}
+
+			toolTipLoggingEnabled.SetToolTip(checkLoggingEnabled,
+				"Ticking this will enable driver's logging. A logging directory is also mandatory when this option is enabled," + Environment.NewLine
+				+ "however the specified logging directory will be saved in the DSN if provided, even if logging is disabled.");
+
+			toolTipLogDirectoryPath.SetToolTip(textLogDirectoryPath, "Specify which directory to write the log files in.");
+			toolTipLogLevel.SetToolTip(comboLogLevel, "Configure the verbosity of the logs.");
 
 			// Set initial state of action buttons.
 			EnableDisableActionButtons();
