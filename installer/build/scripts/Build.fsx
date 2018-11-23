@@ -38,9 +38,9 @@ module Builder =
             ]
 
     let Sign file (version : Version) =
-        tracefn "Signing MSI"
         let release = getBuildParam "release" = "1"
         if release then
+            tracefn "Signing MSI"
             let certificate = getBuildParam "certificate"
             let password = getBuildParam "password"
             let timestampServer = "http://timestamp.comodoca.com"

@@ -104,7 +104,7 @@ Target:
         | (false, _) -> failwithf "certificate file does not exist at %s" certFile
         | (_, false) -> failwithf "password file does not exist at %s" passwordFile
 
-    let private versionFromBuildZipFile =
+    let private versionFromBuildZipFile () =
         let extractVersion (fileInfo:FileInfo) =
             Regex.Replace(fileInfo.Name, "^(.*)\.zip$", "$1")
 
@@ -126,13 +126,18 @@ Target:
                        | ["release";] ->
                            setBuildParam "release" "1"
                            certAndPasswordFromEnvVariables ()
-                           versionFromBuildZipFile
+                           versionFromBuildZipFile()
                        | ["release"; certFile; passwordFile ] ->
                            setBuildParam "release" "1"
                            certAndPasswordFromFile certFile passwordFile
-                           versionFromBuildZipFile
+                           versionFromBuildZipFile()
                        | [IsTarget target;] ->
-                           versionFromBuildZipFile
+                            { FullVersion = "0.0.0";
+                              Major = 0;
+                              Minor = 0;
+                              Patch = 0;
+                              Prerelease = ""; 
+                              RawValue = "0.0.0"; }
                        | _ ->
                            traceError usage
                            exit 2
