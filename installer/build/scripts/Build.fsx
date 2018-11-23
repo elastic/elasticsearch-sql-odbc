@@ -46,7 +46,7 @@ module Builder =
              Attribute.InformationalVersion version // Attribute.Version and Attribute.FileVersion normalize the version number, so retain the prelease suffix
             ]
 
-    let Sign file (version : Version) =
+    let Sign file () =
         let release = getBuildParam "release" = "1"
         if release then
             tracefn "Signing MSI"
@@ -154,6 +154,6 @@ module Builder =
                        |> Seq.map (fun f -> f.FullName)
                        |> Seq.head
 
-        Sign MsiFile version
+        Sign MsiFile
         CopyFile OutDir MsiFile
         DeleteFile MsiFile
