@@ -20,14 +20,23 @@ open Fake.AssemblyInfoFile
 
 module Builder =
 
-    let patchAssemblyInformation (version:Version) = 
-        let version = version.FullVersion
+    type AssemblyInfo = {
+        Path : string;
+        Title: string;
+        Description : string;
+        Guid: string;
+        Product: string;
+        Version: Version;
+    }
+
+    let patchAssemblyInformation (assemblyInfo:AssemblyInfo) = 
+        let version = assemblyInfo.Version.FullVersion
         let commitHash = Information.getCurrentHash()
-        CreateCSharpAssemblyInfo (MsiDir @@ "Properties/AssemblyInfo.cs")
-            [Attribute.Title "Installer"
-             Attribute.Description "Elasticsearch ODBC Installer."
-             Attribute.Guid "44555887-c439-470c-944d-8866ec3d7067"
-             Attribute.Product "Elasticsearch ODBC Installer"
+        CreateCSharpAssemblyInfo assemblyInfo.Path
+            [Attribute.Title assemblyInfo.Title
+             Attribute.Description assemblyInfo.Description
+             Attribute.Guid assemblyInfo.Guid
+             Attribute.Product assemblyInfo.Product
              Attribute.Metadata("GitBuildHash", commitHash)
              Attribute.Company  "Elasticsearch B.V."
              Attribute.Copyright "Elastic License. Copyright Elasticsearch."
@@ -89,13 +98,39 @@ module Builder =
         for e in zip do
             e.Extract(unzipFolder, Ionic.Zip.ExtractExistingFileAction.OverwriteSilently)
 
+    let PatchAssemblyInfos (version : Version) =
+        patchAssemblyInformation ({
+            Path = MsiDir @@ "Properties/AssemblyInfo.cs";
+            Title = "Elasticsearch ODBC Installer";
+            Description = "MSI installer for the Elasticsearch ODBC driver.";
+            Guid = "44555887-c439-470c-944d-8866ec3d7067";
+            Product = "Elasticsearch ODBC Installer";
+            Version = version;
+        })
+        patchAssemblyInformation ({
+            Path = SrcDir @@ "../../dsneditor/EsOdbcDsnEditor/Properties/AssemblyInfo.cs";
+            Title = "Elasticsearch DSN Editor";
+            Description = "Elasticsearch DSN Editor for managing ODBC connection strings.";
+            Guid = "fac0512c-e595-4bf4-acb7-617611df5715";
+            Product = "Elasticsearch DSN Editor";
+            Version = version;
+        })
+        patchAssemblyInformation ({
+            Path = SrcDir @@ "../../dsneditor/EsOdbcDsnEditorLauncher/Properties/AssemblyInfo.cs";
+            Title = "Elasticsearch DSN Editor Launcher";
+            Description = "Elasticsearch DSN Editor Launcher.";
+            Guid = "71bebff7-652e-4b26-9ec3-caef947d368c";
+            Product = "Elasticsearch DSN Editor Launcher";
+            Version = version;
+        })
+
     let BuildMsi (version : Version) =
 
         !! (MsiDir @@ "*.csproj")
         |> MSBuildRelease MsiBuildDir "Build"
         |> ignore
 
-        patchAssemblyInformation (version)
+        PatchAssemblyInfos version
 
         let zipfile = DriverBuildsDir
                       |> directoryInfo
@@ -110,7 +145,7 @@ module Builder =
                          info.WorkingDirectory <- MsiDir
                          info.Arguments <- [version.FullVersion; System.IO.Path.GetFullPath(DriverBuildsDir); zipfile.FullName] |> String.concat " "
                         ) <| TimeSpan.FromMinutes 20.
-    
+
         if exitCode <> 0 then failwithf "Error building MSI"
 
         let MsiFile = MsiDir
@@ -118,7 +153,7 @@ module Builder =
                        |> filesInDirMatching ("*.msi")
                        |> Seq.map (fun f -> f.FullName)
                        |> Seq.head
-        
+
         Sign MsiFile version
         CopyFile OutDir MsiFile
         DeleteFile MsiFile
