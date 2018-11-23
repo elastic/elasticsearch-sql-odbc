@@ -12,7 +12,6 @@
 open System
 open Fake
 open Products
-open Products.Products
 open Products.Paths
 open Build.Builder
 open Commandline
@@ -20,14 +19,12 @@ open Fake.Runtime.Trace
 
 let versionToBuild = Commandline.parse()
 
-if (getBuildParam "target" |> toLower <> "help") then 
-    traceHeader (sprintf "Products:%s%s%s" Environment.NewLine Environment.NewLine versionToBuild.FullVersion)
-
 Target "Clean" (fun _ ->
     CleanDirs [MsiBuildDir; OutDir;]
 )
 
 Target "BuildInstaller" (fun () ->
+    traceHeader (sprintf "Products:%s%s%s" Environment.NewLine Environment.NewLine versionToBuild.FullVersion)
     BuildMsi versionToBuild
 )
 
