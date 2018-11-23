@@ -32,9 +32,15 @@ Target "Release" (fun () ->
     trace "Build in Release mode. MSI will be signed."
 )
 
+Target "PatchVersions" (fun () ->
+    trace "Patching versions."
+    PatchAssemblyInfos versionToBuild
+)
+
 Target "Help" (fun () -> trace Commandline.usage)
 
 "Clean"
+  ==> "PatchVersions"
   ==> "BuildInstaller"
   ==> "Release"
 
