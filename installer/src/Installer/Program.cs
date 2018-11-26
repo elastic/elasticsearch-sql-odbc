@@ -6,16 +6,15 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Diagnostics;
-
 using WixSharp;
 using WixSharp.Controls;
 using System.Xml.Linq;
 
 namespace ODBCInstaller
 {
-    partial class Program
-    {
-        static void Main(string[] args)
+	partial class Program
+	{
+		static void Main(string[] args)
 		{
 			// Arguments
 			var fullVersionString = args[0];
@@ -63,36 +62,36 @@ namespace ODBCInstaller
 			// Append any prerelease flags onto the version string
 			var msiVersionString = $"{driverFileInfo.ProductVersion}{preRelease}";
 
-            var files = System.IO.Directory.GetFiles(driverInputFilesPath)
-                              .Where(f => f.EndsWith(driverFilePath) == false)
-                              .Select(f => new File(f))
-                              .Concat(new[] { new File(driverFilePath, new ODBCDriver("Elasticsearch Driver")) })
-                              .Cast<WixEntity>()
-                              .ToArray();
+			var files = System.IO.Directory.GetFiles(driverInputFilesPath)
+							  .Where(f => f.EndsWith(driverFilePath) == false)
+							  .Select(f => new File(f))
+							  .Concat(new[] { new File(driverFilePath, new ODBCDriver("Elasticsearch Driver")) })
+							  .Cast<WixEntity>()
+							  .ToArray();
 
-            var installDirectory = $@"%ProgramFiles%\Elastic\ODBCDriver\{msiVersionString}";
-            var components = new Dir(installDirectory, files);
+			var installDirectory = $@"%ProgramFiles%\Elastic\ODBCDriver\{msiVersionString}";
+			var components = new Dir(installDirectory, files);
 			var finishActionName = "LaunchODBCDataSourceAdmin";
 
-            var project = new Project("ODBCDriverInstaller", components)
-            {
-                Platform = Platform.x64,
-                InstallScope = InstallScope.perMachine,
-                Version = new Version(driverFileInfo.ProductMajorPart, driverFileInfo.ProductMinorPart, driverFileInfo.ProductBuildPart, driverFileInfo.ProductPrivatePart),
-                GUID = new Guid("e87c5d53-fddf-4539-9447-49032ed527bb"),
-                UI = WUI.WixUI_Common,
-                BannerImage = "topbanner.bmp",
-                BackgroundImage = "leftbanner.bmp",
-                Name = "Elasticsearch ODBC Driver",
-                Description = $"{driverFileInfo.FileDescription} ({msiVersionString})",
-                ControlPanelInfo = new ProductInfo
-                {
-                    ProductIcon = "ODBC.ico",
-                    Manufacturer = driverFileInfo.CompanyName,
-                    UrlInfoAbout = "https://www.elastic.co/products/stack/elasticsearch-sql",
-                    HelpLink = "https://discuss.elastic.co/c/elasticsearch"
-                },
-                OutFileName = $"esodbc-{fullVersionString}", // Use full version string
+			var project = new Project("ODBCDriverInstaller", components)
+			{
+				Platform = Platform.x64,
+				InstallScope = InstallScope.perMachine,
+				Version = new Version(driverFileInfo.ProductMajorPart, driverFileInfo.ProductMinorPart, driverFileInfo.ProductBuildPart, driverFileInfo.ProductPrivatePart),
+				GUID = new Guid("e87c5d53-fddf-4539-9447-49032ed527bb"),
+				UI = WUI.WixUI_Common,
+				BannerImage = "topbanner.bmp",
+				BackgroundImage = "leftbanner.bmp",
+				Name = "Elasticsearch ODBC Driver",
+				Description = $"{driverFileInfo.FileDescription} ({msiVersionString})",
+				ControlPanelInfo = new ProductInfo
+				{
+					ProductIcon = "ODBC.ico",
+					Manufacturer = driverFileInfo.CompanyName,
+					UrlInfoAbout = "https://www.elastic.co/products/stack/elasticsearch-sql",
+					HelpLink = "https://discuss.elastic.co/c/elasticsearch"
+				},
+				OutFileName = $"esodbc-{fullVersionString}", // Use full version string
 				Properties = new[]
 				{
 					new Property("WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT", "Launch ODBC Data Source Administrator after installation"),
@@ -132,13 +131,13 @@ namespace ODBCInstaller
 
 				// http://wixtoolset.org/documentation/manual/v3/xsd/wix/majorupgrade.html
 				MajorUpgrade = new MajorUpgrade
-                {
-                    AllowDowngrades = false,
-                    AllowSameVersionUpgrades = false,
-                    Disallow = true,
-                    DisallowUpgradeErrorMessage = "An existing version is already installed, please uninstall before continuing.",
-                    DowngradeErrorMessage = "A more recent version is already installed, please uninstall before continuing.",
-                },
+				{
+					AllowDowngrades = false,
+					AllowSameVersionUpgrades = false,
+					Disallow = true,
+					DisallowUpgradeErrorMessage = "An existing version is already installed, please uninstall before continuing.",
+					DowngradeErrorMessage = "A more recent version is already installed, please uninstall before continuing.",
+				},
 				CustomUI = UIHelper.BuildCustomUI(finishActionName),
 			};
 
@@ -147,14 +146,14 @@ namespace ODBCInstaller
 				throw new Exception($"The directory '{wixLocation}' could not be found");
 			Compiler.WixLocation = wixLocation;
 
-            project.WixVariables.Add("WixUILicenseRtf", System.IO.Path.Combine(driverInputFilesPath, "LICENSE.rtf"));
+			project.WixVariables.Add("WixUILicenseRtf", System.IO.Path.Combine(driverInputFilesPath, "LICENSE.rtf"));
 			project.Include(WixExtension.NetFx);
 			project.Include(WixExtension.Util);
 			project.Include(WixExtension.UI);
 			project.WixSourceGenerated += document => Project_WixSourceGenerated(finishActionName, document);
 
 			project.BuildMsi();
-        }
+		}
 
 		private static void Project_WixSourceGenerated(string finishActionName, XDocument document)
 		{
@@ -186,7 +185,7 @@ namespace ODBCInstaller
 		public static CustomUI BuildCustomUI(string finishActionName)
 		{
 			var customUI = new CustomUI();
-			
+
 			customUI.On(NativeDialogs.WelcomeDlg, Buttons.Next, new ShowDialog(NativeDialogs.LicenseAgreementDlg));
 
 			customUI.On(NativeDialogs.LicenseAgreementDlg, Buttons.Back, new ShowDialog(NativeDialogs.WelcomeDlg));
@@ -209,7 +208,7 @@ namespace ODBCInstaller
 			customUI.On(NativeDialogs.MaintenanceTypeDlg, Buttons.Repair, new ShowDialog(NativeDialogs.VerifyReadyDlg));
 			customUI.On(NativeDialogs.MaintenanceTypeDlg, Buttons.Remove, new ShowDialog(NativeDialogs.VerifyReadyDlg));
 
-			customUI.On(NativeDialogs.ExitDialog , Buttons.Finish, new ExecuteCustomAction(finishActionName, "WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed"), new CloseDialog()
+			customUI.On(NativeDialogs.ExitDialog, Buttons.Finish, new ExecuteCustomAction(finishActionName, "WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed"), new CloseDialog()
 			{
 				Order = 9999,
 			});

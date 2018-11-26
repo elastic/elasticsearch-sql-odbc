@@ -86,7 +86,7 @@ module Builder =
 
             let exitCode = sign()
             if exitCode <> 0 then failwithf "Signing returned error exit code: %i" exitCode
-    
+
     // Using DotNetZip due to errors with CMAKE zip files: https://github.com/fsharp/FAKE/issues/775
     let unzipFile(zipFolder: string, unzipFolder: string) =
         use zip = Ionic.Zip.ZipFile.Read(zipFolder)
@@ -114,7 +114,7 @@ module Builder =
                          info.WorkingDirectory <- MsiDir
                          info.Arguments <- [version.FullVersion; System.IO.Path.GetFullPath(DriverBuildsDir); zipfile.FullName] |> String.concat " "
                         ) <| TimeSpan.FromMinutes 20.
-    
+
         if exitCode <> 0 then failwithf "Error building MSI"
 
         let MsiFile = MsiDir
@@ -122,7 +122,7 @@ module Builder =
                        |> filesInDirMatching ("*.msi")
                        |> Seq.map (fun f -> f.FullName)
                        |> Seq.head
-        
+
         Sign MsiFile version
         CopyFile OutDir MsiFile
         DeleteFile MsiFile

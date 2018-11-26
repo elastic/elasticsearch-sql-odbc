@@ -10,16 +10,15 @@
 
 namespace EsOdbcDsnEditor
 {
-    public static class ExtensionMethods
-    {
-        public static string StripBraces(this string input)
-        {
-            if (input.StartsWith("{") && input.EndsWith("}"))
-            {
-                return input.Substring(1, input.Length - 2);
-            }
+	public static class ExtensionMethods
+	{
+		public static string StripBraces(this string input)
+		{
+			if (input.StartsWith("{") && input.EndsWith("}")) {
+				return input.Substring(1, input.Length - 2);
+			}
 
-            return input;
-        }
-    }
+			return input;
+		}
+	}
 }
