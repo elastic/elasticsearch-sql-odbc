@@ -99,10 +99,10 @@ namespace EsOdbcDsnEditor
             // 
             // saveButton
             // 
-            this.saveButton.Location = new System.Drawing.Point(514, 676);
-            this.saveButton.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
+            this.saveButton.Location = new System.Drawing.Point(457, 541);
+            this.saveButton.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
             this.saveButton.Name = "saveButton";
-            this.saveButton.Size = new System.Drawing.Size(112, 35);
+            this.saveButton.Size = new System.Drawing.Size(100, 28);
             this.saveButton.TabIndex = 17;
             this.saveButton.Text = "Save";
             this.saveButton.UseVisualStyleBackColor = true;
@@ -110,10 +110,10 @@ namespace EsOdbcDsnEditor
             // 
             // cancelButton
             // 
-            this.cancelButton.Location = new System.Drawing.Point(630, 676);
-            this.cancelButton.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
+            this.cancelButton.Location = new System.Drawing.Point(560, 541);
+            this.cancelButton.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
             this.cancelButton.Name = "cancelButton";
-            this.cancelButton.Size = new System.Drawing.Size(112, 35);
+            this.cancelButton.Size = new System.Drawing.Size(100, 28);
             this.cancelButton.TabIndex = 18;
             this.cancelButton.Text = "Cancel";
             this.cancelButton.UseVisualStyleBackColor = true;
@@ -121,10 +121,10 @@ namespace EsOdbcDsnEditor
             // 
             // testButton
             // 
-            this.testButton.Location = new System.Drawing.Point(19, 676);
-            this.testButton.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
+            this.testButton.Location = new System.Drawing.Point(17, 541);
+            this.testButton.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
             this.testButton.Name = "testButton";
-            this.testButton.Size = new System.Drawing.Size(176, 35);
+            this.testButton.Size = new System.Drawing.Size(156, 28);
             this.testButton.TabIndex = 16;
             this.testButton.Text = "Test Connection";
             this.testButton.UseVisualStyleBackColor = true;
@@ -138,16 +138,16 @@ namespace EsOdbcDsnEditor
             this.header.Location = new System.Drawing.Point(0, 0);
             this.header.Margin = new System.Windows.Forms.Padding(0);
             this.header.Name = "header";
-            this.header.Size = new System.Drawing.Size(765, 72);
+            this.header.Size = new System.Drawing.Size(680, 58);
             this.header.TabIndex = 5;
             this.header.TabStop = false;
             // 
             // certificatePathButton
             // 
-            this.certificatePathButton.Location = new System.Drawing.Point(590, 258);
-            this.certificatePathButton.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
+            this.certificatePathButton.Location = new System.Drawing.Point(524, 206);
+            this.certificatePathButton.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
             this.certificatePathButton.Name = "certificatePathButton";
-            this.certificatePathButton.Size = new System.Drawing.Size(112, 35);
+            this.certificatePathButton.Size = new System.Drawing.Size(100, 28);
             this.certificatePathButton.TabIndex = 15;
             this.certificatePathButton.Text = "Browse...";
             this.certificatePathButton.UseVisualStyleBackColor = true;
@@ -155,18 +155,19 @@ namespace EsOdbcDsnEditor
             // 
             // textCertificatePath
             // 
-            this.textCertificatePath.Location = new System.Drawing.Point(140, 261);
-            this.textCertificatePath.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
+            this.textCertificatePath.Location = new System.Drawing.Point(124, 209);
+            this.textCertificatePath.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.textCertificatePath.MaxLength = 512;
             this.textCertificatePath.Name = "textCertificatePath";
-            this.textCertificatePath.Size = new System.Drawing.Size(440, 26);
+            this.textCertificatePath.Size = new System.Drawing.Size(392, 22);
             this.textCertificatePath.TabIndex = 14;
             // 
             // labelCertificatePath
             // 
             this.labelCertificatePath.AutoSize = true;
-            this.labelCertificatePath.Location = new System.Drawing.Point(18, 265);
+            this.labelCertificatePath.Location = new System.Drawing.Point(16, 212);
             this.labelCertificatePath.Name = "labelCertificatePath";
-            this.labelCertificatePath.Size = new System.Drawing.Size(114, 20);
+            this.labelCertificatePath.Size = new System.Drawing.Size(101, 17);
             this.labelCertificatePath.TabIndex = 11;
             this.labelCertificatePath.Text = "Certificate File:";
             // 
@@ -177,11 +178,9 @@ namespace EsOdbcDsnEditor
             this.groupSSL.Controls.Add(this.radioEnabledNoHostname);
             this.groupSSL.Controls.Add(this.radioEnabledNoValidation);
             this.groupSSL.Controls.Add(this.radioButtonDisabled);
-            this.groupSSL.Location = new System.Drawing.Point(18, 20);
-            this.groupSSL.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
+            this.groupSSL.Location = new System.Drawing.Point(16, 16);
             this.groupSSL.Name = "groupSSL";
-            this.groupSSL.Padding = new System.Windows.Forms.Padding(3, 4, 3, 4);
-            this.groupSSL.Size = new System.Drawing.Size(684, 220);
+            this.groupSSL.Size = new System.Drawing.Size(608, 176);
             this.groupSSL.TabIndex = 10;
             this.groupSSL.TabStop = false;
             this.groupSSL.Text = "Secure Sockets Layer (SSL):";
@@ -189,10 +188,9 @@ namespace EsOdbcDsnEditor
             // radioEnabledFull
             // 
             this.radioEnabledFull.AutoSize = true;
-            this.radioEnabledFull.Location = new System.Drawing.Point(18, 174);
-            this.radioEnabledFull.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
+            this.radioEnabledFull.Location = new System.Drawing.Point(16, 139);
             this.radioEnabledFull.Name = "radioEnabledFull";
-            this.radioEnabledFull.Size = new System.Drawing.Size(340, 24);
+            this.radioEnabledFull.Size = new System.Drawing.Size(304, 21);
             this.radioEnabledFull.TabIndex = 13;
             this.radioEnabledFull.TabStop = true;
             this.radioEnabledFull.Text = "Enabled. Certificate identity chain validated.";
@@ -201,10 +199,9 @@ namespace EsOdbcDsnEditor
             // radioEnabledHostname
             // 
             this.radioEnabledHostname.AutoSize = true;
-            this.radioEnabledHostname.Location = new System.Drawing.Point(18, 140);
-            this.radioEnabledHostname.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
+            this.radioEnabledHostname.Location = new System.Drawing.Point(16, 112);
             this.radioEnabledHostname.Name = "radioEnabledHostname";
-            this.radioEnabledHostname.Size = new System.Drawing.Size(405, 24);
+            this.radioEnabledHostname.Size = new System.Drawing.Size(362, 21);
             this.radioEnabledHostname.TabIndex = 12;
             this.radioEnabledHostname.TabStop = true;
             this.radioEnabledHostname.Text = "Enabled. Certificate is validated; hostname validated.";
@@ -213,10 +210,9 @@ namespace EsOdbcDsnEditor
             // radioEnabledNoHostname
             // 
             this.radioEnabledNoHostname.AutoSize = true;
-            this.radioEnabledNoHostname.Location = new System.Drawing.Point(18, 106);
-            this.radioEnabledNoHostname.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
+            this.radioEnabledNoHostname.Location = new System.Drawing.Point(16, 85);
             this.radioEnabledNoHostname.Name = "radioEnabledNoHostname";
-            this.radioEnabledNoHostname.Size = new System.Drawing.Size(432, 24);
+            this.radioEnabledNoHostname.Size = new System.Drawing.Size(386, 21);
             this.radioEnabledNoHostname.TabIndex = 11;
             this.radioEnabledNoHostname.TabStop = true;
             this.radioEnabledNoHostname.Text = "Enabled. Certificate is validated; hostname not validated.";
@@ -225,10 +221,9 @@ namespace EsOdbcDsnEditor
             // radioEnabledNoValidation
             // 
             this.radioEnabledNoValidation.AutoSize = true;
-            this.radioEnabledNoValidation.Location = new System.Drawing.Point(18, 72);
-            this.radioEnabledNoValidation.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
+            this.radioEnabledNoValidation.Location = new System.Drawing.Point(16, 58);
             this.radioEnabledNoValidation.Name = "radioEnabledNoValidation";
-            this.radioEnabledNoValidation.Size = new System.Drawing.Size(271, 24);
+            this.radioEnabledNoValidation.Size = new System.Drawing.Size(241, 21);
             this.radioEnabledNoValidation.TabIndex = 10;
             this.radioEnabledNoValidation.TabStop = true;
             this.radioEnabledNoValidation.Text = "Enabled. Certificate not validated.";
@@ -237,10 +232,9 @@ namespace EsOdbcDsnEditor
             // radioButtonDisabled
             // 
             this.radioButtonDisabled.AutoSize = true;
-            this.radioButtonDisabled.Location = new System.Drawing.Point(18, 39);
-            this.radioButtonDisabled.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
+            this.radioButtonDisabled.Location = new System.Drawing.Point(16, 31);
             this.radioButtonDisabled.Name = "radioButtonDisabled";
-            this.radioButtonDisabled.Size = new System.Drawing.Size(336, 24);
+            this.radioButtonDisabled.Size = new System.Drawing.Size(299, 21);
             this.radioButtonDisabled.TabIndex = 9;
             this.radioButtonDisabled.TabStop = true;
             this.radioButtonDisabled.Text = "Disabled. All communications unencrypted.";
@@ -248,15 +242,14 @@ namespace EsOdbcDsnEditor
             // 
             // numericUpDownPort
             // 
-            this.numericUpDownPort.Location = new System.Drawing.Point(126, 308);
-            this.numericUpDownPort.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
+            this.numericUpDownPort.Location = new System.Drawing.Point(112, 246);
             this.numericUpDownPort.Maximum = new decimal(new int[] {
             65535,
             0,
             0,
             0});
             this.numericUpDownPort.Name = "numericUpDownPort";
-            this.numericUpDownPort.Size = new System.Drawing.Size(117, 26);
+            this.numericUpDownPort.Size = new System.Drawing.Size(104, 22);
             this.numericUpDownPort.TabIndex = 5;
             this.numericUpDownPort.Value = new decimal(new int[] {
             9200,
@@ -267,63 +260,66 @@ namespace EsOdbcDsnEditor
             // 
             // textPassword
             // 
-            this.textPassword.Location = new System.Drawing.Point(126, 405);
-            this.textPassword.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
+            this.textPassword.Location = new System.Drawing.Point(112, 324);
+            this.textPassword.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.textPassword.MaxLength = 512;
             this.textPassword.Name = "textPassword";
             this.textPassword.PasswordChar = '*';
-            this.textPassword.Size = new System.Drawing.Size(257, 26);
+            this.textPassword.Size = new System.Drawing.Size(229, 22);
             this.textPassword.TabIndex = 7;
             // 
             // labelPassword
             // 
             this.labelPassword.AutoSize = true;
-            this.labelPassword.Location = new System.Drawing.Point(18, 409);
+            this.labelPassword.Location = new System.Drawing.Point(16, 327);
             this.labelPassword.Name = "labelPassword";
-            this.labelPassword.Size = new System.Drawing.Size(82, 20);
+            this.labelPassword.Size = new System.Drawing.Size(73, 17);
             this.labelPassword.TabIndex = 6;
             this.labelPassword.Text = "Password:";
             // 
             // textUsername
             // 
-            this.textUsername.Location = new System.Drawing.Point(126, 355);
-            this.textUsername.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
+            this.textUsername.Location = new System.Drawing.Point(112, 284);
+            this.textUsername.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.textUsername.MaxLength = 512;
             this.textUsername.Name = "textUsername";
-            this.textUsername.Size = new System.Drawing.Size(257, 26);
+            this.textUsername.Size = new System.Drawing.Size(229, 22);
             this.textUsername.TabIndex = 6;
             // 
             // labelUsername
             // 
             this.labelUsername.AutoSize = true;
-            this.labelUsername.Location = new System.Drawing.Point(18, 359);
+            this.labelUsername.Location = new System.Drawing.Point(16, 287);
             this.labelUsername.Name = "labelUsername";
-            this.labelUsername.Size = new System.Drawing.Size(87, 20);
+            this.labelUsername.Size = new System.Drawing.Size(77, 17);
             this.labelUsername.TabIndex = 4;
             this.labelUsername.Text = "Username:";
             // 
             // textHostname
             // 
-            this.textHostname.Location = new System.Drawing.Point(126, 260);
-            this.textHostname.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
+            this.textHostname.Location = new System.Drawing.Point(112, 208);
+            this.textHostname.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.textHostname.MaxLength = 512;
             this.textHostname.Name = "textHostname";
-            this.textHostname.Size = new System.Drawing.Size(569, 26);
+            this.textHostname.Size = new System.Drawing.Size(506, 22);
             this.textHostname.TabIndex = 4;
             this.textHostname.TextChanged += new System.EventHandler(this.TextHostname_TextChanged);
             // 
             // labelPort
             // 
             this.labelPort.AutoSize = true;
-            this.labelPort.Location = new System.Drawing.Point(18, 310);
+            this.labelPort.Location = new System.Drawing.Point(16, 248);
             this.labelPort.Name = "labelPort";
-            this.labelPort.Size = new System.Drawing.Size(42, 20);
+            this.labelPort.Size = new System.Drawing.Size(38, 17);
             this.labelPort.TabIndex = 2;
             this.labelPort.Text = "Port:";
             // 
             // labelHostname
             // 
             this.labelHostname.AutoSize = true;
-            this.labelHostname.Location = new System.Drawing.Point(18, 264);
+            this.labelHostname.Location = new System.Drawing.Point(16, 211);
             this.labelHostname.Name = "labelHostname";
-            this.labelHostname.Size = new System.Drawing.Size(87, 20);
+            this.labelHostname.Size = new System.Drawing.Size(76, 17);
             this.labelHostname.TabIndex = 0;
             this.labelHostname.Text = "Hostname:";
             // 
@@ -336,11 +332,10 @@ namespace EsOdbcDsnEditor
             this.tabConfiguration.Controls.Add(this.pageBasic);
             this.tabConfiguration.Controls.Add(this.pageSecurity);
             this.tabConfiguration.Controls.Add(this.pageLogging);
-            this.tabConfiguration.Location = new System.Drawing.Point(18, 92);
-            this.tabConfiguration.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
+            this.tabConfiguration.Location = new System.Drawing.Point(16, 74);
             this.tabConfiguration.Name = "tabConfiguration";
             this.tabConfiguration.SelectedIndex = 0;
-            this.tabConfiguration.Size = new System.Drawing.Size(729, 575);
+            this.tabConfiguration.Size = new System.Drawing.Size(648, 460);
             this.tabConfiguration.TabIndex = 8;
             // 
             // pageBasic
@@ -357,48 +352,49 @@ namespace EsOdbcDsnEditor
             this.pageBasic.Controls.Add(this.numericUpDownPort);
             this.pageBasic.Controls.Add(this.labelPassword);
             this.pageBasic.Controls.Add(this.textPassword);
-            this.pageBasic.Location = new System.Drawing.Point(4, 29);
-            this.pageBasic.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
+            this.pageBasic.Location = new System.Drawing.Point(4, 25);
             this.pageBasic.Name = "pageBasic";
-            this.pageBasic.Padding = new System.Windows.Forms.Padding(3, 4, 3, 4);
-            this.pageBasic.Size = new System.Drawing.Size(721, 542);
+            this.pageBasic.Padding = new System.Windows.Forms.Padding(3, 3, 3, 3);
+            this.pageBasic.Size = new System.Drawing.Size(640, 431);
             this.pageBasic.TabIndex = 0;
             this.pageBasic.Text = "Basic";
             this.pageBasic.UseVisualStyleBackColor = true;
             // 
             // textDescription
             // 
-            this.textDescription.Location = new System.Drawing.Point(126, 70);
-            this.textDescription.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
+            this.textDescription.Location = new System.Drawing.Point(112, 56);
+            this.textDescription.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.textDescription.MaxLength = 512;
             this.textDescription.Multiline = true;
             this.textDescription.Name = "textDescription";
-            this.textDescription.Size = new System.Drawing.Size(569, 164);
+            this.textDescription.Size = new System.Drawing.Size(506, 132);
             this.textDescription.TabIndex = 3;
             // 
             // labelDescription
             // 
             this.labelDescription.AutoSize = true;
-            this.labelDescription.Location = new System.Drawing.Point(18, 74);
+            this.labelDescription.Location = new System.Drawing.Point(16, 59);
             this.labelDescription.Name = "labelDescription";
-            this.labelDescription.Size = new System.Drawing.Size(93, 20);
+            this.labelDescription.Size = new System.Drawing.Size(83, 17);
             this.labelDescription.TabIndex = 10;
             this.labelDescription.Text = "Description:";
             // 
             // textName
             // 
-            this.textName.Location = new System.Drawing.Point(126, 20);
-            this.textName.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
+            this.textName.Location = new System.Drawing.Point(112, 16);
+            this.textName.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.textName.MaxLength = 256;
             this.textName.Name = "textName";
-            this.textName.Size = new System.Drawing.Size(569, 26);
+            this.textName.Size = new System.Drawing.Size(506, 22);
             this.textName.TabIndex = 2;
             this.textName.TextChanged += new System.EventHandler(this.TextName_TextChanged);
             // 
             // labelName
             // 
             this.labelName.AutoSize = true;
-            this.labelName.Location = new System.Drawing.Point(18, 26);
+            this.labelName.Location = new System.Drawing.Point(16, 21);
             this.labelName.Name = "labelName";
-            this.labelName.Size = new System.Drawing.Size(55, 20);
+            this.labelName.Size = new System.Drawing.Size(49, 17);
             this.labelName.TabIndex = 8;
             this.labelName.Text = "Name:";
             // 
@@ -408,11 +404,10 @@ namespace EsOdbcDsnEditor
             this.pageSecurity.Controls.Add(this.groupSSL);
             this.pageSecurity.Controls.Add(this.textCertificatePath);
             this.pageSecurity.Controls.Add(this.labelCertificatePath);
-            this.pageSecurity.Location = new System.Drawing.Point(4, 29);
-            this.pageSecurity.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
+            this.pageSecurity.Location = new System.Drawing.Point(4, 25);
             this.pageSecurity.Name = "pageSecurity";
-            this.pageSecurity.Padding = new System.Windows.Forms.Padding(3, 4, 3, 4);
-            this.pageSecurity.Size = new System.Drawing.Size(721, 542);
+            this.pageSecurity.Padding = new System.Windows.Forms.Padding(3, 3, 3, 3);
+            this.pageSecurity.Size = new System.Drawing.Size(640, 431);
             this.pageSecurity.TabIndex = 1;
             this.pageSecurity.Text = "Security";
             this.pageSecurity.UseVisualStyleBackColor = true;
@@ -425,10 +420,11 @@ namespace EsOdbcDsnEditor
             this.pageLogging.Controls.Add(this.logDirectoryPathButton);
             this.pageLogging.Controls.Add(this.textLogDirectoryPath);
             this.pageLogging.Controls.Add(this.labelLogDirectory);
-            this.pageLogging.Location = new System.Drawing.Point(4, 29);
+            this.pageLogging.Location = new System.Drawing.Point(4, 25);
+            this.pageLogging.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.pageLogging.Name = "pageLogging";
-            this.pageLogging.Padding = new System.Windows.Forms.Padding(3);
-            this.pageLogging.Size = new System.Drawing.Size(721, 542);
+            this.pageLogging.Padding = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.pageLogging.Size = new System.Drawing.Size(640, 431);
             this.pageLogging.TabIndex = 2;
             this.pageLogging.Text = "Logging";
             this.pageLogging.UseVisualStyleBackColor = true;
@@ -438,9 +434,10 @@ namespace EsOdbcDsnEditor
             this.checkLoggingEnabled.AutoSize = true;
             this.checkLoggingEnabled.Checked = true;
             this.checkLoggingEnabled.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.checkLoggingEnabled.Location = new System.Drawing.Point(18, 26);
+            this.checkLoggingEnabled.Location = new System.Drawing.Point(16, 21);
+            this.checkLoggingEnabled.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.checkLoggingEnabled.Name = "checkLoggingEnabled";
-            this.checkLoggingEnabled.Size = new System.Drawing.Size(155, 24);
+            this.checkLoggingEnabled.Size = new System.Drawing.Size(137, 21);
             this.checkLoggingEnabled.TabIndex = 22;
             this.checkLoggingEnabled.Text = "Enable Logging?";
             this.checkLoggingEnabled.UseVisualStyleBackColor = true;
@@ -455,26 +452,27 @@ namespace EsOdbcDsnEditor
             "INFO",
             "WARN",
             "ERROR"});
-            this.comboLogLevel.Location = new System.Drawing.Point(139, 123);
+            this.comboLogLevel.Location = new System.Drawing.Point(124, 98);
+            this.comboLogLevel.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.comboLogLevel.Name = "comboLogLevel";
-            this.comboLogLevel.Size = new System.Drawing.Size(121, 28);
+            this.comboLogLevel.Size = new System.Drawing.Size(108, 24);
             this.comboLogLevel.TabIndex = 21;
             // 
             // labelLogLevel
             // 
             this.labelLogLevel.AutoSize = true;
-            this.labelLogLevel.Location = new System.Drawing.Point(18, 126);
+            this.labelLogLevel.Location = new System.Drawing.Point(16, 101);
             this.labelLogLevel.Name = "labelLogLevel";
-            this.labelLogLevel.Size = new System.Drawing.Size(81, 20);
+            this.labelLogLevel.Size = new System.Drawing.Size(74, 17);
             this.labelLogLevel.TabIndex = 20;
             this.labelLogLevel.Text = "Log Level:";
             // 
             // logDirectoryPathButton
             // 
-            this.logDirectoryPathButton.Location = new System.Drawing.Point(592, 69);
-            this.logDirectoryPathButton.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
+            this.logDirectoryPathButton.Location = new System.Drawing.Point(526, 55);
+            this.logDirectoryPathButton.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
             this.logDirectoryPathButton.Name = "logDirectoryPathButton";
-            this.logDirectoryPathButton.Size = new System.Drawing.Size(112, 35);
+            this.logDirectoryPathButton.Size = new System.Drawing.Size(100, 28);
             this.logDirectoryPathButton.TabIndex = 18;
             this.logDirectoryPathButton.Text = "Browse...";
             this.logDirectoryPathButton.UseVisualStyleBackColor = true;
@@ -482,26 +480,27 @@ namespace EsOdbcDsnEditor
             // 
             // textLogDirectoryPath
             // 
-            this.textLogDirectoryPath.Location = new System.Drawing.Point(139, 71);
-            this.textLogDirectoryPath.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
+            this.textLogDirectoryPath.Location = new System.Drawing.Point(124, 57);
+            this.textLogDirectoryPath.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.textLogDirectoryPath.MaxLength = 512;
             this.textLogDirectoryPath.Name = "textLogDirectoryPath";
-            this.textLogDirectoryPath.Size = new System.Drawing.Size(440, 26);
+            this.textLogDirectoryPath.Size = new System.Drawing.Size(392, 22);
             this.textLogDirectoryPath.TabIndex = 17;
             // 
             // labelLogDirectory
             // 
             this.labelLogDirectory.AutoSize = true;
-            this.labelLogDirectory.Location = new System.Drawing.Point(18, 77);
+            this.labelLogDirectory.Location = new System.Drawing.Point(16, 62);
             this.labelLogDirectory.Name = "labelLogDirectory";
-            this.labelLogDirectory.Size = new System.Drawing.Size(107, 20);
+            this.labelLogDirectory.Size = new System.Drawing.Size(97, 17);
             this.labelLogDirectory.TabIndex = 16;
             this.labelLogDirectory.Text = "Log Directory:";
             // 
             // DsnEditorForm
             // 
-            this.AutoScaleDimensions = new System.Drawing.SizeF(9F, 20F);
+            this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(767, 735);
+            this.ClientSize = new System.Drawing.Size(682, 588);
             this.Controls.Add(this.tabConfiguration);
             this.Controls.Add(this.header);
             this.Controls.Add(this.testButton);
@@ -509,7 +508,7 @@ namespace EsOdbcDsnEditor
             this.Controls.Add(this.saveButton);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
-            this.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
+            this.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
             this.MaximizeBox = false;
             this.MinimizeBox = false;
             this.Name = "DsnEditorForm";

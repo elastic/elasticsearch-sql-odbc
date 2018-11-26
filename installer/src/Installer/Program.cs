@@ -7,6 +7,8 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Diagnostics;
 using WixSharp;
+using WixSharp.Controls;
+using System.Xml.Linq;
 
 namespace ODBCInstaller
 {
@@ -69,6 +71,7 @@ namespace ODBCInstaller
 
 			var installDirectory = $@"%ProgramFiles%\Elastic\ODBCDriver\{msiVersionString}";
 			var components = new Dir(installDirectory, files);
+			var finishActionName = "LaunchODBCDataSourceAdmin";
 
 			var project = new Project("ODBCDriverInstaller", components)
 			{
@@ -76,7 +79,7 @@ namespace ODBCInstaller
 				InstallScope = InstallScope.perMachine,
 				Version = new Version(driverFileInfo.ProductMajorPart, driverFileInfo.ProductMinorPart, driverFileInfo.ProductBuildPart, driverFileInfo.ProductPrivatePart),
 				GUID = new Guid("e87c5d53-fddf-4539-9447-49032ed527bb"),
-				UI = WUI.WixUI_InstallDir,
+				UI = WUI.WixUI_Common,
 				BannerImage = "topbanner.bmp",
 				BackgroundImage = "leftbanner.bmp",
 				Name = "Elasticsearch ODBC Driver",
@@ -91,13 +94,18 @@ namespace ODBCInstaller
 				OutFileName = $"esodbc-{fullVersionString}", // Use full version string
 				Properties = new[]
 				{
+					new Property("WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT", "Launch ODBC Data Source Administrator after installation"),
+					new Property("WIXUI_EXITDIALOGOPTIONALCHECKBOX", "1"),
+
 					new PropertyRef("NETFRAMEWORK40FULL"),
 
 					// Perform registry search for redist key
 					new Property("VS2017REDISTINSTALLED",
 						new RegistrySearch(RegistryHive.LocalMachine, @"SOFTWARE\WOW6432Node\Microsoft\VisualStudio\14.0\VC\Runtimes\x64", "Installed", RegistrySearchType.raw){
 							Win64 = true
-						})
+						}),
+
+					new Property("WixShellExecTarget", "odbcad32.exe")
 				},
 				LaunchConditions = new List<LaunchCondition>
 				{
@@ -129,7 +137,8 @@ namespace ODBCInstaller
 					Disallow = true,
 					DisallowUpgradeErrorMessage = "An existing version is already installed, please uninstall before continuing.",
 					DowngradeErrorMessage = "A more recent version is already installed, please uninstall before continuing.",
-				}
+				},
+				CustomUI = UIHelper.BuildCustomUI(finishActionName),
 			};
 
 			const string wixLocation = @"..\..\packages\WixSharp.wix.bin\tools\bin";
@@ -139,7 +148,27 @@ namespace ODBCInstaller
 
 			project.WixVariables.Add("WixUILicenseRtf", System.IO.Path.Combine(driverInputFilesPath, "LICENSE.rtf"));
 			project.Include(WixExtension.NetFx);
+			project.Include(WixExtension.Util);
+			project.Include(WixExtension.UI);
+			project.WixSourceGenerated += document => Project_WixSourceGenerated(finishActionName, document);
+
 			project.BuildMsi();
+		}
+
+		private static void Project_WixSourceGenerated(string finishActionName, XDocument document)
+		{
+			var documentRoot = document.Root;
+			var ns = documentRoot.Name.Namespace;
+			var product = documentRoot.Descendants(ns + "Product").Single();
+
+			// executes what's defined in WixShellExecTarget Property.
+			// WixSharp does not have an element for WixShellExec custom action
+			product.Add(new XElement(ns + "CustomAction",
+				new XAttribute("Id", finishActionName),
+				new XAttribute("BinaryKey", "WixCA"),
+				new XAttribute("DllEntry", "WixShellExec"),
+				new XAttribute("Impersonate", "yes")
+			));
 		}
 
 		private static FileVersionInfo GetDriverFileInfo(string zipContentsDirectory)
@@ -148,6 +177,43 @@ namespace ODBCInstaller
 						 .Where(f => f.EndsWith(".dll"))
 						 .Select(f => FileVersionInfo.GetVersionInfo(f))
 						 .Single(f => f.FileDescription == "ODBC Unicode driver for Elasticsearch");
+		}
+	}
+
+	public class UIHelper
+	{
+		public static CustomUI BuildCustomUI(string finishActionName)
+		{
+			var customUI = new CustomUI();
+
+			customUI.On(NativeDialogs.WelcomeDlg, Buttons.Next, new ShowDialog(NativeDialogs.LicenseAgreementDlg));
+
+			customUI.On(NativeDialogs.LicenseAgreementDlg, Buttons.Back, new ShowDialog(NativeDialogs.WelcomeDlg));
+			customUI.On(NativeDialogs.LicenseAgreementDlg, Buttons.Next, new ShowDialog(NativeDialogs.InstallDirDlg));
+
+			customUI.On(NativeDialogs.InstallDirDlg, Buttons.Back, new ShowDialog(NativeDialogs.LicenseAgreementDlg));
+			customUI.On(NativeDialogs.InstallDirDlg, Buttons.Next, new SetTargetPath(),
+															 new ShowDialog(NativeDialogs.VerifyReadyDlg));
+
+			customUI.On(NativeDialogs.InstallDirDlg, Buttons.ChangeFolder,
+															 new SetProperty("_BrowseProperty", "[WIXUI_INSTALLDIR]"),
+															 new ShowDialog(CommonDialogs.BrowseDlg));
+
+			customUI.On(NativeDialogs.VerifyReadyDlg, Buttons.Back, new ShowDialog(NativeDialogs.InstallDirDlg, Condition.NOT_Installed),
+															  new ShowDialog(NativeDialogs.MaintenanceTypeDlg, Condition.Installed));
+
+			customUI.On(NativeDialogs.MaintenanceWelcomeDlg, Buttons.Next, new ShowDialog(NativeDialogs.MaintenanceTypeDlg));
+
+			customUI.On(NativeDialogs.MaintenanceTypeDlg, Buttons.Back, new ShowDialog(NativeDialogs.MaintenanceWelcomeDlg));
+			customUI.On(NativeDialogs.MaintenanceTypeDlg, Buttons.Repair, new ShowDialog(NativeDialogs.VerifyReadyDlg));
+			customUI.On(NativeDialogs.MaintenanceTypeDlg, Buttons.Remove, new ShowDialog(NativeDialogs.VerifyReadyDlg));
+
+			customUI.On(NativeDialogs.ExitDialog, Buttons.Finish, new ExecuteCustomAction(finishActionName, "WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed"), new CloseDialog()
+			{
+				Order = 9999,
+			});
+
+			return customUI;
 		}
 	}
 }

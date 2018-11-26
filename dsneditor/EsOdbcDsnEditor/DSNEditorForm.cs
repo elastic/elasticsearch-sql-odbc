@@ -20,7 +20,8 @@ namespace EsOdbcDsnEditor
 	/// </summary>
 	public delegate int DriverCallbackDelegate(string connectionString, ref string errorMessage, uint flags);
 
-	public partial class DsnEditorForm : Form {
+	public partial class DsnEditorForm : Form
+	{
 		private const int ESODBC_DSN_EXISTS_ERROR = -1;
 
 		private DriverCallbackDelegate testConnection;
@@ -34,7 +35,8 @@ namespace EsOdbcDsnEditor
 			bool onConnect,
 			string dsn,
 			DriverCallbackDelegate connectionTest,
-			DriverCallbackDelegate dsnSave) {
+			DriverCallbackDelegate dsnSave)
+		{
 			InitializeComponent();
 
 			// Wire up default button behaviours
@@ -156,7 +158,8 @@ namespace EsOdbcDsnEditor
 		/// </summary>
 		private void SaveButton_Click(object sender, EventArgs e) => SaveDsn(false);
 
-		private void SaveDsn(bool forceOverwrite) {
+		private void SaveDsn(bool forceOverwrite)
+		{
 			var errorMessage = string.Empty;
 
 			var dsnResult = RebuildAndValidateDsn();
@@ -193,7 +196,8 @@ namespace EsOdbcDsnEditor
 		///     With the Test button the user checks if the input data leads to a connection.
 		///     The function calls the driver callback and displays the result of the operation.
 		/// </summary>
-		private void TestConnectionButton_Click(object sender, EventArgs e) {
+		private void TestConnectionButton_Click(object sender, EventArgs e)
+		{
 			var errorMessage = string.Empty;
 
 			var dsnResult = RebuildAndValidateDsn();
@@ -218,7 +222,8 @@ namespace EsOdbcDsnEditor
 			}
 		}
 
-		private bool RebuildAndValidateDsn() {
+		private bool RebuildAndValidateDsn()
+		{
 			// Basic Panel
 			Builder["dsn"] = textName.Text;
 			Builder["description"] = textDescription.Text;
@@ -241,8 +246,13 @@ namespace EsOdbcDsnEditor
 			Builder["traceenabled"] = checkLoggingEnabled.Checked ? "1" : "0";
 
 			// Validations
+			var keynameOK = true;
 			var certificateFileOK = true;
 			var logDirectoryOK = true;
+
+			if (!string.IsNullOrEmpty(textName.Text)) {
+				keynameOK = ValidateKeyName(textName.Text);
+			}
 
 			if (!string.IsNullOrEmpty(textCertificatePath.Text)) {
 				certificateFileOK = ValidateCertificateFile(textCertificatePath.Text);
@@ -252,10 +262,11 @@ namespace EsOdbcDsnEditor
 				logDirectoryOK = ValidateLogFolderPath(textLogDirectoryPath.Text);
 			}
 
-			return certificateFileOK && logDirectoryOK;
+			return keynameOK && certificateFileOK && logDirectoryOK;
 		}
 
-		private void LogDirectoryPathButton_Click(object sender, EventArgs e) {
+		private void LogDirectoryPathButton_Click(object sender, EventArgs e)
+		{
 			var result = folderLogDirectoryDialog.ShowDialog();
 			if (result == DialogResult.OK) {
 				var path = folderLogDirectoryDialog.SelectedPath;
@@ -265,7 +276,8 @@ namespace EsOdbcDsnEditor
 			}
 		}
 
-		private bool ValidateLogFolderPath(string path) {
+		private bool ValidateLogFolderPath(string path)
+		{
 			if (string.IsNullOrEmpty(path) || Directory.Exists(path)) {
 				return true;
 			}
@@ -274,7 +286,8 @@ namespace EsOdbcDsnEditor
 			return false;
 		}
 
-		private void CertificatePathButton_Click(object sender, EventArgs e) {
+		private void CertificatePathButton_Click(object sender, EventArgs e)
+		{
 			var result = certificateFileDialog.ShowDialog();
 			if (result == DialogResult.OK) {
 				var file = certificateFileDialog.FileName;
@@ -284,7 +297,23 @@ namespace EsOdbcDsnEditor
 			}
 		}
 
-		private bool ValidateCertificateFile(string file) {
+		private bool ValidateKeyName(string keyname)
+		{
+			if (keyname.Length > 255) {
+				MessageBox.Show("Name must be less than 255 characters", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				return false;
+			}
+
+			if (keyname.Contains("\\")) {
+				MessageBox.Show("Name cannot contain backslash \\ characters", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				return false;
+			}
+
+			return true;
+		}
+
+		private bool ValidateCertificateFile(string file)
+		{
 			if (string.IsNullOrEmpty(file)) {
 				return true;
 			}
@@ -306,26 +335,30 @@ namespace EsOdbcDsnEditor
 
 		private void CheckLoggingEnabled_CheckedChanged(object sender, EventArgs e) => EnableDisableLoggingControls();
 
-		private void EnableDisableActionButtons() {
+		private void EnableDisableActionButtons()
+		{
 			saveButton.Enabled = string.IsNullOrEmpty(textName.Text) == false
 								 && string.IsNullOrEmpty(textHostname.Text) == false;
 			testButton.Enabled = string.IsNullOrEmpty(textHostname.Text) == false;
 		}
 
-		private void EnableDisableLoggingControls() {
+		private void EnableDisableLoggingControls()
+		{
 			textLogDirectoryPath.Enabled = checkLoggingEnabled.Checked;
 			comboLogLevel.Enabled = checkLoggingEnabled.Checked;
 			logDirectoryPathButton.Enabled = checkLoggingEnabled.Checked;
 		}
 
-		private void CancelButton_Click(object sender, EventArgs e) {
+		private void CancelButton_Click(object sender, EventArgs e)
+		{
 			// Clear the builder so that the resulting int returned to the caller is 0.
 			Builder.Clear();
 			Close();
 		}
 
 		// Remove the [X] close button in top right to force user to use the cancel button.
-		protected override CreateParams CreateParams {
+		protected override CreateParams CreateParams
+		{
 			get {
 				const int WS_SYSMENU = 0x80000;
 				var cp = base.CreateParams;
