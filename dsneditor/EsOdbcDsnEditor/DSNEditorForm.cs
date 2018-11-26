@@ -15,362 +15,356 @@ using System.IO;
 
 namespace EsOdbcDsnEditor
 {
-    /// <summary>
-    ///     Delegate for the driver callbacks.
-    /// </summary>
-    public delegate int DriverCallbackDelegate(string connectionString, ref string errorMessage, uint flags);
+	/// <summary>
+	///    Delegate for the driver callbacks.
+	/// </summary>
+	public delegate int DriverCallbackDelegate(string connectionString, ref string errorMessage, uint flags);
 
-    public partial class DsnEditorForm : Form
-    {
-        private const int ESODBC_DSN_EXISTS_ERROR = -1;
+	public partial class DsnEditorForm : Form
+	{
+		private const int ESODBC_DSN_EXISTS_ERROR = -1;
 
-        private DriverCallbackDelegate testConnection;
-        private DriverCallbackDelegate saveDsn;
+		private DriverCallbackDelegate testConnection;
+		private DriverCallbackDelegate saveDsn;
 
-        private readonly bool isConnecting;
+		private readonly bool isConnecting;
 
-        public OdbcConnectionStringBuilder Builder { get; set; } = new OdbcConnectionStringBuilder();
+		public OdbcConnectionStringBuilder Builder { get; set; } = new OdbcConnectionStringBuilder();
 
-        public DsnEditorForm(
-            bool onConnect,
-            string dsn,
-            DriverCallbackDelegate connectionTest,
-            DriverCallbackDelegate dsnSave)
-        {
-            InitializeComponent();
+		public DsnEditorForm(
+			bool onConnect,
+			string dsn,
+			DriverCallbackDelegate connectionTest,
+			DriverCallbackDelegate dsnSave)
+		{
+			InitializeComponent();
 
-            // Wire up default button behaviours
-            AcceptButton = saveButton;
-            CancelButton = cancelButton;
+			// Wire up default button behaviours
+			AcceptButton = saveButton;
+			CancelButton = cancelButton;
 
-            isConnecting = onConnect;
-            testConnection = connectionTest;
-            saveDsn = dsnSave;
+			isConnecting = onConnect;
+			testConnection = connectionTest;
+			saveDsn = dsnSave;
 
-            // If connecting then disable some user inputs
-            if (isConnecting)
-            {
-                textName.ReadOnly = textDescription.ReadOnly = true;
-                textName.Enabled = textDescription.Enabled = false;
-            }
+			// If connecting then disable some user inputs
+			if (isConnecting) {
+				textName.ReadOnly = textDescription.ReadOnly = true;
+				textName.Enabled = textDescription.Enabled = false;
+			}
 
-            // If this is a call serving a connect request, name the button "Connect", otherwise it's a DSN editing, so it's going to be a "Save".
-            saveButton.Text = onConnect ? "Connect" : "Save";
+			// If this is a call serving a connect request, name the button "Connect", otherwise it's a DSN editing, so it's going to be a "Save".
+			saveButton.Text = onConnect ? "Connect" : "Save";
 
-            // Parse DSN into the builder
-            Builder.ConnectionString = dsn;
+			// Parse DSN into the builder
+			Builder.ConnectionString = dsn;
 
-            // Basic Panel
-            textName.Text = Builder.ContainsKey("dsn") ? Builder["dsn"].ToString().StripBraces() : string.Empty;
-            textDescription.Text = Builder.ContainsKey("description") ? Builder["description"].ToString().StripBraces() : string.Empty;
-            textUsername.Text = Builder.ContainsKey("uid") ? Builder["uid"].ToString().StripBraces() : string.Empty;
-            textPassword.Text = Builder.ContainsKey("pwd") ? Builder["pwd"].ToString().StripBraces() : string.Empty;
-            textHostname.Text = Builder.ContainsKey("server") ? Builder["server"].ToString().StripBraces() : string.Empty;
-            numericUpDownPort.Text = Builder.ContainsKey("port") ? Builder["port"].ToString().StripBraces() : string.Empty;
+			// Basic Panel
+			textName.Text = Builder.ContainsKey("dsn") ? Builder["dsn"].ToString().StripBraces() : string.Empty;
+			textDescription.Text = Builder.ContainsKey("description") ? Builder["description"].ToString().StripBraces() : string.Empty;
+			textUsername.Text = Builder.ContainsKey("uid") ? Builder["uid"].ToString().StripBraces() : string.Empty;
+			textPassword.Text = Builder.ContainsKey("pwd") ? Builder["pwd"].ToString().StripBraces() : string.Empty;
+			textHostname.Text = Builder.ContainsKey("server") ? Builder["server"].ToString().StripBraces() : string.Empty;
+			numericUpDownPort.Text = Builder.ContainsKey("port") ? Builder["port"].ToString().StripBraces() : string.Empty;
 
-            // Security Panel
-            textCertificatePath.Text = Builder.ContainsKey("capath") ? Builder["capath"].ToString().StripBraces() : string.Empty;
-            radioEnabledNoValidation.Checked = true; // Default setting
-            if (Builder.ContainsKey("secure"))
-            {
-                var result = int.TryParse(Builder["secure"].ToString(), out int val);
-                if (result)
-                { 
-                    switch(val)
-                    {
-                        case 0: radioButtonDisabled.Checked = true; break;
-                        case 1: radioEnabledNoValidation.Checked = true; break;
-                        case 2: radioEnabledNoHostname.Checked = true; break;
-                        case 3: radioEnabledHostname.Checked = true; break;
-                        case 4: radioEnabledFull.Checked = true; break;
-                    }
-                }
-            }
+			toolTipName.SetToolTip(textName, "The name the DSN will be referred by.");
+			toolTipDescription.SetToolTip(textDescription, "Allows arbitrary text, generally used for short notes about the configured connection.");
+			toolTipHostname.SetToolTip(textHostname, "IP address or a resolvable DNS name of the Elasticsearch instance that the driver will connect to.");
+			toolTipPort.SetToolTip(numericUpDownPort, "The port which the Elasticsearch listens on.");
+			toolTipUsername.SetToolTip(textUsername, "If security is enabled, the username configured to access the REST SQL endpoint.");
+			toolTipPassword.SetToolTip(textPassword, "If security is enabled, the password configured to access the REST SQL endpoint.");
 
-            // Logging Panel
-            textLogDirectoryPath.Text = Builder.ContainsKey("tracefile") ? Builder["tracefile"].ToString().StripBraces() : string.Empty;
-            comboLogLevel.Text = "DEBUG"; // Default setting
-            checkLoggingEnabled.Checked = true; // Default setting
-            if (Builder.ContainsKey("tracelevel"))
-            {
-                switch (Builder["tracelevel"].ToString().ToUpperInvariant())
-                {
-                    case "DEBUG": comboLogLevel.Text = "DEBUG"; break;
-                    case "INFO": comboLogLevel.Text = "INFO"; break;
-                    case "WARN": comboLogLevel.Text = "WARN"; break;
-                    case "ERROR": comboLogLevel.Text = "ERROR"; break;
-                }
-            }
-            if (Builder.ContainsKey("traceenabled"))
-            {
-                var result = int.TryParse(Builder["traceenabled"].ToString(), out int val);
-                if (result)
-                {
-                    switch (val)
-                    {
-                        case 0: checkLoggingEnabled.Checked = false; break;
-                        default: checkLoggingEnabled.Checked = true; break;
-                    }
-                }
-            }
-            else
-            {
-                checkLoggingEnabled.Checked = false;
-            }
+			// Security Panel
+			textCertificatePath.Text = Builder.ContainsKey("capath") ? Builder["capath"].ToString().StripBraces() : string.Empty;
+			radioEnabledNoValidation.Checked = true; // Default setting
+			if (Builder.ContainsKey("secure")) {
+				var result = int.TryParse(Builder["secure"].ToString(), out int val);
+				if (result) {
+					switch (val) {
+						case 0: radioButtonDisabled.Checked = true; break;
+						case 1: radioEnabledNoValidation.Checked = true; break;
+						case 2: radioEnabledNoHostname.Checked = true; break;
+						case 3: radioEnabledHostname.Checked = true; break;
+						case 4: radioEnabledFull.Checked = true; break;
+					}
+				}
+			}
 
-            // Set initial state of action buttons.
-            EnableDisableActionButtons();
-        }
+			toolTipDisabled.SetToolTip(radioButtonDisabled,
+				"The communication between the driver and the Elasticsearch instance is performed over a clear-text connection." + Environment.NewLine
+				+ "This setting can expose the access credentials to a 3rd party intercepting the network traffic and is not recommended.");
 
-        /// <summary>
-        ///     On save, call the driver's callback. If operation succeeds, close the window.
-        ///     On failure, display the error received from the driver and keep editing.
-        /// </summary>
-        private void SaveButton_Click(object sender, EventArgs e)
-        {
-            SaveDsn(false);
-        }
+			toolTipEnabledNoValidation.SetToolTip(radioEnabledNoValidation,
+				"The connection encryption is enabled, but the certificate of the server is not validated." + Environment.NewLine
+				+ "This setting allows a 3rd party to act with ease as a man-in-the-middle and thus intercept all communications.");
 
-        private void SaveDsn(bool forceOverwrite)
-        {
-            var errorMessage = string.Empty;
+			toolTipEnabledNoHostname.SetToolTip(radioEnabledNoHostname,
+				"The connection encryption is enabled and the driver verifies that server's certificate is valid," + Environment.NewLine
+				+ "but it does not verify if the certificate is running on the server it was meant for." + Environment.NewLine
+				+ "This setting allows a 3rd party that had access to server's certificate to act as a man-in-the-middle" + Environment.NewLine
+				+ "and thus intercept all the communications.");
 
-            var dsnResult = RebuildAndValidateDsn();
-            if (!dsnResult) return;
+			toolTipEnabledHostname.SetToolTip(radioEnabledHostname,
+				"The connection encryption is enabled and the driver verifies that both the certificate is valid," + Environment.NewLine
+				+ "as well as that it is being deployed on the server that the certificate was meant for.");
 
-            var dsn = Builder.ToString();
-            var flag = forceOverwrite ? 1u : 0;
+			toolTipEnabledFull.SetToolTip(radioEnabledFull,
+				"This setting is equivalent to the previous one, with one additional check against certificate's revocation." + Environment.NewLine
+				+ "This offers the strongest security option and is the recommended setting for production deployments.");
 
-            int result = saveDsn(dsn, ref errorMessage, flag);
-            if (result >= 0 || (forceOverwrite
-                                && result == ESODBC_DSN_EXISTS_ERROR))
-            {
-                Close();
-                return;
-            }
+			toolTipCertificatePath.SetToolTip(textCertificatePath,
+				"In case the server uses a certificate that is not part of the PKI, for example using a self-signed certificate," + Environment.NewLine
+				+ "you can configure the path to a X509 certificate file that will be used by the driver to validate server's offered certificate.");
 
-            // Specific handling for prompting the user if result is an overwrite action
-            if (forceOverwrite == false
-                && result == ESODBC_DSN_EXISTS_ERROR)
-            {
-                var dialogResult = MessageBox.Show("The DSN already exists, are you sure you wish to overwrite it?", "Overwrite", MessageBoxButtons.YesNo);
-                if (dialogResult == DialogResult.Yes)
-                {
-                    SaveDsn(true);
-                }
+			// Logging Panel
+			textLogDirectoryPath.Text = Builder.ContainsKey("tracefile") ? Builder["tracefile"].ToString().StripBraces() : string.Empty;
+			comboLogLevel.Text = "DEBUG"; // Default setting
+			checkLoggingEnabled.Checked = true; // Default setting
+			if (Builder.ContainsKey("tracelevel")) {
+				switch (Builder["tracelevel"].ToString().ToUpperInvariant()) {
+					case "DEBUG": comboLogLevel.Text = "DEBUG"; break;
+					case "INFO": comboLogLevel.Text = "INFO"; break;
+					case "WARN": comboLogLevel.Text = "WARN"; break;
+					case "ERROR": comboLogLevel.Text = "ERROR"; break;
+				}
+			}
+			if (Builder.ContainsKey("traceenabled")) {
+				var result = int.TryParse(Builder["traceenabled"].ToString(), out int val);
+				if (result) {
+					switch (val) {
+						case 0: checkLoggingEnabled.Checked = false; break;
+						default: checkLoggingEnabled.Checked = true; break;
+					}
+				}
+			}
+			else {
+				checkLoggingEnabled.Checked = false;
+			}
 
-                return;
-            }
+			toolTipLoggingEnabled.SetToolTip(checkLoggingEnabled,
+				"Ticking this will enable driver's logging. A logging directory is also mandatory when this option is enabled," + Environment.NewLine
+				+ "however the specified logging directory will be saved in the DSN if provided, even if logging is disabled.");
 
-            if (errorMessage.Length <= 0)
-            {
-                errorMessage = "Saving the DSN failed";
-            }
+			toolTipLogDirectoryPath.SetToolTip(textLogDirectoryPath, "Specify which directory to write the log files in.");
+			toolTipLogLevel.SetToolTip(comboLogLevel, "Configure the verbosity of the logs.");
 
-            MessageBox.Show(errorMessage, "Operation failure", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
+			// Set initial state of action buttons.
+			EnableDisableActionButtons();
+		}
 
-        /// <summary>
-        ///     With the Test button the user checks if the input data leads to a connection.
-        ///     The function calls the driver callback and displays the result of the operation.
-        /// </summary>
-        private void TestConnectionButton_Click(object sender, EventArgs e)
-        {
-            var errorMessage = string.Empty;
+		/// <summary>
+		///     On save, call the driver's callback. If operation succeeds, close the window.
+		///     On failure, display the error received from the driver and keep editing.
+		/// </summary>
+		private void SaveButton_Click(object sender, EventArgs e) => SaveDsn(false);
 
-            var dsnResult = RebuildAndValidateDsn();
-            if (!dsnResult) return;
+		private void SaveDsn(bool forceOverwrite)
+		{
+			var errorMessage = string.Empty;
 
-            var dsn = Builder.ToString();
+			var dsnResult = RebuildAndValidateDsn();
+			if (!dsnResult) return;
 
-            // Wrap slow operation in a wait cursor
-            Cursor = Cursors.WaitCursor;
-            int result = testConnection(dsn, ref errorMessage, 0);
-            Cursor = Cursors.Arrow;
+			var dsn = Builder.ToString();
+			var flag = forceOverwrite ? 1u : 0;
 
-            if (result >= 0)
-            {
-                MessageBox.Show("Connection Success", "Connection Test", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-            else
-            {
-                var message = "Connection Failed";
-                if (0 < errorMessage.Length)
-                {
-                    message += ": " + errorMessage;
-                }
-                MessageBox.Show(message, "Connection Test", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
+			var result = saveDsn(dsn, ref errorMessage, flag);
+			if (result >= 0 || (forceOverwrite && result == ESODBC_DSN_EXISTS_ERROR)) {
+				Close();
+				return;
+			}
 
-        private bool RebuildAndValidateDsn()
-        {
-            // Basic Panel
-            Builder["dsn"] = textName.Text;
-            Builder["description"] = textDescription.Text;
-            Builder["uid"] = textUsername.Text;
-            Builder["pwd"] = textPassword.Text;
-            Builder["server"] = textHostname.Text;
-            Builder["port"] = numericUpDownPort.Text;
+			// Specific handling for prompting the user if result is an overwrite action
+			if (forceOverwrite == false
+				&& result == ESODBC_DSN_EXISTS_ERROR) {
+				var dialogResult = MessageBox.Show("The DSN already exists, are you sure you wish to overwrite it?", "Overwrite", MessageBoxButtons.YesNo);
+				if (dialogResult == DialogResult.Yes) {
+					SaveDsn(true);
+				}
 
-            // Security Panel
-            Builder["capath"] = textCertificatePath.Text;
-            if (radioButtonDisabled.Checked) Builder["secure"] = 0;
-            if (radioEnabledNoValidation.Checked) Builder["secure"] = 1;
-            if (radioEnabledNoHostname.Checked) Builder["secure"] = 2;
-            if (radioEnabledHostname.Checked) Builder["secure"] = 3;
-            if (radioEnabledFull.Checked) Builder["secure"] = 4;
+				return;
+			}
 
-            // Logging Panel
-            Builder["tracefile"] = textLogDirectoryPath.Text;
-            Builder["tracelevel"] = comboLogLevel.Text;
-            Builder["traceenabled"] = checkLoggingEnabled.Checked ? "1" : "0";
+			if (errorMessage.Length <= 0) {
+				errorMessage = "Saving the DSN failed";
+			}
 
-            // Validations
-            var keynameOK = true;
-            var certificateFileOK = true;
-            var logDirectoryOK = true;
-            
-            if (!string.IsNullOrEmpty(textName.Text))
-            {
-                keynameOK = ValidateKeyName(textName.Text);
-            }
+			MessageBox.Show(errorMessage, "Operation failure", MessageBoxButtons.OK, MessageBoxIcon.Error);
+		}
 
-            if (!string.IsNullOrEmpty(textCertificatePath.Text))
-            {
-                certificateFileOK = ValidateCertificateFile(textCertificatePath.Text);
-            }
+		/// <summary>
+		///     With the Test button the user checks if the input data leads to a connection.
+		///     The function calls the driver callback and displays the result of the operation.
+		/// </summary>
+		private void TestConnectionButton_Click(object sender, EventArgs e)
+		{
+			var errorMessage = string.Empty;
 
-            if (!string.IsNullOrEmpty(textLogDirectoryPath.Text))
-            {
-                logDirectoryOK = ValidateLogFolderPath(textLogDirectoryPath.Text);
-            }
+			var dsnResult = RebuildAndValidateDsn();
+			if (!dsnResult) return;
 
-            return keynameOK && certificateFileOK && logDirectoryOK;
-        }
+			var dsn = Builder.ToString();
 
-        private void LogDirectoryPathButton_Click(object sender, EventArgs e)
-        {
-            var result = folderLogDirectoryDialog.ShowDialog();
-            if (result == DialogResult.OK)
-            {
-                string path = folderLogDirectoryDialog.SelectedPath;
-                if (ValidateLogFolderPath(path))
-                {
-                    textLogDirectoryPath.Text = path;
-                }
-            }
-        }
+			// Wrap slow operation in a wait cursor
+			Cursor = Cursors.WaitCursor;
+			var result = testConnection(dsn, ref errorMessage, 0);
+			Cursor = Cursors.Arrow;
 
-        private bool ValidateLogFolderPath(string path)
-        {
-            if (string.IsNullOrEmpty(path) || Directory.Exists(path))
-            {
-                return true;
-            }
+			if (result >= 0) {
+				MessageBox.Show("Connection Success", "Connection Test", MessageBoxButtons.OK, MessageBoxIcon.Information);
+			}
+			else {
+				var message = "Connection Failed";
+				if (0 < errorMessage.Length) {
+					message += $": {errorMessage}";
+				}
+				MessageBox.Show(message, "Connection Test", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+		}
 
-            MessageBox.Show("Log directory invalid, path does not exist", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            return false;
-        }
+		private bool RebuildAndValidateDsn()
+		{
+			// Basic Panel
+			Builder["dsn"] = textName.Text;
+			Builder["description"] = textDescription.Text;
+			Builder["uid"] = textUsername.Text;
+			Builder["pwd"] = textPassword.Text;
+			Builder["server"] = textHostname.Text;
+			Builder["port"] = numericUpDownPort.Text;
 
-        private void CertificatePathButton_Click(object sender, EventArgs e)
-        {
-            var result = certificateFileDialog.ShowDialog();
-            if (result == DialogResult.OK)
-            {
-                string file = certificateFileDialog.FileName;
-                if (ValidateCertificateFile(file))
-                {
-                    textCertificatePath.Text = file;
-                }
-            }
-        }
-        
-        private bool ValidateKeyName(string keyname)
-        {
-            if (keyname.Length > 255)
-            {
-                MessageBox.Show("Name must be less than 255 characters", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return false;
-            }
+			// Security Panel
+			Builder["capath"] = textCertificatePath.Text;
+			if (radioButtonDisabled.Checked) Builder["secure"] = 0;
+			if (radioEnabledNoValidation.Checked) Builder["secure"] = 1;
+			if (radioEnabledNoHostname.Checked) Builder["secure"] = 2;
+			if (radioEnabledHostname.Checked) Builder["secure"] = 3;
+			if (radioEnabledFull.Checked) Builder["secure"] = 4;
 
-            if (keyname.Contains("\\"))
-            {
-                MessageBox.Show("Name cannot contain backslash \\ characters", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return false;
-            }
+			// Logging Panel
+			Builder["tracefile"] = textLogDirectoryPath.Text;
+			Builder["tracelevel"] = comboLogLevel.Text;
+			Builder["traceenabled"] = checkLoggingEnabled.Checked ? "1" : "0";
 
-            return true;
-        }
+			// Validations
+			var keynameOK = true;
+			var certificateFileOK = true;
+			var logDirectoryOK = true;
 
-        private bool ValidateCertificateFile(string file)
-        {
-            if (string.IsNullOrEmpty(file))
-            {
-                return true;
-            }
+			if (!string.IsNullOrEmpty(textName.Text)) {
+				keynameOK = ValidateKeyName(textName.Text);
+			}
 
-            var info = new FileInfo(file);
-            if (info.Exists && info.Length > 0)
-            {
-                return true;
-            }
+			if (!string.IsNullOrEmpty(textCertificatePath.Text)) {
+				certificateFileOK = ValidateCertificateFile(textCertificatePath.Text);
+			}
 
-            MessageBox.Show("Certificate file invalid", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            return false;
-        }
+			if (!string.IsNullOrEmpty(textLogDirectoryPath.Text)) {
+				logDirectoryOK = ValidateLogFolderPath(textLogDirectoryPath.Text);
+			}
 
-        private void TextName_TextChanged(object sender, EventArgs e)
-        {
-            EnableDisableActionButtons();
-        }
+			return keynameOK && certificateFileOK && logDirectoryOK;
+		}
 
-        private void TextHostname_TextChanged(object sender, EventArgs e)
-        {
-            EnableDisableActionButtons();
-        }
+		private void LogDirectoryPathButton_Click(object sender, EventArgs e)
+		{
+			var result = folderLogDirectoryDialog.ShowDialog();
+			if (result == DialogResult.OK) {
+				var path = folderLogDirectoryDialog.SelectedPath;
+				if (ValidateLogFolderPath(path)) {
+					textLogDirectoryPath.Text = path;
+				}
+			}
+		}
 
-        private void NumericUpDownPort_ValueChanged(object sender, EventArgs e)
-        {
-            EnableDisableActionButtons();
-        }
+		private bool ValidateLogFolderPath(string path)
+		{
+			if (string.IsNullOrEmpty(path) || Directory.Exists(path)) {
+				return true;
+			}
 
-        private void EnableDisableActionButtons()
-        {
-            saveButton.Enabled = string.IsNullOrEmpty(textName.Text) == false
-                                 && string.IsNullOrEmpty(textHostname.Text) == false;
-            testButton.Enabled = string.IsNullOrEmpty(textHostname.Text) == false;
-        }
-        
-        private void CheckLoggingEnabled_CheckedChanged(object sender, EventArgs e)
-        {
-            EnableDisableLoggingControls();
-        }
+			MessageBox.Show("Log directory invalid, path does not exist", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			return false;
+		}
 
-        private void EnableDisableLoggingControls()
-        {
-            textLogDirectoryPath.Enabled = checkLoggingEnabled.Checked;
-            comboLogLevel.Enabled = checkLoggingEnabled.Checked;
-            logDirectoryPathButton.Enabled = checkLoggingEnabled.Checked;
-        }
+		private void CertificatePathButton_Click(object sender, EventArgs e)
+		{
+			var result = certificateFileDialog.ShowDialog();
+			if (result == DialogResult.OK) {
+				var file = certificateFileDialog.FileName;
+				if (ValidateCertificateFile(file)) {
+					textCertificatePath.Text = file;
+				}
+			}
+		}
 
-        private void CancelButton_Click(object sender, EventArgs e)
-        {
-            // Clear the builder so that the resulting int returned to the caller is 0.
-            Builder.Clear();
-            Close();
-        }
+		private bool ValidateKeyName(string keyname)
+		{
+			if (keyname.Length > 255) {
+				MessageBox.Show("Name must be less than 255 characters", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				return false;
+			}
 
-        // Remove the [X] close button in top right to force user to use the cancel button.
-        protected override CreateParams CreateParams
-        {
-            get
-            {
-                const int WS_SYSMENU = 0x80000;
-                CreateParams cp = base.CreateParams;
-                cp.Style &= ~WS_SYSMENU;
-                return cp;
-            }
-        }
-    }
+			if (keyname.Contains("\\")) {
+				MessageBox.Show("Name cannot contain backslash \\ characters", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				return false;
+			}
+
+			return true;
+		}
+
+		private bool ValidateCertificateFile(string file)
+		{
+			if (string.IsNullOrEmpty(file)) {
+				return true;
+			}
+
+			var info = new FileInfo(file);
+			if (info.Exists && info.Length > 0) {
+				return true;
+			}
+
+			MessageBox.Show("Certificate file invalid", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			return false;
+		}
+
+		private void TextName_TextChanged(object sender, EventArgs e) => EnableDisableActionButtons();
+
+		private void TextHostname_TextChanged(object sender, EventArgs e) => EnableDisableActionButtons();
+
+		private void NumericUpDownPort_ValueChanged(object sender, EventArgs e) => EnableDisableActionButtons();
+
+		private void CheckLoggingEnabled_CheckedChanged(object sender, EventArgs e) => EnableDisableLoggingControls();
+
+		private void EnableDisableActionButtons()
+		{
+			saveButton.Enabled = string.IsNullOrEmpty(textName.Text) == false
+								 && string.IsNullOrEmpty(textHostname.Text) == false;
+			testButton.Enabled = string.IsNullOrEmpty(textHostname.Text) == false;
+		}
+
+		private void EnableDisableLoggingControls()
+		{
+			textLogDirectoryPath.Enabled = checkLoggingEnabled.Checked;
+			comboLogLevel.Enabled = checkLoggingEnabled.Checked;
+			logDirectoryPathButton.Enabled = checkLoggingEnabled.Checked;
+		}
+
+		private void CancelButton_Click(object sender, EventArgs e)
+		{
+			// Clear the builder so that the resulting int returned to the caller is 0.
+			Builder.Clear();
+			Close();
+		}
+
+		// Remove the [X] close button in top right to force user to use the cancel button.
+		protected override CreateParams CreateParams
+		{
+			get {
+				const int WS_SYSMENU = 0x80000;
+				var cp = base.CreateParams;
+				cp.Style &= ~WS_SYSMENU;
+				return cp;
+			}
+		}
+	}
 }
