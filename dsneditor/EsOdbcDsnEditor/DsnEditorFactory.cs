@@ -10,13 +10,16 @@ using System.Windows.Forms;
 // https://stackoverflow.com/questions/4368201/appdomain-currentdomain-assemblyresolve-asking-for-a-appname-resources-assembl
 // [assembly: NeutralResourcesLanguageAttribute("en-GB", UltimateResourceFallbackLocation.MainAssembly)]
 
-namespace EsOdbcDsnEditor {
-	public static class DsnEditorFactory {
+namespace EsOdbcDsnEditor
+{
+	public static class DsnEditorFactory
+	{
 		public static int DsnEditor(
 			bool onConnect,
 			string dsnIn,
 			DriverCallbackDelegate delegConnectionTest,
-			DriverCallbackDelegate delegSaveDsn) {
+			DriverCallbackDelegate delegSaveDsn)
+		{
 			Application.EnableVisualStyles();
 			var form = new DsnEditorForm(onConnect, dsnIn, delegConnectionTest, delegSaveDsn);
 			// instead of Application.Run(form): prevent STA apps from launching a new editor within the same thread

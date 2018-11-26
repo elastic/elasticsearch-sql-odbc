@@ -13,7 +13,8 @@ using System.IO;
 // https://stackoverflow.com/questions/4368201/appdomain-currentdomain-assemblyresolve-asking-for-a-appname-resources-assembl
 // [assembly: NeutralResourcesLanguageAttribute("en-GB", UltimateResourceFallbackLocation.MainAssembly)]
 
-namespace EsOdbcDsnEditor {
+namespace EsOdbcDsnEditor
+{
 	/// <summary>
 	///    Delegate for the driver callbacks.
 	/// </summary>
