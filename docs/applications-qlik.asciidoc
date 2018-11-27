@@ -1,7 +1,7 @@
 [role="xpack"]
 [testenv="platinum"]
-[[sql-odbc-applications-microstrat]]
-=== MicroStrategy Desktop
+[[sql-odbc-applications-qlik]]
+=== Qlik Sense Desktop
 
 experimental[]
 
@@ -20,56 +20,66 @@ ____
 
 ==== Data loading
 
+To use the {product} to load data into Qlik Sense Desktop perform the following steps in sequence.
+
+. Create new app
++
 Once the application is launched, you'll first need to click on the _Create new app_ button:
-
++
 [[apps_qlik_newapp]]
-.Create new app 
 image:images/apps_qlik_newapp.png[]
-
++
+. Name app
++
 ...then give it a name,
-
++
 [[apps_qlik_create]]
-.Name app
 image:images/apps_qlik_create.png[]
-
++
+. Open app
++
 ...and then open it:
-
++
 [[apps_qlik_open]]
-.Open app
 image:images/apps_qlik_open.png[]
-
++
+. Add data to your app
++
 Start configuring the source to load data from in the newly created app:
-
++
 [[apps_qlik_adddata]]
-.Add data to your app
 image:images/apps_qlik_adddata.png[]
-
++
+. Load from ODBC
++
 You'll be given a choice of sources to select. Click on the _ODBC_ icon:
-
++
 [[apps_qlik_odbc]]
-.Load from ODBC
 image:images/apps_qlik_odbc.png[]
-
++
+. Choose DSN
++
 In the _Create new connection (ODBC)_ dialog, click on the DSN name that you have previously configured for your {es} instance:
-
++
 [[apps_qlik_dsn]]
-.Choose DSN
 image:images/apps_qlik_dsn.png[]
-
++
 Provide a username and password in the respective fields, if authentication is enabled on your instance and if these are not already part
 of the DSN. Press the _Create_ button.
-
++
+. Select source table
++
 The application will now connect to the {es} instance and query the catalog information, presenting you with a list of tables that you can
 load data from:
-
++
 [[apps_qlik_selecttable]]
-.Select source table
 image:images/apps_qlik_selecttable.png[]
-
++
+. Visualize the data
++
 Press on the _Add data_ button and customize your data visualization:
-
++
 [[apps_qlik_visualize]]
-.Visualize the data
 image:images/apps_qlik_visualize.png[]
 
 // vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 tw=138 columns=140
