@@ -1,0 +1,130 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# for linked clone support
+Vagrant.require_version ">= 1.8.0"
+
+Vagrant.configure("2") do |config|
+
+  # when running locally
+  config.vm.define "local" do |local|
+    local.vm.box = "elastic/windows-2012_r2-x86_64"
+	local.vm.provider "virtualbox" do |vb, override|
+      #vb.gui = true
+	  vb.memory = 4096
+	  vb.linked_clone = true
+	end
+	
+    local.vm.synced_folder "./../../Common/", "/common"
+    local.vm.synced_folder "./../../../../../installer/build/out/", "/out"
+    
+    local.vm.provision "powershellget", type: "shell", inline: configure_powershellget()
+    # TODO: use another proxy available on chocolatey
+	#local.vm.provision "fiddler", 		type: "shell", inline: configure_fiddler()
+	# TODO: test with java 9 for versions that support it
+	#local.vm.provision "java9", 		type: "shell", inline: configure_java_9()
+	local.vm.provision "partition", 	type: "shell", inline: create_partition() 
+  end
+
+  # when running in CI
+  config.vm.define "azure" do |azure|
+	azure.vm.box = "azure"
+	azure.vm.communicator = :winrm
+	azure.vm.guest = :windows
+
+    azure.vm.provider "azure" do |azure, override|
+      azure.tenant_id = ENV['AZURE_TENANT_ID']
+      azure.client_id = ENV['AZURE_CLIENT_ID']
+      azure.client_secret = ENV['AZURE_CLIENT_SECRET']
+      azure.subscription_id = ENV['AZURE_SUBSCRIPTION_ID']
+
+      azure.vm_name = "msiintegration"
+	  # swapped out for a random DNS name when running the test
+      azure.dns_name = "AZURE_DNS_NAME"
+      azure.vm_image_urn = 'MicrosoftWindowsServer:WindowsServer:2012-R2-Datacenter-smalldisk:latest'
+      azure.vm_password = ENV['AZURE_VM_PASSWORD']
+      azure.admin_username = ENV['AZURE_ADMIN_USERNAME']
+	  azure.admin_password = ENV['AZURE_ADMIN_PASSWORD']
+
+	  azure.instance_ready_timeout = 600
+	  azure.instance_check_interval = 60
+	  azure.wait_for_destroy = true
+	  # swapped out for a random resource group name when running the test
+	  azure.resource_group_name = "AZURE_RESOURCE_GROUP_NAME"
+	  azure.location = "WestEurope"
+
+	  # use winrm in PowerShell to copy files across and back on Azure as synced folders do not work.
+	  # Disable automatic syncing of the vagrant synced folder
+	  override.vm.synced_folder ".", "/vagrant", disabled: true
+      override.winrm.transport = :ssl
+      override.winrm.port = 5986
+      override.winrm.ssl_peer_verification = false # must be false if using a self signed cert
+    end
+
+    azure.vm.provision "chocolatey", 	type: "shell", inline: configure_chocolatey() 
+    azure.vm.provision "powershellget", type: "shell", inline: configure_powershellget()   
+    azure.vm.provision "java8", 			type: "shell", inline: configure_java_8()  
+    # TODO: test with java 9 for versions that support it
+	#azure.vm.provision "java9", 			type: "shell", inline: configure_java_9()  
+    # TODO: use another proxy available on chocolatey
+	#azure.vm.provision "fiddler", 		type: "shell", inline: configure_fiddler()  
+  end
+
+end
+
+def configure_chocolatey()
+  return <<-SHELL
+    iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+  SHELL
+end
+
+def configure_powershellget()
+  return <<-SHELL
+    choco install powershell-packagemanagement -y
+    Install-PackageProvider -Name NuGet -RequiredVersion 2.8.5.201 -Force
+  SHELL
+end
+
+def configure_java_8()
+  return <<-SHELL
+    choco install jdk8 -y
+  SHELL
+end
+
+def configure_java_9()
+  return <<-SHELL
+    choco install jdk9 -y
+  SHELL
+end
+
+def configure_fiddler()
+  return <<-SHELL
+    choco install fiddler4 -y
+	$scriptsDir = "$([Environment]::GetFolderPath("MyDocuments"))\\Fiddler2\\Scripts"
+	if (-not(Test-Path $scriptsDir)) {
+		New-Item $scriptsDir -Type Directory | Out-Null
+	}
+	$customRules = "C:\\common\\CustomRules.js"
+	if (Test-Path -Path $customRules) {	
+		Copy-Item $customRules $scriptsDir
+	}
+  SHELL
+end
+
+def create_partition()
+  return <<-SHELL
+	$partitions = Get-Disk | Get-Partition
+	$driveLetter = 'D'
+	$d = $partitions | Where-Object { $_.DriveLetter -eq $driveLetter }
+	if (-not $d) {
+		$c = $partitions | Where-Object { $_.DriveLetter -eq 'C' }
+		if (-not ($c)) {
+			throw 'No C Drive available'
+		}
+		$newSize = $c.Size - 1GB
+		Resize-Partition -DiskNumber $c.DiskNumber -PartitionNumber $c.PartitionNumber -Size $newSize
+		$newParititon = New-Partition -DiskNumber $c.DiskNumber -UseMaximumSize -DriveLetter $driveLetter
+		Format-Volume -DriveLetter $newParititon.DriveLetter -FileSystem NTFS -NewFileSystemLabel 'Elastic' -Force -Confirm:$false
+	}
+  SHELL
+end

@@ -18,6 +18,8 @@ module Paths =
     let MsiBuildDir = MsiDir @@ "bin/Release/"
     let DriverBuildsDir = SrcDir @@ "../../builds/" // Output folder from driver compilation
 
+    let IntegrationTestsDir = FullName (SrcDir @@ "Tests/")
+
 module Products =
     type Version = {
         FullVersion : string;

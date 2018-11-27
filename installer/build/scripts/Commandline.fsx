@@ -65,12 +65,15 @@ Target:
           RawValue = m.Version.Value; }
 
     let private args = getBuildParamOrDefault "cmdline" "buildinstaller" |> split ' '
+    let private gui = args |> List.exists (fun x -> x = "-gui")
+    let private noDestroy = args |> List.exists (fun x -> x = "-nodestroy")
 
     let private (|IsTarget|_|) (candidate: string) =
         match candidate.ToLowerInvariant() with
         | "buildinstaller"
         | "clean"
         | "help"
+        | "integrate"
         | "release" -> Some candidate
         | _ -> None
 
@@ -83,6 +86,13 @@ Target:
             | "?" -> "help"
             | _ -> "buildinstaller"
         | _ -> "buildinstaller"
+
+    let private (|IsVagrantProvider|_|) candidate =
+        match candidate with 
+        | "local"
+        | "azure" 
+        | "quick-azure" -> Some candidate
+        | _ -> None
 
     let arguments =
         match args with
@@ -135,6 +145,10 @@ Target:
                            setBuildParam "release" "1"
                            certAndPasswordFromFile certFile passwordFile
                            versionFromBuildZipFile
+                       | ["integrate"; IsVagrantProvider provider; testTargets] ->
+                           setBuildParam "testtargets" testTargets
+                           setBuildParam "vagrantprovider" provider
+                           versionFromBuildZipFile
                        | [IsTarget target;] ->
                            versionFromBuildZipFile
                        | _ ->
@@ -142,4 +156,6 @@ Target:
                            exit 2
 
         setBuildParam "target" target
+        if gui then setBuildParam "gui" "$true"
+        if noDestroy then setBuildParam "no-destroy" "$false"
         version

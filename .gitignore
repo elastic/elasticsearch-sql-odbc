@@ -2,7 +2,8 @@
 driver/*.swp
 cscope.out
 .vs
-installer/src/Installer/driver/
 dsneditor/EsOdbcDsnEditor/Debug/
 dsneditor/EsOdbcDsnEditorLauncher/bin/
 dsneditor/EsOdbcDsnEditorLauncher/obj/
+installer/src/Tests/Tests/**/.vagrant/
+installer/src/Installer/driver/
