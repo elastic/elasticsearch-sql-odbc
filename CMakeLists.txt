@@ -95,6 +95,11 @@ if (${WIN32})
 	# 2MB stack size
 	# set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /STACK:2097152")
 	# set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /F 2097152")
+	# Force UJSON4C's Unicode decoder scratchpad onto the heap. Its large
+	# default size (128K) leads to high stack usage.
+	set(CMAKE_C_FLAGS
+		# defined to sizeof(wchar_t)
+		"${CMAKE_C_FLAGS} /DJSON_MAX_STACK_BUFFER_SIZE=2")
 
 	if (${IS_UNICODE})
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DUNICODE /D_UNICODE")
@@ -313,7 +318,7 @@ add_dependencies(${DRV_NAME} dsneditor)
 include_directories(${ODBC_INC} ${DRV_SRC_DIR} ${LIBCURL_INC_PATH}
 	${UJSON4C_INC} ${CTIMESTAMP_PATH_SRC} ${DSNEDITOR_INC_PATH})
 target_link_libraries(${DRV_NAME} odbccp32 legacy_stdio_definitions
-	${DSNBND_LIB_BIN_DIR_BASE}-$<CONFIG>/esdsnbnd${CMAKE_IMPORT_LIBRARY_SUFFIX}
+	${DSNBND_LIB_BIN_DIR_BASE}-$<CONFIG>/esdsnbnd${BARCH}${CMAKE_IMPORT_LIBRARY_SUFFIX}
 	libcurl ${LIBCURL_WIN_LIBS})
 
 
@@ -351,14 +356,14 @@ install(FILES
 endif (${LIBCURL_LINK_MODE} MATCHES [Dd][Ll][Ll])
 # add editor DLLs
 install(FILES
-	${DSNBND_LIB_BIN_DIR_BASE}-$<CONFIG>/esdsnedt.dll
-	${DSNBND_LIB_BIN_DIR_BASE}-$<CONFIG>/esdsnbnd.dll
+	${DSNBND_LIB_BIN_DIR_BASE}-$<CONFIG>/esdsnedt${CMAKE_SHARED_LIBRARY_SUFFIX}
+	${DSNBND_LIB_BIN_DIR_BASE}-$<CONFIG>/esdsnbnd${BARCH}${CMAKE_SHARED_LIBRARY_SUFFIX}
 	DESTINATION ${INSTALL_DIR})
 install(TARGETS ${DRV_NAME}
 	DESTINATION ${INSTALL_DIR})
 
 #
-# Set up the packaing
+# Set up the packaging
 #
 set(CPACK_GENERATOR "ZIP")
 # don't build ALL (but see CMAKE_SKIP_INSTALL_ALL_DEPENDENCY comment)
@@ -384,4 +389,4 @@ message("Driver install target: ${INSTALL_DIR}.")
 message("Driver packaging target: ${CPACK_PACKAGE_FILE_NAME}.")
 message("   ***** </Generation summary>")
 
-# vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 :
+# vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 tw=78 :

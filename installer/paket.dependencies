@@ -4,10 +4,10 @@ nuget WixSharp.bin
 nuget WixSharp.wix.bin
 
 group build
-    source https://www.nuget.org/api/v2
+	source https://www.nuget.org/api/v2
 
-    nuget FAKE.x64
-    nuget FSharp.Data
-    nuget FSharp.Text.RegexProvider
-    nuget FSharp.Configuration
-    nuget DotNetZip
+	nuget FAKE.x64
+	nuget FSharp.Data
+	nuget FSharp.Text.RegexProvider
+	nuget FSharp.Configuration
+	nuget DotNetZip
