@@ -46,8 +46,8 @@ namespace ODBCInstaller
 				releaseString = releaseString.Replace(snapshotSuffix, string.Empty);
 			}
 
-			var preRelease = string.Empty;
 			// Is this a pre-release?
+			var preRelease = string.Empty;
 			if (releaseString.Contains("-"))
 			{
 				var versionSplit = releaseString.Split('-');
@@ -58,6 +58,16 @@ namespace ODBCInstaller
 
 				preRelease = "-" + versionSplit[1];
 			}
+
+			// Get the documentation link version
+			var documentationLink = "https://www.elastic.co/guide/en/elasticsearch/sql-odbc/index.html";
+			if (!releaseString.Contains("-"))
+			{
+				var documentationVersion = releaseString.Split('.').Reverse().SkipWhile(s => s == "0").Reverse().ToArray().Join(".");
+				documentationLink = $"https://www.elastic.co/guide/en/elasticsearch/sql-odbc/{documentationVersion}/index.html";
+			}
+
+			Console.WriteLine($"Setting documentation link to : {documentationLink}");
 
 			// Append any prerelease flags onto the version string
 			var msiVersionString = $"{driverFileInfo.ProductVersion}{preRelease}";
@@ -88,24 +98,25 @@ namespace ODBCInstaller
 				{
 					ProductIcon = "ODBC.ico",
 					Manufacturer = driverFileInfo.CompanyName,
-					UrlInfoAbout = "https://www.elastic.co/products/stack/elasticsearch-sql",
-					HelpLink = "https://discuss.elastic.co/c/elasticsearch"
+					UrlInfoAbout = documentationLink,
+					HelpLink = "https://discuss.elastic.co/tags/c/elasticsearch/sql"
 				},
 				OutFileName = $"esodbc-{fullVersionString}", // Use full version string
 				Properties = new[]
 				{
+					// Exit dialog checkbox options
 					new Property("WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT", "Launch ODBC Data Source Administrator after installation"),
 					new Property("WIXUI_EXITDIALOGOPTIONALCHECKBOX", "1"),
+					new Property("WixShellExecTarget", "odbcad32.exe"),
 
+					// Is .NET Framework 4.0 installed?
 					new PropertyRef("NETFRAMEWORK40FULL"),
 
-					// Perform registry search for redist key
+					// Perform registry search for VS 2017 redist key
 					new Property("VS2017REDISTINSTALLED",
 						new RegistrySearch(RegistryHive.LocalMachine, @"SOFTWARE\WOW6432Node\Microsoft\VisualStudio\14.0\VC\Runtimes\x64", "Installed", RegistrySearchType.raw){
 							Win64 = true
-						}),
-
-					new Property("WixShellExecTarget", "odbcad32.exe")
+						})
 				},
 				LaunchConditions = new List<LaunchCondition>
 				{
