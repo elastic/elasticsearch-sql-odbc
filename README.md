@@ -69,7 +69,7 @@ The required libraries are added as subtrees to the project, in the libs directo
 #### MSVC 
 
 Building the driver requires the installation of Microsoft tools. These can be
-from the Visual Studio pack or with the [standalone tools](http://landinghub.visualstudio.com/visual-cpp-build-tools).
+from the Visual Studio pack or with the [standalone tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/).
 
 Version 2017 Enterprize 15.5.2 is used to develop with, older versions
 should work fine too, with their corresponding modules. The lists of packages
