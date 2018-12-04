@@ -12,6 +12,8 @@ within them.
 * <<sql-odbc-applications-excel, Microsoft Excel>>
 * <<sql-odbc-applications-powerbi, Microsoft Power BI Desktop>>
 * <<sql-odbc-applications-ps1, Microsoft PowerShell>>
+* <<sql-odbc-applications-microstrat, MicroStrategy Desktop>>
+* <<sql-odbc-applications-qlik, Qlik Sense Desktop>>
 * <<sql-odbc-applications-tableau, Tableau Desktop>>
 
 NOTE: Each application has its own requirements and licensing; these are outside the scope of this documentation which only covers the
@@ -22,6 +24,8 @@ WARNING: The support for applications implementing the ODBC 2.x standard and pri
 include::applications-excel.asciidoc[]
 include::applications-powerbi.asciidoc[]
 include::applications-ps1.asciidoc[]
+include::applications-microstrat.asciidoc[]
+include::applications-qlik.asciidoc[]
 include::applications-tableau.asciidoc[]
 
 
