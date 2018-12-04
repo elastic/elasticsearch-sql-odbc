@@ -33,14 +33,13 @@ TEST_F(BindCol, ColumnWise) {
 	SQLCHAR buff[ARR_SZ];
 	SQLLEN ind_len_buff[ARR_SZ];
 	SQLUSMALLINT row_stats[ARR_SZ];
-	SQLUINTEGER fetched_rows;
+	SQLULEN fetched_rows;
 
 	ret = SQLSetStmtAttr(stmt, SQL_ATTR_ROW_BIND_TYPE,
 			(SQLPOINTER)SQL_BIND_BY_COLUMN, 0);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	ret = SQLSetStmtAttr(stmt, SQL_ATTR_ROW_ARRAY_SIZE, (SQLPOINTER)ARR_SZ,
-			0); 
+	ret = SQLSetStmtAttr(stmt, SQL_ATTR_ROW_ARRAY_SIZE, (SQLPOINTER)ARR_SZ, 0);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	ret = SQLSetStmtAttr(stmt, SQL_ATTR_ROW_STATUS_PTR, row_stats, 0);
