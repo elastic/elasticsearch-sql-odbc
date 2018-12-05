@@ -33,21 +33,20 @@ module Builder =
         Version: Version;
     }
 
-    let patchAssemblyInformation (assemblyInfo:AssemblyInfo) = 
+    let patchAssemblyInformation (assemblyInfo:AssemblyInfo, isClean:bool) = 
         let version = assemblyInfo.Version.FullVersion
-        let commitHash = Information.getCurrentHash()
+        let informationalVersion = if isClean then version else version + "-" + Information.getCurrentHash()
         CreateCSharpAssemblyInfo assemblyInfo.Path
             [Attribute.Title assemblyInfo.Title
              Attribute.Description assemblyInfo.Description
              Attribute.Guid assemblyInfo.Guid
              Attribute.Product assemblyInfo.Product
-             Attribute.Metadata("GitBuildHash", commitHash)
-             Attribute.Company  "Elasticsearch B.V."
+             Attribute.Company "Elasticsearch B.V."
              Attribute.Copyright "Elastic License. Copyright Elasticsearch."
              Attribute.Trademark "Elasticsearch is a trademark of Elasticsearch B.V."
-             Attribute.Version  version
+             Attribute.Version version
              Attribute.FileVersion version
-             Attribute.InformationalVersion version // Attribute.Version and Attribute.FileVersion normalize the version number, so retain the prelease suffix
+             Attribute.InformationalVersion informationalVersion
             ]
 
     let Sign file () =
@@ -103,6 +102,7 @@ module Builder =
             e.Extract(unzipFolder, Ionic.Zip.ExtractExistingFileAction.OverwriteSilently)
 
     let PatchAssemblyInfos (version : Version) =
+        let isClean = (version.FullVersion = "0.0.0")
         patchAssemblyInformation ({
             Path = MsiDir @@ "Properties/AssemblyInfo.cs";
             Title = "Elasticsearch ODBC Installer";
@@ -110,7 +110,7 @@ module Builder =
             Guid = "44555887-c439-470c-944d-8866ec3d7067";
             Product = "Elasticsearch ODBC Installer";
             Version = version;
-        })
+        },isClean)
         patchAssemblyInformation ({
             Path = SrcDir @@ "../../dsneditor/EsOdbcDsnEditor/Properties/AssemblyInfo.cs";
             Title = "Elasticsearch DSN Editor";
@@ -118,7 +118,7 @@ module Builder =
             Guid = "fac0512c-e595-4bf4-acb7-617611df5715";
             Product = "Elasticsearch DSN Editor";
             Version = version;
-        })
+        },isClean)
         patchAssemblyInformation ({
             Path = SrcDir @@ "../../dsneditor/EsOdbcDsnEditorLauncher/Properties/AssemblyInfo.cs";
             Title = "Elasticsearch DSN Editor Launcher";
@@ -126,7 +126,7 @@ module Builder =
             Guid = "71bebff7-652e-4b26-9ec3-caef947d368c";
             Product = "Elasticsearch DSN Editor Launcher";
             Version = version;
-        })
+        },isClean)
 
     let BuildMsi (version : Version) =
 
