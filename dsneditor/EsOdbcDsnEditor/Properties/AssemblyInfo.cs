@@ -6,7 +6,6 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyDescriptionAttribute("Elasticsearch DSN Editor for managing ODBC connection strings.")]
 [assembly: GuidAttribute("fac0512c-e595-4bf4-acb7-617611df5715")]
 [assembly: AssemblyProductAttribute("Elasticsearch DSN Editor")]
-[assembly: AssemblyMetadataAttribute("GitBuildHash","cb20c0")]
 [assembly: AssemblyCompanyAttribute("Elasticsearch B.V.")]
 [assembly: AssemblyCopyrightAttribute("Elastic License. Copyright Elasticsearch.")]
 [assembly: AssemblyTrademarkAttribute("Elasticsearch is a trademark of Elasticsearch B.V.")]
@@ -19,7 +18,6 @@ namespace System {
         internal const System.String AssemblyDescription = "Elasticsearch DSN Editor for managing ODBC connection strings.";
         internal const System.String Guid = "fac0512c-e595-4bf4-acb7-617611df5715";
         internal const System.String AssemblyProduct = "Elasticsearch DSN Editor";
-        internal const System.String AssemblyMetadata_GitBuildHash = "cb20c0";
         internal const System.String AssemblyCompany = "Elasticsearch B.V.";
         internal const System.String AssemblyCopyright = "Elastic License. Copyright Elasticsearch.";
         internal const System.String AssemblyTrademark = "Elasticsearch is a trademark of Elasticsearch B.V.";

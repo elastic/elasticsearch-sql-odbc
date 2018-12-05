@@ -6,7 +6,6 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyDescriptionAttribute("MSI installer for the Elasticsearch ODBC driver.")]
 [assembly: GuidAttribute("44555887-c439-470c-944d-8866ec3d7067")]
 [assembly: AssemblyProductAttribute("Elasticsearch ODBC Installer")]
-[assembly: AssemblyMetadataAttribute("GitBuildHash","cb20c0")]
 [assembly: AssemblyCompanyAttribute("Elasticsearch B.V.")]
 [assembly: AssemblyCopyrightAttribute("Elastic License. Copyright Elasticsearch.")]
 [assembly: AssemblyTrademarkAttribute("Elasticsearch is a trademark of Elasticsearch B.V.")]
@@ -19,7 +18,6 @@ namespace System {
         internal const System.String AssemblyDescription = "MSI installer for the Elasticsearch ODBC driver.";
         internal const System.String Guid = "44555887-c439-470c-944d-8866ec3d7067";
         internal const System.String AssemblyProduct = "Elasticsearch ODBC Installer";
-        internal const System.String AssemblyMetadata_GitBuildHash = "cb20c0";
         internal const System.String AssemblyCompany = "Elasticsearch B.V.";
         internal const System.String AssemblyCopyright = "Elastic License. Copyright Elasticsearch.";
         internal const System.String AssemblyTrademark = "Elasticsearch is a trademark of Elasticsearch B.V.";

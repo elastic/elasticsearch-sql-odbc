@@ -16,6 +16,12 @@ open Fake.Runtime.Trace
 let versionToBuild = Commandline.parse()
 
 Target "Clean" (fun _ ->
+    PatchAssemblyInfos ({ FullVersion = "0.0.0";
+                          Major = 0;
+                          Minor = 0;
+                          Patch = 0;
+                          Prerelease = ""; 
+                          RawValue = "0.0.0"; })
     CleanDirs [MsiBuildDir; OutDir;]
 )
 
