@@ -31,25 +31,25 @@ namespace ODBCInstaller
 			var driverFileInfo = GetDriverFileInfo(driverInputFilesPath);
 			var driverFilePath = System.IO.Path.Combine(driverInputFilesPath, driverFileInfo.FileName);
 
-			// Remove the platform suffix
-			string platformSuffix = is64bit
+			// Remove the platform
+			string platformVersionComponent = is64bit
 										? "-windows-x86_64"
 										: "-windows-x86";
 			var releaseString = fullVersionString;
 			if (string.IsNullOrEmpty(releaseString) == false &&
-				releaseString.EndsWith(platformSuffix))
+				releaseString.Contains(platformVersionComponent))
 			{
-				releaseString = releaseString.Replace(platformSuffix, string.Empty);
+				releaseString = releaseString.Replace(platformVersionComponent, string.Empty);
 			}
 
-			// Remove the -SNAPSHOT suffix
-			const string snapshotSuffix = "-SNAPSHOT";
+			// Remove the -SNAPSHOT
+			const string snapshotVersionComponent = "-SNAPSHOT";
 			var isSnapshot = false;
 			if (string.IsNullOrEmpty(releaseString) == false &&
-				releaseString.EndsWith(snapshotSuffix))
+				releaseString.Contains(snapshotVersionComponent))
 			{
 				isSnapshot = true;
-				releaseString = releaseString.Replace(snapshotSuffix, string.Empty);
+				releaseString = releaseString.Replace(snapshotVersionComponent, string.Empty);
 			}
 
 			// Is this a pre-release?
