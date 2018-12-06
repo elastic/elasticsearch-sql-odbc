@@ -9,7 +9,11 @@ namespace ODBCInstaller
     partial class Program
     {
         static void Main(string[] args)
-		{          
+		{
+			// Is 64bit target?
+			var is64bit = IntPtr.Size == 8;
+			var bitness = is64bit ? "64bit" : "32bit";
+
 			// Get the input files
 			var fullVersionString = args[0];
 			var driverBuildsDir = args[1];
@@ -20,7 +24,9 @@ namespace ODBCInstaller
 			var driverFilePath = System.IO.Path.Combine(driverInputFilesPath, driverFileInfo.FileName);
 
 			// Remove the platform suffix
-			const string platformSuffix = "-windows-x86_64";
+			string platformSuffix = is64bit
+										? "-windows-x86_64"
+										: "-windows-x86";
 			var releaseString = fullVersionString;
 			if (string.IsNullOrEmpty(releaseString) == false &&
 				releaseString.EndsWith(platformSuffix))
@@ -66,15 +72,19 @@ namespace ODBCInstaller
 
             var project = new Project("ODBCDriverInstaller", components)
             {
-                Platform = Platform.x64,
+                Platform = is64bit
+								? Platform.x64
+								: Platform.x86,
                 InstallScope = InstallScope.perMachine,
                 Version = new Version(driverFileInfo.ProductMajorPart, driverFileInfo.ProductMinorPart, driverFileInfo.ProductBuildPart, driverFileInfo.ProductPrivatePart),
-                GUID = new Guid("e87c5d53-fddf-4539-9447-49032ed527bb"),
-                UI = WUI.WixUI_InstallDir,
+                GUID = new Guid(is64bit
+									? "e87c5d53-fddf-4539-9447-49032ed527bb"
+									: "ef6b65e0-20c3-43e3-a5e3-24e2ee8c84cb"),
+				UI = WUI.WixUI_InstallDir,
                 BannerImage = "topbanner.bmp",
                 BackgroundImage = "leftbanner.bmp",
                 Name = "Elasticsearch ODBC Driver",
-                Description = $"{driverFileInfo.FileDescription} ({msiVersionString})",
+                Description = $"{driverFileInfo.FileDescription} ({msiVersionString}) {bitness}",
                 ControlPanelInfo = new ProductInfo
                 {
                     ProductIcon = "ODBC.ico",
@@ -89,8 +99,15 @@ namespace ODBCInstaller
 
 					// Perform registry search for redist key
 					new Property("VS2017REDISTINSTALLED",
-						new RegistrySearch(RegistryHive.LocalMachine, @"SOFTWARE\WOW6432Node\Microsoft\VisualStudio\14.0\VC\Runtimes\x64", "Installed", RegistrySearchType.raw){
-							Win64 = true
+						new RegistrySearch(
+								RegistryHive.LocalMachine,
+								is64bit
+									? @"SOFTWARE\WOW6432Node\Microsoft\VisualStudio\14.0\VC\Runtimes\x64"
+									: @"SOFTWARE\WOW6432Node\Microsoft\VisualStudio\14.0\VC\Runtimes\x86",
+								"Installed",
+								RegistrySearchType.raw)
+						{
+							Win64 = is64bit
 						})
 				},
 				LaunchConditions = new List<LaunchCondition>
