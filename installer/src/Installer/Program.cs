@@ -87,6 +87,7 @@ namespace ODBCInstaller
 
             var installDirectory = $@"%ProgramFiles%\Elastic\ODBCDriver\{msiVersionString}";
             var components = new Dir(installDirectory, files);
+			var finishActionName = "LaunchODBCDataSourceAdmin";
 
             var project = new Project("ODBCDriverInstaller", components)
             {
@@ -98,7 +99,7 @@ namespace ODBCInstaller
                 GUID = new Guid(is64bit
 									? "e87c5d53-fddf-4539-9447-49032ed527bb"
 									: "ef6b65e0-20c3-43e3-a5e3-24e2ee8c84cb"),
-				UI = WUI.WixUI_InstallDir,
+				UI = WUI.WixUI_Common,
                 BannerImage = "topbanner.bmp",
                 BackgroundImage = "leftbanner.bmp",
                 Name = "Elasticsearch ODBC Driver",
@@ -107,10 +108,10 @@ namespace ODBCInstaller
                 {
                     ProductIcon = "ODBC.ico",
                     Manufacturer = driverFileInfo.CompanyName,
-                    UrlInfoAbout = "https://www.elastic.co/products/stack/elasticsearch-sql",
-                    HelpLink = "https://discuss.elastic.co/c/elasticsearch"
+					UrlInfoAbout = documentationLink,
+					HelpLink = "https://discuss.elastic.co/tags/c/elasticsearch/sql"
                 },
-                OutFileName = "esodbc-" + fullVersionString, // Use full version string
+				OutFileName = $"esodbc-{fullVersionString}", // Use full version string
 				Properties = new[]
 				{
 					// Exit dialog checkbox options
