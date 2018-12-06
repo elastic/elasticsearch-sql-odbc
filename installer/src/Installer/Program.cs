@@ -16,10 +16,6 @@ namespace ODBCInstaller
 	{
 		static void Main(string[] args)
 		{
-			// Is 64bit target?
-			var is64bit = IntPtr.Size == 8;
-			var bitness = is64bit ? "64bit" : "32bit";
-
 			// Get the input files
 			var fullVersionString = args[0];
 			var driverBuildsDir = args[1];
@@ -30,6 +26,11 @@ namespace ODBCInstaller
 			var driverInputFilesPath = System.IO.Path.Combine(driverBuildsDir, zipDirectory);
 			var driverFileInfo = GetDriverFileInfo(driverInputFilesPath);
 			var driverFilePath = System.IO.Path.Combine(driverInputFilesPath, driverFileInfo.FileName);
+
+			// Is 64bit target?
+			// full version format: <release>[-<qualifier>][-SNAPSHOT]-windows-x86[_64], with release: X.Y.Z and qualifier: alphaX/betaX(/gamaX?)
+			var is64bit = fullVersionString.EndsWith("x86_64");
+			var bitness = is64bit ? "64bit" : "32bit";
 
 			// Remove the platform
 			string platformVersionComponent = is64bit
