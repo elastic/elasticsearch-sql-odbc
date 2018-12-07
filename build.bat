@@ -6,7 +6,7 @@ rem you may not use this file except in compliance with the Elastic License.
 rem
 
 setlocal EnableExtensions EnableDelayedExpansion
-cls
+rem cls
 
 set DRIVER_BASE_NAME=esodbc
 
@@ -15,15 +15,8 @@ set SRC_PATH=%~dp0
 
 call:SET_ARCH
 call:SET_CMAKE
+call:SET_BUILDS_DIR
 
-
-REM
-REM  List of variables that can be customized
-REM
-
-if [%BUILD_DIR%] == [] (
-	SET BUILD_DIR=%SRC_PATH%\builds
-)
 
 REM
 REM  Perform the building steps
@@ -66,6 +59,10 @@ REM
 REM Run building steps from within build dir
 REM
 
+if not exist !BUILD_DIR! (
+	mkdir !BUILD_DIR!
+	echo %~nx0: building in !BUILD_DIR!.
+)
 cd %BUILD_DIR%
 
 
@@ -185,6 +182,28 @@ REM function to check and set cmake binary (if installed)
 
 	goto:eof
 
+REM function to create dirs where to build and set corresponding build vars:
+REM build: path to either x86 or x64 build
+REM buildS: path to store the x86 and/or x64 folders (no Release/Debug
+REM specific dirs, though)
+:SET_BUILDS_DIR
+	if [%BUILDS_DIR%] == [] (
+		SET BUILDS_DIR=!SRC_PATH!\builds
+	)
+	if not exist !BUILDS_DIR! (
+		REM Happened before: builds/.gitignore gets removed and then
+		REM so does builds/ in git.
+		echo.
+		echo %~nx0: ERROR: !BUILDS_DIR! to hold the builds doesn't exist.
+		echo.
+
+		goto END
+	)
+
+	SET BUILD_DIR=!BUILDS_DIR!\!TARCH!
+
+	goto:eof
+
 REM USAGE function: output a usage message
 :USAGE
 	echo Usage: %~1 [argument(s^)]
@@ -222,8 +241,8 @@ REM USAGE function: output a usage message
 	echo List of read environment variables:
 	echo    CMAKE       : cmake executable to use (if not in PATH^);
 	echo                  currently set to: `%CMAKE%`.
-	echo    BUILD_DIR   : folder path to build the driver into;
-	echo                  currently set to: `%BUILD_DIR%`.
+	echo    BUILDS_DIR  : folder path to build the driver into;
+	echo                  currently set to: `%BUILDS_DIR%`.
 	echo    INSTALL_DIR : folder path to install the driver into;
 	echo                  currently set to: `%INSTALL_DIR%`.
 	echo.
@@ -264,11 +283,11 @@ REM CLEAN function: clean up the build dir.
 :CLEAN
 	echo %~nx0: cleaning builds.
 	REM delete all files that don't have the "extension" .gitignore :-)
-	for %%i in (%BUILD_DIR%\*) do if not %%~xi == .gitignore (
+	for %%i in (%BUILDS_DIR%\*) do if not %%~xi == .gitignore (
 		del /s /q %%i >nul 2>&1
 	)
 	REM delete all directories
-	for /d %%i in (%BUILD_DIR%\*) do rmdir /s /q %%i >nul 2>&1
+	for /d %%i in (%BUILDS_DIR%\*) do rmdir /s /q %%i >nul 2>&1
 
 	REM clean the installer too
 	!SRC_PATH!\installer\build.bat clean
@@ -537,10 +556,19 @@ REM PACKAGE_DO function: generate deliverable package
 	if ERRORLEVEL 1 (
 		goto END
 	)
-	if not [!SIGN_CERT!] == [] (
-		!SRC_PATH!\installer\build.bat release !SIGN_CERT! !SIGN_PASS!
-	) else (
-		!SRC_PATH!\installer\build.bat
+	for /f %%i in ("%BUILD_DIR%\%DRIVER_BASE_NAME%*.zip") do (
+		if not [!SIGN_CERT!] == [] (
+			echo %~nx0: building release installer for ZIP: %%~fi.
+			!SRC_PATH!\installer\build.bat release %%~fi !SIGN_CERT! !SIGN_PASS!
+		) else (
+			echo %~nx0: building installer for ZIP: %%~fi.
+			!SRC_PATH!\installer\build.bat buildinstaller %%~fi
+		)
+		if ERRORLEVEL 1 (
+			goto END
+		) else (
+			goto:eof
+		)
 	)
 
 	goto:eof
