@@ -288,7 +288,7 @@ add_custom_target(curlclean
 	)
 
 #
-# Patch installer's file with the version being built
+# Patch installer's and editor's AssemblyInfos with the version being built
 #
 execute_process(COMMAND
 	${CMAKE_SOURCE_DIR}/installer/build.bat patchversions ${DRV_VERSION}${VERSION_QUALIFIER}
@@ -308,7 +308,19 @@ endif (${CMD_RETURN})
 #
 set(DSNBND_LIB_BIN_DIR_BASE ${CMAKE_BINARY_DIR}/dsneditor-${TARCH})
 set(DSNEDITOR_INC_PATH ${CMAKE_SOURCE_DIR}/dsneditor/EsOdbcDsnBinding/)
+
+# Generate resource file for the editor binding.
+# The directory where .vcxproj defines it isn't yet created, though: that
+# happens later when the "dsneditor" custom command below is executed =>
+# generate it in the general build directory for now and copy it part of the
+# custom command.
+configure_file(${CMAKE_SOURCE_DIR}/dsneditor/EsOdbcDsnBinding/EsOdbcDsnBinding.rc.cmake ${CMAKE_BINARY_DIR}/EsOdbcDsnBinding.rc)
+
+file(TO_NATIVE_PATH ${DSNBND_LIB_BIN_DIR_BASE}-$<CONFIG>/
+	DSNBND_LIB_BIN_DIR_BASE_NATIVE)
 add_custom_target(dsneditor
+	COMMAND xcopy /Y/F EsOdbcDsnBinding.rc ${DSNBND_LIB_BIN_DIR_BASE_NATIVE}
+	WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 	COMMAND MSBuild ${CMAKE_SOURCE_DIR}/dsneditor/EsOdbcDsnBinding/EsOdbcDsnBinding.vcxproj
 		# place all the build items (by- & products) into a single dir
 		/p:OutputPath=${DSNBND_LIB_BIN_DIR_BASE}-$<CONFIG>/
@@ -319,7 +331,6 @@ add_custom_target(dsneditor
 		 /p:Platform=${TARCH} # make it explicit, for x-arch builds
 	WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 	COMMENT "Building the DSN editor libraries.")
-
 
 #
 # finally, set destination library
