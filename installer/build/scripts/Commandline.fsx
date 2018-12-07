@@ -30,13 +30,13 @@ module Commandline =
     let usage = """
 USAGE:
 
-build.bat [Target] [Target specific params] [skiptests]
+build.bat <Target> [Target specific params] [skiptests]
 
 Target:
 -------
 
-* buildinstaller
-  - default target if none provided. Builds ODBC installer
+* buildinstaller <PathToZipFile>
+  - builds the installer for the ODBC driver in the provided ZIP file
 
 * clean
   - cleans build output folders
@@ -44,12 +44,12 @@ Target:
 * patchversions [VersionString]
   - patches version numbers in assemblyinfo files to [VersionString]
 
-* release [CertFile] [PasswordFile]
+* release <PathToZipFile> [CertFile] [PasswordFile]
   - create a release version of the MSI by building and then signing the installer.
   - when CertFile and PasswordFile are specified, these will be used for signing otherwise the values in ELASTIC_CERT_FILE
     and ELASTIC_CERT_PASSWORD environment variables will be used
 
-  Example: build.bat release C:/path_to_cert_file C:/path_to_password_file
+  Example: build.bat release C:/path_to_zip_file C:/path_to_cert_file C:/path_to_password_file
 
 * help or ?
   - show this usage summary
@@ -113,33 +113,34 @@ Target:
         | (false, _) -> failwithf "certificate file does not exist at %s" certFile
         | (_, false) -> failwithf "password file does not exist at %s" passwordFile
 
-    let private versionFromBuildZipFile () =
-        let extractVersion (fileInfo:FileInfo) =
-            Regex.Replace(fileInfo.Name, "^(.*)\.zip$", "$1")
+    let private versionFromZipFile zipFile =
+        trace "Getting zip location from arguments"
 
-        let zips = DriverBuildsDir
-                   |> directoryInfo
-                   |> filesInDirMatching ("*.zip")
+        let extractVersion (fileName) =
+            Regex.Replace(fileName, "^.*\\\([^\\\]*)\.zip$", "$1")
 
-        match zips.Length with
-        | 0 -> failwithf "No zip file found in %s" DriverBuildsDir
-        | 1 ->
-            let version = zips.[0] |> extractVersion |> parseVersion
-            tracefn "Extracted version information %s from %s" version.FullVersion zips.[0].FullName
+        match (fileExists zipFile) with
+        | (false) -> failwithf "ZIP file does not exist at %s" zipFile
+        | (true) ->
+            setBuildParam "zipFile" zipFile
+            trace "Getting zip location from arguments"
+            let version = zipFile |> extractVersion |> parseVersion
+            tracefn "Extracted version information %s from %s" version.FullVersion zipFile
             version
-        | _ -> failwithf "Expecting one zip file in %s but found %i" DriverBuildsDir zips.Length
 
     let parse () =
         setEnvironVar "FAKEBUILD" "1"
         let version = match arguments with
-                       | ["release";] ->
+                       | ["release"; zipFile ] ->
                            setBuildParam "release" "1"
                            certAndPasswordFromEnvVariables ()
-                           versionFromBuildZipFile()
-                       | ["release"; certFile; passwordFile ] ->
+                           versionFromZipFile zipFile
+                       | ["release"; zipFile; certFile; passwordFile ] ->
                            setBuildParam "release" "1"
                            certAndPasswordFromFile certFile passwordFile
-                           versionFromBuildZipFile()
+                           versionFromZipFile zipFile
+                       | ["buildinstaller"; zipFile] ->
+                           versionFromZipFile zipFile
                        | ["patchversions"; version] ->
                             version |> parseVersion
                        | [IsTarget target;] when target = "clean" || target ="help" ->
@@ -149,8 +150,6 @@ Target:
                               Patch = 0;
                               Prerelease = ""; 
                               RawValue = "0.0.0"; }
-                       | [IsTarget target;] ->
-                           versionFromBuildZipFile()
                        | _ ->
                            traceError usage
                            exit 2

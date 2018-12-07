@@ -19,6 +19,7 @@ open Products.Products
 open Products.Paths
 open Products
 open System.Text
+open System.Text.RegularExpressions
 open Fake.FileHelper
 open Fake.AssemblyInfoFile
 
@@ -136,18 +137,16 @@ module Builder =
 
         PatchAssemblyInfos version
 
-        let zipfile = DriverBuildsDir
-                      |> directoryInfo
-                      |> filesInDirMatching ("*.zip")
-                      |> Seq.head
-                          
-        unzipFile (zipfile.FullName, DriverBuildsDir)
-        tracefn "Unzipped zip file in %s" zipfile.FullName
+        let zipFile = getBuildParam "zipFile"
+        let buildDir = Regex.Replace(zipFile, "(^.*)\\\[^\\\]*\.zip$", "$1/")
+
+        unzipFile (zipFile, buildDir)
+        tracefn "Unzipped zip file in %s" zipFile
 
         let exitCode = ExecProcess (fun info ->
                          info.FileName <- sprintf "%sOdbcInstaller" MsiBuildDir
                          info.WorkingDirectory <- MsiDir
-                         info.Arguments <- [version.FullVersion; System.IO.Path.GetFullPath(DriverBuildsDir); zipfile.FullName] |> String.concat " "
+                         info.Arguments <- [version.FullVersion; System.IO.Path.GetFullPath(buildDir); zipFile] |> String.concat " "
                         ) <| TimeSpan.FromMinutes 20.
 
         if exitCode <> 0 then failwithf "Error building MSI"

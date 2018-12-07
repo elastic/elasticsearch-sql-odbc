@@ -16,7 +16,6 @@ module Paths =
     let SrcDir = "./src/"
     let MsiDir = SrcDir @@ "Installer/"
     let MsiBuildDir = MsiDir @@ "bin/Release/"
-    let DriverBuildsDir = SrcDir @@ "../../builds/" // Output folder from driver compilation
 
 module Products =
     type Version = {

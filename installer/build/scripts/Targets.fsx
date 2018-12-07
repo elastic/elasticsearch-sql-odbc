@@ -45,9 +45,7 @@ Target "PatchVersions" (fun () ->
 
 Target "Help" (fun () -> trace Commandline.usage)
 
-"Clean"
-  ==> "PatchVersions"
-  ==> "BuildInstaller"
+"BuildInstaller"
   ==> "Release"
 
-RunTargetOrDefault "BuildInstaller"
+RunTargetOrDefault "Help"
