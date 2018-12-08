@@ -17,6 +17,8 @@ set(VERSION_QUALIFIER $ENV{VERSION_QUALIFIER} CACHE STRING
 
 # build a UNICODE driver? (the only supported way currently)
 set(IS_UNICODE 1)
+# should the ODBC driver's name respect the Short Format Name?
+set(SFN_DRV_NAME 1)
 
 #include(GenerateExportHeader)
 
@@ -52,7 +54,11 @@ else (${IS_UNICODE})
 endif (${IS_UNICODE})
 
 # driver name (ANSI/Unicode x 32/64)
-set(DRV_NAME "${DRIVER_BASE_NAME}${PROJECT_VERSION_MAJOR}${ENCODING}${BARCH}")
+if (${SFN_DRV_NAME})
+	set(DRV_NAME "${DRIVER_BASE_NAME}${PROJECT_VERSION_MAJOR}${ENCODING}")
+else (${SFN_DRV_NAME})
+	set(DRV_NAME "${DRIVER_BASE_NAME}${PROJECT_VERSION_MAJOR}${ENCODING}${BARCH}")
+endif (${SFN_DRV_NAME})
 
 # Turn on the ability to create folders to organize projects (.vcproj)
 # It creates "CMakePredefinedTargets" folder by default and adds CMake
