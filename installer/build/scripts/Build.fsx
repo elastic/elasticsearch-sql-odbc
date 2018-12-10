@@ -19,32 +19,41 @@ open Products.Products
 open Products.Paths
 open Products
 open System.Text
+open System.Text.RegularExpressions
 open Fake.FileHelper
 open Fake.AssemblyInfoFile
 
 module Builder =
 
-    let patchAssemblyInformation (version:Version) = 
-        let version = version.FullVersion
-        let commitHash = Information.getCurrentHash()
-        CreateCSharpAssemblyInfo (MsiDir @@ "Properties/AssemblyInfo.cs")
-            [Attribute.Title "Installer"
-             Attribute.Description "Elasticsearch ODBC Installer."
-             Attribute.Guid "44555887-c439-470c-944d-8866ec3d7067"
-             Attribute.Product "Elasticsearch ODBC Installer"
-             Attribute.Metadata("GitBuildHash", commitHash)
-             Attribute.Company  "Elasticsearch B.V."
+    type AssemblyInfo = {
+        Path : string;
+        Title: string;
+        Description : string;
+        Guid: string;
+        Product: string;
+        Version: Version;
+    }
+
+    let patchAssemblyInformation (assemblyInfo:AssemblyInfo, isClean:bool) = 
+        let version = assemblyInfo.Version.FullVersion
+        let informationalVersion = if isClean then version else version + "-" + Information.getCurrentHash()
+        CreateCSharpAssemblyInfo assemblyInfo.Path
+            [Attribute.Title assemblyInfo.Title
+             Attribute.Description assemblyInfo.Description
+             Attribute.Guid assemblyInfo.Guid
+             Attribute.Product assemblyInfo.Product
+             Attribute.Company "Elasticsearch B.V."
              Attribute.Copyright "Elastic License. Copyright Elasticsearch."
              Attribute.Trademark "Elasticsearch is a trademark of Elasticsearch B.V."
-             Attribute.Version  version
+             Attribute.Version version
              Attribute.FileVersion version
-             Attribute.InformationalVersion version // Attribute.Version and Attribute.FileVersion normalize the version number, so retain the prelease suffix
+             Attribute.InformationalVersion informationalVersion
             ]
 
-    let Sign file (version : Version) =
-        tracefn "Signing MSI"
+    let Sign file () =
         let release = getBuildParam "release" = "1"
         if release then
+            tracefn "Signing MSI"
             let certificate = getBuildParam "certificate"
             let password = getBuildParam "password"
             let timestampServer = "http://timestamp.comodoca.com"
@@ -93,26 +102,51 @@ module Builder =
         for e in zip do
             e.Extract(unzipFolder, Ionic.Zip.ExtractExistingFileAction.OverwriteSilently)
 
+    let PatchAssemblyInfos (version : Version) =
+        let isClean = (version.FullVersion = "0.0.0")
+        patchAssemblyInformation ({
+            Path = MsiDir @@ "Properties/AssemblyInfo.cs";
+            Title = "Elasticsearch ODBC Installer";
+            Description = "MSI installer for the Elasticsearch ODBC driver.";
+            Guid = "44555887-c439-470c-944d-8866ec3d7067";
+            Product = "Elasticsearch ODBC Installer";
+            Version = version;
+        },isClean)
+        patchAssemblyInformation ({
+            Path = SrcDir @@ "../../dsneditor/EsOdbcDsnEditor/Properties/AssemblyInfo.cs";
+            Title = "Elasticsearch DSN Editor";
+            Description = "Elasticsearch DSN Editor for managing ODBC connection strings.";
+            Guid = "fac0512c-e595-4bf4-acb7-617611df5715";
+            Product = "Elasticsearch DSN Editor";
+            Version = version;
+        },isClean)
+        patchAssemblyInformation ({
+            Path = SrcDir @@ "../../dsneditor/EsOdbcDsnEditorLauncher/Properties/AssemblyInfo.cs";
+            Title = "Elasticsearch DSN Editor Launcher";
+            Description = "Elasticsearch DSN Editor Launcher.";
+            Guid = "71bebff7-652e-4b26-9ec3-caef947d368c";
+            Product = "Elasticsearch DSN Editor Launcher";
+            Version = version;
+        },isClean)
+
     let BuildMsi (version : Version) =
 
         !! (MsiDir @@ "*.csproj")
         |> MSBuildRelease MsiBuildDir "Build"
         |> ignore
 
-        patchAssemblyInformation (version)
+        PatchAssemblyInfos version
 
-        let zipfile = DriverBuildsDir
-                      |> directoryInfo
-                      |> filesInDirMatching ("*.zip")
-                      |> Seq.head
-                          
-        unzipFile (zipfile.FullName, DriverBuildsDir)
-        tracefn "Unzipped zip file in %s" zipfile.FullName
+        let zipFile = getBuildParam "zipFile"
+        let buildDir = Regex.Replace(zipFile, "(^.*)\\\[^\\\]*\.zip$", "$1/")
+
+        unzipFile (zipFile, buildDir)
+        tracefn "Unzipped zip file in %s" zipFile
 
         let exitCode = ExecProcess (fun info ->
                          info.FileName <- sprintf "%sOdbcInstaller" MsiBuildDir
                          info.WorkingDirectory <- MsiDir
-                         info.Arguments <- [version.FullVersion; System.IO.Path.GetFullPath(DriverBuildsDir); zipfile.FullName] |> String.concat " "
+                         info.Arguments <- [version.FullVersion; System.IO.Path.GetFullPath(buildDir); zipFile] |> String.concat " "
                         ) <| TimeSpan.FromMinutes 20.
 
         if exitCode <> 0 then failwithf "Error building MSI"
@@ -123,6 +157,6 @@ module Builder =
                        |> Seq.map (fun f -> f.FullName)
                        |> Seq.head
 
-        Sign MsiFile version
+        Sign MsiFile
         CopyFile OutDir MsiFile
         DeleteFile MsiFile

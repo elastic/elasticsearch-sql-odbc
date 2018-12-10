@@ -181,6 +181,9 @@
   <ItemGroup>
     <ClCompile Include="EsOdbcDsnBinding.cc" />
   </ItemGroup>
+  <ItemGroup Condition="Exists('$(OutDir)\EsOdbcDsnBinding.rc')">
+    <ResourceCompile Include="$(OutDir)\EsOdbcDsnBinding.rc" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\EsOdbcDsnEditor\EsOdbcDsnEditor.csproj">
       <Project>{fac0512c-e595-4bf4-acb7-617611df5715}</Project>

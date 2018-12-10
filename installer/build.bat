@@ -4,15 +4,19 @@ REM you may not use this file except in compliance with the Elastic License.
 
 @echo off
 
-.paket\paket.bootstrapper.exe
-IF %ERRORLEVEL% NEQ 0 EXIT /B %ERRORLEVEL%
+cd %~dp0
 
-IF EXIST paket.lock (
-	.paket\paket.exe restore
+IF NOT [%1] == [clean] (
+	.paket\paket.bootstrapper.exe
 	IF %ERRORLEVEL% NEQ 0 EXIT /B %ERRORLEVEL%
-) ELSE (
-	.paket\paket.exe install
-	IF %ERRORLEVEL% NEQ 0 EXIT /B %ERRORLEVEL%
+
+	IF EXIST paket.lock (
+		.paket\paket.exe restore
+		IF %ERRORLEVEL% NEQ 0 EXIT /B %ERRORLEVEL%
+	) ELSE (
+		.paket\paket.exe install
+		IF %ERRORLEVEL% NEQ 0 EXIT /B %ERRORLEVEL%
+	)
 )
 
 SET FAKE_NO_LEGACY_WARNING=true

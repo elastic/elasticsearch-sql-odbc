@@ -1,16 +1,16 @@
 NUGET
   remote: https://api.nuget.org/v3/index.json
-    WixSharp.bin (1.9.2)
+    WixSharp.bin (1.9.3)
     WixSharp.wix.bin (3.11)
 
 GROUP build
 NUGET
   remote: https://www.nuget.org/api/v2
-    DotNetZip (1.11)
+    DotNetZip (1.12)
     FAKE.x64 (5.8.4)
     FSharp.Configuration (1.5)
       FSharp.Core (>= 4.0.0.1)
-    FSharp.Core (4.5.2)
+    FSharp.Core (4.5.4)
     FSharp.Data (3.0)
       FSharp.Core (>= 4.0.0.1) - restriction: >= net45
       FSharp.Core (>= 4.3.4) - restriction: && (< net45) (>= netstandard2.0)
