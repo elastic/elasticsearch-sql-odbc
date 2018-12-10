@@ -25,7 +25,6 @@ ServicePointManager.SecurityProtocol <- SecurityProtocolType.Ssl3 ||| SecurityPr
 ServicePointManager.ServerCertificateValidationCallback <- (fun _ _ _ _ -> true)
 
 module Commandline =
-    open Fake.Core
 
     let usage = """
 USAGE:
@@ -41,9 +40,6 @@ Target:
 * clean
   - cleans build output folders
 
-* patchversions [VersionString]
-  - patches version numbers in assemblyinfo files to [VersionString]
-
 * release [CertFile] [PasswordFile]
   - create a release version of the MSI by building and then signing the installer.
   - when CertFile and PasswordFile are specified, these will be used for signing otherwise the values in ELASTIC_CERT_FILE
@@ -55,7 +51,7 @@ Target:
   - show this usage summary
 
 """
-    type VersionRegex = Regex< @"^(esodbc\-)?(?<Version>(?<Major>\d+)\.(?<Minor>\d+)\.(?<Patch>\d+)(?:\-(?<Prerelease>[\w\-]+))?)", noMethodPrefix=true >
+    type VersionRegex = Regex< @"^esodbc\-(?<Version>(?<Major>\d+)\.(?<Minor>\d+)\.(?<Patch>\d+)(?:\-(?<Prerelease>[\w\-]+))?)", noMethodPrefix=true >
 
     let parseVersion version =
         let m = VersionRegex().Match version
@@ -75,7 +71,6 @@ Target:
         | "buildinstaller"
         | "clean"
         | "help"
-        | "patchversions"
         | "release" -> Some candidate
         | _ -> None
 
@@ -113,7 +108,7 @@ Target:
         | (false, _) -> failwithf "certificate file does not exist at %s" certFile
         | (_, false) -> failwithf "password file does not exist at %s" passwordFile
 
-    let private versionFromBuildZipFile () =
+    let private versionFromBuildZipFile =
         let extractVersion (fileInfo:FileInfo) =
             Regex.Replace(fileInfo.Name, "^(.*)\.zip$", "$1")
 
@@ -135,22 +130,13 @@ Target:
                        | ["release";] ->
                            setBuildParam "release" "1"
                            certAndPasswordFromEnvVariables ()
-                           versionFromBuildZipFile()
+                           versionFromBuildZipFile
                        | ["release"; certFile; passwordFile ] ->
                            setBuildParam "release" "1"
                            certAndPasswordFromFile certFile passwordFile
-                           versionFromBuildZipFile()
-                       | ["patchversions"; version] ->
-                            version |> parseVersion
-                       | [IsTarget target;] when target = "clean" || target ="help" ->
-                            { FullVersion = "0.0.0";
-                              Major = 0;
-                              Minor = 0;
-                              Patch = 0;
-                              Prerelease = ""; 
-                              RawValue = "0.0.0"; }
+                           versionFromBuildZipFile
                        | [IsTarget target;] ->
-                           versionFromBuildZipFile()
+                           versionFromBuildZipFile
                        | _ ->
                            traceError usage
                            exit 2

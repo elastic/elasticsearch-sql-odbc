@@ -288,22 +288,6 @@ add_custom_target(curlclean
 	)
 
 #
-# Patch installer's file with the version being built
-#
-execute_process(COMMAND
-	${CMAKE_SOURCE_DIR}/installer/build.bat patchversions ${DRV_VERSION}${VERSION_QUALIFIER}
-	RESULT_VARIABLE CMD_RETURN
-	OUTPUT_VARIABLE CMD_OUTPUT
-	ERROR_VARIABLE CMD_OUTERR
-	)
-if (${CMD_RETURN})
-	message(WARNING "Patching installer with the versions failed:")
-	message("\tret: ${CMD_RETURN}")
-	message("\tout: ${CMD_OUTPUT}")
-	message("\terr: ${CMD_OUTERR}")
-endif (${CMD_RETURN})
-
-#
 # DSN Config GUI
 #
 set(DSNBND_LIB_BIN_DIR_BASE ${CMAKE_BINARY_DIR}/dsneditor-${TARCH})
