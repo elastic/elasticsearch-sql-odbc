@@ -16,7 +16,7 @@ namespace ODBCInstaller
 	{
 		static void Main(string[] args)
 		{
-			// Get the input files
+			// Arguments
 			var fullVersionString = args[0];
 			var driverBuildsDir = args[1];
 			var zipFilepath = args[2];
@@ -27,30 +27,23 @@ namespace ODBCInstaller
 			var driverFileInfo = GetDriverFileInfo(driverInputFilesPath);
 			var driverFilePath = System.IO.Path.Combine(driverInputFilesPath, driverFileInfo.FileName);
 
-			// Is 64bit target?
-			// full version format: <release>[-<qualifier>][-SNAPSHOT]-windows-x86[_64], with release: X.Y.Z and qualifier: alphaX/betaX(/gamaX?)
-			var is64bit = fullVersionString.EndsWith("x86_64");
-			var bitness = is64bit ? "64bit" : "32bit";
-
-			// Remove the platform
-			string platformVersionComponent = is64bit
-										? "-windows-x86_64"
-										: "-windows-x86";
+			// Remove the platform suffix
+			const string platformSuffix = "-windows-x86_64";
 			var releaseString = fullVersionString;
 			if (string.IsNullOrEmpty(releaseString) == false &&
-				releaseString.Contains(platformVersionComponent))
+				releaseString.EndsWith(platformSuffix))
 			{
-				releaseString = releaseString.Replace(platformVersionComponent, string.Empty);
+				releaseString = releaseString.Replace(platformSuffix, string.Empty);
 			}
 
-			// Remove the -SNAPSHOT
-			const string snapshotVersionComponent = "-SNAPSHOT";
+			// Remove the -SNAPSHOT suffix
+			const string snapshotSuffix = "-SNAPSHOT";
 			var isSnapshot = false;
 			if (string.IsNullOrEmpty(releaseString) == false &&
-				releaseString.Contains(snapshotVersionComponent))
+				releaseString.EndsWith(snapshotSuffix))
 			{
 				isSnapshot = true;
-				releaseString = releaseString.Replace(snapshotVersionComponent, string.Empty);
+				releaseString = releaseString.Replace(snapshotSuffix, string.Empty);
 			}
 
 			// Is this a pre-release?
@@ -92,19 +85,15 @@ namespace ODBCInstaller
 
 			var project = new Project("ODBCDriverInstaller", components)
 			{
-				Platform = is64bit
-								? Platform.x64
-								: Platform.x86,
+				Platform = Platform.x64,
 				InstallScope = InstallScope.perMachine,
 				Version = new Version(driverFileInfo.ProductMajorPart, driverFileInfo.ProductMinorPart, driverFileInfo.ProductBuildPart, driverFileInfo.ProductPrivatePart),
-				GUID = new Guid(is64bit
-									? "e87c5d53-fddf-4539-9447-49032ed527bb"
-									: "ef6b65e0-20c3-43e3-a5e3-24e2ee8c84cb"),
+				GUID = new Guid("e87c5d53-fddf-4539-9447-49032ed527bb"),
 				UI = WUI.WixUI_Common,
 				BannerImage = "topbanner.bmp",
 				BackgroundImage = "leftbanner.bmp",
 				Name = "Elasticsearch ODBC Driver",
-				Description = $"{driverFileInfo.FileDescription} ({msiVersionString}) {bitness}",
+				Description = $"{driverFileInfo.FileDescription} ({msiVersionString})",
 				ControlPanelInfo = new ProductInfo
 				{
 					ProductIcon = "ODBC.ico",
@@ -125,15 +114,8 @@ namespace ODBCInstaller
 
 					// Perform registry search for VS 2017 redist key
 					new Property("VS2017REDISTINSTALLED",
-						new RegistrySearch(
-								RegistryHive.LocalMachine,
-								is64bit
-									? @"SOFTWARE\WOW6432Node\Microsoft\VisualStudio\14.0\VC\Runtimes\x64"
-									: @"SOFTWARE\WOW6432Node\Microsoft\VisualStudio\14.0\VC\Runtimes\x86",
-								"Installed",
-								RegistrySearchType.raw)
-						{
-							Win64 = is64bit
+						new RegistrySearch(RegistryHive.LocalMachine, @"SOFTWARE\WOW6432Node\Microsoft\VisualStudio\14.0\VC\Runtimes\x64", "Installed", RegistrySearchType.raw){
+							Win64 = true
 						})
 				},
 				LaunchConditions = new List<LaunchCondition>
