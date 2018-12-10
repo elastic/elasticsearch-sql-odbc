@@ -12,7 +12,6 @@
 open System
 open Fake
 open Products
-open Products.Products
 open Products.Paths
 open Build.Builder
 open Commandline
@@ -20,14 +19,18 @@ open Fake.Runtime.Trace
 
 let versionToBuild = Commandline.parse()
 
-if (getBuildParam "target" |> toLower <> "help") then 
-    traceHeader (sprintf "Products:%s%s%s" Environment.NewLine Environment.NewLine versionToBuild.FullVersion)
-
 Target "Clean" (fun _ ->
+    PatchAssemblyInfos ({ FullVersion = "0.0.0";
+                          Major = 0;
+                          Minor = 0;
+                          Patch = 0;
+                          Prerelease = ""; 
+                          RawValue = "0.0.0"; })
     CleanDirs [MsiBuildDir; OutDir;]
 )
 
 Target "BuildInstaller" (fun () ->
+    traceHeader (sprintf "Products:%s%s%s" Environment.NewLine Environment.NewLine versionToBuild.FullVersion)
     BuildMsi versionToBuild
 )
 
@@ -35,9 +38,15 @@ Target "Release" (fun () ->
     trace "Build in Release mode. MSI will be signed."
 )
 
+Target "PatchVersions" (fun () ->
+    trace "Patching versions."
+    PatchAssemblyInfos versionToBuild
+)
+
 Target "Help" (fun () -> trace Commandline.usage)
 
 "Clean"
+  ==> "PatchVersions"
   ==> "BuildInstaller"
   ==> "Release"
 
