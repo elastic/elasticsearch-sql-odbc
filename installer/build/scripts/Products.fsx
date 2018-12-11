@@ -26,3 +26,10 @@ module Products =
         Prerelease : string;
         RawValue: string;
     }
+
+    let public EmptyVersion = { FullVersion = "0.0.0";
+                              Major = 0;
+                              Minor = 0;
+                              Patch = 0;
+                              Prerelease = ""; 
+                              RawValue = "0.0.0"; }

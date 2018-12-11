@@ -9,9 +9,9 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyCompanyAttribute("Elasticsearch B.V.")]
 [assembly: AssemblyCopyrightAttribute("Elastic License. Copyright Elasticsearch.")]
 [assembly: AssemblyTrademarkAttribute("Elasticsearch is a trademark of Elasticsearch B.V.")]
-[assembly: AssemblyVersionAttribute("0.0.0")]
-[assembly: AssemblyFileVersionAttribute("0.0.0")]
-[assembly: AssemblyInformationalVersionAttribute("0.0.0")]
+[assembly: AssemblyVersionAttribute("7.0.0")]
+[assembly: AssemblyFileVersionAttribute("7.0.0")]
+[assembly: AssemblyInformationalVersionAttribute("7.0.0-windows-x86_64-341e86")]
 namespace System {
     internal static class AssemblyVersionInformation {
         internal const System.String AssemblyTitle = "Elasticsearch DSN Editor Launcher";
@@ -21,8 +21,8 @@ namespace System {
         internal const System.String AssemblyCompany = "Elasticsearch B.V.";
         internal const System.String AssemblyCopyright = "Elastic License. Copyright Elasticsearch.";
         internal const System.String AssemblyTrademark = "Elasticsearch is a trademark of Elasticsearch B.V.";
-        internal const System.String AssemblyVersion = "0.0.0";
-        internal const System.String AssemblyFileVersion = "0.0.0";
-        internal const System.String AssemblyInformationalVersion = "0.0.0";
+        internal const System.String AssemblyVersion = "7.0.0";
+        internal const System.String AssemblyFileVersion = "7.0.0";
+        internal const System.String AssemblyInformationalVersion = "7.0.0-windows-x86_64-341e86";
     }
 }
