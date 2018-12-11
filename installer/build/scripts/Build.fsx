@@ -24,6 +24,7 @@ open Fake.FileHelper
 open Fake.AssemblyInfoFile
 
 module Builder =
+    open Fake.FileSystemHelper
 
     type AssemblyInfo = {
         Path : string;
@@ -130,8 +131,13 @@ module Builder =
         },isClean)
 
     let copyFileWithLog outDir file = 
-        tracefn "Copying: %s <- %s" outDir file
-        CopyFile outDir file
+        let targetDirexists = directoryExists outDir
+        if (targetDirexists = false) then
+            tracefn "%s does not exist" outDir
+        else
+            tracefn "%s exists" outDir
+            tracefn "Copying: %s <- %s" outDir file
+            CopyFile outDir file
 
     let BuildMsi (version : Version) =
 
