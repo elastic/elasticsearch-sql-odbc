@@ -129,6 +129,10 @@ module Builder =
             Version = version;
         },isClean)
 
+    let copyFileWithLog outDir file = 
+        tracefn "Copying: %s <- %s" outDir file
+        CopyFile outDir file
+
     let BuildMsi (version : Version) =
 
         !! (MsiDir @@ "*.csproj")
@@ -158,5 +162,5 @@ module Builder =
                        |> Seq.head
 
         Sign MsiFile
-        CopyFile OutDir MsiFile
+        copyFileWithLog OutDir MsiFile
         DeleteFile MsiFile
