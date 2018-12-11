@@ -125,4 +125,4 @@ CMake and MSBuild, as needed. ```build.bat proper``` will clean the project to i
 
 ## Installation
 
-[TODO]
+See: https://www.elastic.co/guide/en/elasticsearch/sql-odbc/current/index.html
