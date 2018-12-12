@@ -94,7 +94,7 @@ namespace ODBCInstaller
 			var installDirectory = $@"%ProgramFiles%\Elastic\ODBCDriver\{msiVersionString}";
 			var components = new Dir(installDirectory, files);
 
-			var showODBCAdminControlPanel = new ManagedAction(CustomActions.MyAction)
+			var showODBCAdminControlPanel = new ManagedAction(CustomActions.LaunchODBCControlPanel)
 			{
 				Sequence = Sequence.NotInSequence,
 				Return = Return.ignore
@@ -199,14 +199,23 @@ namespace ODBCInstaller
 		}
 	}
 
+	// Implemented as a CustomAction as using the WixShellExecTarget only ever launches a 32 bit process,
+	// then attempting to access any 64 bit programs will succumb to windows path rewriting and resolve to
+	// 32 bit equivalent program.
 	public class CustomActions
 	{
 		[CustomAction]
-		public static ActionResult MyAction(Session session)
+		public static ActionResult LaunchODBCControlPanel(Session session)
 		{
-			var process = new Process();
-			process.StartInfo.FileName = "C:\\windows\\system32\\odbcad32.exe";
-			process.Start();
+			var windir = Environment.GetEnvironmentVariable("windir");
+			var odbcad32 = System.IO.Path.Combine(windir, "system32", "odbcad32.exe");
+			session.Log($"Launching: {odbcad32}");
+			using (var process = new Process())
+			{
+				process.StartInfo.FileName = odbcad32;
+				process.Start();
+				process.WaitForExit();
+			}
 			return ActionResult.Success;
 		}
 	}
