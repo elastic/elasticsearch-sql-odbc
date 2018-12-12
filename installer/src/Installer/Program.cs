@@ -9,6 +9,7 @@ using System.Diagnostics;
 using WixSharp;
 using WixSharp.Controls;
 using System.Xml.Linq;
+using Microsoft.Deployment.WindowsInstaller;
 
 namespace ODBCInstaller
 {
@@ -92,7 +93,12 @@ namespace ODBCInstaller
 
 			var installDirectory = $@"%ProgramFiles%\Elastic\ODBCDriver\{msiVersionString}";
 			var components = new Dir(installDirectory, files);
-			var finishActionName = "LaunchODBCDataSourceAdmin";
+
+			var showODBCAdminControlPanel = new ManagedAction(CustomActions.MyAction)
+			{
+				Sequence = Sequence.NotInSequence,
+				Return = Return.ignore
+			};
 
 			var project = new Project("ODBCDriverInstaller", components)
 			{
@@ -119,10 +125,7 @@ namespace ODBCInstaller
 					// Exit dialog checkbox options
 					new Property("WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT", "Launch ODBC Data Source Administrator after installation"),
 					new Property("WIXUI_EXITDIALOGOPTIONALCHECKBOX", "1"),
-
-					// Oddly, the 32bit ODBC panel is in System64Folder (C:\Windows\SysWOW64), and the 64 bit ODBC panel in SystemFolder (C:\Windows\System32)
-					new Property("WixShellExecTarget", "odbcad32.exe"),
-
+					
 					// Is .NET Framework 4.0 installed?
 					new PropertyRef("NETFRAMEWORK40FULL"),
 
@@ -167,7 +170,11 @@ namespace ODBCInstaller
 					DisallowUpgradeErrorMessage = "An existing version is already installed, please uninstall before continuing.",
 					DowngradeErrorMessage = "A more recent version is already installed, please uninstall before continuing.",
 				},
-				CustomUI = UIHelper.BuildCustomUI(finishActionName),
+				Actions = new WixSharp.Action[]
+				{
+					showODBCAdminControlPanel
+				},
+				CustomUI = UIHelper.BuildCustomUI(showODBCAdminControlPanel)
 			};
 
 			const string wixLocation = @"..\..\packages\WixSharp.wix.bin\tools\bin";
@@ -179,25 +186,8 @@ namespace ODBCInstaller
 			project.Include(WixExtension.NetFx);
 			project.Include(WixExtension.Util);
 			project.Include(WixExtension.UI);
-			project.WixSourceGenerated += document => Project_WixSourceGenerated(finishActionName, document);
 
 			project.BuildMsi();
-		}
-
-		private static void Project_WixSourceGenerated(string finishActionName, XDocument document)
-		{
-			var documentRoot = document.Root;
-			var ns = documentRoot.Name.Namespace;
-			var product = documentRoot.Descendants(ns + "Product").Single();
-
-			// Executes what's defined in WixShellExecTarget Property.
-			// WixSharp does not have an element for WixShellExec custom action
-			product.Add(new XElement(ns + "CustomAction",
-				new XAttribute("Id", finishActionName),
-				new XAttribute("BinaryKey", "WixCA"),
-				new XAttribute("DllEntry", "WixShellExec"),
-				new XAttribute("Impersonate", "yes")
-			));
 		}
 
 		private static FileVersionInfo GetDriverFileInfo(string zipContentsDirectory)
@@ -209,9 +199,21 @@ namespace ODBCInstaller
 		}
 	}
 
+	public class CustomActions
+	{
+		[CustomAction]
+		public static ActionResult MyAction(Session session)
+		{
+			var process = new Process();
+			process.StartInfo.FileName = "C:\\windows\\system32\\odbcad32.exe";
+			process.Start();
+			return ActionResult.Success;
+		}
+	}
+
 	public class UIHelper
 	{
-		public static CustomUI BuildCustomUI(string finishActionName)
+		public static CustomUI BuildCustomUI(ManagedAction showODBCAdminControlPanel)
 		{
 			var customUI = new CustomUI();
 
@@ -237,7 +239,7 @@ namespace ODBCInstaller
 			customUI.On(NativeDialogs.MaintenanceTypeDlg, Buttons.Repair, new ShowDialog(NativeDialogs.VerifyReadyDlg));
 			customUI.On(NativeDialogs.MaintenanceTypeDlg, Buttons.Remove, new ShowDialog(NativeDialogs.VerifyReadyDlg));
 
-			customUI.On(NativeDialogs.ExitDialog, Buttons.Finish, new ExecuteCustomAction(finishActionName, "WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed"), new CloseDialog()
+			customUI.On(NativeDialogs.ExitDialog, Buttons.Finish, new ExecuteCustomAction(showODBCAdminControlPanel.Id, "WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed"), new CloseDialog()
 			{
 				Order = 9999,
 			});
