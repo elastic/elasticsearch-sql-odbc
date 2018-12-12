@@ -1,0 +1,3 @@
+# this file must remain present in order for git to track the empty directory
+*
+!.gitignore
