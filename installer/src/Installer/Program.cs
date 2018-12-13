@@ -8,10 +8,9 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using WixSharp;
 using WixSharp.Controls;
-using System.Xml.Linq;
-using Microsoft.Deployment.WindowsInstaller;
+using InstallerCA;
 
-namespace ODBCInstaller
+namespace Installer
 {
 	partial class Program
 	{
@@ -94,7 +93,7 @@ namespace ODBCInstaller
 			var installDirectory = $@"%ProgramFiles%\Elastic\ODBCDriver\{msiVersionString}";
 			var components = new Dir(installDirectory, files);
 
-			var showODBCAdminControlPanel = new ManagedAction(CustomActions.LaunchODBCControlPanel)
+			var showODBCAdminControlPanel = new ManagedAction(CustomActions.LaunchODBCControlPanel, typeof(CustomActions).Assembly.Location)
 			{
 				Sequence = Sequence.NotInSequence,
 				Return = Return.ignore
@@ -157,7 +156,7 @@ namespace ODBCInstaller
 					),
 					new LaunchCondition(
 						"Installed OR NETFRAMEWORK40FULL",
-						"This installer requires at least .NET Framework 4.0 in order to run the configuration editor. " +
+						"This installer requires at least .NET Framework 4.0 in order to run the configuration editor and run custom install actions. " +
 						"Please install .NET Framework 4.0 and then run this installer again."
 					)
 				},
@@ -196,27 +195,6 @@ namespace ODBCInstaller
 						 .Where(f => f.EndsWith(".dll"))
 						 .Select(f => FileVersionInfo.GetVersionInfo(f))
 						 .Single(f => f.FileDescription == "ODBC Unicode driver for Elasticsearch");
-		}
-	}
-
-	// Implemented as a CustomAction as using the WixShellExecTarget only ever launches a 32 bit process,
-	// then attempting to access any 64 bit programs will succumb to windows path rewriting and resolve to
-	// 32 bit equivalent program.
-	public class CustomActions
-	{
-		[CustomAction]
-		public static ActionResult LaunchODBCControlPanel(Session session)
-		{
-			var windir = Environment.GetEnvironmentVariable("windir");
-			var odbcad32 = System.IO.Path.Combine(windir, "system32", "odbcad32.exe");
-			session.Log($"Launching: {odbcad32}");
-			using (var process = new Process())
-			{
-				process.StartInfo.FileName = odbcad32;
-				process.Start();
-				process.WaitForExit();
-			}
-			return ActionResult.Success;
 		}
 	}
 
