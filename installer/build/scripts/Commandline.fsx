@@ -19,7 +19,6 @@ open System.Net
 open Fake
 open FSharp.Text.RegexProvider
 open Products.Products
-open Products.Paths
 
 ServicePointManager.SecurityProtocol <- SecurityProtocolType.Ssl3 ||| SecurityProtocolType.Tls ||| SecurityProtocolType.Tls11 ||| SecurityProtocolType.Tls12;
 ServicePointManager.ServerCertificateValidationCallback <- (fun _ _ _ _ -> true)
@@ -143,13 +142,8 @@ Target:
                            versionFromZipFile zipFile
                        | ["patchversions"; version] ->
                             version |> parseVersion
-                       | [IsTarget target;] when target = "clean" || target ="help" ->
-                            { FullVersion = "0.0.0";
-                              Major = 0;
-                              Minor = 0;
-                              Patch = 0;
-                              Prerelease = ""; 
-                              RawValue = "0.0.0"; }
+                       | [IsTarget target;] when target = "clean" || target = "help" ->
+                            Products.Products.EmptyVersion
                        | _ ->
                            traceError usage
                            exit 2
