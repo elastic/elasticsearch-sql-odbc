@@ -114,6 +114,14 @@ module Builder =
             Version = version;
         },isClean)
         patchAssemblyInformation ({
+            Path = MsiDir @@ "../InstallerCA/Properties/AssemblyInfo.cs";
+            Title = "Elasticsearch ODBC Installer Custom Actions";
+            Description = "MSI installer custom actions for the Elasticsearch ODBC driver.";
+            Guid = "4498d74b-e5c5-48bb-a9d4-8cc55b7b0909";
+            Product = "Elasticsearch ODBC Installer Custom Actions";
+            Version = version;
+        },isClean)
+        patchAssemblyInformation ({
             Path = SrcDir @@ "../../dsneditor/EsOdbcDsnEditor/Properties/AssemblyInfo.cs";
             Title = "Elasticsearch DSN Editor";
             Description = "Elasticsearch DSN Editor for managing ODBC connection strings.";
@@ -154,7 +162,7 @@ module Builder =
         tracefn "Unzipped zip file in %s" zipFile
 
         let exitCode = ExecProcess (fun info ->
-                         info.FileName <- sprintf "%sOdbcInstaller" MsiBuildDir
+                         info.FileName <- sprintf "%sInstaller" MsiBuildDir
                          info.WorkingDirectory <- MsiDir
                          info.Arguments <- [version.FullVersion; System.IO.Path.GetFullPath(buildDir); zipFile] |> String.concat " "
                         ) <| TimeSpan.FromMinutes 20.
