@@ -12,7 +12,7 @@ namespace InstallerCA
 		[CustomAction]
 		public static ActionResult LaunchODBCControlPanel(Session session)
 		{
-			var windir = Environment.GetEnvironmentVariable("windir");
+			var windir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
 			var odbcad32 = System.IO.Path.Combine(windir, "system32", "odbcad32.exe");
 			session.Log($"Launching: {odbcad32}");
 			using (var process = new Process())
