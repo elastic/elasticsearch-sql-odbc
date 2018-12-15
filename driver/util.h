@@ -150,12 +150,18 @@ typedef struct {
  * 0-terminator should not be counted (as it's a non-WS).
  */
 void trim_ws(cstr_st *str);
-void wtrim_ws(wstr_st *wstr);
+void wltrim_ws(wstr_st *wstr);
+void wrtrim_ws(wstr_st *wstr);
+#define wtrim_ws(_w) do { wltrim_ws(_w); wrtrim_ws(_w); } while (0)
+
 
 BOOL wstr2bool(wstr_st *val);
-BOOL str2ubigint(void *val, const BOOL wide, SQLUBIGINT *out);
-BOOL str2bigint(void *val, const BOOL wide, SQLBIGINT *out);
-BOOL str2double(void *val, BOOL wide, SQLDOUBLE *dbl);
+/* Converts a [cw]str_st to a SQL(U)BIGINT.
+ * If !strict, parsing stops at first non-digit char.
+ * Returns the number of parsed characters or negative of failure. */
+int str2ubigint(void *val, BOOL wide, SQLUBIGINT *out, BOOL strict);
+int str2bigint(void *val,  BOOL wide, SQLBIGINT *out, BOOL strict);
+int str2double(void *val, BOOL wide, SQLDOUBLE *dbl, BOOL strict);
 
 /* converts the int types to a C or wide string, returning the string length */
 size_t i64tot(int64_t i64, void *buff, BOOL wide);

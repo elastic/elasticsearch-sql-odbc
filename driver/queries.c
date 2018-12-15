@@ -50,7 +50,7 @@ void clear_resultset(esodbc_stmt_st *stmt, BOOL on_close)
 	STMT_GD_RESET(stmt);
 }
 
-/* Set the desriptor fields associated with "size". This step is needed since
+/* Set the descriptor fields associated with "size". This step is needed since
  * the application could read the descriptors - like .length - individually,
  * rather than through functions that make use of get_col_size() (where we
  * could just read the es_type directly). */
@@ -81,6 +81,11 @@ static void set_col_size(esodbc_rec_st *rec)
 		case METATYPE_DATETIME:
 			/* "number of characters in the character representation" */
 			rec->length = rec->es_type->column_size;
+			break;
+
+		case METATYPE_INTERVAL_WSEC:
+		case METATYPE_INTERVAL_WOSEC:
+			rec->length = rec->es_type->display_size;
 			break;
 
 		default:
@@ -232,7 +237,7 @@ SQLRETURN TEST_API attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 	if (! obj) {
 		ERRH(stmt, "failed to decode JSON answer: %s ([%zu] `%.*s`).",
 			stmt->rset.state ? UJGetError(stmt->rset.state) : "<none>",
-			blen, buff);
+			blen, blen, buff);
 		RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
 	}
 	columns = rows = cursor = NULL;
@@ -973,7 +978,7 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 
 	/* return number of processed rows (even if 0) */
 	if (ird->rows_processed_ptr) {
-		DBGH(stmt, "setting number of processed rows to: %lu.", i);
+		DBGH(stmt, "setting number of processed rows to: %llu.", i);
 		*ird->rows_processed_ptr = i;
 	}
 
@@ -1019,6 +1024,11 @@ static SQLRETURN gd_checks(esodbc_stmt_st *stmt, SQLUSMALLINT colno)
 		/* DM should have detected this case */
 		ERRH(stmt, "SQLFetch() hasn't yet been called on result set.");
 		RET_HDIAGS(stmt, SQL_STATE_24000);
+	}
+	/* colno will be used as 1-based index, if not using bookmarks */
+	if (colno < 1) { // TODO: add bookmark check (when implementing it)
+		ERRH(stmt, "column number (%hu) can be less than 1.", colno);
+		RET_HDIAGS(stmt, SQL_STATE_07009);
 	}
 
 	return SQL_SUCCESS;
@@ -1343,7 +1353,7 @@ static esodbc_estype_st *lookup_es_type(esodbc_dbc_st *dbc,
 }
 
 /* find the matching ES/SQL type for app's SQL type, which can be an exact
- * math against ES/SQL types, but also some other valid SQL type. */
+ * match against ES/SQL types, but also some other valid SQL type. */
 static esodbc_estype_st *match_es_type(esodbc_rec_st *arec,
 	esodbc_rec_st *irec)
 {
@@ -1402,9 +1412,7 @@ static esodbc_estype_st *match_es_type(esodbc_rec_st *arec,
 
 		case METATYPE_INTERVAL_WSEC:
 		case METATYPE_INTERVAL_WOSEC:
-		/* TODO: implement them once avail in ES */
-
-		case METATYPE_FLOAT_NUMERIC: /* should have matched already */
+		case METATYPE_FLOAT_NUMERIC: /* these should have matched already */
 		case METATYPE_MAX:
 		/* -> SQL_C_DEFAULT, ESODBC_SQL_NULL, should've matched already */
 		case METATYPE_UNKNOWN:
@@ -1448,6 +1456,11 @@ SQLRETURN EsSQLBindParameter(
 	if (InputOutputType != SQL_PARAM_INPUT) {
 		ERRH(stmt, "parameter IO-type (%hd) not supported.", InputOutputType);
 		RET_HDIAG(stmt, SQL_STATE_HYC00, "parameter IO-type not supported", 0);
+	}
+	/* ParameterNumber will be used as 1-based index */
+	if (ParameterNumber < 1) {
+		ERRH(stmt, "param. no (%hd) can't be less than 1.", ParameterNumber);
+		RET_HDIAGS(stmt, SQL_STATE_07009);
 	}
 
 	/* Note: "If StrLen_or_IndPtr is a null pointer, the driver assumes that
@@ -2093,7 +2106,7 @@ static inline SQLULEN get_col_size(esodbc_rec_st *rec)
 	switch (rec->meta_type) {
 		case METATYPE_EXACT_NUMERIC:
 		case METATYPE_FLOAT_NUMERIC:
-			return rec->es_type->column_size;
+			return rec->es_type->column_size; // precision?
 
 		case METATYPE_STRING:
 		case METATYPE_BIN:
@@ -2119,8 +2132,7 @@ static inline SQLSMALLINT get_col_decdigits(esodbc_rec_st *rec)
 	switch (rec->meta_type) {
 		case METATYPE_DATETIME:
 		case METATYPE_INTERVAL_WSEC:
-			/* TODO: pending GH#30002 actually */
-			return 3;
+			return ESODBC_MAX_SEC_PRECISION;
 
 		case METATYPE_EXACT_NUMERIC:
 			return rec->es_type->maximum_scale;
@@ -2421,4 +2433,4 @@ SQLRETURN EsSQLRowCount(_In_ SQLHSTMT StatementHandle, _Out_ SQLLEN *RowCount)
 	return SQL_SUCCESS;
 }
 
-/* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */
+/* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 tw=78 : */

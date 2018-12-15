@@ -459,12 +459,16 @@ SQLRETURN SQL_API SQLGetDescRecW(
  * SQL_DESC_TYPE field and the values applicable to the SQL_DESC_TYPE field in
  * the same record are valid and consistent.
  *
- * The SQL_DESC_DATA_PTR field of an IPD is not normally set; however, an
+ * "The SQL_DESC_DATA_PTR field of an IPD is not normally set; however, an
  * application can do so to force a consistency check of IPD fields. The value
  * that the SQL_DESC_DATA_PTR field of the IPD is set to is not actually
  * stored and cannot be retrieved by a call to SQLGetDescField or
  * SQLGetDescRec; the setting is made only to force the consistency check. A
  * consistency check cannot be performed on an IRD."
+ *
+ * "A call to SQLSetDescRec sets the interval leading precision to the default
+ * but sets the interval seconds precision (in the SQL_DESC_PRECISION field)
+ * to the value of its Precision argument"
  */
 SQLRETURN  SQL_API SQLSetDescRec(
 	SQLHDESC DescriptorHandle,
