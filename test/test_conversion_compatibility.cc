@@ -40,12 +40,8 @@ static BOOL is_interval(SQLSMALLINT type)
  * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/converting-data-from-c-to-sql-data-types */
 static BOOL conv_supported(SQLSMALLINT sqltype, SQLSMALLINT ctype)
 {
-
-	/* interval types not yet implemented */
-	if (is_interval(sqltype) || is_interval(ctype))
-		return FALSE;
 	/* GUID type not yet implemented */
-	if (sqltype == SQL_GUID || ctype == SQL_GUID)
+	if (sqltype == SQL_GUID || ctype == SQL_C_GUID)
 		return FALSE;
 
 	switch (ctype) {
@@ -82,6 +78,13 @@ static BOOL conv_supported(SQLSMALLINT sqltype, SQLSMALLINT ctype)
 				case SQL_C_TYPE_TIME:
 				case SQL_C_TYPE_TIMESTAMP:
 				case SQL_C_GUID:
+				case SQL_C_INTERVAL_YEAR_TO_MONTH:
+				case SQL_C_INTERVAL_DAY_TO_HOUR:
+				case SQL_C_INTERVAL_DAY_TO_MINUTE:
+				case SQL_C_INTERVAL_DAY_TO_SECOND:
+				case SQL_C_INTERVAL_HOUR_TO_MINUTE:
+				case SQL_C_INTERVAL_HOUR_TO_SECOND:
+				case SQL_C_INTERVAL_MINUTE_TO_SECOND:
 					return FALSE;
 			}
 			break;
@@ -145,17 +148,10 @@ static BOOL conv_supported(SQLSMALLINT sqltype, SQLSMALLINT ctype)
 
 		case SQL_INTERVAL_MONTH:
 		case SQL_INTERVAL_YEAR:
-		case SQL_INTERVAL_YEAR_TO_MONTH:
 		case SQL_INTERVAL_DAY:
 		case SQL_INTERVAL_HOUR:
 		case SQL_INTERVAL_MINUTE:
 		case SQL_INTERVAL_SECOND:
-		case SQL_INTERVAL_DAY_TO_HOUR:
-		case SQL_INTERVAL_DAY_TO_MINUTE:
-		case SQL_INTERVAL_DAY_TO_SECOND:
-		case SQL_INTERVAL_HOUR_TO_MINUTE:
-		case SQL_INTERVAL_HOUR_TO_SECOND:
-		case SQL_INTERVAL_MINUTE_TO_SECOND:
 			switch (ctype) {
 				case SQL_C_BIT:
 				case SQL_C_NUMERIC:
@@ -171,6 +167,21 @@ static BOOL conv_supported(SQLSMALLINT sqltype, SQLSMALLINT ctype)
 				case SQL_C_SLONG:
 				case SQL_C_ULONG:
 					return TRUE;
+			}
+			if (sqltype == ctype) { /* compat with self */
+				return TRUE;
+			}
+			return FALSE;
+
+		case SQL_INTERVAL_YEAR_TO_MONTH:
+		case SQL_INTERVAL_DAY_TO_HOUR:
+		case SQL_INTERVAL_DAY_TO_MINUTE:
+		case SQL_INTERVAL_DAY_TO_SECOND:
+		case SQL_INTERVAL_HOUR_TO_MINUTE:
+		case SQL_INTERVAL_HOUR_TO_SECOND:
+		case SQL_INTERVAL_MINUTE_TO_SECOND:
+			if (sqltype == ctype) { /* compat with self */
+				return TRUE;
 			}
 			return FALSE;
 
@@ -228,15 +239,11 @@ TEST_F(ConversionCompatibility, ConvCompat)
 			ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, csql, sql,
 				/*size*/0, /*decdigits*/0, NULL, sizeof(NULL), &indlen);
 			BOOL conv = conv_supported(sql, csql);
-			ASSERT_TRUE((!SQL_SUCCEEDED(ret) && !conv) || 
-					(SQL_SUCCEEDED(ret) && conv));
-			//ASSERT_TRUE((! SQL_SUCCEEDED(ret)) ^ conv_supported(sql, csql));
-			//ASSERT_TRUE(((SQL_SUCCEEDED(ret)) && conv_supported(sql, csql)) || 
-			//		(! SQL_SUCCEEDED(ret)));
+			ASSERT_TRUE(!!SQL_SUCCEEDED(ret) == !!conv);
 		}
 	}
 }
 
 } // test namespace
 
-/* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */
+/* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 tw=78 : */

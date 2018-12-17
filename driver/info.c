@@ -1189,37 +1189,24 @@ SQLRETURN EsSQLGetFunctions(SQLHDBC ConnectionHandle,
 	return SQL_SUCCESS;
 }
 
-/*
- * Equivalent of JDBC's getTypeInfo() ([0]:900)
- */
+/* "If the DataType argument specifies a data type which is valid for the
+ * version of ODBC supported by the driver, but is not supported by the
+ * driver, then it will return an empty result set." */
 SQLRETURN EsSQLGetTypeInfoW(SQLHSTMT StatementHandle, SQLSMALLINT DataType)
 {
 #define SQL_TYPES_STMT		"SYS TYPES"
-#define SQL_TYPES_TYPE_SEL	"TYPE"
 
 	SQLRETURN ret;
 	esodbc_stmt_st *stmt = STMH(StatementHandle);
-	SQLWCHAR wbuff[sizeof(SQL_TYPES_STMT " " SQL_TYPES_TYPE_SEL " 32767")];
+	SQLWCHAR wbuff[sizeof(SQL_TYPES_STMT " 32767")];
 	size_t cnt;
 
-	switch (DataType) {
-		case SQL_ALL_TYPES:
-			DBGH(stmt, "requested type description for all supported types.");
-			wcscpy(wbuff, MK_WPTR(SQL_TYPES_STMT));
-			cnt = sizeof(SQL_TYPES_STMT) - 1;
-			break;
-
-		/* "If the DataType argument specifies a data type which is valid for
-		 * the version of ODBC supported by the driver, but is not supported
-		 * by the driver, then it will return an empty result set." */
-		default:
-			cnt = swprintf(wbuff, sizeof(wbuff)/sizeof(*wbuff),
-					MK_WPTR(SQL_TYPES_STMT " " SQL_TYPES_TYPE_SEL " %hd"),
-					DataType);
-			if (cnt <= 0) {
-				ERRNH(stmt, "failed to print catalog query.");
-				RET_HDIAGS(stmt, SQL_STATE_HY000);
-			}
+	DBGH(stmt, "requested type description for type %hd.", DataType);
+	cnt = swprintf(wbuff, sizeof(wbuff)/sizeof(*wbuff),
+			MK_WPTR(SQL_TYPES_STMT " %hd"), DataType);
+	if (cnt <= 0) {
+		ERRNH(stmt, "failed to print catalog query.");
+		RET_HDIAGS(stmt, SQL_STATE_HY000);
 	}
 
 	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
@@ -1231,7 +1218,6 @@ SQLRETURN EsSQLGetTypeInfoW(SQLHSTMT StatementHandle, SQLSMALLINT DataType)
 	return ret;
 
 #	undef SQL_TYPES_STMT
-#	undef SQL_TYPES_TYPE_SEL
 }
 
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 tw=78 : */

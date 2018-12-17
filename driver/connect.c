@@ -24,31 +24,117 @@
 
 /* Elasticsearch/SQL data types */
 /* 2 */
-#define JSON_COL_IP				"ip"
+#define TYPE_IP				"IP"
 /* 4 */
-#define JSON_COL_BYTE			"byte"
-#define JSON_COL_LONG			"long"
-#define JSON_COL_TEXT			"text"
-#define JSON_COL_DATE			"date"
-#define JSON_COL_NULL			"null"
+#define TYPE_BYTE			"BYTE"
+#define TYPE_LONG			"LONG"
+#define TYPE_TEXT			"TEXT"
+#define TYPE_DATE			"DATE"
+#define TYPE_NULL			"NULL"
 /* 5 */
-#define JSON_COL_SHORT			"short"
-#define JSON_COL_FLOAT			"float"
+#define TYPE_SHORT			"SHORT"
+#define TYPE_FLOAT			"FLOAT"
 /* 6 */
-#define JSON_COL_DOUBLE			"double"
-#define JSON_COL_BINARY			"binary"
-#define JSON_COL_OBJECT			"object"
-#define JSON_COL_NESTED			"nested"
+#define TYPE_DOUBLE			"DOUBLE"
+#define TYPE_BINARY			"BINARY"
+#define TYPE_OBJECT			"OBJECT"
+#define TYPE_NESTED			"NESTED"
 /* 7 */
-#define JSON_COL_BOOLEAN		"boolean"
-#define JSON_COL_INTEGER		"integer"
-#define JSON_COL_KEYWORD		"keyword"
+#define TYPE_BOOLEAN		"BOOLEAN"
+#define TYPE_INTEGER		"INTEGER"
+#define TYPE_KEYWORD		"KEYWORD"
 /* 10 */
-#define JSON_COL_HALF_FLOAT		"half_float"
+#define TYPE_HALF_FLOAT		"HALF_FLOAT"
 /* 11 */
-#define JSON_COL_UNSUPPORTED	"unsupported"
+#define TYPE_UNSUPPORTED	"UNSUPPORTED"
 /* 12 */
-#define JSON_COL_SCALED_FLOAT	"scaled_float"
+#define TYPE_SCALED_FLOAT	"SCALED_FLOAT"
+/*
+ * intervals
+ */
+#define TYPE_IVL_DAY				"INTERVAL_DAY"
+/* 13 */
+#define TYPE_IVL_YEAR				"INTERVAL_YEAR"
+#define TYPE_IVL_HOUR				"INTERVAL_HOUR"
+/* 14 */
+#define TYPE_IVL_MONTH				"INTERVAL_MONTH"
+/* 15 */
+#define TYPE_IVL_MINUTE				"INTERVAL_MINUTE"
+#define TYPE_IVL_SECOND				"INTERVAL_SECOND"
+/* 20 */
+#define TYPE_IVL_DAY_TO_HOUR		"INTERVAL_DAY_TO_HOUR"
+/* 22 */
+#define TYPE_IVL_DAY_TO_MINUTE		"INTERVAL_DAY_TO_MINUTE"
+#define TYPE_IVL_YEAR_TO_MONTH		"INTERVAL_YEAR_TO_MONTH"
+#define TYPE_IVL_DAY_TO_SECOND		"INTERVAL_DAY_TO_SECOND"
+/* 23 */
+#define TYPE_IVL_HOUR_TO_MINUTE		"INTERVAL_HOUR_TO_MINUTE"
+#define TYPE_IVL_HOUR_TO_SECOND		"INTERVAL_HOUR_TO_SECOND"
+/* 25 */
+#define TYPE_IVL_MINUTE_TO_SECOND	"INTERVAL_MINUTE_TO_SECOND"
+
+/*
+ * ES-to-C-SQL mappings.
+ * DATA_TYPE(SYS TYPES) : SQL_<type> -> SQL_C_<type>
+ * Intervals not covered, since C==SQL, with no ES customization.
+ */
+/* -6: SQL_TINYINT -> SQL_C_TINYINT */
+#define ES_BYTE_TO_CSQL			SQL_C_TINYINT
+#define ES_BYTE_TO_SQL			SQL_TINYINT
+/* 5: SQL_SMALLINT -> SQL_C_SHORT */
+#define ES_SHORT_TO_CSQL		SQL_C_SSHORT
+#define ES_SHORT_TO_SQL			SQL_SMALLINT
+/* 4: SQL_INTEGER -> SQL_C_LONG */
+#define ES_INTEGER_TO_CSQL		SQL_C_SLONG
+#define ES_INTEGER_TO_SQL		SQL_INTEGER
+/* -5: SQL_BIGINT -> SQL_C_SBIGINT */
+#define ES_LONG_TO_CSQL			SQL_C_SBIGINT
+#define ES_LONG_TO_SQL			SQL_BIGINT
+/* 6: SQL_FLOAT -> SQL_C_DOUBLE */
+#define ES_HALF_TO_CSQL_FLOAT	SQL_C_DOUBLE
+#define ES_HALF_TO_SQL_FLOAT	SQL_FLOAT
+/* 6: SQL_FLOAT -> SQL_C_DOUBLE */
+#define ES_SCALED_TO_CSQL_FLOAT	SQL_C_DOUBLE
+#define ES_SCALED_TO_SQL_FLOAT	SQL_FLOAT
+/* 7: SQL_REAL -> SQL_C_DOUBLE */
+#define ES_FLOAT_TO_CSQL		SQL_C_FLOAT
+#define ES_FLOAT_TO_SQL			SQL_REAL
+/* 8: SQL_DOUBLE -> SQL_C_FLOAT */
+#define ES_DOUBLE_TO_CSQL		SQL_C_DOUBLE
+#define ES_DOUBLE_TO_SQL		SQL_DOUBLE
+/* 16: ??? -> SQL_C_TINYINT */
+#define ES_BOOLEAN_TO_CSQL		SQL_C_BIT
+#define ES_BOOLEAN_TO_SQL		SQL_BIT
+/* 12: SQL_VARCHAR -> SQL_C_WCHAR */
+#define ES_KEYWORD_TO_CSQL		SQL_C_WCHAR /* XXX: CBOR needs _CHAR */
+#define ES_KEYWORD_TO_SQL		SQL_VARCHAR
+/* 12: SQL_VARCHAR -> SQL_C_WCHAR */
+#define ES_TEXT_TO_CSQL			SQL_C_WCHAR /* XXX: CBOR needs _CHAR */
+#define ES_TEXT_TO_SQL			SQL_VARCHAR
+/* 12: SQL_VARCHAR -> SQL_C_WCHAR */
+#define ES_IP_TO_CSQL			SQL_C_WCHAR /* XXX: CBOR needs _CHAR */
+#define ES_IP_TO_SQL			SQL_VARCHAR
+/* 93: SQL_TYPE_TIMESTAMP -> SQL_C_TYPE_TIMESTAMP */
+#define ES_DATE_TO_CSQL			SQL_C_TYPE_TIMESTAMP
+#define ES_DATE_TO_SQL			SQL_TYPE_TIMESTAMP
+/* -3: SQL_VARBINARY -> SQL_C_BINARY */
+#define ES_BINARY_TO_CSQL		SQL_C_BINARY
+#define ES_BINARY_TO_SQL		SQL_VARBINARY
+/* 0: SQL_TYPE_NULL -> SQL_C_TINYINT */
+#define ES_NULL_TO_CSQL			SQL_C_STINYINT // ???
+#define ES_NULL_TO_SQL			SQL_TYPE_NULL
+/*
+ * ES-non mappable
+ */
+/* 1111: ??? -> SQL_C_BINARY */
+#define ES_UNSUPPORTED_TO_CSQL	SQL_C_BINARY
+#define ES_UNSUPPORTED_TO_SQL	ESODBC_SQL_UNSUPPORTED
+/* 2002: ??? -> SQL_C_BINARY */
+#define ES_OBJECT_TO_CSQL		SQL_C_BINARY
+#define ES_OBJECT_TO_SQL		ESODBC_SQL_OBJECT
+/* 2002: ??? -> SQL_C_BINARY */
+#define ES_NESTED_TO_CSQL		SQL_C_BINARY
+#define ES_NESTED_TO_SQL		ESODBC_SQL_NESTED
 
 
 /* structure for one row returned by the ES.
@@ -739,7 +825,7 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 		goto err;
 	}
 
-	if (! str2bigint(&attrs->secure, /*wide?*/TRUE, &secure)) {
+	if (str2bigint(&attrs->secure, /*wide?*/TRUE, &secure, /*stri*/TRUE) < 0) {
 		ERRH(dbc, "failed to read secure param `" LWPDL "`.",
 			LWSTR(&attrs->secure));
 		SET_HDIAG(dbc, SQL_STATE_HY000, "security setting number "
@@ -826,7 +912,8 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	/*
 	 * request timeout for liburl: negative reset to 0
 	 */
-	if (! str2bigint(&attrs->timeout, /*wide?*/TRUE, (SQLBIGINT *)&timeout)) {
+	if (str2bigint(&attrs->timeout, /*wide?*/TRUE,
+			(SQLBIGINT *)&timeout, /*strict*/TRUE) < 0) {
 		ERRH(dbc, "failed to convert `" LWPDL "` [%zu] to big int.",
 			LWSTR(&attrs->timeout), attrs->timeout.cnt);
 		SET_HDIAG(dbc, SQL_STATE_HY000, "timeout setting number "
@@ -843,8 +930,8 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	/*
 	 * set max body size
 	 */
-	if (! str2bigint(&attrs->max_body_size, /*wide?*/TRUE,
-			(SQLBIGINT *)&max_body_size)) {
+	if (str2bigint(&attrs->max_body_size, /*wide?*/TRUE,
+			(SQLBIGINT *)&max_body_size, /*strict*/TRUE) < 0) {
 		ERRH(dbc, "failed to convert max body size `" LWPDL "` [%zu] to LL.",
 			LWSTR(&attrs->max_body_size), attrs->max_body_size.cnt);
 		SET_HDIAG(dbc, SQL_STATE_HY000, "max body size setting number "
@@ -865,8 +952,8 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	/*
 	 * set max fetch size
 	 */
-	if (! str2bigint(&attrs->max_fetch_size, /*wide?*/TRUE,
-			(SQLBIGINT *)&max_fetch_size)) {
+	if (str2bigint(&attrs->max_fetch_size, /*wide?*/TRUE,
+			(SQLBIGINT *)&max_fetch_size, /*strict*/TRUE) < 0) {
 		ERRH(dbc, "failed to convert max fetch size `" LWPDL "` [%zu] to LL.",
 			LWSTR(&attrs->max_fetch_size), attrs->max_fetch_size.cnt);
 		SET_HDIAG(dbc, SQL_STATE_HY000, "max fetch size setting number "
@@ -1018,67 +1105,211 @@ SQLRETURN do_connect(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	return ret;
 }
 
+static BOOL elastic_intervals_name2types(wstr_st *type_name,
+	SQLSMALLINT *c_sql, SQLSMALLINT *sql)
+{
+	switch (type_name->cnt) {
+		/* 12: INTERVAL_DAY */
+		case sizeof(TYPE_IVL_DAY) - 1:
+			if (! wmemncasecmp(type_name->str,
+					MK_WPTR(TYPE_IVL_DAY), type_name->cnt)) {
+				*c_sql = SQL_C_INTERVAL_DAY;
+				*sql = SQL_INTERVAL_DAY;
+				return TRUE;
+			}
+			break;
+		/* 13: INTERVAL_YEAR, INTERVAL_HOUR */
+		case sizeof(TYPE_IVL_YEAR) - 1:
+			switch (tolower(type_name->str[/*Y in INTERVAL_YEAR*/9])) {
+				case (SQLWCHAR)'y':
+					if (! wmemncasecmp(type_name->str,
+							MK_WPTR(TYPE_IVL_YEAR), type_name->cnt)) {
+						*c_sql = SQL_C_INTERVAL_YEAR;
+						*sql = SQL_INTERVAL_YEAR;
+						return TRUE;
+					}
+					break;
+				case (SQLWCHAR)'h':
+					if (! wmemncasecmp(type_name->str,
+							MK_WPTR(TYPE_IVL_HOUR), type_name->cnt)) {
+						*c_sql = SQL_C_INTERVAL_HOUR;
+						*sql = SQL_INTERVAL_HOUR;
+						return TRUE;
+					}
+					break;
+			}
+			break;
+		/* 14: INTERVAL_MONTH */
+		case sizeof(TYPE_IVL_MONTH) - 1:
+			if (! wmemncasecmp(type_name->str,
+					MK_WPTR(TYPE_IVL_MONTH), type_name->cnt)) {
+				*c_sql = SQL_C_INTERVAL_MONTH;
+				*sql = SQL_INTERVAL_MONTH;
+				return TRUE;
+			}
+			break;
+		/* 15: INTERVAL_MINUTE, INTERVAL_SECOND */
+		case sizeof(TYPE_IVL_MINUTE) - 1:
+			switch (tolower(type_name->str[/*last letter*/14])) {
+				case (SQLWCHAR)'e':
+					if (! wmemncasecmp(type_name->str,
+							MK_WPTR(TYPE_IVL_MINUTE), type_name->cnt)) {
+						*c_sql = SQL_C_INTERVAL_MINUTE;
+						*sql = SQL_INTERVAL_MINUTE;
+						return TRUE;
+					}
+					break;
+				case (SQLWCHAR)'d':
+					if (! wmemncasecmp(type_name->str,
+							MK_WPTR(TYPE_IVL_SECOND), type_name->cnt)) {
+						*c_sql = SQL_C_INTERVAL_SECOND;
+						*sql = SQL_INTERVAL_SECOND;
+						return TRUE;
+					}
+					break;
+			}
+			break;
+		/* 20: TYPE_IVL_DAY_TO_HOUR */
+		case sizeof(TYPE_IVL_DAY_TO_HOUR) - 1:
+			if (! wmemncasecmp(type_name->str,
+					MK_WPTR(TYPE_IVL_DAY_TO_HOUR), type_name->cnt)) {
+				*c_sql = SQL_C_INTERVAL_DAY_TO_HOUR;
+				*sql = SQL_INTERVAL_DAY_TO_HOUR;
+				return TRUE;
+			}
+			break;
+		/* 22: INTERVAL_DAY_TO_MINUTE, INTERVAL_YEAR_TO_MONTH,
+		 *     INTERVAL_DAY_TO_SECOND  */
+		case sizeof(TYPE_IVL_DAY_TO_MINUTE) - 1:
+			switch (tolower(type_name->str[/*last letter*/21])) {
+				case (SQLWCHAR)'e':
+					if (! wmemncasecmp(type_name->str,
+							MK_WPTR(TYPE_IVL_DAY_TO_MINUTE), type_name->cnt)) {
+						*c_sql = SQL_C_INTERVAL_DAY_TO_MINUTE;
+						*sql = SQL_INTERVAL_DAY_TO_MINUTE;
+						return TRUE;
+					}
+					break;
+				case (SQLWCHAR)'h':
+					if (! wmemncasecmp(type_name->str,
+							MK_WPTR(TYPE_IVL_YEAR_TO_MONTH), type_name->cnt)) {
+						*c_sql = SQL_C_INTERVAL_YEAR_TO_MONTH;
+						*sql = SQL_INTERVAL_YEAR_TO_MONTH;
+						return TRUE;
+					}
+					break;
+				case (SQLWCHAR)'d':
+					if (! wmemncasecmp(type_name->str,
+							MK_WPTR(TYPE_IVL_DAY_TO_SECOND), type_name->cnt)) {
+						*c_sql = SQL_C_INTERVAL_DAY_TO_SECOND;
+						*sql = SQL_INTERVAL_DAY_TO_SECOND;
+						return TRUE;
+					}
+					break;
+			}
+			break;
+		/* 23: INTERVAL_HOUR_TO_MINUTE, TYPE_IVL_HOUR_TO_SECOND */
+		case sizeof(TYPE_IVL_HOUR_TO_MINUTE) - 1:
+			switch (tolower(type_name->str[/*last letter*/22])) {
+				case (SQLWCHAR)'e':
+					if (! wmemncasecmp(type_name->str,
+							MK_WPTR(TYPE_IVL_HOUR_TO_MINUTE),
+							type_name->cnt)) {
+						*c_sql = SQL_C_INTERVAL_HOUR_TO_MINUTE;
+						*sql = SQL_INTERVAL_HOUR_TO_MINUTE;
+						return TRUE;
+					}
+					break;
+				case (SQLWCHAR)'d':
+					if (! wmemncasecmp(type_name->str,
+							MK_WPTR(TYPE_IVL_HOUR_TO_SECOND),
+							type_name->cnt)) {
+						*c_sql = SQL_C_INTERVAL_HOUR_TO_SECOND;
+						*sql = SQL_INTERVAL_HOUR_TO_SECOND;
+						return TRUE;
+					}
+					break;
+			}
+			break;
+		/* 25: INTERVAL_MINUTE_TO_SECOND */
+		case sizeof(TYPE_IVL_MINUTE_TO_SECOND) - 1:
+			if (! wmemncasecmp(type_name->str,
+					MK_WPTR(TYPE_IVL_MINUTE_TO_SECOND), type_name->cnt)) {
+				*c_sql = SQL_C_INTERVAL_MINUTE_TO_SECOND;
+				*sql = SQL_INTERVAL_MINUTE_TO_SECOND;
+				return TRUE;
+			}
+			break;
+	}
 
-/* Maps ES/SQL type name to C SQL and SQL id values. */
+	ERR("unrecognized Elastic type `" LWPDL "` (%zd).", LWSTR(type_name),
+		type_name->cnt);
+	return FALSE;
+}
+
+/* Maps ES/SQL type name to C SQL and SQL id values.
+ * ES/SQL type ID uses ODBC spec 3.x values for most common types (ES/SQL's
+ * "DATE" is an ODBC "TIMESTAMP", as an exception).
+ * The values are set here, since the driver:
+ * - must set these for the non-common types (KEYWORD etc.);
+ * - would need to check if the above mentioned identity is still true.
+ * => ignore ES/SQL's type IDs, set these explicitely.
+ */
 static BOOL elastic_name2types(wstr_st *type_name,
 	SQLSMALLINT *c_sql, SQLSMALLINT *sql)
 {
 	assert(0 < type_name->cnt);
 	switch (type_name->cnt) {
 		/* 2: IP */
-		case sizeof(JSON_COL_IP) - 1:
-			switch (tolower(type_name->str[0])) {
-				case (SQLWCHAR)'i':
-					if (! wmemncasecmp(type_name->str,
-							MK_WPTR(JSON_COL_IP), type_name->cnt)) {
-						*c_sql = ESODBC_ES_TO_CSQL_IP;
-						*sql = ESODBC_ES_TO_SQL_IP;
-						return TRUE;
-					}
-					break;
+		case sizeof(TYPE_IP) - 1:
+			if (! wmemncasecmp(type_name->str,
+					MK_WPTR(TYPE_IP), type_name->cnt)) {
+				*c_sql = ES_IP_TO_CSQL;
+				*sql = ES_IP_TO_SQL;
+				return TRUE;
 			}
 			break;
 
 		/* 4: BYTE, LONG, TEXT, DATE, NULL */
-		case sizeof(JSON_COL_BYTE) - 1:
+		case sizeof(TYPE_BYTE) - 1:
 			switch (tolower(type_name->str[0])) {
 				case (SQLWCHAR)'b':
 					if (! wmemncasecmp(type_name->str,
-							MK_WPTR(JSON_COL_BYTE), type_name->cnt)) {
-						*c_sql = ESODBC_ES_TO_CSQL_BYTE;
-						*sql = ESODBC_ES_TO_SQL_BYTE;
+							MK_WPTR(TYPE_BYTE), type_name->cnt)) {
+						*c_sql = ES_BYTE_TO_CSQL;
+						*sql = ES_BYTE_TO_SQL;
 						return TRUE;
 					}
 					break;
 				case (SQLWCHAR)'l':
-					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_LONG),
+					if (! wmemncasecmp(type_name->str, MK_WPTR(TYPE_LONG),
 							type_name->cnt)) {
-						*c_sql = ESODBC_ES_TO_CSQL_LONG;
-						*sql = ESODBC_ES_TO_SQL_LONG;
+						*c_sql = ES_LONG_TO_CSQL;
+						*sql = ES_LONG_TO_SQL;
 						return TRUE;
 					}
 					break;
 				case (SQLWCHAR)'t':
-					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_TEXT),
+					if (! wmemncasecmp(type_name->str, MK_WPTR(TYPE_TEXT),
 							type_name->cnt)) {
-						*c_sql = ESODBC_ES_TO_CSQL_TEXT;
-						*sql = ESODBC_ES_TO_SQL_TEXT;
+						*c_sql = ES_TEXT_TO_CSQL;
+						*sql = ES_TEXT_TO_SQL;
 						return TRUE;
 					}
 					break;
 				case (SQLWCHAR)'d':
-					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_DATE),
+					if (! wmemncasecmp(type_name->str, MK_WPTR(TYPE_DATE),
 							type_name->cnt)) {
-						*c_sql = ESODBC_ES_TO_CSQL_DATE;
-						*sql = ESODBC_ES_TO_SQL_DATE;
+						*c_sql = ES_DATE_TO_CSQL;
+						*sql = ES_DATE_TO_SQL;
 						return TRUE;
 					}
 					break;
 				case (SQLWCHAR)'n':
-					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_NULL),
+					if (! wmemncasecmp(type_name->str, MK_WPTR(TYPE_NULL),
 							type_name->cnt)) {
-						*c_sql = ESODBC_ES_TO_CSQL_NULL;
-						*sql = ESODBC_ES_TO_SQL_NULL;
+						*c_sql = ES_NULL_TO_CSQL;
+						*sql = ES_NULL_TO_SQL;
 						return TRUE;
 					}
 					break;
@@ -1086,21 +1317,21 @@ static BOOL elastic_name2types(wstr_st *type_name,
 			break;
 
 		/* 5: SHORT, FLOAT */
-		case sizeof(JSON_COL_SHORT) - 1:
+		case sizeof(TYPE_SHORT) - 1:
 			switch (tolower(type_name->str[0])) {
 				case (SQLWCHAR)'s':
-					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_SHORT),
+					if (! wmemncasecmp(type_name->str, MK_WPTR(TYPE_SHORT),
 							type_name->cnt)) {
-						*c_sql = ESODBC_ES_TO_CSQL_SHORT;
-						*sql = ESODBC_ES_TO_SQL_SHORT;
+						*c_sql = ES_SHORT_TO_CSQL;
+						*sql = ES_SHORT_TO_SQL;
 						return TRUE;
 					}
 					break;
 				case (SQLWCHAR)'f':
-					if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_FLOAT),
+					if (! wmemncasecmp(type_name->str, MK_WPTR(TYPE_FLOAT),
 							type_name->cnt)) {
-						*c_sql = ESODBC_ES_TO_CSQL_FLOAT;
-						*sql = ESODBC_ES_TO_SQL_FLOAT;
+						*c_sql = ES_FLOAT_TO_CSQL;
+						*sql = ES_FLOAT_TO_SQL;
 						return TRUE;
 					}
 					break;
@@ -1108,37 +1339,37 @@ static BOOL elastic_name2types(wstr_st *type_name,
 			break;
 
 		/* 6: DOUBLE, BINARY, OBJECT, NESTED */
-		case sizeof(JSON_COL_DOUBLE) - 1:
+		case sizeof(TYPE_DOUBLE) - 1:
 			switch (tolower(type_name->str[0])) {
 				case (SQLWCHAR)'d':
 					if (! wmemncasecmp(type_name->str,
-							MK_WPTR(JSON_COL_DOUBLE), type_name->cnt)) {
-						*c_sql = ESODBC_ES_TO_CSQL_DOUBLE;
-						*sql = ESODBC_ES_TO_SQL_DOUBLE;
+							MK_WPTR(TYPE_DOUBLE), type_name->cnt)) {
+						*c_sql = ES_DOUBLE_TO_CSQL;
+						*sql = ES_DOUBLE_TO_SQL;
 						return TRUE;
 					}
 					break;
 				case (SQLWCHAR)'b':
 					if (! wmemncasecmp(type_name->str,
-							MK_WPTR(JSON_COL_BINARY), type_name->cnt)) {
-						*c_sql = ESODBC_ES_TO_CSQL_BINARY;
-						*sql = ESODBC_ES_TO_SQL_BINARY;
+							MK_WPTR(TYPE_BINARY), type_name->cnt)) {
+						*c_sql = ES_BINARY_TO_CSQL;
+						*sql = ES_BINARY_TO_SQL;
 						return TRUE;
 					}
 					break;
 				case (SQLWCHAR)'o':
 					if (! wmemncasecmp(type_name->str,
-							MK_WPTR(JSON_COL_OBJECT), type_name->cnt)) {
-						*c_sql = ESODBC_ES_TO_CSQL_OBJECT;
-						*sql = ESODBC_ES_TO_SQL_OBJECT;
+							MK_WPTR(TYPE_OBJECT), type_name->cnt)) {
+						*c_sql = ES_OBJECT_TO_CSQL;
+						*sql = ES_OBJECT_TO_SQL;
 						return TRUE;
 					}
 					break;
 				case (SQLWCHAR)'n':
 					if (! wmemncasecmp(type_name->str,
-							MK_WPTR(JSON_COL_NESTED), type_name->cnt)) {
-						*c_sql = ESODBC_ES_TO_CSQL_NESTED;
-						*sql = ESODBC_ES_TO_SQL_NESTED;
+							MK_WPTR(TYPE_NESTED), type_name->cnt)) {
+						*c_sql = ES_NESTED_TO_CSQL;
+						*sql = ES_NESTED_TO_SQL;
 						return TRUE;
 					}
 					break;
@@ -1146,29 +1377,29 @@ static BOOL elastic_name2types(wstr_st *type_name,
 			break;
 
 		/* 7: INTEGER, BOOLEAN, KEYWORD */
-		case sizeof(JSON_COL_INTEGER) - 1:
+		case sizeof(TYPE_INTEGER) - 1:
 			switch (tolower(type_name->str[0])) {
 				case (SQLWCHAR)'i': /* integer */
-					if (wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_INTEGER),
+					if (wmemncasecmp(type_name->str, MK_WPTR(TYPE_INTEGER),
 							type_name->cnt) == 0) {
-						*c_sql = ESODBC_ES_TO_CSQL_INTEGER;
-						*sql = ESODBC_ES_TO_SQL_INTEGER;
+						*c_sql = ES_INTEGER_TO_CSQL;
+						*sql = ES_INTEGER_TO_SQL;
 						return TRUE;
 					}
 					break;
 				case (SQLWCHAR)'b': /* boolean */
-					if (wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_BOOLEAN),
+					if (wmemncasecmp(type_name->str, MK_WPTR(TYPE_BOOLEAN),
 							type_name->cnt) == 0) {
-						*c_sql = ESODBC_ES_TO_CSQL_BOOLEAN;
-						*sql = ESODBC_ES_TO_SQL_BOOLEAN;
+						*c_sql = ES_BOOLEAN_TO_CSQL;
+						*sql = ES_BOOLEAN_TO_SQL;
 						return TRUE;
 					}
 					break;
 				case (SQLWCHAR)'k': /* keyword */
-					if (wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_KEYWORD),
+					if (wmemncasecmp(type_name->str, MK_WPTR(TYPE_KEYWORD),
 							type_name->cnt) == 0) {
-						*c_sql = ESODBC_ES_TO_CSQL_KEYWORD;
-						*sql = ESODBC_ES_TO_SQL_KEYWORD;
+						*c_sql = ES_KEYWORD_TO_CSQL;
+						*sql = ES_KEYWORD_TO_SQL;
 						return TRUE;
 					}
 					break;
@@ -1176,39 +1407,37 @@ static BOOL elastic_name2types(wstr_st *type_name,
 			break;
 
 		/* 10: HALF_FLOAT */
-		case sizeof(JSON_COL_HALF_FLOAT) - 1:
-			if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_HALF_FLOAT),
+		case sizeof(TYPE_HALF_FLOAT) - 1:
+			if (! wmemncasecmp(type_name->str, MK_WPTR(TYPE_HALF_FLOAT),
 					type_name->cnt)) {
-				*c_sql = ESODBC_ES_TO_CSQL_HALF_FLOAT;
-				*sql = ESODBC_ES_TO_SQL_HALF_FLOAT;
+				*c_sql = ES_HALF_TO_CSQL_FLOAT;
+				*sql = ES_HALF_TO_SQL_FLOAT;
 				return TRUE;
 			}
 			break;
 
 		/* 11: UNSUPPORTED */
-		case sizeof(JSON_COL_UNSUPPORTED) - 1:
-			if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_UNSUPPORTED),
+		case sizeof(TYPE_UNSUPPORTED) - 1:
+			if (! wmemncasecmp(type_name->str, MK_WPTR(TYPE_UNSUPPORTED),
 					type_name->cnt)) {
-				*c_sql = ESODBC_ES_TO_CSQL_UNSUPPORTED;
-				*sql = ESODBC_ES_TO_SQL_UNSUPPORTED;
+				*c_sql = ES_UNSUPPORTED_TO_CSQL;
+				*sql = ES_UNSUPPORTED_TO_SQL;
 				return TRUE;
 			}
 			break;
 
 		/* 12: SCALED_FLOAT */
-		case sizeof(JSON_COL_SCALED_FLOAT) - 1:
-			if (! wmemncasecmp(type_name->str, MK_WPTR(JSON_COL_SCALED_FLOAT),
+		case sizeof(TYPE_SCALED_FLOAT) - 1:
+			if (! wmemncasecmp(type_name->str, MK_WPTR(TYPE_SCALED_FLOAT),
 					type_name->cnt)) {
-				*c_sql = ESODBC_ES_TO_CSQL_SCALED_FLOAT;
-				*sql = ESODBC_ES_TO_SQL_SCALED_FLOAT;
+				*c_sql = ES_SCALED_TO_CSQL_FLOAT;
+				*sql = ES_SCALED_TO_SQL_FLOAT;
 				return TRUE;
 			}
 			break;
-
 	}
-	ERR("unrecognized Elastic type `" LWPDL "` (%zd).", LWSTR(type_name),
-		type_name->cnt);
-	return FALSE;
+
+	return elastic_intervals_name2types(type_name, c_sql, sql);
 }
 
 /*
@@ -1223,6 +1452,7 @@ static void set_display_size(esodbc_estype_st *es_type)
 		case SQL_WCHAR:
 		case SQL_WVARCHAR:
 		case SQL_WLONGVARCHAR:
+			// TODO: 45 if IP?
 			es_type->display_size = es_type->column_size;
 			break;
 
@@ -1277,6 +1507,51 @@ static void set_display_size(esodbc_estype_st *es_type)
 			es_type->display_size = SQL_NO_TOTAL;
 			break;
 
+		/* intervals */
+		case SQL_INTERVAL_MONTH:
+			es_type->display_size = ESODBC_MAX_IVL_MONTH_LEAD_PREC;
+			break;
+		case SQL_INTERVAL_YEAR:
+			es_type->display_size = ESODBC_MAX_IVL_YEAR_LEAD_PREC;
+			break;
+		case SQL_INTERVAL_YEAR_TO_MONTH:
+			es_type->display_size = 3 + ESODBC_MAX_IVL_YEAR_LEAD_PREC;
+			break;
+		case SQL_INTERVAL_DAY:
+			es_type->display_size = ESODBC_MAX_IVL_DAY_LEAD_PREC;
+			break;
+		case SQL_INTERVAL_HOUR:
+			es_type->display_size = ESODBC_MAX_IVL_HOUR_LEAD_PREC;
+			break;
+		case SQL_INTERVAL_MINUTE:
+			es_type->display_size = ESODBC_MAX_IVL_MINUTE_LEAD_PREC;
+			break;
+		case SQL_INTERVAL_SECOND:
+			es_type->display_size = ESODBC_MAX_IVL_SECOND_LEAD_PREC + /*.*/1 +
+				ESODBC_MAX_SEC_PRECISION;
+			break;
+		case SQL_INTERVAL_DAY_TO_HOUR:
+			es_type->display_size = 3 + ESODBC_MAX_IVL_DAY_LEAD_PREC;
+			break;
+		case SQL_INTERVAL_DAY_TO_MINUTE:
+			es_type->display_size = 6 + ESODBC_MAX_IVL_DAY_LEAD_PREC;
+			break;
+		case SQL_INTERVAL_DAY_TO_SECOND:
+			es_type->display_size = 10 + ESODBC_MAX_IVL_DAY_LEAD_PREC +
+				ESODBC_MAX_SEC_PRECISION;
+			break;
+		case SQL_INTERVAL_HOUR_TO_MINUTE:
+			es_type->display_size = 3 + ESODBC_MAX_IVL_HOUR_LEAD_PREC;
+			break;
+		case SQL_INTERVAL_HOUR_TO_SECOND:
+			es_type->display_size = 7 + ESODBC_MAX_IVL_HOUR_LEAD_PREC +
+				ESODBC_MAX_SEC_PRECISION;
+			break;
+		case SQL_INTERVAL_MINUTE_TO_SECOND:
+			es_type->display_size = 4 + ESODBC_MAX_IVL_MINUTE_LEAD_PREC +
+				ESODBC_MAX_SEC_PRECISION;
+			break;
+
 		/*
 		case SQL_TYPE_UTCDATETIME:
 		case SQL_TYPE_UTCTIME:
@@ -1285,25 +1560,15 @@ static void set_display_size(esodbc_estype_st *es_type)
 		case SQL_DECIMAL:
 		case SQL_NUMERIC:
 
-		case SQL_INTERVAL_MONTH:
-		case SQL_INTERVAL_YEAR:
-		case SQL_INTERVAL_YEAR_TO_MONTH:
-		case SQL_INTERVAL_DAY:
-		case SQL_INTERVAL_HOUR:
-		case SQL_INTERVAL_MINUTE:
-		case SQL_INTERVAL_SECOND:
-		case SQL_INTERVAL_DAY_TO_HOUR:
-		case SQL_INTERVAL_DAY_TO_MINUTE:
-		case SQL_INTERVAL_DAY_TO_SECOND:
-		case SQL_INTERVAL_HOUR_TO_MINUTE:
-		case SQL_INTERVAL_HOUR_TO_SECOND:
-		case SQL_INTERVAL_MINUTE_TO_SECOND:
-
 		case SQL_GUID:
 
 		default:
 			BUG("unsupported ES/SQL data type: %d.", es_type->data_type);
+			return;
 	}
+
+	DBG("data type: %hd, display size: %lld", es_type->data_type,
+		es_type->data_type);
 }
 
 static BOOL bind_types_cols(esodbc_stmt_st *stmt, estype_row_st *type_row)
@@ -1451,7 +1716,7 @@ static void *copy_types_rows(esodbc_dbc_st *dbc, estype_row_st *type_row,
 		 * other statement), which causes issues, since it's a non-SQL type
 		 * => change it to SQL_BIT */
 		if (types[i].data_type == ESODBC_SQL_BOOLEAN) {
-			types[i].data_type = ESODBC_ES_TO_SQL_BOOLEAN;
+			types[i].data_type = ES_BOOLEAN_TO_SQL;
 		}
 
 		/* .data_type is used in data conversions -> make sure the SQL type
