@@ -1918,7 +1918,7 @@ static SQLRETURN parse_interval_iso8601(esodbc_rec_st *arec,
 	fraction = 0;
 	state = saved = ST_UNINITED;
 	for (crr = wstr->str, end = wstr->str + wstr->cnt; crr < end; ) {
-		switch (*crr | 0x20) {
+		switch (*crr | 0x20) { /* ~tolower(), ascii vals only */
 			case L'p':
 				if (state != ST_UNINITED) {
 					goto err_parse;
@@ -2319,13 +2319,13 @@ static SQLSMALLINT parse_interval_type(wstr_st *wstr)
 	}
 
 	/* split by last letter */
-	switch (wstr->str[wstr->cnt - 1] | 0x20) {
+	switch (wstr->str[wstr->cnt - 1] | 0x20) { /* ~tolower(), ascii val only */
 		case L'y': /* day */
 			TRIM_IF_ENDS_WITH_OR_RET("day");
 			return SQL_IS_DAY;
 
 		case L'r': /* year, hour, day to hour */
-			switch (wstr->str[wstr->cnt - 2] | 0x20) {
+			switch (wstr->str[wstr->cnt - 2] | 0x20) { /* ~tolower() */
 				case L'a': /* ...in year */
 					TRIM_IF_ENDS_WITH_OR_RET("year");
 					return SQL_IS_YEAR;
@@ -2345,7 +2345,7 @@ static SQLSMALLINT parse_interval_type(wstr_st *wstr)
 				return SQL_IS_MINUTE;
 			}
 			TRIM_IF_ENDS_WITH_OR_RET("to");
-			switch (wstr->str[wstr->cnt - 1] | 0x20) {
+			switch (wstr->str[wstr->cnt - 1] | 0x20) { /* ~tolower() */
 				case L'y': /* ...in "day" */
 					TRIM_IF_ENDS_WITH_OR_RET("day");
 					return SQL_IS_DAY_TO_MINUTE;
@@ -2367,7 +2367,7 @@ static SQLSMALLINT parse_interval_type(wstr_st *wstr)
 				return SQL_IS_SECOND;
 			}
 			TRIM_IF_ENDS_WITH_OR_RET("to");
-			switch (wstr->str[wstr->cnt - 1] | 0x20) {
+			switch (wstr->str[wstr->cnt - 1] | 0x20) { /* ~tolower() */
 				case L'y': /* ...in "day" */
 					TRIM_IF_ENDS_WITH_OR_RET("day");
 					return SQL_IS_DAY_TO_SECOND;
