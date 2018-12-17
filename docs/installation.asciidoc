@@ -15,12 +15,14 @@ Before you install the {product} you need to meet the following prerequisites;
 
 * Windows 10 64 bit _or_ Windows Server 2016 64 bit operating system
 * .NET Framework 4.0 full - https://www.microsoft.com/en-au/download/details.aspx?id=17718
-* Microsoft Visual C++ Redistributable (x64) for Visual Studio 2017 - https://support.microsoft.com/en-au/help/2977003/the-latest-supported-visual-c-downloads
+* Microsoft Visual C++ Redistributable for Visual Studio 2017 - https://support.microsoft.com/en-au/help/2977003/the-latest-supported-visual-c-downloads
+- The 64 bit driver requires the x64 redistributable
+- The 32 bit driver requires the x86 redistributable
 * Elevated privileges (administrator) for the User performing the installation
 
 If you fail to meet any of the prerequisites the installer will show an error message and abort the installation.
 
-NOTE: It is not possible to inline upgrade using the MSI. In order to upgrade, you will first have to uninstall the old driver and then reinstall the new driver.
+NOTE: It is not possible to inline upgrade using the MSI. In order to upgrade, you will first have to uninstall the old driver and then install the new driver.
 
 [float]
 [[download]]
@@ -77,6 +79,8 @@ If you encounter an error during installation we would encourage you to open an 
 [float]
 [[installation-cmd]]
 === Installation using the command line
+
+NOTE: The examples given below apply to installation of the 64 bit MSI package. To acheive the same result with the 32 bit MSI package you would instead use the filename suffix `windows-x86.msi`
 
 The `.msi` can also be installed via the command line. The simplest installation using the same defaults as the GUI is achieved by first navigating to the download directory, then running:
 
