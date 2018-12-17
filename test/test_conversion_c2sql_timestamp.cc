@@ -9,6 +9,12 @@
 
 #include <string.h>
 
+#ifdef _WIN64
+#	define CLIENT_ID	"\"client_id\": \"odbc64\""
+#else /* _WIN64 */
+#	define CLIENT_ID	"\"client_id\": \"odbc32\""
+#endif /* _WIN64 */
+
 
 namespace test {
 
@@ -83,7 +89,7 @@ TEST_F(ConvertC2SQL_Timestamp, WStr_Timestamp2Timestamp_colsize_16)
 		"{\"query\": \"WStr_Timestamp2Timestamp_colsize_16\", "
 		"\"params\": [{\"type\": \"DATE\", "
 		"\"value\": \"1234-12-23T12:34:00Z\"}], "
-		"\"mode\": \"ODBC\"}");
+		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -107,7 +113,7 @@ TEST_F(ConvertC2SQL_Timestamp, WStr_Timestamp2Timestamp_colsize_19)
 		"{\"query\": \"WStr_Timestamp2Timestamp_colsize_19\", "
 		"\"params\": [{\"type\": \"DATE\", "
 		"\"value\": \"1234-12-23T12:34:56Z\"}], "
-		"\"mode\": \"ODBC\"}");
+		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -147,7 +153,7 @@ TEST_F(ConvertC2SQL_Timestamp, CStr_Timestamp2Timestamp_colsize_decdigits_trim)
 		"{\"query\": \"CStr_Timestamp2Timestamp_colsize_decdigits_trim\", "
 		"\"params\": [{\"type\": \"DATE\", "
 		"\"value\": \"1234-12-23T12:34:56.78901Z\"}], "
-		"\"mode\": \"ODBC\"}");
+		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -171,7 +177,7 @@ TEST_F(ConvertC2SQL_Timestamp, CStr_Timestamp2Timestamp_colsize_decdigits_full)
 		"{\"query\": \"CStr_Timestamp2Timestamp_colsize_decdigits_full\", "
 		"\"params\": [{\"type\": \"DATE\", "
 		"\"value\": \"1234-12-23T12:34:56.7890123Z\"}], "
-		"\"mode\": \"ODBC\"}");
+		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -202,7 +208,7 @@ TEST_F(ConvertC2SQL_Timestamp, Timestamp2Timestamp_decdigits_7)
 		"{\"query\": \"Timestamp2Timestamp_decdigits_7\", "
 		"\"params\": [{\"type\": \"DATE\", "
 		"\"value\": \"2345-01-23T12:34:56.7890123Z\"}], "
-		"\"mode\": \"ODBC\"}");
+		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -234,7 +240,7 @@ TEST_F(ConvertC2SQL_Timestamp, Binary2Timestamp_colsize_0)
 		"{\"query\": \"Binary2Timestamp_colsize_0\", "
 		"\"params\": [{\"type\": \"DATE\", "
 		"\"value\": \"2345-01-23T12:34:56.789Z\"}], "
-		"\"mode\": \"ODBC\"}");
+		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -262,7 +268,7 @@ TEST_F(ConvertC2SQL_Timestamp, Date2Timestamp)
 		"{\"query\": \"Date2Timestamp\", "
 		"\"params\": [{\"type\": \"DATE\", "
 		"\"value\": \"2345-01-23T00:00:00.000Z\"}], "
-		"\"mode\": \"ODBC\"}");
+		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
