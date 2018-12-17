@@ -105,7 +105,7 @@ int parse_log_level(wstr_st *level)
 		return LOG_LEVEL_DISABLED;
 	}
 	/* first letter will indicate the log level */
-	switch ((unsigned)level->str[0] | 0x20) {
+	switch ((unsigned)level->str[0] | 0x20) { /* ~tolower(), ascii set only */
 		case 'e':
 			return LOG_LEVEL_ERR;
 		case 'w':

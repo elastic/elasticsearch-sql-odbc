@@ -710,7 +710,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 			desc = stmt->apd;
 			break;
 		} while (0);
-			ret = EsSQLSetDescFieldW(desc, NO_REC_NR, 
+			ret = EsSQLSetDescFieldW(desc, NO_REC_NR,
 					SQL_DESC_ARRAY_STATUS_PTR, ValuePtr, BufferLength);
 			if (ret != SQL_SUCCESS) { /* _WITH_INFO wud be "error" here */
 				/* if SetDescField() fails, DM will check statement's diag */
@@ -732,7 +732,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 			desc = stmt->ipd;
 			break;
 		} while (0);
-			ret = EsSQLSetDescFieldW(desc, NO_REC_NR, 
+			ret = EsSQLSetDescFieldW(desc, NO_REC_NR,
 					SQL_DESC_ROWS_PROCESSED_PTR, ValuePtr, BufferLength);
 			if (ret != SQL_SUCCESS) { /* _WITH_INFO wud be "error" here */
 				/* if SetDescField() fails, DM will check statement's diag */
@@ -1452,7 +1452,7 @@ SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count)
  */
 esodbc_rec_st *get_record(esodbc_desc_st *desc, SQLSMALLINT rec_no, BOOL grow)
 {
-	assert(0 <= rec_no);
+	assert(0 < rec_no);
 
 	if (desc->count < rec_no) {
 		if (! grow) {
@@ -1671,7 +1671,7 @@ SQLRETURN EsSQLGetDescFieldW(
 		case SQL_DESC_LITERAL_PREFIX:
 			wstr = rec->es_type->literal_prefix;
 			break;
-		case SQL_DESC_LITERAL_SUFFIX: 
+		case SQL_DESC_LITERAL_SUFFIX:
 			wstr = rec->es_type->literal_suffix;
 			break;
 		case SQL_DESC_LOCAL_TYPE_NAME:
@@ -1917,12 +1917,14 @@ void concise_to_type_code(SQLSMALLINT concise, SQLSMALLINT *type,
 			*type = SQL_INTERVAL;
 			*code = SQL_CODE_MINUTE_TO_SECOND;
 			break;
+		default:
+			/* "For all data types except datetime and interval data types,
+			 * the verbose type identifier is the same as the concise type
+			 * identifier and the value in SQL_DESC_DATETIME_INTERVAL_CODE is
+			 * equal to 0." */
+			*type = concise;
+			*code = 0;
 	}
-	/* "For all data types except datetime and interval data types, the
-	 * verbose type identifier is the same as the concise type identifier and
-	 * the value in SQL_DESC_DATETIME_INTERVAL_CODE is equal to 0." */
-	*type = concise;
-	*code = 0;
 }
 
 /*
@@ -1947,10 +1949,10 @@ static void set_defaults_from_meta_type(esodbc_rec_st *rec)
 			}
 			break;
 		case METATYPE_INTERVAL_WSEC:
-			rec->precision = ESODBC_DEF_INTVL_WS_PRECISION;
+			rec->precision = ESODBC_DEF_IVL_WS_PRECISION;
 		/* no break */
 		case METATYPE_INTERVAL_WOSEC:
-			rec->datetime_interval_precision = ESODBC_DEF_INTVL_WOS_DT_PREC;
+			rec->datetime_interval_precision = ESODBC_DEF_IVL_WOS_DT_PREC;
 			break;
 		case METATYPE_EXACT_NUMERIC:
 			if (rec->concise_type == SQL_DECIMAL ||
@@ -2151,6 +2153,7 @@ static BOOL consistency_check(esodbc_rec_st *rec)
 {
 	SQLSMALLINT type, code;
 	esodbc_desc_st *desc = rec->desc;
+	SQLINTEGER max_prec;
 
 	/* validity of C / SQL datatypes is checked when setting the meta_type */
 	assert(METATYPE_UNKNOWN <= rec->meta_type &&
@@ -2188,23 +2191,58 @@ static BOOL consistency_check(esodbc_rec_st *rec)
 			}
 			break;
 
+		/* check SQL_DESC_PRECISION field */
+		/* "a time or timestamp data type" */
 		case METATYPE_DATETIME:
 			if (rec->concise_type == SQL_TYPE_DATE) {
 				break;
 			}
+		/* "an interval type with a seconds component" */
 		case METATYPE_INTERVAL_WSEC:
-		// TODO: "or one of the interval data types with a time component"
+		/* "or one of the interval data types with a time component" */
 		case METATYPE_INTERVAL_WOSEC:
-			if (rec->precision < 0 ||
-				ESODBC_MAX_SEC_PRECISION < rec->precision) {
-				ERRH(desc, "precision (%hd) out of bounds [0, %d].",
-					rec->precision, ESODBC_MAX_SEC_PRECISION);
-				return FALSE;
+			if (SQL_INTERVAL_MONTH < rec->concise_type &&
+				rec->concise_type != SQL_INTERVAL_YEAR_TO_MONTH) {
+				if (rec->precision < 0 ||
+					ESODBC_MAX_SEC_PRECISION < rec->precision) {
+					ERRH(desc, "precision (%hd) out of bounds [0, %d].",
+						rec->precision, ESODBC_MAX_SEC_PRECISION);
+					return FALSE;
+				}
 			}
 			if (rec->meta_type == METATYPE_DATETIME) {
 				break;
 			}
-			// TODO: check rec->datetime_interval_precision
+			/* check SQL_DESC_DATETIME_INTERVAL_PRECISION */
+			switch (rec->concise_type) {
+				case SQL_INTERVAL_YEAR:
+					max_prec = ESODBC_MAX_IVL_YEAR_LEAD_PREC;
+					break;
+				case SQL_INTERVAL_MONTH:
+					max_prec = ESODBC_MAX_IVL_MONTH_LEAD_PREC;
+					break;
+				case SQL_INTERVAL_DAY:
+					max_prec = ESODBC_MAX_IVL_DAY_LEAD_PREC;
+					break;
+				case SQL_INTERVAL_HOUR:
+					max_prec = ESODBC_MAX_IVL_HOUR_LEAD_PREC;
+					break;
+				case SQL_INTERVAL_MINUTE:
+					max_prec = ESODBC_MAX_IVL_MINUTE_LEAD_PREC;
+					break;
+				case SQL_INTERVAL_SECOND:
+					max_prec = ESODBC_MAX_IVL_SECOND_LEAD_PREC;
+					break;
+				default:
+					max_prec = -1;
+			}
+			if (0 < max_prec &&
+				(rec->datetime_interval_precision < 0 ||
+					max_prec < rec->datetime_interval_precision)) {
+				ERRH(desc, "datetime_interval_precision (%hd) out of bounds "
+					"[0, %d].", rec->datetime_interval_precision, max_prec);
+				return FALSE;
+			}
 			break;
 	}
 
@@ -2273,6 +2311,7 @@ SQLRETURN EsSQLSetDescFieldW(
 	SQLINTEGER *intp;
 	SQLSMALLINT count, type, chk_type, chk_code;
 	SQLULEN ulen;
+	SQLLEN slen;
 	size_t wlen;
 
 	if (! check_access(desc, FieldIdentifier, O_RDWR)) {
@@ -2414,7 +2453,7 @@ SQLRETURN EsSQLSetDescFieldW(
 		case SQL_DESC_TYPE:
 			type = (SQLSMALLINT)(intptr_t)ValuePtr;
 			DBGH(desc, "setting type of rec@0x%p to %d.", rec, type);
-			/* Note: SQL_[C_]DATE == SQL_DATETIME (== 9) => 
+			/* Note: SQL_[C_]DATE == SQL_DATETIME (== 9) =>
 			 * 1. one needs to always use SQL_DESC_CONCISE_TYPE for setting
 			 * the types from within the driver (binding cols, params):
 			 * "SQL_DESC_CONCISE_TYPE can be set by a call to SQLBindCol or
@@ -2429,7 +2468,7 @@ SQLRETURN EsSQLSetDescFieldW(
 				 * valid and consistent." */
 				/* setting the verbose type only */
 				concise_to_type_code(rec->concise_type, &chk_type, &chk_code);
-				if (chk_type != type || 
+				if (chk_type != type ||
 						chk_code != rec->datetime_interval_code ||
 						(! rec->datetime_interval_code)) {
 					ERRH(desc, "type fields found inconsistent when setting "
@@ -2445,10 +2484,10 @@ SQLRETURN EsSQLSetDescFieldW(
 			/* no break! */
 		case SQL_DESC_CONCISE_TYPE:
 			DBGH(desc, "setting concise type of rec 0x%p to %d.", rec,
-					(SQLSMALLINT)(intptr_t)ValuePtr); 
+					(SQLSMALLINT)(intptr_t)ValuePtr);
 			rec->concise_type = (SQLSMALLINT)(intptr_t)ValuePtr;
 
-			concise_to_type_code(rec->concise_type, &rec->type, 
+			concise_to_type_code(rec->concise_type, &rec->type,
 					&rec->datetime_interval_code);
 			rec->meta_type = concise_to_meta(rec->concise_type, desc->type);
 			if (rec->meta_type == METATYPE_UNKNOWN) {
@@ -2513,7 +2552,7 @@ SQLRETURN EsSQLSetDescFieldW(
 		case SQL_DESC_NAME:
 			WARNH(desc, "stored procedure params (to set to `"LWPD"`) not "
 					"supported.", ValuePtr ? (SQLWCHAR *)ValuePtr : TWS_NULL);
-			RET_HDIAG(desc, SQL_STATE_HYC00, 
+			RET_HDIAG(desc, SQL_STATE_HYC00,
 					"stored procedure params not supported", 0);
 
 		/* <SQLWCHAR *> */
@@ -2571,10 +2610,12 @@ SQLRETURN EsSQLSetDescFieldW(
 			DBGH(desc, "setting octet length: %ld.",
 					(SQLLEN)(intptr_t)ValuePtr);
 			/* rec field's type is signed :/; a negative is dangerous l8r  */
-			if ((SQLLEN)(intptr_t)ValuePtr < 0) {
+			slen = (SQLLEN)(intptr_t)ValuePtr;
+			if (slen < 0 && slen != SQL_NTSL) {
 				ERRH(desc, "octet length attribute can't be negative (%lld)",
-						(SQLLEN)(intptr_t)ValuePtr);
-				RET_HDIAGS(desc, SQL_STATE_HY000);
+						slen);
+				RET_HDIAG(desc, SQL_STATE_HY000,
+						"invalid negative octet lenght attribute", 0);
 			}
 			rec->octet_length = (SQLLEN)(intptr_t)ValuePtr;
 			break;
@@ -2613,7 +2654,7 @@ SQLRETURN EsSQLSetDescFieldW(
 		/* <SQLINTEGER> */
 		do {
 		/* R/O field: auto_unique_value, case_sensitive  */
-		case SQL_DESC_DATETIME_INTERVAL_PRECISION: 
+		case SQL_DESC_DATETIME_INTERVAL_PRECISION:
 			intp = &rec->datetime_interval_precision;
 			break;
 		case SQL_DESC_NUM_PREC_RADIX:
