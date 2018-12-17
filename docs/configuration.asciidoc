@@ -8,7 +8,7 @@ experimental[]
 Once the driver has been installed, in order for an application to be able to connect to {es} through ODBC, a set of configuration parameters must be provided to the driver. Depending on the application, there are generally three ways of providing these parameters:
 
 * through a connection string;
-* using a User or a System DSN;
+* using a User DSN or System DSN;
 * through a File DSN.
 
 DSN (_data source name_) is a generic name given to the set of parameters an ODBC driver needs to connect to a database.
@@ -24,7 +24,10 @@ We will focus on DSN usage only.
 
 For DSN management, ODBC provides the _ODBC Data Source Administrator_ application, readily installed on all recent desktop Windows OSes.
 
-To launch it, open the search menu - _Win + S_ - and type "ODBC Data Sources (64-bit)" an press _Enter_:
+- The 32-bit version of the Odbcad32.exe file is located in the `%systemdrive%\Windows\SysWoW64` folder.
+- The 64-bit version of the Odbcad32.exe file is located in the `%systemdrive%\Windows\System32` folder.
+
+To launch it, open the search menu - _Win + S_ - and type "ODBC Data Sources (64-bit)" or "ODBC Data Sources (32-bit)" an press _Enter_:
 
 [[launch_administrator]]
 .Launching ODBC Data Source Administrator

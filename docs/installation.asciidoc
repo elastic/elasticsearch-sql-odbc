@@ -16,7 +16,7 @@ Before you install the {product} you need to meet the following prerequisites;
 * Windows 10 64 bit _or_ Windows Server 2016 64 bit operating system
 * .NET Framework 4.0 full - https://www.microsoft.com/en-au/download/details.aspx?id=17718
 * Microsoft Visual C++ Redistributable for Visual Studio 2017 - https://support.microsoft.com/en-au/help/2977003/the-latest-supported-visual-c-downloads
-- The 64 bit driver requires the x64 redistributable
+- The 64 bit driver requires the x64 redistributable (this also installs the components needed for the 32 bit driver)
 - The 32 bit driver requires the x86 redistributable
 * Elevated privileges (administrator) for the User performing the installation
 
@@ -33,8 +33,8 @@ https://www.elastic.co/downloads/odbc-client
 
 There are two versions of the installer available:
 
-- *32 bit driver (x86)* for primary use with Microsoft Office 2016 suite of applications; notably Microsoft Excel and Microsoft Access. 
-- *64 bit driver (x64)* for use with all other applications.
+- *32 bit driver (x86)* for use with the Microsoft Office 2016 suite of applications; notably Microsoft Excel and Microsoft Access and other 32 bit based programs.
+- *64 bit driver (x64)* for use with all other applications (recommended).
 
 Users ought to consider downloading and installing both the 32 and 64 bit drivers for maximum compatibility across installed applications.
 
@@ -48,7 +48,7 @@ You will first be presented with a welcome screen:
 
 image::images/installer_started.png[Installer Welcome Screen]
 
-Clicking  *Next* will present the End User License Agreement. You will need to accept the license agreement in order to continue the installation.
+Clicking *Next* will present the End User License Agreement. You will need to accept the license agreement in order to continue the installation.
 
 image::images/installer_accept_license.png[Installer EULA Screen]
 
@@ -74,7 +74,7 @@ image::images/installer_finish.png[Installer Complete]
 
 As with any MSI installation package, a log file for the installation process can be found within the `%TEMP%` directory, with a randomly generated name adhering to the format `MSI<random>.LOG`.
 
-If you encounter an error during installation we would encourage you to open an issue [ISSUE LINK HERE], attach your installation log file and provide details so we can investigate.
+If you encounter an error during installation we would encourage you to open an issue https://github.com/elastic/elasticsearch-sql-odbc/issues, attach your installation log file and provide details so we can investigate.
 
 [float]
 [[installation-cmd]]
