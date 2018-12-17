@@ -15,7 +15,7 @@ Before you install the {product} you need to meet the following prerequisites;
 
 * Windows 10 64 bit _or_ Windows Server 2016 64 bit operating system
 * .NET Framework 4.0 full - https://www.microsoft.com/en-au/download/details.aspx?id=17718
-* Microsoft Visual C++ Redistributable for Visual Studio 2017 - https://support.microsoft.com/en-au/help/2977003/the-latest-supported-visual-c-downloads
+* Microsoft Visual C++ Redistributable (x64) for Visual Studio 2017 - https://support.microsoft.com/en-au/help/2977003/the-latest-supported-visual-c-downloads
 * Elevated privileges (administrator) for the User performing the installation
 
 If you fail to meet any of the prerequisites the installer will show an error message and abort the installation.
@@ -24,10 +24,17 @@ NOTE: It is not possible to inline upgrade using the MSI. In order to upgrade, y
 
 [float]
 [[download]]
-=== Download the `.msi` package
+=== Download the `.msi` package(s)
 
 Download the `.msi` package for {product} {version} from:
 https://www.elastic.co/downloads/odbc-client
+
+There are two versions of the installer available:
+
+- *32 bit driver (x86)* for primary use with Microsoft Office 2016 suite of applications; notably Microsoft Excel and Microsoft Access. 
+- *64 bit driver (x64)* for use with all other applications.
+
+Users ought to consider downloading and installing both the 32 and 64 bit drivers for maximum compatibility across installed applications.
 
 [float]
 [[installation-gui]]
@@ -55,9 +62,12 @@ NOTE: You will require elevated privileges (administrator) for installation.
 
 image::images/installer_ready_install.png[Installer Begin]
 
-Assuming the installation takes place without error you should see progress screen, followed by the completed screen:
+Assuming the installation takes place without error you should see progress screen, followed by the finish screen:
 
 image::images/installer_installing.png[Installer Installing]
+
+On the finish screen you can launch the ODBC Data Source Administration screen by checking the dialog checkbox. This will automatically launch the configuration screen on close (either 32 bit or 64 bit) where you can configure System DSNs and User DSNs.
+
 image::images/installer_finish.png[Installer Complete]
 
 As with any MSI installation package, a log file for the installation process can be found within the `%TEMP%` directory, with a randomly generated name adhering to the format `MSI<random>.LOG`.
