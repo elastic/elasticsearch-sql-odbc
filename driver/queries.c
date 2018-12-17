@@ -1715,6 +1715,21 @@ static SQLRETURN convert_param_val(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		case SQL_TYPE_TIMESTAMP: /* DATE */
 			return c2sql_timestamp(arec, irec, pos, dest, len);
 
+		case SQL_INTERVAL_YEAR:
+		case SQL_INTERVAL_MONTH:
+		case SQL_INTERVAL_DAY:
+		case SQL_INTERVAL_HOUR:
+		case SQL_INTERVAL_MINUTE:
+		case SQL_INTERVAL_SECOND:
+		case SQL_INTERVAL_YEAR_TO_MONTH:
+		case SQL_INTERVAL_DAY_TO_HOUR:
+		case SQL_INTERVAL_DAY_TO_MINUTE:
+		case SQL_INTERVAL_DAY_TO_SECOND:
+		case SQL_INTERVAL_HOUR_TO_MINUTE:
+		case SQL_INTERVAL_HOUR_TO_SECOND:
+		case SQL_INTERVAL_MINUTE_TO_SECOND:
+			return c2sql_interval(arec, irec, pos, dest, len);
+
 		/* JSON (Base64 encoded) string */
 		case SQL_VARBINARY: /* BINARY */
 			// XXX: json_escape

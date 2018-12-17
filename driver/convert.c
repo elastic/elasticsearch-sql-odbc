@@ -47,9 +47,9 @@
 		RET_HDIAGS(_stmt, SQL_STATE_22003); \
 	} while (0)
 
-/* maximum lenght of an interval literal (with terminator), with no field
- * sanity checks: five longs with separators and sign */
-#define INTERVAL_LIT_MAX_LEN (5 * sizeof("4294967295"))
+/* maximum lenght of an interval literal (with terminator; both ISO and SQL),
+ * with no field sanity checks: five longs with separators and sign */
+#define INTERVAL_VAL_MAX_LEN (5 * sizeof("4294967295"))
 
 #if (0x0300 <= ODBCVER)
 #	define ESSQL_TYPE_MIN		SQL_GUID
@@ -1755,21 +1755,21 @@ static SQLRETURN wstr_to_time(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	return SQL_SUCCESS;
 }
 
-static inline SQLRETURN adjust_to_precision(esodbc_rec_st *arec,
+static inline SQLRETURN adjust_to_precision(esodbc_rec_st *rec,
 	SQLUBIGINT *val, SQLSMALLINT prec_have)
 {
-	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
+	esodbc_stmt_st *stmt = rec->desc->hdr.stmt;
 
-	if (prec_have < arec->precision) {
+	if (prec_have < rec->precision) {
 		DBGH(stmt, "augmenting value %llu with %hd digits.", *val,
-			arec->precision - prec_have);
+			rec->precision - prec_have);
 		/* no overflow check: the target precision should have been checked */
-		*val *= pow10(arec->precision - prec_have);
+		*val *= pow10(rec->precision - prec_have);
 		return SQL_SUCCESS;
 	} else {
 		DBGH(stmt, "truncating value %llu with %hd digits.", *val,
-			prec_have - arec->precision);
-		*val /= pow10(prec_have - arec->precision);
+			prec_have - rec->precision);
+		*val /= pow10(prec_have - rec->precision);
 		RET_HDIAGS(stmt, SQL_STATE_01S07);
 	}
 }
@@ -1857,7 +1857,7 @@ static SQLRETURN parse_interval_iso8601(esodbc_rec_st *arec,
 	BOOL has_fraction;
 	enum {ST_UNINITED, ST_PERIOD, ST_TIME, ST_NUMBER} state, saved;
 	uint16_t fields_bm; /* read fields bit mask */
-	static uint16_t type2bm[] = {
+	static const uint16_t type2bm[] = {
 		1 << SQL_IS_YEAR,
 			1 << SQL_IS_MONTH,
 			1 << SQL_IS_DAY,
@@ -2052,10 +2052,10 @@ err_format:
  * 'wstr' is adjusted to have the field removed.
  * The field value is stored in 'uiptr'.
  * */
-static SQLRETURN parse_interval_field(esodbc_rec_st *arec, SQLUINTEGER limit,
+static SQLRETURN parse_interval_field(esodbc_rec_st *rec, SQLUINTEGER limit,
 	wstr_st *wstr, SQLUINTEGER *uiptr)
 {
-	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
+	esodbc_stmt_st *stmt = rec->desc->hdr.stmt;
 	SQLUBIGINT ubint;
 	int digits;
 
@@ -2074,9 +2074,11 @@ static SQLRETURN parse_interval_field(esodbc_rec_st *arec, SQLUINTEGER limit,
 		RET_HDIAGS(stmt, SQL_STATE_22015);
 	}
 	if (limit <= 0) {
-		if (arec->datetime_interval_precision < digits) {
+		// TODO: digits could account for leading 0s (that could wrongly match
+		// the condition)
+		if (rec->datetime_interval_precision < digits) {
 			ERRH(stmt, "interval's set dt_interval precision (%ld) lower than "
-				"data's (%d).", arec->datetime_interval_precision, digits);
+				"data's (%d).", rec->datetime_interval_precision, digits);
 			RET_HDIAGS(stmt, SQL_STATE_22018);
 		}
 	} else if (limit < ubint) {
@@ -2089,15 +2091,15 @@ static SQLRETURN parse_interval_field(esodbc_rec_st *arec, SQLUINTEGER limit,
 	return SQL_SUCCESS;
 }
 
-static SQLRETURN parse_interval_second(esodbc_rec_st *arec, SQLUINTEGER limit,
+static SQLRETURN parse_interval_second(esodbc_rec_st *rec, SQLUINTEGER limit,
 	wstr_st *wstr, SQL_INTERVAL_STRUCT *ivl)
 {
-	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
+	esodbc_stmt_st *stmt = rec->desc->hdr.stmt;
 	size_t digits;
 	SQLRETURN ret;
 	unsigned long long ull;
 
-	ret = parse_interval_field(arec, limit, wstr,
+	ret = parse_interval_field(rec, limit, wstr,
 			&ivl->intval.day_second.second);
 	if (! SQL_SUCCEEDED(ret)) {
 		return ret;
@@ -2120,7 +2122,7 @@ static SQLRETURN parse_interval_second(esodbc_rec_st *arec, SQLUINTEGER limit,
 		return SQL_SUCCESS;
 	}
 	digits = wstr->cnt;
-	ret = parse_interval_field(arec, ULONG_MAX, wstr,
+	ret = parse_interval_field(rec, ULONG_MAX, wstr,
 			&ivl->intval.day_second.fraction);
 	if (! SQL_SUCCEEDED(ret)) {
 		return ret;
@@ -2129,7 +2131,7 @@ static SQLRETURN parse_interval_second(esodbc_rec_st *arec, SQLUINTEGER limit,
 		assert(digits < SHRT_MAX);
 	}
 	ull = ivl->intval.day_second.fraction;
-	ret = adjust_to_precision(arec, &ull, (SQLSMALLINT)digits);
+	ret = adjust_to_precision(rec, &ull, (SQLSMALLINT)digits);
 	assert(ull < ULONG_MAX); /* interval seconds precision limited to 9 */
 	ivl->intval.day_second.fraction = (SQLUINTEGER)ull;
 
@@ -2140,7 +2142,7 @@ static SQLRETURN parse_interval_second(esodbc_rec_st *arec, SQLUINTEGER limit,
 	} else {
 		DBGH(stmt, "single component 'second' has value: %lu.%lu(%hd).",
 			ivl->intval.day_second.second,
-			ivl->intval.day_second.fraction, arec->precision);
+			ivl->intval.day_second.fraction, rec->precision);
 	}
 	return ret;
 }
@@ -2148,10 +2150,10 @@ static SQLRETURN parse_interval_second(esodbc_rec_st *arec, SQLUINTEGER limit,
 /* TODO: use rec's .datetime_interval_precision and .precision through a
  * "general" get_col_xxx() function (: decdigits or similar) */
 /* parses the `<value>` in an interval literal */
-static SQLRETURN parse_interval_literal_value(esodbc_rec_st *arec,
+static SQLRETURN parse_interval_literal_value(esodbc_rec_st *rec,
 	wstr_st *wstr, SQL_INTERVAL_STRUCT *ivl)
 {
-	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
+	esodbc_stmt_st *stmt = rec->desc->hdr.stmt;
 	SQLUINTEGER *uiptr;
 	SQLRETURN ret;
 
@@ -2159,9 +2161,9 @@ static SQLRETURN parse_interval_literal_value(esodbc_rec_st *arec,
 	 * entire string has been parsed, if, `_at_the_end` is set (for single
 	 * field intervals).
 	 * Returns on error. */
-#	define PARSE_IVL_FLD_OR_RET(arec, limit, wstr, uiptr, _at_the_end) \
+#	define PARSE_IVL_FLD_OR_RET(rec, limit, wstr, uiptr, _at_the_end) \
 	do { \
-		ret = parse_interval_field(arec, limit, wstr, uiptr); \
+		ret = parse_interval_field(rec, limit, wstr, uiptr); \
 		if (! SQL_SUCCEEDED(ret)) { \
 			return ret; \
 		} \
@@ -2184,20 +2186,20 @@ static SQLRETURN parse_interval_literal_value(esodbc_rec_st *arec,
 		case SQL_IS_HOUR: uiptr = &ivl->intval.day_second.hour; break;
 		case SQL_IS_MINUTE: uiptr = &ivl->intval.day_second.minute; break;
 		} while (0);
-			PARSE_IVL_FLD_OR_RET(arec, /*limit*/0, wstr, uiptr, /*end?*/TRUE);
+			PARSE_IVL_FLD_OR_RET(rec, /*limit*/0, wstr, uiptr, /*end?*/TRUE);
 			DBGH(stmt, "single component of type %d has value: %lu.",
 					ivl->interval_type, *uiptr);
 			break;
 
 		case SQL_IS_SECOND:
-			ret = parse_interval_second(arec, /*limit*/0, wstr, ivl);
+			ret = parse_interval_second(rec, /*limit*/0, wstr, ivl);
 			if (! SQL_SUCCEEDED(ret)) {
 				return ret;
 			}
 			break;
 
 		case SQL_IS_YEAR_TO_MONTH:
-			PARSE_IVL_FLD_OR_RET(arec, /*limit*/0, wstr,
+			PARSE_IVL_FLD_OR_RET(rec, /*limit*/0, wstr,
 					&ivl->intval.year_month.year, /*end?*/FALSE);
 			wltrim_ws(wstr);
 			if (wstr->str[0] != L'-') {
@@ -2208,17 +2210,17 @@ static SQLRETURN parse_interval_literal_value(esodbc_rec_st *arec,
 				wstr->cnt --;
 			}
 			wltrim_ws(wstr);
-			PARSE_IVL_FLD_OR_RET(arec, /*limit: months*/11, wstr,
+			PARSE_IVL_FLD_OR_RET(rec, /*limit: months*/11, wstr,
 					&ivl->intval.year_month.month, /*end?*/TRUE);
 			break;
 
 		case SQL_IS_DAY_TO_HOUR:
 		case SQL_IS_DAY_TO_MINUTE:
 		case SQL_IS_DAY_TO_SECOND:
-			PARSE_IVL_FLD_OR_RET(arec, /*limit*/0, wstr,
+			PARSE_IVL_FLD_OR_RET(rec, /*limit*/0, wstr,
 					&ivl->intval.day_second.day, /*end?*/FALSE);
 			wltrim_ws(wstr);
-			PARSE_IVL_FLD_OR_RET(arec, /*hour limit*/23, wstr,
+			PARSE_IVL_FLD_OR_RET(rec, /*hour limit*/23, wstr,
 					&ivl->intval.day_second.hour,
 					/*end?*/ivl->interval_type == SQL_IS_DAY_TO_HOUR);
 			if (ivl->interval_type == SQL_IS_DAY_TO_HOUR) {
@@ -2231,7 +2233,7 @@ static SQLRETURN parse_interval_literal_value(esodbc_rec_st *arec,
 				wstr->str ++;
 				wstr->cnt --;
 			}
-			PARSE_IVL_FLD_OR_RET(arec, /*minute limit*/59, wstr,
+			PARSE_IVL_FLD_OR_RET(rec, /*minute limit*/59, wstr,
 					&ivl->intval.day_second.minute,
 					/*end?*/ivl->interval_type == SQL_IS_DAY_TO_MINUTE);
 			if (ivl->interval_type == SQL_IS_DAY_TO_MINUTE) {
@@ -2244,7 +2246,7 @@ static SQLRETURN parse_interval_literal_value(esodbc_rec_st *arec,
 				wstr->str ++;
 				wstr->cnt --;
 			}
-			ret = parse_interval_second(arec, /*second limit*/59, wstr, ivl);
+			ret = parse_interval_second(rec, /*second limit*/59, wstr, ivl);
 			if (! SQL_SUCCEEDED(ret)) {
 				return ret;
 			}
@@ -2252,7 +2254,7 @@ static SQLRETURN parse_interval_literal_value(esodbc_rec_st *arec,
 
 		case SQL_IS_HOUR_TO_MINUTE:
 		case SQL_IS_HOUR_TO_SECOND:
-			PARSE_IVL_FLD_OR_RET(arec, /*limit*/0, wstr,
+			PARSE_IVL_FLD_OR_RET(rec, /*limit*/0, wstr,
 					&ivl->intval.day_second.hour, /*end?*/FALSE);
 			if (wstr->str[0] != L':') {
 				ERRH(stmt, "invalid char as separator: `%c`.", wstr->str[0]);
@@ -2263,7 +2265,7 @@ static SQLRETURN parse_interval_literal_value(esodbc_rec_st *arec,
 			}
 			/*no break*/
 		case SQL_IS_MINUTE_TO_SECOND:
-			PARSE_IVL_FLD_OR_RET(arec,
+			PARSE_IVL_FLD_OR_RET(rec,
 					/*minute limit*/
 					ivl->interval_type == SQL_IS_MINUTE_TO_SECOND ? 0 : 59,
 					wstr, &ivl->intval.day_second.minute,
@@ -2278,7 +2280,7 @@ static SQLRETURN parse_interval_literal_value(esodbc_rec_st *arec,
 				wstr->str ++;
 				wstr->cnt --;
 			}
-			ret = parse_interval_second(arec, /*second limit*/59, wstr, ivl);
+			ret = parse_interval_second(rec, /*second limit*/59, wstr, ivl);
 			if (! SQL_SUCCEEDED(ret)) {
 				return ret;
 			}
@@ -2383,10 +2385,10 @@ static SQLSMALLINT parse_interval_type(wstr_st *wstr)
 
 /* parse `INTERVAL ± '<value>' <qualifier>`, each space being
  * optional and extendable; the entire expression can be enclosed in {} */
-static SQLRETURN parse_interval_literal(esodbc_rec_st *arec, wstr_st *wstr,
+static SQLRETURN parse_interval_literal(esodbc_rec_st *rec, wstr_st *wstr,
 	SQL_INTERVAL_STRUCT *ivl)
 {
-	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
+	esodbc_stmt_st *stmt = rec->desc->hdr.stmt;
 	static const wstr_st INTERVAL = WSTR_INIT("INTERVAL");
 
 	memset(ivl, 0, sizeof(*ivl));
@@ -2443,7 +2445,7 @@ static SQLRETURN parse_interval_literal(esodbc_rec_st *arec, wstr_st *wstr,
 		wstr->cnt -= 2;
 	}
 
-	return parse_interval_literal_value(arec, wstr, ivl);
+	return parse_interval_literal_value(rec, wstr, ivl);
 }
 
 static SQLRETURN sql2c_interval(esodbc_rec_st *arec,
@@ -2452,7 +2454,7 @@ static SQLRETURN sql2c_interval(esodbc_rec_st *arec,
 	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
 	SQLRETURN ret;
 	SQL_INTERVAL_STRUCT ivl;
-	SQLSMALLINT ivl_type2c_type[] = {
+	static const SQLSMALLINT ivl_type2c_type[] = {
 		SQL_C_INTERVAL_YEAR, /* = 1, ++ */
 		SQL_C_INTERVAL_MONTH,
 		SQL_C_INTERVAL_DAY,
@@ -2506,6 +2508,50 @@ err_22018:
 	RET_HDIAGS(stmt, SQL_STATE_22018);
 }
 
+/* print just the 'second[.fraction]' field of an interval */
+static size_t print_interval_sec(esodbc_rec_st *rec, SQL_INTERVAL_STRUCT *ivl,
+	void *dest, BOOL wide)
+{
+	esodbc_stmt_st *stmt = rec->desc->hdr.stmt;
+	wchar_t wfmt[] = L"%.0lf";
+	char cfmt[] = "%.0lf";
+	double dbl;
+	size_t res;
+
+	if (ivl->intval.day_second.fraction && rec->precision) {
+		assert(ESODBC_MAX_SEC_PRECISION < 10);
+		assert(0 <= rec->precision &&
+			rec->precision <= ESODBC_MAX_SEC_PRECISION);
+		dbl = (double)ivl->intval.day_second.fraction;
+		dbl /= pow10(rec->precision);
+		dbl += (double)ivl->intval.day_second.second;
+
+		if (wide) {
+			wfmt[2] = L'0' + rec->precision;
+			/* printf's limits: max lenght of '<second>.<fraction>', accounted
+			 * in buffer's max len estimation. */
+			res = swprintf((wchar_t *)dest, 2 * sizeof("4294967295") + 1,
+					wfmt, dbl);
+		} else {
+			cfmt[2] = '0' + rec->precision;
+			res = snprintf((char *)dest, 2 * sizeof("4294967295") + 1,
+					cfmt, dbl);
+		}
+
+		if (res < 0) {
+			ERRNH(stmt, "failed to print the 'second' component for "
+				"second: %lu, fraction: %lu, precision: %hd.",
+				ivl->intval.day_second.second,
+				ivl->intval.day_second.fraction, rec->precision);
+			return 0;
+		}
+	} else {
+		res = ui64tot(ivl->intval.day_second.second, dest, wide);
+	}
+
+	return res;
+}
+
 /* Convert an interval struct to a SQL literal (value).
  * There's no reference for the sign in:
  * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/interval-data-type-length
@@ -2514,11 +2560,9 @@ static size_t print_interval_sql(esodbc_rec_st *arec, SQL_INTERVAL_STRUCT *ivl,
 	SQLWCHAR *dest)
 {
 	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
-	size_t pos;
+	size_t pos, res;
 	SQLUINTEGER uint;
-	int res;
 	wchar_t fmt[] = L"%.0f";;
-	float flt;
 
 	pos = 0;
 	if (ivl->interval_sign) {
@@ -2575,27 +2619,11 @@ static size_t print_interval_sql(esodbc_rec_st *arec, SQL_INTERVAL_STRUCT *ivl,
 			pos += ui64tot(ivl->intval.day_second.minute, dest + pos, TRUE);
 			dest[pos ++] = L':';
 		case SQL_IS_SECOND:
-			if (ivl->intval.day_second.fraction) {
-				assert(ESODBC_MAX_SEC_PRECISION < 10);
-				assert(0 <= arec->precision &&
-						arec->precision <= ESODBC_MAX_SEC_PRECISION);
-				fmt[2] = L'0' + arec->precision;
-				flt = (float)ivl->intval.day_second.fraction;
-				flt /= pow10(arec->precision);
-				flt += (float)ivl->intval.day_second.second;
-				res = swprintf(dest + pos, 2 * sizeof("4294967295") + 1, fmt,
-						flt);
-				if (res < 0) {
-					ERRNH(stmt, "failed to print the 'second' component for "
-							"second: %lu, fraction: %lu, precision: %hd.",
-							ivl->intval.day_second.second,
-							ivl->intval.day_second.fraction, arec->precision);
-					return 0;
-				}
-				pos += res;
+			res = print_interval_sec(arec, ivl, dest +  pos, /*wide*/TRUE);
+			if (res <= 0) {
+				return 0;
 			} else {
-				pos += ui64tot(ivl->intval.day_second.second, dest + pos,
-						TRUE);
+				pos += res;
 			}
 			break;
 
@@ -2611,6 +2639,95 @@ static size_t print_interval_sql(esodbc_rec_st *arec, SQL_INTERVAL_STRUCT *ivl,
 	/*INDENT-ON*/
 
 	return pos;
+}
+
+/* Convert an interval struct to a ISO8601 value. */
+static size_t print_interval_iso8601(esodbc_rec_st *rec,
+	SQL_INTERVAL_STRUCT *ivl, SQLCHAR *dest)
+{
+	esodbc_stmt_st *stmt = rec->desc->hdr.stmt;
+	size_t res, pos;
+	BOOL t_added;
+
+	/* Prints one interval field, if non-zero.
+	 * Uses local vars: ivl, dest, pos, t_added */
+#	define PRINT_FIELD(_ivl_field, _field_qualif, _is_time) \
+	do { \
+		if (ivl->intval._ivl_field) { \
+			if (_is_time && !t_added) { \
+				dest[pos ++] = 'T'; \
+				t_added = TRUE; \
+			} \
+			if (ivl->interval_sign) { \
+				dest[pos ++] = '-'; \
+			} \
+			pos += ui64tot(ivl->intval._ivl_field, dest + pos, \
+					/*wide*/FALSE); \
+			dest[pos ++] = _field_qualif; \
+		} \
+	} while (0)
+
+	pos = 0;
+	dest[pos ++] = 'P';
+	switch (ivl->interval_type) {
+		case SQL_IS_YEAR:
+		case SQL_IS_MONTH:
+		case SQL_IS_YEAR_TO_MONTH:
+			PRINT_FIELD(year_month.year, 'Y', /* is time comp. */FALSE);
+			PRINT_FIELD(year_month.month, 'M', /* is time comp. */FALSE);
+			if (pos <= /*leading 'P'*/1) { /* 0 interval */
+				dest[pos ++] = '0';
+				dest[pos ++] = 'M';
+			}
+			break;
+
+		case SQL_IS_DAY:
+		case SQL_IS_HOUR:
+		case SQL_IS_MINUTE:
+		case SQL_IS_SECOND:
+		case SQL_IS_DAY_TO_HOUR:
+		case SQL_IS_DAY_TO_MINUTE:
+		case SQL_IS_DAY_TO_SECOND:
+		case SQL_IS_HOUR_TO_MINUTE:
+		case SQL_IS_HOUR_TO_SECOND:
+		case SQL_IS_MINUTE_TO_SECOND:
+			// TODO: compoound year to hour, ES/SQL-style?
+			// (see parse_interval_iso8601 note)
+			PRINT_FIELD(day_second.day, 'D', /* is time comp. */FALSE);
+			t_added = FALSE;
+			PRINT_FIELD(day_second.hour, 'H', /*is time*/TRUE);
+			PRINT_FIELD(day_second.minute, 'M', /*is time*/TRUE);
+			if (ivl->intval.day_second.second |
+				ivl->intval.day_second.fraction) {
+				if (! t_added) {
+					dest[pos ++] = 'T';
+				}
+				if (ivl->interval_sign) {
+					dest[pos ++] = '-';
+				}
+				res = print_interval_sec(rec, ivl, dest + pos, /*wide*/FALSE);
+				if (res <= 0) {
+					return 0;
+				} else {
+					pos += res;
+				}
+				dest[pos ++] = 'S';
+			}
+			if (pos <= /*leading 'P'*/1) { /* 0 interval */
+				dest[pos ++] = 'T';
+				dest[pos ++] = '0';
+				dest[pos ++] = 'S';
+			}
+			break;
+
+		default:
+			BUGH(stmt, "unexpected interval type %d.", ivl->interval_type);
+			return 0;
+	}
+	DBGH(stmt, "interval of type %d printed as [%zu] `" LCPDL "`.",
+		ivl->interval_type, pos, pos, dest);
+	return pos;
+#	undef PRINT_FIELD
 }
 
 /* translate the string representation of an interval value from the ISO8601
@@ -2636,7 +2753,7 @@ static SQLRETURN interval_iso8601_to_sql(esodbc_rec_st *arec,
 	if (cnt <= 0) {
 		ERRH(stmt, "sql interval printing failed for ISO8601`" LWPDL "`.",
 			chars_0 - 1, wstr);
-		RET_HDIAGS(stmt, SQL_STATE_HY000);
+		RET_HDIAG(stmt, SQL_STATE_HY000, "internal printing failed", 0);
 	}
 	DBGH(arec->desc->hdr.stmt, "convered `" LWPDL "` to `" LWPDL "`.",
 		chars_0 - 1, wstr, cnt, lit);
@@ -2665,7 +2782,7 @@ SQLRETURN sql2c_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	wstr_st wval;
 	double dbl;
 	SQLWCHAR *endp;
-	wchar_t buff[INTERVAL_LIT_MAX_LEN + /*0*/1];
+	wchar_t buff[INTERVAL_VAL_MAX_LEN + /*0*/1];
 	SQLRETURN ret;
 
 	/* The interval strings are received from ES in ISO8601, not SQL format:
@@ -2922,50 +3039,6 @@ SQLRETURN convertability_check(esodbc_stmt_st *stmt, SQLINTEGER idx,
 	DBGH(stmt, "convertibility check: OK.");
 	return SQL_SUCCESS;
 }
-
-#if 0
-/* check if data types in returned columns are compabile with buffer types
- * bound for those columns */
-SQLRETURN sql2c_convertible(esodbc_stmt_st *stmt)
-{
-	SQLSMALLINT i, min, ret;
-	esodbc_desc_st *ard, *ird;
-	esodbc_rec_st *arec, *irec;
-
-	assert(stmt->hdr.dbc->es_types);
-	assert(STMT_HAS_RESULTSET(stmt));
-
-	ard = stmt->ard;
-	ird = stmt->ird;
-
-	min = ard->count < ird->count ? ard->count : ird->count;
-	for (i = 0; i < min; i ++) {
-		arec = &ard->recs[i];
-		if (! REC_IS_BOUND(arec)) {
-			/* skip not bound columns */
-			continue;
-		}
-		irec = &ird->recs[i];
-
-		if (! ESODBC_TYPES_COMPATIBLE(irec->concise_type,arec->concise_type)) {
-			ERRH(stmt, "type conversion not possible on column %d: IRD: %hd, "
-				"ARD: %hd.", i + 1, irec->concise_type, arec->concise_type);
-			stmt->sql2c_conversion = CONVERSION_VIOLATION;
-			RET_HDIAGS(stmt, SQL_STATE_07006);
-		}
-		if (! conv_implemented(irec->concise_type, arec->concise_type)) {
-			ERRH(stmt, "conversion not supported on column %d types: IRD: %hd,"
-				" ARD: %hd.", i + 1, irec->concise_type, arec->concise_type);
-			stmt->sql2c_conversion = CONVERSION_UNSUPPORTED;
-			RET_HDIAGS(stmt, SQL_STATE_HYC00);
-		}
-	}
-
-	stmt->sql2c_conversion = CONVERSION_SUPPORTED;
-	DBGH(stmt, "convertibility check: OK.");
-	return SQL_SUCCESS;
-}
-#endif
 
 /* Converts a C/W-string to a u/llong or double (dest_type?); the xstr->wide
  * needs to be set;
@@ -3676,8 +3749,7 @@ SQLRETURN c2sql_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			break;
 
 		default:
-			BUGH(stmt, "can't convert SQL C type %hd to timestamp.",
-				get_rec_c_type(arec, irec));
+			BUGH(stmt, "can't convert SQL C type %hd to timestamp.", ctype);
 			RET_HDIAG(stmt, SQL_STATE_HY000, "bug converting parameter", 0);
 	}
 
@@ -3735,6 +3807,228 @@ SQLRETURN c2sql_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	return SQL_SUCCESS;
 }
 
+/* parses an interval literal string from app's char/wchar_t buffer */
+SQLRETURN c2sql_str2interval(esodbc_rec_st *arec, esodbc_rec_st *irec,
+	SQLSMALLINT ctype, void *data_ptr, SQL_INTERVAL_STRUCT *ivl)
+{
+	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
+	wstr_st wstr;
+	SQLWCHAR wbuff[128], *wptr;
+	SQLLEN octet_length;
+	int ret;
+
+	if (ctype == SQL_C_CHAR) {
+		octet_length = arec->octet_length;
+		if (octet_length == SQL_NTSL) {
+			octet_length = strlen((SQLCHAR *)data_ptr);
+		}
+		assert (0 <= octet_length); // checked on param bind
+		if (sizeof(wbuff)/sizeof(wbuff[0]) < (size_t)octet_length) {
+			INFOH(stmt, "translation buffer too small (%zu < %lld), "
+				"allocation needed.", sizeof(wbuff)/sizeof(wbuff[0]),
+				(size_t)octet_length);
+			wptr = malloc(octet_length * sizeof(SQLWCHAR));
+			if (! wptr) {
+				ERRNH(stmt, "OOM for %lld x SQLWCHAR", octet_length);
+				RET_HDIAGS(stmt, SQL_STATE_HY001);
+			}
+		} else {
+			wptr = wbuff;
+		}
+		ret = ascii_c2w((SQLCHAR *)data_ptr, wptr, octet_length);
+		if (ret <= 0) {
+			ERRH(stmt, "SQLCHAR-to-SQLWCHAR conversion failed for "
+				"[%lld] `" LCPDL "`.", octet_length, octet_length,
+				(char *)data_ptr);
+			if (wptr != wbuff) {
+				free(wptr);
+				wptr = NULL;
+			}
+			/* should only happen on too short input string */
+			RET_HDIAGS(stmt, SQL_STATE_22018);
+		}
+		wstr.str = wptr;
+		wstr.cnt = octet_length;
+	} else {
+		assert(ctype == SQL_C_WCHAR);
+
+		wstr.str = (SQLWCHAR *)data_ptr;
+		octet_length = arec->octet_length;
+		if (octet_length == SQL_NTSL) {
+			wstr.cnt = wcslen(wstr.str);
+		} else {
+			assert (0 <= octet_length); // checked on param bind
+			wstr.cnt = (size_t)octet_length;
+		}
+		wptr = NULL;
+	}
+
+	/* trim trailing NTS, if any */
+	if (wstr.str[wstr.cnt - 1] == L'\0') {
+		wstr.cnt --;
+	}
+	/* TODO: spec is not clear if we'd get here a literal, or a value (which
+	 * would make sense, given that the interval type is passed as SQL type;
+	 * however, inter-interval types conversions are also not clearly spec'd:
+	 * we could get a literal of one type and different SQL type in bound
+	 * param). --> parse_interval_literal_value()??  */
+	/* BindParam sets IPD's fields -> use irec */
+	ret = parse_interval_literal(irec, &wstr, ivl);
+	if (wptr && wptr != wbuff) {
+		free(wptr);
+		wptr = NULL;
+	}
+	if (! SQL_SUCCEEDED(ret)) {
+		return ret;
+	}
+
+	return SQL_SUCCESS;
+}
+
+SQLRETURN c2sql_interval(esodbc_rec_st *arec, esodbc_rec_st *irec,
+	SQLULEN pos, char *dest, size_t *len)
+{
+	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
+	void *data_ptr;
+	SQLSMALLINT ctype;
+	SQLUBIGINT ubint;
+	SQLBIGINT bint;
+	SQLUINTEGER uint;
+	size_t res;
+	SQL_INTERVAL_STRUCT ivl = {0};
+	SQLRETURN ret;
+
+	/* Assign the temporary `ubint` the value passed in the client app buffer,
+	 * setting interval's sign, if negative.
+	 * Uses local vars: bint, ubint, ivl */
+#	define ASSIGN_SIGNED(_sqltype) \
+	do { \
+		bint = (SQLBIGINT)*(_sqltype *)data_ptr; \
+		if (bint < 0) { \
+			ivl.interval_sign = SQL_TRUE; \
+			ubint = -bint; \
+		} else { \
+			ubint = bint; \
+		} \
+	} while (0)
+
+	if (! dest) {
+		/* maximum possible space it can take */
+		*len = INTERVAL_VAL_MAX_LEN;
+		return SQL_SUCCESS;
+	} else {
+		*dest = '"';
+		*len = 1;
+	}
+
+	/* pointer to app's buffer */
+	data_ptr = deferred_address(SQL_DESC_DATA_PTR, pos, arec);
+
+	assert(SQL_FALSE == 0); /* == {0}'d above */
+	/*INDENT-OFF*/
+	switch ((ctype = get_rec_c_type(arec, irec))) {
+		case SQL_C_CHAR:
+		case SQL_C_WCHAR:
+			ret = c2sql_str2interval(arec, irec, ctype, data_ptr, &ivl);
+			if (! SQL_SUCCEEDED(ret)) {
+				return ret;
+			}
+			break;
+
+		/* numeric exact */
+		do {
+		case SQL_C_BIT: ubint = *(SQLCHAR *)data_ptr ? 1 : 0; break;
+		case SQL_C_SHORT:
+		case SQL_C_SSHORT: ASSIGN_SIGNED(SQLSMALLINT); break;
+		case SQL_C_USHORT: ubint = (SQLUBIGINT)*(SQLUSMALLINT*)data_ptr; break;
+		case SQL_C_LONG:
+		case SQL_C_SLONG: ASSIGN_SIGNED(SQLINTEGER); break;
+		case SQL_C_ULONG: ubint = (SQLUBIGINT)*(SQLUINTEGER *)data_ptr; break;
+		case SQL_C_TINYINT:
+		case SQL_C_STINYINT: ASSIGN_SIGNED(SQLSCHAR); break;
+		case SQL_C_UTINYINT: ubint = (SQLUBIGINT)*(SQLCHAR *)data_ptr; break;
+		case SQL_C_SBIGINT: ASSIGN_SIGNED(SQLBIGINT); break;
+		case SQL_C_UBIGINT: ubint = *(SQLUBIGINT *)data_ptr; break;
+		} while (0);
+			if (/*SQLUINTEGER*/ULONG_MAX < ubint) {
+				ERRH(stmt, "value too large for interval field: %llu.", ubint);
+				RET_HDIAGS(stmt, SQL_STATE_22015);
+			} else {
+				uint = (SQLUINTEGER)ubint;
+			}
+			assert(SQL_CODE_YEAR == SQL_IS_YEAR);
+			ivl.interval_type = irec->es_type->data_type -
+				(SQL_INTERVAL_YEAR - SQL_CODE_YEAR);
+			DBGH(stmt, "converting integer value %lu to interval.type: %d.",
+					uint, ivl.interval_type);
+			// TODO: precision checks? (ES/SQL takes already a u32/SQLUINT.)
+			switch (irec->es_type->data_type) {
+				case SQL_INTERVAL_YEAR:
+					ivl.intval.year_month.year = uint;
+					break;
+				case SQL_INTERVAL_MONTH:
+					ivl.intval.year_month.month = uint;
+					break;
+				case SQL_INTERVAL_DAY:
+					ivl.intval.day_second.day = uint;
+					break;
+				case SQL_INTERVAL_HOUR:
+					ivl.intval.day_second.hour = uint;
+					break;
+				case SQL_INTERVAL_MINUTE:
+					ivl.intval.day_second.minute = uint;
+					break;
+				case SQL_INTERVAL_SECOND:
+					ivl.intval.day_second.second = uint;
+					break;
+				default: // shold never get here
+					BUGH(stmt, "conversion not supported.");
+					RET_HDIAGS(stmt, SQL_STATE_HY000);
+			}
+			break;
+
+		case SQL_C_INTERVAL_YEAR:
+		case SQL_C_INTERVAL_MONTH:
+		case SQL_C_INTERVAL_DAY:
+		case SQL_C_INTERVAL_HOUR:
+		case SQL_C_INTERVAL_MINUTE:
+		case SQL_C_INTERVAL_SECOND:
+		case SQL_C_INTERVAL_YEAR_TO_MONTH:
+		case SQL_C_INTERVAL_DAY_TO_HOUR:
+		case SQL_C_INTERVAL_DAY_TO_MINUTE:
+		case SQL_C_INTERVAL_DAY_TO_SECOND:
+		case SQL_C_INTERVAL_HOUR_TO_MINUTE:
+		case SQL_C_INTERVAL_HOUR_TO_SECOND:
+		case SQL_C_INTERVAL_MINUTE_TO_SECOND:
+			// by data compatibility
+			assert (irec->es_type->data_type == ctype);
+			ivl = *(SQL_INTERVAL_STRUCT *)data_ptr;
+			break;
+
+		case SQL_C_NUMERIC:
+		case SQL_C_BINARY:
+			BUGH(stmt, "conversion not yet supported.");
+			RET_HDIAGS(stmt, SQL_STATE_HYC00);
+			break;
+
+		default:
+			BUGH(stmt, "can't convert SQL C type %hd to interval.", ctype);
+			RET_HDIAG(stmt, SQL_STATE_HY000, "bug converting parameter", 0);
+	}
+	/*INDENT-ON*/
+
+	res = print_interval_iso8601(irec, &ivl, dest + *len);
+	if (res <= 0) {
+		ERRH(stmt, "printing interval of type %hd failed.", ivl.interval_type);
+		RET_HDIAG(stmt, SQL_STATE_HY000, "internal printing failed", 0);
+	} else {
+		*len += res;
+	}
+
+	dest[(*len) ++] = '"';
+	return SQL_SUCCESS;
+#	undef ASSIGN_SIGNED
+}
 
 static SQLRETURN c2sql_cstr2qstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	SQLULEN pos, char *dest, size_t *len)
