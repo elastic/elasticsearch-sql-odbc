@@ -137,8 +137,6 @@
 /* driver version ex. 7.0.0(b0a34b4,u,d) */
 #define ESODBC_DRIVER_VER	STR(DRV_VERSION) \
 	"(" STR(DRV_SRC_VER) "," STR(DRV_ENCODING) "," STR(DRV_BUILD_TYPE) ")"
-/* TODO: POST / (together with cluster "sniffing") */
-#define ESODBC_ELASTICSEARCH_VER	"7.0.0"
 #define ESODBC_ELASTICSEARCH_NAME	"Elasticsearch"
 
 /*
@@ -274,16 +272,17 @@
 /*
  * Timedate functions support:
  * - supported: DAYNAME, DAYOFMONTH, DAYOFWEEK, DAYOFYEAR, EXTRACT, HOUR,
- *   MINUTE, MONTH, MONTHNAME, QUARTER, SECOND, WEEK, YEAR;
- * - not supported: CURRENT_DATE, CURRENT_TIME, CURRENT_TIMESTAMP, CURDATE,
- *   CURTIME, NOW, TIMESTAMPADD, TIMESTAMPDIFF.
+ *   MINUTE, MONTH, MONTHNAME, QUARTER, SECOND, WEEK, YEAR, NOW,
+ *   CURRENT_TIMESTAMP;
+ * - not supported: CURRENT_DATE, CURRENT_TIME, CURDATE,
+ *   CURTIME, TIMESTAMPADD, TIMESTAMPDIFF.
  */
 #define ESODBC_TIMEDATE_FUNCTIONS				(0LU | \
 	SQL_FN_TD_DAYNAME | SQL_FN_TD_DAYOFMONTH | SQL_FN_TD_DAYOFWEEK | \
 	SQL_FN_TD_DAYOFYEAR | SQL_FN_TD_EXTRACT | SQL_FN_TD_HOUR | \
 	SQL_FN_TD_MINUTE | SQL_FN_TD_MONTH | SQL_FN_TD_MONTHNAME | \
 	SQL_FN_TD_QUARTER | SQL_FN_TD_SECOND | SQL_FN_TD_WEEK | \
-	SQL_FN_TD_YEAR)
+	SQL_FN_TD_YEAR | SQL_FN_TD_NOW | SQL_FN_TD_CURRENT_TIMESTAMP )
 
 /*
  * TIMESTAMPDIFF timestamp intervals:
@@ -301,10 +300,11 @@
 #define ESODBC_TIMEDATE_ADD_INTERVALS			0LU
 /*
  * System functions:
- * - supported: none.
- * - not supported: DATABASE, IFNULL, USER
+ * - supported: DATABASE, IFNULL, USER.
+ * - not supported: none DATABASE, IFNULL, USER
  */
-#define ESODBC_SYSTEM_FUNCTIONS					0LU
+#define ESODBC_SYSTEM_FUNCTIONS					(0LU | \
+		SQL_FN_SYS_USERNAME | SQL_FN_SYS_DBNAME | SQL_FN_SYS_IFNULL)
 /*
  * Convert functions support:
  * - supported: CAST.
@@ -354,10 +354,11 @@
 #define ESODBC_DATETIME_LITERALS				SQL_DL_SQL92_TIMESTAMP
 /*
  * SQL92 value functions:
- * - supported: none.
- * - not supported: CASE, CAST, COALESCE, NULLIF
+ * - supported: COALESCE, NULLIF
+ * - not supported: CASE, CAST.
  */
-#define ODBC_SQL92_VALUE_EXPRESSIONS			0LU
+#define ODBC_SQL92_VALUE_EXPRESSIONS			(0LU | \
+		SQL_SVE_COALESCE | SQL_SVE_NULLIF)
 
 /*
  * ES specific data types
