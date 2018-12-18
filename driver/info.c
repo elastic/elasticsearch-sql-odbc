@@ -303,13 +303,10 @@ static SQLRETURN getinfo_dbms_product(
 			return write_wstr(dbc, InfoValue,
 					&MK_WSTR(ESODBC_ELASTICSEARCH_NAME), BufferLength,
 					StringLengthPtr);
-		// FIXME: get version from server
 		case SQL_DBMS_VER:
-			DBGH(dbc, "requested: DBMS version (`%s`).",
-				ESODBC_ELASTICSEARCH_VER);
-			return write_wstr(dbc, InfoValue,
-					&MK_WSTR(ESODBC_ELASTICSEARCH_VER), BufferLength,
-					StringLengthPtr);
+			DBGH(dbc, "requested: DBMS version (`%s`).", STR(DRV_VERSION));
+			return write_wstr(dbc, InfoValue, &MK_WSTR(STR(DRV_VERSION)),
+					BufferLength, StringLengthPtr);
 	}
 	*handled = FALSE;
 	return SQL_ERROR;

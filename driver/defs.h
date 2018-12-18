@@ -137,8 +137,6 @@
 /* driver version ex. 7.0.0(b0a34b4,u,d) */
 #define ESODBC_DRIVER_VER	STR(DRV_VERSION) \
 	"(" STR(DRV_SRC_VER) "," STR(DRV_ENCODING) "," STR(DRV_BUILD_TYPE) ")"
-/* TODO: POST / (together with cluster "sniffing") */
-#define ESODBC_ELASTICSEARCH_VER	"7.0.0"
 #define ESODBC_ELASTICSEARCH_NAME	"Elasticsearch"
 
 /*
