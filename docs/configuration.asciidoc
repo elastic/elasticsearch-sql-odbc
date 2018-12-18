@@ -15,7 +15,7 @@ DSN (_data source name_) is a generic name given to the set of parameters an ODB
 
 We will refer to these parameters as _connection parameters_ or _DSN_ (despite some of these parameters configuring some other aspects of a driver's functions; e.g. logging, buffer sizes...).
 
-Using a DSN is the most widely used, simplest and safest way of performing the driver configuration. Constructing a connection string, on the other hand, is the most simplistic way and consequently the least common method.
+Using a DSN is the most widely used, simplest and safest way of performing the driver configuration. Constructing a connection string, on the other hand, is the most crude way and consequently the least common method.
 
 We will focus on DSN usage only.
 
