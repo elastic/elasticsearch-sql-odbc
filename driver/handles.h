@@ -130,7 +130,8 @@ typedef struct struct_dbc {
 
 	wstr_st dsn; /* data source name SQLGetInfo(SQL_DATA_SOURCE_NAME) */
 	wstr_st server; /* ~ name; requested with SQLGetInfo(SQL_SERVER_NAME) */
-	cstr_st url;
+	cstr_st url; /* SQL URL (posts) */
+	cstr_st root_url; /* root URL (gets) */
 	enum {
 		ESODBC_SEC_NONE = 0,
 		ESODBC_SEC_USE_SSL,
