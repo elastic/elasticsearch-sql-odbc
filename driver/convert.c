@@ -1790,13 +1790,13 @@ static SQLRETURN parse_iso8601_number(esodbc_rec_st *arec, wstr_st *wstr,
 	digits = str2bigint(&nr, /*w*/TRUE, &bint, /*strict*/FALSE);
 	if (digits < 0) {
 		return SQL_ERROR;
-	} else if (wstr->cnt <= digits) {
+	} else if (wstr->cnt <= (size_t)digits) {
 		return SQL_ERROR; /* a number can't end the ISO value */
 	} else if (wstr->str[digits] == L'.') { /* does it have a fraction? */
 		if (digits == 0) {
 			bint = 0; /* value is `.<fraction>` */
 		}
-		if (wstr->cnt <= digits + 1) {
+		if (wstr->cnt <= (size_t)digits + 1) {
 			return SQL_ERROR; /* ISO value ends with `.` */
 		}
 		nr.str = wstr->str + digits + /*`.`*/1;
