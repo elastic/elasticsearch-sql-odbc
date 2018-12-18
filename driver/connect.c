@@ -1169,7 +1169,7 @@ static SQLRETURN check_server_version(esodbc_dbc_st *dbc)
 	static const wchar_t err_msg_fmt[] = L"Version mismatch between server ("
 		WPFWP_LDESC ") and driver (" WPFWP_LDESC "). Please use a driver whose"
 		" version matches that of your server.";
-	/* 32: max lenght of the version strings for which the explicit message
+	/* 32: max length of the version strings for which the explicit message
 	 * above is provided. */
 	SQLWCHAR wbuff[sizeof(err_msg_fmt)/sizeof(err_msg_fmt[0]) + 2*32];
 	int n;

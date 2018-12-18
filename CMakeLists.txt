@@ -93,6 +93,7 @@ if (${WIN32})
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /W3")
 	# TODO: review@alpha
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /D_CRT_SECURE_NO_WARNINGS")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /D_CRT_NONSTDC_NO_DEPRECATE")
 	# don't complain about non-constant aggregate initializer (C4204)
 	# set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /Ze")
 	# parallel building

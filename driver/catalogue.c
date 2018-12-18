@@ -48,7 +48,7 @@ static SQLRETURN fake_answer(SQLHSTMT hstmt, const char *src, size_t cnt)
 {
 	char *dup;
 
-	if (! (dup = _strdup(src))) {
+	if (! (dup = strdup(src))) {
 		ERRNH(hstmt, "OOM with %zu.", cnt);
 		RET_HDIAGS(hstmt, SQL_STATE_HY001);
 	}
