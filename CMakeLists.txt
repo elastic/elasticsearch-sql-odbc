@@ -115,7 +115,8 @@ if (${WIN32})
 	#
 	# set the version identifiers
 	#
-	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_VERSION=${DRV_VERSION}")
+	set(CMAKE_C_FLAGS
+		"${CMAKE_C_FLAGS} /DDRV_VERSION=${DRV_VERSION}${VERSION_QUALIFIER}")
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_SRC_VER=${DRV_SRC_VER}")
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_ENCODING=${ENCODING}")
 	# ...including the build type indicator
