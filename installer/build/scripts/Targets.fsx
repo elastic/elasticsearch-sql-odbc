@@ -21,7 +21,9 @@ let versionToBuild = Commandline.parse()
 
 Target "Clean" (fun _ ->
     PatchAssemblyInfos (Products.Products.EmptyVersion)
-    CleanDirs [MsiBuildDir; OutDir;]
+    CleanDirs [MsiBuildDir]
+    for file in System.IO.Directory.EnumerateFiles(OutDir, "*.msi") do
+        System.IO.File.Delete(file)
 )
 
 Target "BuildInstaller" (fun () ->
