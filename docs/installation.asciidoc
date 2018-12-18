@@ -5,7 +5,7 @@
 
 experimental[]
 
-The {product} can be installed on Windows using the MSI package. The installation process is simple and is composed of standard MSI wizard steps.
+The {product} can be installed on Microsoft Windows using an MSI package. The installation process is simple and is composed of standard MSI wizard steps.
 
 [float]
 [[prerequisites]]
@@ -34,9 +34,9 @@ https://www.elastic.co/downloads/odbc-client
 There are two versions of the installer available:
 
 - *32 bit driver (x86)* for use with the Microsoft Office 2016 suite of applications; notably Microsoft Excel and Microsoft Access and other 32 bit based programs.
-- *64 bit driver (x64)* for use with all other applications (recommended).
+- *64 bit driver (x64)* recommended for use with all other applications.
 
-Users ought to consider downloading and installing both the 32 and 64 bit drivers for maximum compatibility across installed applications.
+Users should consider downloading and installing both the 32 and 64 bit drivers for maximum compatibility across applications installed on their system.
 
 [float]
 [[installation-gui]]
@@ -68,13 +68,13 @@ Assuming the installation takes place without error you should see progress scre
 
 image::images/installer_installing.png[Installer Installing]
 
-On the finish screen you can launch the ODBC Data Source Administration screen by checking the dialog checkbox. This will automatically launch the configuration screen on close (either 32 bit or 64 bit) where you can configure System DSNs and User DSNs.
+On the finish screen you can launch the ODBC Data Source Administration screen by checking the dialog checkbox. This will automatically launch the configuration screen on close (either 32 bit or 64 bit) where you can configure a DSN.
 
 image::images/installer_finish.png[Installer Complete]
 
 As with any MSI installation package, a log file for the installation process can be found within the `%TEMP%` directory, with a randomly generated name adhering to the format `MSI<random>.LOG`.
 
-If you encounter an error during installation we would encourage you to open an issue https://github.com/elastic/elasticsearch-sql-odbc/issues, attach your installation log file and provide details so we can investigate.
+If you encounter an error during installation we would encourage you to open an issue https://github.com/elastic/elasticsearch-sql-odbc/issues, attach your installation log file and provide additional details so we can investigate.
 
 [float]
 [[installation-cmd]]
