@@ -9,6 +9,12 @@
 
 #include <string.h>
 
+#ifdef _WIN64
+#	define CLIENT_ID	"\"client_id\": \"odbc64\""
+#else /* _WIN64 */
+#	define CLIENT_ID	"\"client_id\": \"odbc32\""
+#endif /* _WIN64 */
+
 
 namespace test {
 
@@ -32,7 +38,7 @@ TEST_F(ConvertC2SQL_Interval, Bit2Interval_year)
 	cstr_st expect = CSTR_INIT("{\"query\": \"Bit2Interval_year\", "
 		"\"params\": [{\"type\": \"INTERVAL_YEAR\", "
 		"\"value\": \"P1Y\"}], "
-		"\"mode\": \"ODBC\"}");
+		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -54,7 +60,7 @@ TEST_F(ConvertC2SQL_Interval, Short2Interval_month)
 	cstr_st expect = CSTR_INIT("{\"query\": \"Short2Interval_month\", "
 		"\"params\": [{\"type\": \"INTERVAL_MONTH\", "
 		"\"value\": \"P-2M\"}], "
-		"\"mode\": \"ODBC\"}");
+		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -76,7 +82,7 @@ TEST_F(ConvertC2SQL_Interval, Short2Interval_month_all_0)
 	cstr_st expect = CSTR_INIT("{\"query\": \"Short2Interval_month_all_0\", "
 		"\"params\": [{\"type\": \"INTERVAL_MONTH\", "
 		"\"value\": \"P0M\"}], "
-		"\"mode\": \"ODBC\"}");
+		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -98,7 +104,7 @@ TEST_F(ConvertC2SQL_Interval, Integer2Interval_day)
 	cstr_st expect = CSTR_INIT("{\"query\": \"Integer2Interval_day\", "
 		"\"params\": [{\"type\": \"INTERVAL_DAY\", "
 		"\"value\": \"P-3D\"}], "
-		"\"mode\": \"ODBC\"}");
+		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -120,7 +126,7 @@ TEST_F(ConvertC2SQL_Interval, UBigInt2Interval_minute)
 	cstr_st expect = CSTR_INIT("{\"query\": \"UBigInt2Interval_minute\", "
 		"\"params\": [{\"type\": \"INTERVAL_MINUTE\", "
 		"\"value\": \"PT12345678M\"}], "
-		"\"mode\": \"ODBC\"}");
+		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -142,7 +148,7 @@ TEST_F(ConvertC2SQL_Interval, SBigInt2Interval_second)
 	cstr_st expect = CSTR_INIT("{\"query\": \"SBigInt2Interval_second\", "
 		"\"params\": [{\"type\": \"INTERVAL_SECOND\", "
 		"\"value\": \"PT-123456789S\"}], "
-		"\"mode\": \"ODBC\"}");
+		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -165,7 +171,7 @@ TEST_F(ConvertC2SQL_Interval, SBigInt2Interval_second_all_0)
 		"{\"query\": \"SBigInt2Interval_second_all_0\", "
 		"\"params\": [{\"type\": \"INTERVAL_SECOND\", "
 		"\"value\": \"PT0S\"}], "
-		"\"mode\": \"ODBC\"}");
+		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -188,7 +194,7 @@ TEST_F(ConvertC2SQL_Interval, WChar2Interval_day_to_second)
 		"{\"query\": \"WChar2Interval_day_to_second\", "
 		"\"params\": [{\"type\": \"INTERVAL_DAY_TO_SECOND\", "
 		"\"value\": \"P-2DT-3H-4M-5.678S\"}], "
-		"\"mode\": \"ODBC\"}");
+		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -211,7 +217,7 @@ TEST_F(ConvertC2SQL_Interval, Char2Interval_hour_to_second)
 		"{\"query\": \"Char2Interval_hour_to_second\", "
 		"\"params\": [{\"type\": \"INTERVAL_HOUR_TO_SECOND\", "
 		"\"value\": \"PT3H4M5.678S\"}], "
-		"\"mode\": \"ODBC\"}");
+		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -238,7 +244,7 @@ TEST_F(ConvertC2SQL_Interval, Char2Interval_hour_to_second_force_alloc)
 		"{\"query\": \"Char2Interval_hour_to_second_force_alloc\", "
 		"\"params\": [{\"type\": \"INTERVAL_HOUR_TO_SECOND\", "
 		"\"value\": \"PT3H4M5.678S\"}], "
-		"\"mode\": \"ODBC\"}");
+		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
 }
@@ -266,7 +272,7 @@ TEST_F(ConvertC2SQL_Interval, Interval2Interval_year_to_month)
 		"{\"query\": \"Interval2Interval_year_to_month\", "
 		"\"params\": [{\"type\": \"INTERVAL_YEAR_TO_MONTH\", "
 		"\"value\": \"P-12Y-11M\"}], "
-		"\"mode\": \"ODBC\"}");
+		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
 }

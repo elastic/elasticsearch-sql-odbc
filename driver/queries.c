@@ -477,7 +477,8 @@ SQLRETURN TEST_API attach_error(SQLHANDLE hnd, cstr_st *body, int code)
  */
 SQLRETURN TEST_API attach_sql(esodbc_stmt_st *stmt,
 	const SQLWCHAR *sql, /* SQL text statement */
-	size_t sqlcnt /* count of chars of 'sql' */)
+	size_t sqlcnt, /* count of chars of 'sql' */
+	BOOL is_catalog)
 {
 	wstr_st sqlw = (wstr_st) {
 		(SQLWCHAR *)sql, sqlcnt
@@ -495,6 +496,8 @@ SQLRETURN TEST_API attach_sql(esodbc_stmt_st *stmt,
 	/* if the app correctly SQL_CLOSE'es the statement, this would not be
 	 * needed. but just in case: re-init counter of total # of rows */
 	STMT_TFROWS_RESET(stmt);
+
+	stmt->is_catalog = is_catalog;
 
 	return SQL_SUCCESS;
 }
@@ -1314,7 +1317,7 @@ SQLRETURN EsSQLPrepareW
 	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
 	assert(SQL_SUCCEEDED(ret)); /* can't return error */
 
-	return attach_sql(stmt, szSqlStr, cchSqlStr);
+	return attach_sql(stmt, szSqlStr, cchSqlStr, /*is_catalog*/FALSE);
 }
 
 
@@ -1839,6 +1842,11 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 #	define JSON_KEY_PAGE_TOUT	", \"page_timeout\": " /* n-th key */
 #	define JSON_KEY_TIME_ZONE	", \"time_zone\": " /* n-th key */
 #	define JSON_KEY_VAL_MODE	", \"mode\": \"ODBC\"" /* n-th key */
+#	ifdef _WIN64
+#		define JSON_KEY_CLT_ID		", \"client_id\": \"odbc64\"" /* n-th k. */
+#	else /* _WIN64 */
+#		define JSON_KEY_CLT_ID		", \"client_id\": \"odbc32\"" /* n-th k. */
+#	endif /* _WIN64 */
 
 	SQLRETURN ret = SQL_SUCCESS;
 	size_t bodylen, pos, u8len, len;
@@ -1896,7 +1904,10 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 		}
 	}
 	/* TODO: request_/page_timeout, time_zone */
-	bodylen += sizeof(JSON_KEY_VAL_MODE) - 1; /* "mode": */
+	if (stmt->is_catalog) {
+		bodylen += sizeof(JSON_KEY_VAL_MODE) - 1; /* "mode": */
+	}
+	bodylen += sizeof(JSON_KEY_CLT_ID) - 1; /* "client_id": */
 	bodylen += 1; /* } */
 
 	/* allocate memory for the stringified buffer, if needed */
@@ -1953,8 +1964,13 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 		}
 	}
 	/* "mode": */
-	memcpy(body + pos, JSON_KEY_VAL_MODE, sizeof(JSON_KEY_VAL_MODE) - 1);
-	pos += sizeof(JSON_KEY_VAL_MODE) - 1;
+	if (stmt->is_catalog) {
+		memcpy(body + pos, JSON_KEY_VAL_MODE, sizeof(JSON_KEY_VAL_MODE) - 1);
+		pos += sizeof(JSON_KEY_VAL_MODE) - 1;
+		stmt->is_catalog = FALSE;
+	}
+	memcpy(body + pos, JSON_KEY_CLT_ID, sizeof(JSON_KEY_CLT_ID) - 1);
+	pos += sizeof(JSON_KEY_CLT_ID) - 1;
 	body[pos ++] = '}';
 
 	buff->cnt = pos;
@@ -2062,7 +2078,7 @@ SQLRETURN EsSQLExecDirectW
 	// & param marker is set!
 	assert(stmt->apd->array_size <= 1);
 
-	ret = attach_sql(stmt, szSqlStr, cchSqlStr);
+	ret = attach_sql(stmt, szSqlStr, cchSqlStr, /*is_catalog*/FALSE);
 	if (SQL_SUCCEEDED(ret)) {
 		ret = EsSQLExecute(stmt);
 	}
