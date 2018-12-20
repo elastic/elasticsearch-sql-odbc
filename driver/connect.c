@@ -1162,7 +1162,7 @@ static SQLRETURN check_server_version(esodbc_dbc_st *dbc)
 	const wchar_t *tl_key[] = {L"version"}; /* top-level key of interest */
 	const wchar_t *version_key[] = {L"number"};
 	wstr_st ver_no;
-	wstr_st own_ver = WSTR_INIT(STR(DRV_VERSION)); /*build-type define*/
+	wstr_st own_ver = WSTR_INIT(STR(DRV_VERSION)); /*build-time define*/
 #	ifndef NDEBUG
 	SQLWCHAR *pos, *end;
 #	endif /* !NDEBUG */
