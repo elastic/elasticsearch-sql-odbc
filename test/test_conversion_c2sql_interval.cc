@@ -277,6 +277,34 @@ TEST_F(ConvertC2SQL_Interval, Interval2Interval_year_to_month)
 	ASSERT_CSTREQ(buff, expect);
 }
 
+TEST_F(ConvertC2SQL_Interval, Interval_binary2Interval_year_to_month)
+{
+	prepareStatement();
+
+	SQL_INTERVAL_STRUCT val;
+	val.interval_type = SQL_IS_YEAR_TO_MONTH;
+	val.interval_sign = SQL_TRUE;
+	val.intval.year_month.year = 12;
+	val.intval.year_month.month = 11;
+
+	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT,
+			SQL_C_BINARY, SQL_INTERVAL_YEAR_TO_MONTH,
+			/*size*/2, /*decdigits*/3, &val, sizeof(val), /*IndLen*/NULL);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	cstr_st buff = {NULL, 0};
+	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	cstr_st expect = CSTR_INIT(
+		"{\"query\": \"Interval_binary2Interval_year_to_month\", "
+		"\"params\": [{\"type\": \"INTERVAL_YEAR_TO_MONTH\", "
+		"\"value\": \"P-12Y-11M\"}], "
+		"\"mode\": \"ODBC\", " CLIENT_ID "}");
+
+	ASSERT_CSTREQ(buff, expect);
+}
+
 
 
 } // test namespace

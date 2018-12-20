@@ -2721,7 +2721,8 @@ static size_t print_interval_iso8601(esodbc_rec_st *rec,
 			break;
 
 		default:
-			BUGH(stmt, "unexpected interval type %d.", ivl->interval_type);
+			/* an error if user-provided interval buffer is incorrect  */
+			ERRH(stmt, "unexpected interval type %d.", ivl->interval_type);
 			return 0;
 	}
 	DBGH(stmt, "interval of type %d printed as [%zu] `" LCPDL "`.",
@@ -4008,11 +4009,12 @@ SQLRETURN c2sql_interval(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		case SQL_C_INTERVAL_MINUTE_TO_SECOND:
 			// by data compatibility
 			assert (irec->es_type->data_type == ctype);
+			/* no break! */
+		case SQL_C_BINARY:
 			ivl = *(SQL_INTERVAL_STRUCT *)data_ptr;
 			break;
 
 		case SQL_C_NUMERIC:
-		case SQL_C_BINARY:
 			BUGH(stmt, "conversion not yet supported.");
 			RET_HDIAGS(stmt, SQL_STATE_HYC00);
 			break;
@@ -4026,7 +4028,7 @@ SQLRETURN c2sql_interval(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	res = print_interval_iso8601(irec, &ivl, dest + *len);
 	if (res <= 0) {
 		ERRH(stmt, "printing interval of type %hd failed.", ivl.interval_type);
-		RET_HDIAG(stmt, SQL_STATE_HY000, "internal printing failed", 0);
+		RET_HDIAG(stmt, SQL_STATE_HY000, "interval printing failed", 0);
 	} else {
 		*len += res;
 	}
