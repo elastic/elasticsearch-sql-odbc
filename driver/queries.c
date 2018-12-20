@@ -452,7 +452,7 @@ SQLRETURN TEST_API attach_error(SQLHANDLE hnd, cstr_st *body, int code)
 	char buff[SQL_MAX_MESSAGE_LENGTH];
 	size_t to_copy;
 
-	ERRH(hnd, "POST failure %d body: len: %zu, content: `%.*s`.", code,
+	ERRH(hnd, "request failure %d body: len: %zu, content: `%.*s`.", code,
 		body->cnt, LCSTR(body));
 
 	if (body->cnt) {
