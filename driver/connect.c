@@ -736,7 +736,7 @@ SQLRETURN post_json(esodbc_stmt_st *stmt, const cstr_st *u8body)
 		/* copy any error occured at DBC level back down to the statement,
 		 * where it's going to be read from. */
 		if (HDRH(dbc)->diag.state) {
-			stmt->hdr.diag = dbc->hdr.diag;
+			HDRH(stmt)->diag = HDRH(dbc)->diag;
 		}
 	}
 
