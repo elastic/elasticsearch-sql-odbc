@@ -26,9 +26,10 @@ TEST_F(ConvertC2SQL_Boolean, CStr2Boolean) /* note: test name used in test */
   prepareStatement();
 
 	SQLCHAR val[] = "1";
+	SQLLEN osize = SQL_NTSL;
 	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR,
-			ESODBC_SQL_BOOLEAN, /*size*/0, /*decdigits*/0, val, sizeof(val),
-			/*IndLen*/NULL);
+			ESODBC_SQL_BOOLEAN, /*size*/0, /*decdigits*/0, val,
+			sizeof(val) - /*\0*/1, &osize);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	cstr_st buff = {NULL, 0};
@@ -46,10 +47,10 @@ TEST_F(ConvertC2SQL_Boolean, WStr2Boolean) /* note: test name used in test */
 {
   prepareStatement();
 
-	SQLWCHAR val[] = L"0";
+	SQLWCHAR val[] = L"0X";
+	SQLLEN osize = sizeof(val[0]);
 	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR,
-			ESODBC_SQL_BOOLEAN, /*size*/0, /*decdigits*/0, val, sizeof(val),
-			/*IndLen*/NULL);
+			ESODBC_SQL_BOOLEAN, /*size*/0, /*decdigits*/0, val, 0, &osize);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	cstr_st buff = {NULL, 0};

@@ -3049,20 +3049,22 @@ static BOOL xstr_to_number(esodbc_stmt_st *stmt, void *data_ptr,
 {
 	int res;
 
+	/* "If StrLen_or_IndPtr is a null pointer, the driver assumes that all
+	 * input parameter values are non-NULL and that character and binary data
+	 * is null-terminated." */
 	if (xstr->wide) {
 		xstr->w.str = (SQLWCHAR *)data_ptr;
-		if ((octet_len_ptr && *octet_len_ptr == SQL_NTSL) || !octet_len_ptr) {
+		if ((! octet_len_ptr) || (*octet_len_ptr == SQL_NTSL)) {
 			xstr->w.cnt = wcslen(xstr->w.str);
 		} else {
-			xstr->w.cnt = (size_t)(*octet_len_ptr / sizeof(*xstr->w.str));
-			xstr->w.cnt -= /*0-term*/1;
+			xstr->w.cnt = (size_t)*octet_len_ptr / sizeof(*xstr->w.str);
 		}
 	} else {
 		xstr->c.str = (SQLCHAR *)data_ptr;
-		if ((octet_len_ptr && *octet_len_ptr == SQL_NTSL) || !octet_len_ptr) {
+		if ((! octet_len_ptr) || (*octet_len_ptr == SQL_NTSL)) {
 			xstr->c.cnt = strlen(xstr->c.str);
 		} else {
-			xstr->c.cnt = (size_t)(*octet_len_ptr - /*\0*/1);
+			xstr->c.cnt = (size_t)*octet_len_ptr;
 		}
 	}
 
@@ -3455,11 +3457,15 @@ static SQLRETURN binary_to_number(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	data_ptr = deferred_address(SQL_DESC_DATA_PTR, pos, arec);
 
 	if (! octet_len_ptr) {
-		/* "If [...] is a null pointer, the driver assumes [...] that
-		 * character and binary data is null-terminated." */
-		WARNH(stmt, "no length information provided for binary type: "
-			"calculating it as a C-string!");
-		osize = strlen((char *)data_ptr);
+		if (0 < arec->octet_length) {
+			osize = arec->octet_length;
+		} else {
+			/* "If [...] is a null pointer, the driver assumes [...] that
+			 * character and binary data is null-terminated." */
+			WARNH(stmt, "no length information provided for binary type: "
+				"calculating it as a C-string!");
+			osize = strlen((char *)data_ptr);
+		}
 	} else {
 		osize = *octet_len_ptr;
 	}
