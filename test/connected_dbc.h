@@ -27,9 +27,7 @@ extern "C" {
 
 /* convenience casting macros */
 #define ATTACH_ANSWER(_h, _s, _l)   attach_answer((esodbc_stmt_st *)_h, _s, _l)
-#define ATTACH_SQL(_h, _s, _l)      \
-	/* is_catalog set to TRUE, since all tests expect the mode param */ \
-	attach_sql((esodbc_stmt_st *)_h, _s, _l, TRUE)
+#define ATTACH_SQL(_h, _s, _l)      attach_sql((esodbc_stmt_st *)_h, _s, _l)
 
 #define ASSERT_CSTREQ(_c1, _c2) \
 	do { \

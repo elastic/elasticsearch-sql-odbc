@@ -123,7 +123,7 @@ SQLSMALLINT copy_current_catalog(esodbc_dbc_st *dbc, SQLWCHAR *dest,
 	assert(stmt);
 
 	if (! SQL_SUCCEEDED(attach_sql(stmt, MK_WPTR(SYS_CATALOGS),
-				sizeof(SYS_CATALOGS) - 1, /*is catalog*/TRUE))) {
+				sizeof(SYS_CATALOGS) - 1))) {
 		ERRH(dbc, "failed to attach query to statement.");
 		goto end;
 	}
@@ -403,7 +403,7 @@ SQLRETURN EsSQLTablesW(
 
 	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
 	assert(SQL_SUCCEEDED(ret)); /* can't return error */
-	ret = attach_sql(stmt, wbuf, pos, /*is_catalog*/TRUE);
+	ret = attach_sql(stmt, wbuf, pos);
 	if (SQL_SUCCEEDED(ret)) {
 		ret = EsSQLExecute(stmt);
 	}
@@ -539,7 +539,7 @@ SQLRETURN EsSQLColumnsW
 
 	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
 	assert(SQL_SUCCEEDED(ret)); /* can't return error */
-	ret = attach_sql(stmt, wbuf, pos, /*is_catalog*/TRUE);
+	ret = attach_sql(stmt, wbuf, pos);
 	if (SQL_SUCCEEDED(ret)) {
 		ret = EsSQLExecute(stmt);
 	}
