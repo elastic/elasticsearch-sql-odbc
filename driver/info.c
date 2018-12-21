@@ -1208,7 +1208,7 @@ SQLRETURN EsSQLGetTypeInfoW(SQLHSTMT StatementHandle, SQLSMALLINT DataType)
 
 	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
 	assert(SQL_SUCCEEDED(ret)); /* can't return error */
-	ret = attach_sql(stmt, wbuff, cnt, /*is_catalog*/TRUE);
+	ret = attach_sql(stmt, wbuff, cnt);
 	if (SQL_SUCCEEDED(ret)) {
 		ret = EsSQLExecute(stmt);
 	}

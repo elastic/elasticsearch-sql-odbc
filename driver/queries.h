@@ -14,7 +14,7 @@ SQLRETURN TEST_API attach_answer(esodbc_stmt_st *stmt, char *buff,
 	size_t blen);
 SQLRETURN TEST_API attach_error(SQLHANDLE hnd, cstr_st *body, int code);
 SQLRETURN TEST_API attach_sql(esodbc_stmt_st *stmt, const SQLWCHAR *sql,
-	size_t tlen, BOOL is_catalog);
+	size_t tlen);
 void detach_sql(esodbc_stmt_st *stmt);
 SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff);
 
@@ -115,6 +115,21 @@ SQLRETURN EsSQLNumParams(
 	_Out_opt_
 	SQLSMALLINT       *ParameterCountPtr);
 SQLRETURN EsSQLRowCount(_In_ SQLHSTMT StatementHandle, _Out_ SQLLEN *RowCount);
+
+	/* JSON body build elements */
+#define JSON_KEY_QUERY			"\"query\": " /* will always be the 1st key */
+#define JSON_KEY_CURSOR			"\"cursor\": " /* 1st key */
+#define JSON_KEY_PARAMS			", \"params\": " /* n-th key */
+#define JSON_KEY_FETCH			", \"fetch_size\": " /* n-th key */
+#define JSON_KEY_REQ_TOUT		", \"request_timeout\": " /* n-th key */
+#define JSON_KEY_PAGE_TOUT		", \"page_timeout\": " /* n-th key */
+#define JSON_KEY_TIME_ZONE		", \"time_zone\": " /* n-th key */
+#define JSON_KEY_VAL_MODE		", \"mode\": \"ODBC\"" /* n-th key */
+#ifdef _WIN64
+#	define JSON_KEY_CLT_ID		", \"client_id\": \"odbc64\"" /* n-th k. */
+#else /* _WIN64 */
+#	define JSON_KEY_CLT_ID		", \"client_id\": \"odbc32\"" /* n-th k. */
+#endif /* _WIN64 */
 
 
 #endif /* __QUERIES_H__ */

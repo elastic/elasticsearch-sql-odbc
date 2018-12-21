@@ -302,7 +302,6 @@ typedef struct struct_stmt {
 
 	/* cache UTF8 JSON serialized SQL: can be (re)used with varying params */
 	cstr_st u8sql;
-	BOOL is_catalog; /* statment is for a catalog query */
 
 	/* pointers to the current descriptors */
 	esodbc_desc_st *ard;

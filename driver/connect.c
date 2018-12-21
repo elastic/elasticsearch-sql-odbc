@@ -20,7 +20,8 @@
 /* HTTP headers default for every request */
 #define HTTP_ACCEPT_JSON		"Accept: application/json"
 #define HTTP_CONTENT_TYPE_JSON	"Content-Type: application/json; charset=utf-8"
-#define HTTP_TEST_JSON			"{\"query\": \"SELECT 0\"}"
+#define HTTP_TEST_JSON			\
+	"{\"query\": \"SELECT 0\"" JSON_KEY_VAL_MODE JSON_KEY_CLT_ID "}"
 
 /* Elasticsearch/SQL data types */
 /* 2 */
@@ -707,6 +708,7 @@ SQLRETURN post_json(esodbc_stmt_st *stmt, const cstr_st *u8body)
 	tout = dbc->timeout < stmt->query_timeout ? stmt->query_timeout :
 		dbc->timeout;
 
+	HDRH(dbc)->diag.state = SQL_STATE_00000;
 	code = -1; /* init value */
 	if (dbc_curl_add_post_body(dbc, tout, u8body) &&
 		dbc_curl_perform(dbc, &code, &resp)) {
@@ -731,6 +733,12 @@ SQLRETURN post_json(esodbc_stmt_st *stmt, const cstr_st *u8body)
 	/* was there an error answer received correctly? */
 	if (0 < code) {
 		ret = attach_error(stmt, &resp, code);
+	} else {
+		/* copy any error occured at DBC level back down to the statement,
+		 * where it's going to be read from. */
+		if (HDRH(dbc)->diag.state) {
+			HDRH(stmt)->diag = HDRH(dbc)->diag;
+		}
 	}
 
 	/* an answer might have been received, but a late curl error (like
@@ -740,9 +748,6 @@ SQLRETURN post_json(esodbc_stmt_st *stmt, const cstr_st *u8body)
 		resp.str = NULL;
 	}
 end:
-	/* copy any error occured at DBC level back down to the statement, where
-	 * it's going to be read from. */
-	stmt->hdr.diag = dbc->hdr.diag;
 	return ret;
 }
 
@@ -1157,12 +1162,12 @@ static SQLRETURN check_server_version(esodbc_dbc_st *dbc)
 	cstr_st resp = {0};
 	SQLRETURN ret;
 	UJObject obj, o_version, o_number;
-	void *state;
+	void *state = NULL;
 	int unpacked;
 	const wchar_t *tl_key[] = {L"version"}; /* top-level key of interest */
 	const wchar_t *version_key[] = {L"number"};
 	wstr_st ver_no;
-	wstr_st own_ver = WSTR_INIT(STR(DRV_VERSION)); /*build-type define*/
+	wstr_st own_ver = WSTR_INIT(STR(DRV_VERSION)); /*build-time define*/
 #	ifndef NDEBUG
 	SQLWCHAR *pos, *end;
 #	endif /* !NDEBUG */
@@ -1179,18 +1184,22 @@ static SQLRETURN check_server_version(esodbc_dbc_st *dbc)
 		return ret;
 	}
 
+	HDRH(dbc)->diag.state = SQL_STATE_00000;
 	if (! dbc_curl_perform(dbc, &code, &resp)) {
 		dbc_curl_post_diag(dbc, SQL_STATE_HY000);
 		cleanup_curl(dbc);
 		return SQL_ERROR;
 	}
-	if ((code != 200) || (! resp.cnt)) {
-		ERRH(dbc, "failed to get a positive response with body: code=%ld, "
+	if (! resp.cnt) {
+		ERRH(dbc, "failed to get a response with body: code=%ld, "
 				"body len: %zu.", code, resp.cnt);
 		goto err;
+	} else if (code != 200) {
+		ret = attach_error(dbc, &resp, code);
+		goto err;
 	}
+	/* 200 with body received: decode (hopefully JSON) answer */
 
-	state = NULL;
 	obj = UJDecode(resp.str, resp.cnt, /*heap f()s*/NULL, &state);
 	if (! obj) {
 		ERRH(dbc, "failed to parse as JSON");
@@ -1254,7 +1263,12 @@ err:
 	if (state) {
 		UJFree(state);
 	}
-	RET_HDIAG(dbc, SQL_STATE_08S01, "Failed to extract server's version", 0);
+	if (HDRH(dbc)->diag.state) {
+		RET_STATE(HDRH(dbc)->diag.state);
+	} else {
+		RET_HDIAG(dbc, SQL_STATE_08S01,
+				"Failed to extract server's version", 0);
+	}
 }
 
 /* fully initializes a DBC and performs a simple test query */
@@ -2031,6 +2045,11 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 #endif /* TESTING */
 		if (! SQL_SUCCEEDED(EsSQLGetTypeInfoW(stmt, SQL_ALL_TYPES))) {
 			ERRH(stmt, "failed to query Elasticsearch.");
+			/* if there's a message received from ES (which ends up attached
+			 * to the statement), copy it on the DBC */
+			if (HDRH(stmt)->diag.state) {
+				HDRH(dbc)->diag = HDRH(stmt)->diag;
+			}
 			goto end;
 		}
 	}
@@ -2356,10 +2375,18 @@ SQLRETURN EsSQLDriverConnectW
 			RET_HDIAGS(dbc, SQL_STATE_HY110);
 	}
 
+	HDRH(dbc)->diag.state = SQL_STATE_00000;
 	if (! load_es_types(dbc)) {
 		ERRH(dbc, "failed to load Elasticsearch/SQL types.");
-		RET_HDIAG(dbc, SQL_STATE_HY000,
-			"failed to load Elasticsearch/SQL types", 0);
+		TRACE;
+		if (HDRH(dbc)->diag.state) {
+			TRACE;
+			RET_STATE(HDRH(dbc)->diag.state);
+		} else {
+			TRACE;
+			RET_HDIAG(dbc, SQL_STATE_HY000,
+				"failed to load Elasticsearch/SQL types", 0);
+		}
 	}
 
 	/* save the original DSN and (new) server name for later inquiry by app */
