@@ -176,7 +176,7 @@ TEST_F(ConvertC2SQL_Interval, SBigInt2Interval_second_all_0)
 	ASSERT_CSTREQ(buff, expect);
 }
 
-TEST_F(ConvertC2SQL_Interval, WChar2Interval_day_to_second)
+TEST_F(ConvertC2SQL_Interval, WStr2Interval_day_to_second)
 {
 	prepareStatement();
 
@@ -191,7 +191,7 @@ TEST_F(ConvertC2SQL_Interval, WChar2Interval_day_to_second)
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	cstr_st expect = CSTR_INIT(
-		"{\"query\": \"WChar2Interval_day_to_second\", "
+		"{\"query\": \"WStr2Interval_day_to_second\", "
 		"\"params\": [{\"type\": \"INTERVAL_DAY_TO_SECOND\", "
 		"\"value\": \"P-2DT-3H-4M-5.678S\"}], "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
@@ -199,7 +199,7 @@ TEST_F(ConvertC2SQL_Interval, WChar2Interval_day_to_second)
 	ASSERT_CSTREQ(buff, expect);
 }
 
-TEST_F(ConvertC2SQL_Interval, Char2Interval_hour_to_second)
+TEST_F(ConvertC2SQL_Interval, CStr2Interval_hour_to_second)
 {
 	prepareStatement();
 
@@ -214,7 +214,7 @@ TEST_F(ConvertC2SQL_Interval, Char2Interval_hour_to_second)
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	cstr_st expect = CSTR_INIT(
-		"{\"query\": \"Char2Interval_hour_to_second\", "
+		"{\"query\": \"CStr2Interval_hour_to_second\", "
 		"\"params\": [{\"type\": \"INTERVAL_HOUR_TO_SECOND\", "
 		"\"value\": \"PT3H4M5.678S\"}], "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
@@ -222,7 +222,7 @@ TEST_F(ConvertC2SQL_Interval, Char2Interval_hour_to_second)
 	ASSERT_CSTREQ(buff, expect);
 }
 
-TEST_F(ConvertC2SQL_Interval, Char2Interval_hour_to_second_force_alloc)
+TEST_F(ConvertC2SQL_Interval, CStr2Interval_hour_to_second_force_alloc)
 {
 	prepareStatement();
 
@@ -231,9 +231,10 @@ TEST_F(ConvertC2SQL_Interval, Char2Interval_hour_to_second_force_alloc)
 		"                                                           "
 		"                                                           "
 		"SECOND";
+	SQLLEN osize = sizeof(val) - 1;
 	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR,
 			SQL_INTERVAL_HOUR_TO_SECOND, /*size*/2, /*decdigits*/3, val,
-			sizeof(val) - 1, /*IndLen*/NULL);
+			0, &osize);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	cstr_st buff = {NULL, 0};
@@ -241,7 +242,7 @@ TEST_F(ConvertC2SQL_Interval, Char2Interval_hour_to_second_force_alloc)
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	cstr_st expect = CSTR_INIT(
-		"{\"query\": \"Char2Interval_hour_to_second_force_alloc\", "
+		"{\"query\": \"CStr2Interval_hour_to_second_force_alloc\", "
 		"\"params\": [{\"type\": \"INTERVAL_HOUR_TO_SECOND\", "
 		"\"value\": \"PT3H4M5.678S\"}], "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
@@ -270,6 +271,34 @@ TEST_F(ConvertC2SQL_Interval, Interval2Interval_year_to_month)
 
 	cstr_st expect = CSTR_INIT(
 		"{\"query\": \"Interval2Interval_year_to_month\", "
+		"\"params\": [{\"type\": \"INTERVAL_YEAR_TO_MONTH\", "
+		"\"value\": \"P-12Y-11M\"}], "
+		"\"mode\": \"ODBC\", " CLIENT_ID "}");
+
+	ASSERT_CSTREQ(buff, expect);
+}
+
+TEST_F(ConvertC2SQL_Interval, Interval_binary2Interval_year_to_month)
+{
+	prepareStatement();
+
+	SQL_INTERVAL_STRUCT val;
+	val.interval_type = SQL_IS_YEAR_TO_MONTH;
+	val.interval_sign = SQL_TRUE;
+	val.intval.year_month.year = 12;
+	val.intval.year_month.month = 11;
+
+	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT,
+			SQL_C_BINARY, SQL_INTERVAL_YEAR_TO_MONTH,
+			/*size*/2, /*decdigits*/3, &val, sizeof(val), /*IndLen*/NULL);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	cstr_st buff = {NULL, 0};
+	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	cstr_st expect = CSTR_INIT(
+		"{\"query\": \"Interval_binary2Interval_year_to_month\", "
 		"\"params\": [{\"type\": \"INTERVAL_YEAR_TO_MONTH\", "
 		"\"value\": \"P-12Y-11M\"}], "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
