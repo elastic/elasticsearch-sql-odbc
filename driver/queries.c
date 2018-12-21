@@ -1830,21 +1830,6 @@ static SQLRETURN serialize_params(esodbc_stmt_st *stmt, char *dest,
  */
 SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 {
-	/* JSON body build elements */
-#	define JSON_KEY_QUERY		"\"query\": " /* will always be the 1st key */
-#	define JSON_KEY_CURSOR		"\"cursor\": " /* 1st key */
-#	define JSON_KEY_PARAMS		", \"params\": " /* n-th key */
-#	define JSON_KEY_FETCH		", \"fetch_size\": " /* n-th key */
-#	define JSON_KEY_REQ_TOUT	", \"request_timeout\": " /* n-th key */
-#	define JSON_KEY_PAGE_TOUT	", \"page_timeout\": " /* n-th key */
-#	define JSON_KEY_TIME_ZONE	", \"time_zone\": " /* n-th key */
-#	define JSON_KEY_VAL_MODE	", \"mode\": \"ODBC\"" /* n-th key */
-#	ifdef _WIN64
-#		define JSON_KEY_CLT_ID		", \"client_id\": \"odbc64\"" /* n-th k. */
-#	else /* _WIN64 */
-#		define JSON_KEY_CLT_ID		", \"client_id\": \"odbc32\"" /* n-th k. */
-#	endif /* _WIN64 */
-
 	SQLRETURN ret = SQL_SUCCESS;
 	size_t bodylen, pos, u8len, len;
 	char *body;

@@ -20,7 +20,8 @@
 /* HTTP headers default for every request */
 #define HTTP_ACCEPT_JSON		"Accept: application/json"
 #define HTTP_CONTENT_TYPE_JSON	"Content-Type: application/json; charset=utf-8"
-#define HTTP_TEST_JSON			"{\"query\": \"SELECT 0\"}"
+#define HTTP_TEST_JSON			\
+	"{\"query\": \"SELECT 0\"" JSON_KEY_VAL_MODE JSON_KEY_CLT_ID "}"
 
 /* Elasticsearch/SQL data types */
 /* 2 */
