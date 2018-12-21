@@ -148,6 +148,8 @@ BOOL filelog_print_path(wstr_st *dest, wstr_st *dir_path, wstr_st *ident)
 	}
 
 	/* build the log full path name */
+	/* swprintf fails if formatted string would overrun the buffer, while
+	 * _snwprintf doesn't (though also not portable) */
 	cnt = _snwprintf(dest->str, dest->cnt,
 			L"%.*s" "%c" "%s" "_%d%.2d%.2d%.2d%.2d%.2d_" "%.*s" "%s",
 			(int)dir.cnt, dir.str,

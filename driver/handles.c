@@ -2607,17 +2607,14 @@ SQLRETURN EsSQLSetDescFieldW(
 		/* <SQLLEN> */
 		/* R/O fields: display_size */
 		case SQL_DESC_OCTET_LENGTH:
-			DBGH(desc, "setting octet length: %ld.",
-					(SQLLEN)(intptr_t)ValuePtr);
-			/* rec field's type is signed :/; a negative is dangerous l8r  */
 			slen = (SQLLEN)(intptr_t)ValuePtr;
-			if (slen < 0 && slen != SQL_NTSL) {
-				ERRH(desc, "octet length attribute can't be negative (%lld)",
-						slen);
-				RET_HDIAG(desc, SQL_STATE_HY000,
-						"invalid negative octet lenght attribute", 0);
+			DBGH(desc, "setting octet length: %ld.", slen);
+			/* rec field's type is signed; a negative can be dangerous */
+			if (slen < 0) {
+				WARNH(desc, "negative octet length provided (%lld)", slen);
+				/* no eror returned: in non-str/binary, it is to be ignorred */
 			}
-			rec->octet_length = (SQLLEN)(intptr_t)ValuePtr;
+			rec->octet_length = slen;
 			break;
 
 		/* <SQLULEN> */

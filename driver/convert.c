@@ -2721,7 +2721,8 @@ static size_t print_interval_iso8601(esodbc_rec_st *rec,
 			break;
 
 		default:
-			BUGH(stmt, "unexpected interval type %d.", ivl->interval_type);
+			/* an error if user-provided interval buffer is incorrect  */
+			ERRH(stmt, "unexpected interval type %d.", ivl->interval_type);
 			return 0;
 	}
 	DBGH(stmt, "interval of type %d printed as [%zu] `" LCPDL "`.",
@@ -3049,20 +3050,22 @@ static BOOL xstr_to_number(esodbc_stmt_st *stmt, void *data_ptr,
 {
 	int res;
 
+	/* "If StrLen_or_IndPtr is a null pointer, the driver assumes that all
+	 * input parameter values are non-NULL and that character and binary data
+	 * is null-terminated." */
 	if (xstr->wide) {
 		xstr->w.str = (SQLWCHAR *)data_ptr;
-		if ((octet_len_ptr && *octet_len_ptr == SQL_NTSL) || !octet_len_ptr) {
+		if ((! octet_len_ptr) || (*octet_len_ptr == SQL_NTSL)) {
 			xstr->w.cnt = wcslen(xstr->w.str);
 		} else {
-			xstr->w.cnt = (size_t)(*octet_len_ptr / sizeof(*xstr->w.str));
-			xstr->w.cnt -= /*0-term*/1;
+			xstr->w.cnt = (size_t)*octet_len_ptr / sizeof(*xstr->w.str);
 		}
 	} else {
 		xstr->c.str = (SQLCHAR *)data_ptr;
-		if ((octet_len_ptr && *octet_len_ptr == SQL_NTSL) || !octet_len_ptr) {
+		if ((! octet_len_ptr) || (*octet_len_ptr == SQL_NTSL)) {
 			xstr->c.cnt = strlen(xstr->c.str);
 		} else {
-			xstr->c.cnt = (size_t)(*octet_len_ptr - /*\0*/1);
+			xstr->c.cnt = (size_t)*octet_len_ptr;
 		}
 	}
 
@@ -3455,11 +3458,15 @@ static SQLRETURN binary_to_number(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	data_ptr = deferred_address(SQL_DESC_DATA_PTR, pos, arec);
 
 	if (! octet_len_ptr) {
-		/* "If [...] is a null pointer, the driver assumes [...] that
-		 * character and binary data is null-terminated." */
-		WARNH(stmt, "no length information provided for binary type: "
-			"calculating it as a C-string!");
-		osize = strlen((char *)data_ptr);
+		if (0 < arec->octet_length) {
+			osize = arec->octet_length;
+		} else {
+			/* "If [...] is a null pointer, the driver assumes [...] that
+			 * character and binary data is null-terminated." */
+			WARNH(stmt, "no length information provided for binary type: "
+				"calculating it as a C-string!");
+			osize = strlen((char *)data_ptr);
+		}
 	} else {
 		osize = *octet_len_ptr;
 	}
@@ -3808,37 +3815,44 @@ SQLRETURN c2sql_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
 }
 
 /* parses an interval literal string from app's char/wchar_t buffer */
-SQLRETURN c2sql_str2interval(esodbc_rec_st *arec, esodbc_rec_st *irec,
-	SQLSMALLINT ctype, void *data_ptr, SQL_INTERVAL_STRUCT *ivl)
+static SQLRETURN c2sql_str2interval(esodbc_rec_st *arec, esodbc_rec_st *irec,
+	SQLSMALLINT ctype, void *data_ptr, SQLLEN *octet_len_ptr,
+	SQL_INTERVAL_STRUCT *ivl)
 {
 	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
 	wstr_st wstr;
 	SQLWCHAR wbuff[128], *wptr;
-	SQLLEN octet_length;
+	SQLLEN octet_len;
 	int ret;
 
-	if (ctype == SQL_C_CHAR) {
-		octet_length = arec->octet_length;
-		if (octet_length == SQL_NTSL) {
-			octet_length = strlen((SQLCHAR *)data_ptr);
+	if ((! octet_len_ptr) || (*octet_len_ptr == SQL_NTSL)) {
+		octet_len = (ctype == SQL_C_CHAR) ? strlen((SQLCHAR *)data_ptr) :
+			wcslen((SQLWCHAR *)data_ptr);
+	} else {
+		octet_len = *octet_len_ptr;
+		if (octet_len <= 0) {
+			ERRH(stmt, "invalid interval buffer length: %llu.", octet_len);
+			RET_HDIAGS(stmt, SQL_STATE_HY090);
 		}
-		assert (0 <= octet_length); // checked on param bind
-		if (sizeof(wbuff)/sizeof(wbuff[0]) < (size_t)octet_length) {
+	}
+
+	if (ctype == SQL_C_CHAR) {
+		if (sizeof(wbuff)/sizeof(wbuff[0]) < (size_t)octet_len) {
 			INFOH(stmt, "translation buffer too small (%zu < %lld), "
 				"allocation needed.", sizeof(wbuff)/sizeof(wbuff[0]),
-				(size_t)octet_length);
-			wptr = malloc(octet_length * sizeof(SQLWCHAR));
+				(size_t)octet_len);
+			wptr = malloc(octet_len * sizeof(SQLWCHAR));
 			if (! wptr) {
-				ERRNH(stmt, "OOM for %lld x SQLWCHAR", octet_length);
+				ERRNH(stmt, "OOM for %lld x SQLWCHAR", octet_len);
 				RET_HDIAGS(stmt, SQL_STATE_HY001);
 			}
 		} else {
 			wptr = wbuff;
 		}
-		ret = ascii_c2w((SQLCHAR *)data_ptr, wptr, octet_length);
+		ret = ascii_c2w((SQLCHAR *)data_ptr, wptr, octet_len);
 		if (ret <= 0) {
 			ERRH(stmt, "SQLCHAR-to-SQLWCHAR conversion failed for "
-				"[%lld] `" LCPDL "`.", octet_length, octet_length,
+				"[%lld] `" LCPDL "`.", octet_len, octet_len,
 				(char *)data_ptr);
 			if (wptr != wbuff) {
 				free(wptr);
@@ -3848,18 +3862,12 @@ SQLRETURN c2sql_str2interval(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			RET_HDIAGS(stmt, SQL_STATE_22018);
 		}
 		wstr.str = wptr;
-		wstr.cnt = octet_length;
+		wstr.cnt = (size_t)octet_len;
 	} else {
 		assert(ctype == SQL_C_WCHAR);
-
 		wstr.str = (SQLWCHAR *)data_ptr;
-		octet_length = arec->octet_length;
-		if (octet_length == SQL_NTSL) {
-			wstr.cnt = wcslen(wstr.str);
-		} else {
-			assert (0 <= octet_length); // checked on param bind
-			wstr.cnt = (size_t)octet_length;
-		}
+		wstr.cnt = (size_t)octet_len;
+
 		wptr = NULL;
 	}
 
@@ -3890,6 +3898,7 @@ SQLRETURN c2sql_interval(esodbc_rec_st *arec, esodbc_rec_st *irec,
 {
 	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
 	void *data_ptr;
+	SQLLEN *octet_len_ptr;
 	SQLSMALLINT ctype;
 	SQLUBIGINT ubint;
 	SQLBIGINT bint;
@@ -3929,7 +3938,11 @@ SQLRETURN c2sql_interval(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	switch ((ctype = get_rec_c_type(arec, irec))) {
 		case SQL_C_CHAR:
 		case SQL_C_WCHAR:
-			ret = c2sql_str2interval(arec, irec, ctype, data_ptr, &ivl);
+			/* pointer to read from how many bytes we have */
+			octet_len_ptr = deferred_address(SQL_DESC_OCTET_LENGTH_PTR, pos,
+					arec);
+			ret = c2sql_str2interval(arec, irec, ctype, data_ptr,
+					octet_len_ptr, &ivl);
 			if (! SQL_SUCCEEDED(ret)) {
 				return ret;
 			}
@@ -4002,11 +4015,12 @@ SQLRETURN c2sql_interval(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		case SQL_C_INTERVAL_MINUTE_TO_SECOND:
 			// by data compatibility
 			assert (irec->es_type->data_type == ctype);
+			/* no break! */
+		case SQL_C_BINARY:
 			ivl = *(SQL_INTERVAL_STRUCT *)data_ptr;
 			break;
 
 		case SQL_C_NUMERIC:
-		case SQL_C_BINARY:
 			BUGH(stmt, "conversion not yet supported.");
 			RET_HDIAGS(stmt, SQL_STATE_HYC00);
 			break;
@@ -4020,7 +4034,7 @@ SQLRETURN c2sql_interval(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	res = print_interval_iso8601(irec, &ivl, dest + *len);
 	if (res <= 0) {
 		ERRH(stmt, "printing interval of type %hd failed.", ivl.interval_type);
-		RET_HDIAG(stmt, SQL_STATE_HY000, "internal printing failed", 0);
+		RET_HDIAG(stmt, SQL_STATE_HY000, "interval printing failed", 0);
 	} else {
 		*len += res;
 	}
