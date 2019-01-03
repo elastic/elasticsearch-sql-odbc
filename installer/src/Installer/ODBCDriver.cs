@@ -5,7 +5,7 @@
 using System.Linq;
 using WixSharp;
 
-namespace ODBCInstaller
+namespace Installer
 {
 	partial class Program
 	{

@@ -16,7 +16,6 @@ module Paths =
     let SrcDir = "./src/"
     let MsiDir = SrcDir @@ "Installer/"
     let MsiBuildDir = MsiDir @@ "bin/Release/"
-    let DriverBuildsDir = SrcDir @@ "../../builds/" // Output folder from driver compilation
 
     let IntegrationTestsDir = FullName (SrcDir @@ "Tests/")
 
@@ -29,3 +28,10 @@ module Products =
         Prerelease : string;
         RawValue: string;
     }
+
+    let public EmptyVersion = { FullVersion = "0.0.0";
+                              Major = 0;
+                              Minor = 0;
+                              Patch = 0;
+                              Prerelease = ""; 
+                              RawValue = "0.0.0"; }

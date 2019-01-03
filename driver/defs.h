@@ -75,8 +75,10 @@
 #define ESODBC_MAX_FIX_PRECISION		ESODBC_PRECISION_UINT64
 /* maximum floating numeric precision */
 #define ESODBC_MAX_FLT_PRECISION		ESODBC_PRECISION_DOUBLE
-/* maximum seconds precision */
-#define ESODBC_MAX_SEC_PRECISION		ESODBC_PRECISION_UINT64
+/* maximum seconds precision (i.e. sub-second accuracy) */
+/* Seconds precision is currently 3, with ES/SQL's ISO8601 millis.
+ * (Should move to 9 with nanosecond implementation) */
+#define ESODBC_MAX_SEC_PRECISION		9
 /*
  * standard specified defaults:
  * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetdescfield-function##record-fields
@@ -88,11 +90,26 @@
 #define ESODBC_DEF_DATETIME_PRECISION	0
 #define ESODBC_DEF_TIMESTAMP_PRECISION	6
 /* interval */
-#define ESODBC_DEF_INTVL_WS_PRECISION	6
-#define ESODBC_DEF_INTVL_WOS_DT_PREC	2
+#define ESODBC_DEF_IVL_WS_PRECISION		6
+#define ESODBC_DEF_IVL_WOS_DT_PREC		2
 /* decimal, numeric */
 #define ESODBC_DEF_DECNUM_SCALE			0
-
+/*
+ * interval lead precision maxes:
+ * - YEAR,MONTH: LONG_MAX (2147483647)
+ * - DAY: 106751991167300
+ * - HOUR: 2562047788015215
+ * - MINUTE: 153722867280912930 (0x0222,2222,2222,2222)
+ * - SECOND: LLONG_MAX (9223372036854775807)
+ * with Duration/Period of 11.0.1+13-LTS Win x64 O-JVM.
+ * TODO: reasoning for these maxes mix??
+ */
+#define ESODBC_MAX_IVL_YEAR_LEAD_PREC	(sizeof("-2147483647") - 1)
+#define ESODBC_MAX_IVL_MONTH_LEAD_PREC	(sizeof("-2147483647") - 1)
+#define ESODBC_MAX_IVL_DAY_LEAD_PREC	(sizeof("-106751991167300") - 1)
+#define ESODBC_MAX_IVL_HOUR_LEAD_PREC	(sizeof("-2562047788015215") - 1)
+#define ESODBC_MAX_IVL_MINUTE_LEAD_PREC	(sizeof("-153722867280912930") - 1)
+#define ESODBC_MAX_IVL_SECOND_LEAD_PREC	(sizeof("-9223372036854775807") - 1)
 
 
 
@@ -120,8 +137,6 @@
 /* driver version ex. 7.0.0(b0a34b4,u,d) */
 #define ESODBC_DRIVER_VER	STR(DRV_VERSION) \
 	"(" STR(DRV_SRC_VER) "," STR(DRV_ENCODING) "," STR(DRV_BUILD_TYPE) ")"
-/* TODO: POST / (together with cluster "sniffing") */
-#define ESODBC_ELASTICSEARCH_VER	"7.0.0"
 #define ESODBC_ELASTICSEARCH_NAME	"Elasticsearch"
 
 /*
@@ -257,16 +272,17 @@
 /*
  * Timedate functions support:
  * - supported: DAYNAME, DAYOFMONTH, DAYOFWEEK, DAYOFYEAR, EXTRACT, HOUR,
- *   MINUTE, MONTH, MONTHNAME, QUARTER, SECOND, WEEK, YEAR;
- * - not supported: CURRENT_DATE, CURRENT_TIME, CURRENT_TIMESTAMP, CURDATE,
- *   CURTIME, NOW, TIMESTAMPADD, TIMESTAMPDIFF.
+ *   MINUTE, MONTH, MONTHNAME, QUARTER, SECOND, WEEK, YEAR, NOW,
+ *   CURRENT_TIMESTAMP;
+ * - not supported: CURRENT_DATE, CURRENT_TIME, CURDATE,
+ *   CURTIME, TIMESTAMPADD, TIMESTAMPDIFF.
  */
 #define ESODBC_TIMEDATE_FUNCTIONS				(0LU | \
 	SQL_FN_TD_DAYNAME | SQL_FN_TD_DAYOFMONTH | SQL_FN_TD_DAYOFWEEK | \
 	SQL_FN_TD_DAYOFYEAR | SQL_FN_TD_EXTRACT | SQL_FN_TD_HOUR | \
 	SQL_FN_TD_MINUTE | SQL_FN_TD_MONTH | SQL_FN_TD_MONTHNAME | \
 	SQL_FN_TD_QUARTER | SQL_FN_TD_SECOND | SQL_FN_TD_WEEK | \
-	SQL_FN_TD_YEAR)
+	SQL_FN_TD_YEAR | SQL_FN_TD_NOW | SQL_FN_TD_CURRENT_TIMESTAMP )
 
 /*
  * TIMESTAMPDIFF timestamp intervals:
@@ -284,10 +300,11 @@
 #define ESODBC_TIMEDATE_ADD_INTERVALS			0LU
 /*
  * System functions:
- * - supported: none.
- * - not supported: DATABASE, IFNULL, USER
+ * - supported: DATABASE, IFNULL, USER.
+ * - not supported: none DATABASE, IFNULL, USER
  */
-#define ESODBC_SYSTEM_FUNCTIONS					0LU
+#define ESODBC_SYSTEM_FUNCTIONS					(0LU | \
+		SQL_FN_SYS_USERNAME | SQL_FN_SYS_DBNAME | SQL_FN_SYS_IFNULL)
 /*
  * Convert functions support:
  * - supported: CAST.
@@ -337,10 +354,11 @@
 #define ESODBC_DATETIME_LITERALS				SQL_DL_SQL92_TIMESTAMP
 /*
  * SQL92 value functions:
- * - supported: none.
- * - not supported: CASE, CAST, COALESCE, NULLIF
+ * - supported: COALESCE, NULLIF
+ * - not supported: CASE, CAST.
  */
-#define ODBC_SQL92_VALUE_EXPRESSIONS			0LU
+#define ODBC_SQL92_VALUE_EXPRESSIONS			(0LU | \
+		SQL_SVE_COALESCE | SQL_SVE_NULLIF)
 
 /*
  * ES specific data types
@@ -358,66 +376,6 @@
 /* https://docs.microsoft.com/en-us/sql/relational-databases/native-client-odbc-date-time/data-type-support-for-odbc-date-and-time-improvements */
 #define ESODBC_DATE_TEMPLATE		"yyyy-mm-ddT"
 #define ESODBC_TIME_TEMPLATE		"hh:mm:ss.9999999"
-
-/*
- * ES-to-C-SQL mappings
- * DATA_TYPE(SYS TYPES) : SQL_<type> -> SQL_C_<type>
- * Collected here for a quick overview (and easy change); can't be automated.
- */
-/* -6: SQL_TINYINT -> SQL_C_TINYINT */
-#define ESODBC_ES_TO_CSQL_BYTE			SQL_C_TINYINT
-#define ESODBC_ES_TO_SQL_BYTE			SQL_TINYINT
-/* 5: SQL_SMALLINT -> SQL_C_SHORT */
-#define ESODBC_ES_TO_CSQL_SHORT			SQL_C_SSHORT
-#define ESODBC_ES_TO_SQL_SHORT			SQL_SMALLINT
-/* 4: SQL_INTEGER -> SQL_C_LONG */
-#define ESODBC_ES_TO_CSQL_INTEGER		SQL_C_SLONG
-#define ESODBC_ES_TO_SQL_INTEGER		SQL_INTEGER
-/* -5: SQL_BIGINT -> SQL_C_SBIGINT */
-#define ESODBC_ES_TO_CSQL_LONG			SQL_C_SBIGINT
-#define ESODBC_ES_TO_SQL_LONG			SQL_BIGINT
-/* 6: SQL_FLOAT -> SQL_C_DOUBLE */
-#define ESODBC_ES_TO_CSQL_HALF_FLOAT	SQL_C_DOUBLE
-#define ESODBC_ES_TO_SQL_HALF_FLOAT		SQL_FLOAT
-/* 6: SQL_FLOAT -> SQL_C_DOUBLE */
-#define ESODBC_ES_TO_CSQL_SCALED_FLOAT	SQL_C_DOUBLE
-#define ESODBC_ES_TO_SQL_SCALED_FLOAT	SQL_FLOAT
-/* 7: SQL_REAL -> SQL_C_DOUBLE */
-#define ESODBC_ES_TO_CSQL_FLOAT			SQL_C_FLOAT
-#define ESODBC_ES_TO_SQL_FLOAT			SQL_REAL
-/* 8: SQL_DOUBLE -> SQL_C_FLOAT */
-#define ESODBC_ES_TO_CSQL_DOUBLE		SQL_C_DOUBLE
-#define ESODBC_ES_TO_SQL_DOUBLE			SQL_DOUBLE
-/* 16: ??? -> SQL_C_TINYINT */
-#define ESODBC_ES_TO_CSQL_BOOLEAN		SQL_C_BIT
-#define ESODBC_ES_TO_SQL_BOOLEAN		SQL_BIT
-/* 12: SQL_VARCHAR -> SQL_C_WCHAR */
-#define ESODBC_ES_TO_CSQL_KEYWORD		SQL_C_WCHAR /* XXX: CBOR needs _CHAR */
-#define ESODBC_ES_TO_SQL_KEYWORD		SQL_VARCHAR
-/* 12: SQL_VARCHAR -> SQL_C_WCHAR */
-#define ESODBC_ES_TO_CSQL_TEXT			SQL_C_WCHAR /* XXX: CBOR needs _CHAR */
-#define ESODBC_ES_TO_SQL_TEXT			SQL_VARCHAR
-/* 12: SQL_VARCHAR -> SQL_C_WCHAR */
-#define ESODBC_ES_TO_CSQL_IP			SQL_C_WCHAR /* XXX: CBOR needs _CHAR */
-#define ESODBC_ES_TO_SQL_IP				SQL_VARCHAR
-/* 93: SQL_TYPE_TIMESTAMP -> SQL_C_TYPE_TIMESTAMP */
-#define ESODBC_ES_TO_CSQL_DATE			SQL_C_TYPE_TIMESTAMP
-#define ESODBC_ES_TO_SQL_DATE			SQL_TYPE_TIMESTAMP
-/* -3: SQL_VARBINARY -> SQL_C_BINARY */
-#define ESODBC_ES_TO_CSQL_BINARY		SQL_C_BINARY
-#define ESODBC_ES_TO_SQL_BINARY			SQL_VARBINARY
-/* 0: SQL_TYPE_NULL -> SQL_C_TINYINT */
-#define ESODBC_ES_TO_CSQL_NULL			SQL_C_STINYINT
-#define ESODBC_ES_TO_SQL_NULL			SQL_TYPE_NULL
-/* 1111: ??? -> SQL_C_BINARY */
-#define ESODBC_ES_TO_CSQL_UNSUPPORTED	SQL_C_BINARY
-#define ESODBC_ES_TO_SQL_UNSUPPORTED	ESODBC_SQL_UNSUPPORTED
-/* 2002: ??? -> SQL_C_BINARY */
-#define ESODBC_ES_TO_CSQL_OBJECT		SQL_C_BINARY
-#define ESODBC_ES_TO_SQL_OBJECT			ESODBC_SQL_OBJECT
-/* 2002: ??? -> SQL_C_BINARY */
-#define ESODBC_ES_TO_CSQL_NESTED		SQL_C_BINARY
-#define ESODBC_ES_TO_SQL_NESTED			ESODBC_SQL_NESTED
 
 #endif /* __DEFS_H__ */
 

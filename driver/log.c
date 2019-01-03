@@ -105,7 +105,7 @@ int parse_log_level(wstr_st *level)
 		return LOG_LEVEL_DISABLED;
 	}
 	/* first letter will indicate the log level */
-	switch ((unsigned)level->str[0] | 0x20) {
+	switch ((unsigned)level->str[0] | 0x20) { /* ~tolower(), ascii set only */
 		case 'e':
 			return LOG_LEVEL_ERR;
 		case 'w':
@@ -148,6 +148,8 @@ BOOL filelog_print_path(wstr_st *dest, wstr_st *dir_path, wstr_st *ident)
 	}
 
 	/* build the log full path name */
+	/* swprintf fails if formatted string would overrun the buffer, while
+	 * _snwprintf doesn't (though also not portable) */
 	cnt = _snwprintf(dest->str, dest->cnt,
 			L"%.*s" "%c" "%s" "_%d%.2d%.2d%.2d%.2d%.2d_" "%.*s" "%s",
 			(int)dir.cnt, dir.str,

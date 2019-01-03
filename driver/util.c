@@ -27,7 +27,7 @@ BOOL wstr2bool(wstr_st *val)
 	return TRUE;
 }
 
-BOOL str2ubigint(void *val, const BOOL wide, SQLUBIGINT *out)
+int str2ubigint(void *val, BOOL wide, SQLUBIGINT *out, BOOL strict)
 {
 	SQLUBIGINT res, digit;
 	size_t i, cnt;
@@ -46,7 +46,7 @@ BOOL str2ubigint(void *val, const BOOL wide, SQLUBIGINT *out)
 
 	if (cnt < 1) {
 		errno = EINVAL;
-		return FALSE;
+		return -1;
 	}
 	digit = wide ? wstr[0] : cstr[0];
 	i = (digit == '+') ? 1 : 0; /* L'+' =(ubigint)= '+' */
@@ -55,8 +55,12 @@ BOOL str2ubigint(void *val, const BOOL wide, SQLUBIGINT *out)
 		digit = wide ? wstr[i] - L'0' : cstr[i] - '0';
 		/* is it a number? */
 		if (digit < 0 || 9 < digit) {
-			errno = EINVAL;
-			return FALSE;
+			if (strict) {
+				errno = EINVAL;
+				return -1;
+			} else {
+				break;
+			}
 		}
 		assert(sizeof(SQLUBIGINT) == sizeof(uint64_t));
 		if (i < ESODBC_PRECISION_UINT64 - 1) {
@@ -66,27 +70,33 @@ BOOL str2ubigint(void *val, const BOOL wide, SQLUBIGINT *out)
 			/* would it overflow? */
 			if (max_div_10 < res) {
 				errno = ERANGE;
-				return FALSE;
+				return -1;
 			} else {
 				res *= 10;
 			}
 			if (ULLONG_MAX - res < digit) {
 				errno = ERANGE;
-				return FALSE;
+				return -1;
 			} else {
 				res += digit;
 			}
 		}
 	}
+	if (cnt <= 1 && digit == '+') {
+		/* prevent '+' or smth like '+a..' from returning a valid result */
+		return -1;
+	}
 	*out = res;
-	return TRUE;
+	assert(i <= INT_MAX); /* long will take less than INT_MAX digits */
+	return (long)i;
 }
 
-BOOL str2bigint(void *val, const BOOL wide, SQLBIGINT *out)
+int str2bigint(void *val, BOOL wide, SQLBIGINT *out, BOOL strict)
 {
 	SQLUBIGINT ull; /* unsigned long long */
 	size_t i;
-	BOOL negative, ret;
+	BOOL negative;
+	int ret;
 	cstr_st cstr;
 	wstr_st wstr;
 
@@ -100,7 +110,7 @@ BOOL str2bigint(void *val, const BOOL wide, SQLBIGINT *out)
 
 	if (i < 1) {
 		errno = EINVAL;
-		return FALSE;
+		return -1;
 	} else {
 		switch (wide ? wstr.str[0] : cstr.str[0]) {
 			case '-': /* L'-' =(size_t)= '-' */
@@ -120,68 +130,76 @@ BOOL str2bigint(void *val, const BOOL wide, SQLBIGINT *out)
 	if (wide) {
 		wstr.str += i;
 		wstr.cnt -= i;
-		ret = str2ubigint(&wstr, wide, &ull);
+		ret = str2ubigint(&wstr, wide, &ull, strict);
 	} else {
 		cstr.str += i;
 		cstr.cnt -= i;
-		ret = str2ubigint(&cstr, wide, &ull);
+		ret = str2ubigint(&cstr, wide, &ull, strict);
 	}
-	if (! ret) {
-		return FALSE;
+	if (ret < 0) { /* str2ubigint(,strict) won't return 0 */
+		return -1;
+	} else if (ret == 0 && i) { /* +/- only is NaN */
+		return -1;
 	}
 	if (negative) {
 		if ((SQLUBIGINT)LLONG_MIN < ull) {
 			errno = ERANGE;
-			return FALSE; /* underflow */
+			return -1; /* underflow */
 		} else {
 			*out = -(SQLBIGINT)ull;
 		}
 	} else {
 		if ((SQLUBIGINT)LLONG_MAX < ull) {
 			errno = ERANGE;
-			return FALSE; /* overflow */
+			return -1; /* overflow */
 		} else {
 			*out = (SQLBIGINT)ull;
 		}
 	}
-	return TRUE;
+	return ret + (int)i;
 }
 
-BOOL str2double(void *val, BOOL wide, SQLDOUBLE *dbl)
+int str2double(void *val, BOOL wide, SQLDOUBLE *dbl, BOOL strict)
 {
 	wstr_st wstr;
 	cstr_st cstr;
 	wchar_t *endwptr;
 	char *endptr;
+	size_t digits;
 
 	errno = 0;
 	if (wide) {
 		wstr = *(wstr_st *)val;
 		if (wstr.str[wstr.cnt]) {
 			// TODO: simple quick parser instead of scanf
-			if(_snwscanf(wstr.str, wstr.cnt, L"%le", (double *)dbl) != 1) {
-				return FALSE;
+			if (_snwscanf(wstr.str, wstr.cnt, L"%le", (double *)dbl) != 1) {
+				return -1;
 			}
+			digits = wstr.cnt; // TODO
 		} else {
 			*dbl = wcstod((wchar_t *)wstr.str, &endwptr);
-			if (errno || wstr.str + wstr.cnt != endwptr) {
-				return FALSE;
+			digits = endwptr - wstr.str;
+			if (errno || (strict && wstr.cnt != digits)) {
+				return -1;
 			}
 		}
 	} else {
 		cstr = *(cstr_st *)val;
 		if (cstr.str[cstr.cnt]) {
-			if(_snscanf(cstr.str, cstr.cnt, "%le", (double *)dbl) != 1) {
-				return FALSE;
+			if (_snscanf(cstr.str, cstr.cnt, "%le", (double *)dbl) != 1) {
+				return -1;
 			}
+			digits = cstr.cnt;
 		} else {
 			*dbl = strtod((char *)cstr.str, &endptr);
-			if (errno || cstr.str + cstr.cnt != endptr) {
-				return FALSE;
+			digits = endptr - cstr.str;
+			if (errno || (strict && cstr.cnt != digits)) {
+				return -1;
 			}
 		}
 	}
-	return TRUE;
+	assert(digits <= INT_MAX);
+	return (int)digits;
 }
 
 size_t i64tot(int64_t i64, void *buff, BOOL wide)
@@ -208,22 +226,36 @@ size_t ui64tot(uint64_t ui64, void *buff, BOOL wide)
 }
 
 /*
- * Trims leading and trailing WS of a wide string of 'chars' length.
+ * Trims leading WS of a wide string of 'chars' length.
  * 0-terminator should not be counted (as it's a non-WS).
  */
-void wtrim_ws(wstr_st *wstr)
+void wltrim_ws(wstr_st *wstr)
 {
 	size_t cnt = wstr->cnt;
 	SQLWCHAR *wcrr = wstr->str;
 	SQLWCHAR *wend = wcrr + cnt;
 
-	/* right trim */
+	/* left trim */
 	while (wcrr < wend && iswspace(*wcrr)) {
 		wcrr ++;
 		cnt --;
 	}
 
-	/* left trim */
+	*wstr = (wstr_st) {
+		wcrr, cnt
+	};
+}
+
+/*
+ * Trims leading and trailing WS of a wide string of 'chars' length.
+ * 0-terminator should not be counted (as it's a non-WS).
+ */
+void wrtrim_ws(wstr_st *wstr)
+{
+	size_t cnt = wstr->cnt;
+	SQLWCHAR *wcrr = wstr->str;
+
+	/* right trim */
 	while (cnt && iswspace(wcrr[cnt - 1])) {
 		cnt --;
 	}
@@ -232,6 +264,7 @@ void wtrim_ws(wstr_st *wstr)
 		wcrr, cnt
 	};
 }
+
 void trim_ws(cstr_st *cstr)
 {
 	size_t cnt = cstr->cnt;
@@ -253,6 +286,7 @@ void trim_ws(cstr_st *cstr)
 		crr, cnt
 	};
 }
+
 
 /*
  * Converts a wchar_t string to a C string for ASCII characters.

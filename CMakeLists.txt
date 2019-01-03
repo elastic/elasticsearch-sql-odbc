@@ -17,6 +17,8 @@ set(VERSION_QUALIFIER $ENV{VERSION_QUALIFIER} CACHE STRING
 
 # build a UNICODE driver? (the only supported way currently)
 set(IS_UNICODE 1)
+# should the ODBC driver's name respect the Short Format Name?
+set(SFN_DRV_NAME 1)
 
 #include(GenerateExportHeader)
 
@@ -52,7 +54,11 @@ else (${IS_UNICODE})
 endif (${IS_UNICODE})
 
 # driver name (ANSI/Unicode x 32/64)
-set(DRV_NAME "${DRIVER_BASE_NAME}${PROJECT_VERSION_MAJOR}${ENCODING}${BARCH}")
+if (${SFN_DRV_NAME})
+	set(DRV_NAME "${DRIVER_BASE_NAME}${PROJECT_VERSION_MAJOR}${ENCODING}")
+else (${SFN_DRV_NAME})
+	set(DRV_NAME "${DRIVER_BASE_NAME}${PROJECT_VERSION_MAJOR}${ENCODING}${BARCH}")
+endif (${SFN_DRV_NAME})
 
 # Turn on the ability to create folders to organize projects (.vcproj)
 # It creates "CMakePredefinedTargets" folder by default and adds CMake
@@ -87,6 +93,7 @@ if (${WIN32})
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /W3")
 	# TODO: review@alpha
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /D_CRT_SECURE_NO_WARNINGS")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /D_CRT_NONSTDC_NO_DEPRECATE")
 	# don't complain about non-constant aggregate initializer (C4204)
 	# set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /Ze")
 	# parallel building
@@ -109,7 +116,8 @@ if (${WIN32})
 	#
 	# set the version identifiers
 	#
-	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_VERSION=${DRV_VERSION}")
+	set(CMAKE_C_FLAGS
+		"${CMAKE_C_FLAGS} /DDRV_VERSION=${DRV_VERSION}${VERSION_QUALIFIER}")
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_SRC_VER=${DRV_SRC_VER}")
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DDRV_ENCODING=${ENCODING}")
 	# ...including the build type indicator
@@ -288,11 +296,39 @@ add_custom_target(curlclean
 	)
 
 #
+# Patch installer's and editor's AssemblyInfos with the version being built
+#
+execute_process(COMMAND
+	${CMAKE_SOURCE_DIR}/installer/build.bat patchversions ${DRV_VERSION}${VERSION_QUALIFIER}
+	RESULT_VARIABLE CMD_RETURN
+	OUTPUT_VARIABLE CMD_OUTPUT
+	ERROR_VARIABLE CMD_OUTERR
+	)
+if (${CMD_RETURN})
+	message(WARNING "Patching installer with the versions failed:")
+	message("\tret: ${CMD_RETURN}")
+	message("\tout: ${CMD_OUTPUT}")
+	message("\terr: ${CMD_OUTERR}")
+endif (${CMD_RETURN})
+
+#
 # DSN Config GUI
 #
 set(DSNBND_LIB_BIN_DIR_BASE ${CMAKE_BINARY_DIR}/dsneditor-${TARCH})
 set(DSNEDITOR_INC_PATH ${CMAKE_SOURCE_DIR}/dsneditor/EsOdbcDsnBinding/)
+
+# Generate resource file for the editor binding.
+# The directory where .vcxproj defines it isn't yet created, though: that
+# happens later when the "dsneditor" custom command below is executed =>
+# generate it in the general build directory for now and copy it part of the
+# custom command.
+configure_file(${CMAKE_SOURCE_DIR}/dsneditor/EsOdbcDsnBinding/EsOdbcDsnBinding.rc.cmake ${CMAKE_BINARY_DIR}/EsOdbcDsnBinding.rc)
+
+file(TO_NATIVE_PATH ${DSNBND_LIB_BIN_DIR_BASE}-$<CONFIG>/
+	DSNBND_LIB_BIN_DIR_BASE_NATIVE)
 add_custom_target(dsneditor
+	COMMAND xcopy /Y/F EsOdbcDsnBinding.rc ${DSNBND_LIB_BIN_DIR_BASE_NATIVE}
+	WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 	COMMAND MSBuild ${CMAKE_SOURCE_DIR}/dsneditor/EsOdbcDsnBinding/EsOdbcDsnBinding.vcxproj
 		# place all the build items (by- & products) into a single dir
 		/p:OutputPath=${DSNBND_LIB_BIN_DIR_BASE}-$<CONFIG>/
@@ -303,7 +339,6 @@ add_custom_target(dsneditor
 		 /p:Platform=${TARCH} # make it explicit, for x-arch builds
 	WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 	COMMENT "Building the DSN editor libraries.")
-
 
 #
 # finally, set destination library

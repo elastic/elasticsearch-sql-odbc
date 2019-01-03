@@ -15,7 +15,6 @@
 open System
 open Fake
 open Products
-open Products.Products
 open Products.Paths
 open Build.Builder
 open Commandline
@@ -24,19 +23,25 @@ open System.Management.Automation
 
 let versionToBuild = Commandline.parse()
 
-if (getBuildParam "target" |> toLower <> "help") then 
-    traceHeader (sprintf "Products:%s%s%s" Environment.NewLine Environment.NewLine versionToBuild.FullVersion)
-
 Target "Clean" (fun _ ->
-    CleanDirs [MsiBuildDir; OutDir;]
+    PatchAssemblyInfos (Products.Products.EmptyVersion)
+    CleanDirs [MsiBuildDir]
+    for file in System.IO.Directory.EnumerateFiles(OutDir, "*.msi") do
+        System.IO.File.Delete(file)
 )
 
 Target "BuildInstaller" (fun () ->
+    traceHeader (sprintf "Products:%s%s%s" Environment.NewLine Environment.NewLine versionToBuild.FullVersion)
     BuildMsi versionToBuild
 )
 
 Target "Release" (fun () ->
     trace "Build in Release mode. MSI will be signed."
+)
+
+Target "PatchVersions" (fun () ->
+    trace "Patching versions."
+    PatchAssemblyInfos versionToBuild
 )
 
 Target "Integrate" (fun () ->
@@ -78,9 +83,8 @@ Target "Help" (fun () -> trace Commandline.usage)
 "Clean"
   ==> "BuildInstaller"
   ==> "Release"
+  
+//"BuildInstaller"
+//  ==> "Integrate"
 
-"Clean"
-"BuildInstaller"
-  ==> "Integrate"
-
-RunTargetOrDefault "BuildInstaller"
+RunTargetOrDefault "Help"

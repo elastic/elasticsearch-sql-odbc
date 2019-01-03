@@ -7,9 +7,9 @@
     <ProjectGuid>{44555887-C439-470C-944D-8866EC3D7067}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>ODBCInstaller</RootNamespace>
-    <AssemblyName>ODBCInstaller</AssemblyName>
-    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <RootNamespace>Installer</RootNamespace>
+    <AssemblyName>Installer</AssemblyName>
+    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <TargetFrameworkProfile />
@@ -85,6 +85,12 @@
       <Private>True</Private>
       <Paket>True</Paket>
     </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\InstallerCA\InstallerCA.csproj">
+      <Project>{4498d74b-e5c5-48bb-a9d4-8cc55b7b0909}</Project>
+      <Name>InstallerCA</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="..\..\packages\WixSharp.bin\build\WixSharp.bin.targets" Condition="Exists('..\..\packages\WixSharp.bin\build\WixSharp.bin.targets')" Label="Paket" />
 </Project>
