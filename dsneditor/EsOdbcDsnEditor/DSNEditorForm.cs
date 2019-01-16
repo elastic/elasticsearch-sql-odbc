@@ -23,6 +23,7 @@ namespace EsOdbcDsnEditor
 	public partial class DsnEditorForm : Form
 	{
 		private const int ESODBC_DSN_EXISTS_ERROR = -1;
+		private const int ESODBC_DSN_NAME_INVALID_ERROR = -4;
 
 		private DriverCallbackDelegate testConnection;
 		private DriverCallbackDelegate saveDsn;
@@ -186,7 +187,9 @@ namespace EsOdbcDsnEditor
 			}
 
 			if (errorMessage.Length <= 0) {
-				errorMessage = "Saving the DSN failed";
+				errorMessage = (result == ESODBC_DSN_NAME_INVALID_ERROR)
+					? "Invalid DSN name"
+					: "Invalid DSN name";
 			}
 
 			MessageBox.Show(errorMessage, "Operation failure", MessageBoxButtons.OK, MessageBoxIcon.Error);
