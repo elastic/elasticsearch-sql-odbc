@@ -189,7 +189,7 @@ namespace EsOdbcDsnEditor
 			if (errorMessage.Length <= 0) {
 				errorMessage = (result == ESODBC_DSN_NAME_INVALID_ERROR)
 					? "Invalid DSN name"
-					: "Invalid DSN name";
+					: "Saving the DSN failed";
 			}
 
 			MessageBox.Show(errorMessage, "Operation failure", MessageBoxButtons.OK, MessageBoxIcon.Error);
