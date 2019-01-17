@@ -287,6 +287,18 @@ void trim_ws(cstr_st *cstr)
 	};
 }
 
+BOOL wtrim_at(wstr_st *wstr, SQLWCHAR wchar)
+{
+	SQLWCHAR *pos, *end;
+
+	for (pos = wstr->str, end = pos + wstr->cnt; pos < end; pos ++) {
+		if (*pos == wchar) {
+			wstr->cnt = pos - wstr->str;
+			return TRUE;
+		}
+	}
+	return FALSE;
+}
 
 /*
  * Converts a wchar_t string to a C string for ASCII characters.
@@ -398,7 +410,8 @@ static inline size_t json_escaped_len(const char *json, size_t len)
 		switch(uchar) {
 			case '"':
 			case '\\':
-			case '/':
+			/* '/' needs no quoting as per ECMA spec, even if listed on
+			 * json.org; ES/SQL uses it unescaped in cursor values. */
 			case '\b':
 			case '\f':
 			case '\n':
@@ -449,7 +462,8 @@ size_t json_escape(const char *jin, size_t inlen, char *jout, size_t outlen)
 			} while (0);
 			case '"':
 			case '\\':
-			case '/':
+			/* '/' needs no quoting as per ECMA spec, even if listed on
+			 * json.org; ES/SQL uses it unescaped in cursor values. */
 				if (outlen <= pos + 1) {
 					i = inlen; // break the for loop
 					continue;
