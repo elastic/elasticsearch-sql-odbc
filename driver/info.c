@@ -304,8 +304,9 @@ static SQLRETURN getinfo_dbms_product(
 					&MK_WSTR(ESODBC_ELASTICSEARCH_NAME), BufferLength,
 					StringLengthPtr);
 		case SQL_DBMS_VER:
-			DBGH(dbc, "requested: DBMS version (`%s`).", STR(DRV_VERSION));
-			return write_wstr(dbc, InfoValue, &MK_WSTR(STR(DRV_VERSION)),
+			DBGH(dbc, "requested: DBMS version (`" LWPDL "`).",
+					LWSTR(&dbc->srv_ver.string));
+			return write_wstr(dbc, InfoValue, &dbc->srv_ver.string,
 					BufferLength, StringLengthPtr);
 	}
 	*handled = FALSE;

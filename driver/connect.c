@@ -1063,9 +1063,9 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	/*
 	 * set the REST body format: JSON/CBOR
 	 */
-	if (EQ_CASE_WSTR(&attrs->packing, &MK_WSTR("JSON"))) {
+	if (EQ_CASE_WSTR(&attrs->packing, &MK_WSTR(ESODBC_DSN_PACK_JSON))) {
 		dbc->pack_json = TRUE;
-	} else if (EQ_CASE_WSTR(&attrs->packing, &MK_WSTR("CBOR"))) {
+	} else if (EQ_CASE_WSTR(&attrs->packing, &MK_WSTR(ESODBC_DSN_PACK_CBOR))) {
 		dbc->pack_json = FALSE;
 	} else {
 		ERRH(dbc, "unknown packing encoding '" LWPDL "'.",
@@ -1074,6 +1074,28 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 		goto err;
 	}
 	INFOH(dbc, "pack JSON: %s.", dbc->pack_json ? "true" : "false");
+
+	/*
+	 * Version checking mode
+	 */
+	if (EQ_CASE_WSTR(&attrs->version_checking,
+				&MK_WSTR(ESODBC_DSN_VC_STRICT))
+			|| EQ_CASE_WSTR(&attrs->version_checking,
+				&MK_WSTR(ESODBC_DSN_VC_MAJOR))
+#			ifndef NDEBUG
+			|| EQ_CASE_WSTR(&attrs->version_checking,
+				&MK_WSTR(ESODBC_DSN_VC_NONE))
+#			endif /* NDEBUG */
+			) {
+		dbc->srv_ver.checking = (unsigned char)attrs->version_checking.str[0];
+		DBGH(dbc, "version checking mode: %c.", dbc->srv_ver.checking);
+	} else {
+		ERRH(dbc, "unknown version checking mode '" LWPDL "'.",
+			LWSTR(&attrs->version_checking));
+		SET_HDIAG(dbc, SQL_STATE_HY000, "invalid version checking mode "
+				"setting", 0);
+		goto err;
+	}
 
 	return SQL_SUCCESS;
 err:
@@ -1146,6 +1168,11 @@ void cleanup_dbc(esodbc_dbc_st *dbc)
 	} else {
 		assert(dbc->no_types == 0);
 	}
+	if (dbc->srv_ver.string.cnt) { /* .str might be compromized by the union */
+		free(dbc->srv_ver.string.str);
+		dbc->srv_ver.string.str = NULL;
+		dbc->srv_ver.string.cnt = 0;
+	}
 
 	assert(dbc->abuff == NULL);
 	cleanup_curl(dbc);
@@ -1168,9 +1195,6 @@ static SQLRETURN check_server_version(esodbc_dbc_st *dbc)
 	const wchar_t *version_key[] = {L"number"};
 	wstr_st ver_no;
 	wstr_st own_ver = WSTR_INIT(STR(DRV_VERSION)); /*build-time define*/
-#	ifndef NDEBUG
-	SQLWCHAR *pos, *end;
-#	endif /* !NDEBUG */
 	static const wchar_t err_msg_fmt[] = L"Version mismatch between server ("
 		WPFWP_LDESC ") and driver (" WPFWP_LDESC "). Please use a driver whose"
 		" version matches that of your server.";
@@ -1223,34 +1247,51 @@ static SQLRETURN check_server_version(esodbc_dbc_st *dbc)
 
 #	ifndef NDEBUG
 	/* strip any qualifiers (=anything following a first `-`) in debug mode */
-	for (pos = ver_no.str, end = pos + ver_no.cnt; pos < end; pos ++) {
-		if (*pos == L'-') {
-			ver_no.cnt = pos - ver_no.str;
-			break;
-		}
-	}
-	for (pos = own_ver.str, end = pos + own_ver.cnt; pos < end; pos ++) {
-		if (*pos == L'-') {
-			own_ver.cnt = pos - own_ver.str;
-			break;
-		}
-	}
+	wtrim_at(&ver_no, L'-');
+	wtrim_at(&own_ver, L'-');
 #	endif /* !NDEBUG */
 
-	if (! EQ_WSTR(&ver_no, &own_ver)) {
-		ERRH(dbc, "version mismatch: server: " LWPDL ", own: " LWPDL ".",
-				LWSTR(&ver_no), LWSTR(&own_ver));
-		n = swprintf(wbuff, sizeof(wbuff)/sizeof(wbuff[0]), err_msg_fmt,
-				LWSTR(&ver_no), LWSTR(&own_ver));
-		ret = post_diagnostic(dbc, SQL_STATE_HY000, (n <= 0) ?
-				L"Version mismatch between server and driver" :
-				wbuff, 0);
-	} else {
-		INFOH(dbc, "server and driver versions aligned to: " LWPDL ".",
-				LWSTR(&own_ver));
-		ret = SQL_SUCCESS;
+	if (tolower(dbc->srv_ver.checking) == tolower(ESODBC_DSN_VC_MAJOR[0])) {
+		/* trim versions to the first dot, i.e. major version */
+		wtrim_at(&ver_no, L'.');
+		wtrim_at(&own_ver, L'.');
 	}
 
+	if (tolower(dbc->srv_ver.checking) != tolower(ESODBC_DSN_VC_NONE[0])) {
+		if (! EQ_WSTR(&ver_no, &own_ver)) {
+			ERRH(dbc, "version mismatch: server: " LWPDL ", "
+					"own: " LWPDL ".", LWSTR(&ver_no), LWSTR(&own_ver));
+			n = swprintf(wbuff, sizeof(wbuff)/sizeof(wbuff[0]),
+					err_msg_fmt, LWSTR(&ver_no), LWSTR(&own_ver));
+			ret = post_diagnostic(dbc, SQL_STATE_HY000, (n <= 0) ?
+					L"Version mismatch between server and driver" :
+					wbuff, 0);
+		} else {
+			INFOH(dbc, "server and driver versions aligned to: " LWPDL ".",
+					LWSTR(&own_ver));
+			ret = SQL_SUCCESS;
+		}
+#	ifndef NDEBUG
+	} else {
+		WARNH(dbc, "version checking disabled.");
+#	endif /* !NDEBUG */
+	}
+
+	/* re-read the original version (before trimming) and dup it */
+	ver_no.str = (SQLWCHAR *)UJReadString(o_number, &ver_no.cnt);
+	/* version is returned to application, which requires a NTS => +1 for \0 */
+	if (! (dbc->srv_ver.string.str = malloc(ver_no.cnt * sizeof(SQLWCHAR) + /*\0*/1))) {
+		ERRNH(dbc, "OOM for %zd.", ver_no.cnt * sizeof(SQLWCHAR));
+		post_diagnostic(dbc, SQL_STATE_HY001, NULL, 0);
+		goto err;
+	} else {
+		memcpy(dbc->srv_ver.string.str, ver_no.str,
+				ver_no.cnt * sizeof(SQLWCHAR));
+		dbc->srv_ver.string.cnt = ver_no.cnt;
+		dbc->srv_ver.string.str[ver_no.cnt] = 0;
+	}
+
+	free(resp.str);
 	assert(state);
 	UJFree(state);
 	return ret;
@@ -1259,6 +1300,7 @@ err:
 	if (resp.cnt) {
 		ERRH(dbc, "failed to process server's answer: [%zu] `" LWPDL "`.",
 				resp.cnt, LCSTR(&resp));
+		free(resp.str);
 	}
 	if (state) {
 		UJFree(state);

@@ -153,7 +153,9 @@ void trim_ws(cstr_st *str);
 void wltrim_ws(wstr_st *wstr);
 void wrtrim_ws(wstr_st *wstr);
 #define wtrim_ws(_w) do { wltrim_ws(_w); wrtrim_ws(_w); } while (0)
-
+/* Trim the w-string at first encounter of the give w-char.
+ * Returns TRUE if character has been encounter / trimming occured. */
+BOOL wtrim_at(wstr_st *wstr, SQLWCHAR wchar);
 
 BOOL wstr2bool(wstr_st *val);
 /* Converts a [cw]str_st to a SQL(U)BIGINT.

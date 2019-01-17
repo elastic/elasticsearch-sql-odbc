@@ -77,6 +77,7 @@ int assign_dsn_attr(esodbc_dsn_attrs_st *attrs,
 		{&MK_WSTR(ESODBC_DSN_PACKING), &attrs->packing},
 		{&MK_WSTR(ESODBC_DSN_MAX_FETCH_SIZE), &attrs->max_fetch_size},
 		{&MK_WSTR(ESODBC_DSN_MAX_BODY_SIZE_MB), &attrs->max_body_size},
+		{&MK_WSTR(ESODBC_DSN_VERSION_CHECKING), &attrs->version_checking},
 		{&MK_WSTR(ESODBC_DSN_TRACE_ENABLED), &attrs->trace_enabled},
 		{&MK_WSTR(ESODBC_DSN_TRACE_FILE), &attrs->trace_file},
 		{&MK_WSTR(ESODBC_DSN_TRACE_LEVEL), &attrs->trace_level},
@@ -404,6 +405,7 @@ long TEST_API write_00_list(esodbc_dsn_attrs_st *attrs,
 		{&MK_WSTR(ESODBC_DSN_PACKING), &attrs->packing},
 		{&MK_WSTR(ESODBC_DSN_MAX_FETCH_SIZE), &attrs->max_fetch_size},
 		{&MK_WSTR(ESODBC_DSN_MAX_BODY_SIZE_MB), &attrs->max_body_size},
+		{&MK_WSTR(ESODBC_DSN_VERSION_CHECKING), &attrs->version_checking},
 		{&MK_WSTR(ESODBC_DSN_TRACE_ENABLED), &attrs->trace_enabled},
 		{&MK_WSTR(ESODBC_DSN_TRACE_FILE), &attrs->trace_file},
 		{&MK_WSTR(ESODBC_DSN_TRACE_LEVEL), &attrs->trace_level},
@@ -674,6 +676,11 @@ BOOL write_system_dsn(esodbc_dsn_attrs_st *new_attrs,
 			old_attrs ? &old_attrs->max_body_size : NULL
 		},
 		{
+			&MK_WSTR(ESODBC_DSN_VERSION_CHECKING),
+			&new_attrs->version_checking,
+			old_attrs ? &old_attrs->version_checking : NULL
+		},
+		{
 			&MK_WSTR(ESODBC_DSN_TRACE_ENABLED), &new_attrs->trace_enabled,
 			old_attrs ? &old_attrs->trace_enabled : NULL
 		},
@@ -757,6 +764,7 @@ long TEST_API write_connection_string(esodbc_dsn_attrs_st *attrs,
 		{&attrs->packing, &MK_WSTR(ESODBC_DSN_PACKING)},
 		{&attrs->max_fetch_size, &MK_WSTR(ESODBC_DSN_MAX_FETCH_SIZE)},
 		{&attrs->max_body_size, &MK_WSTR(ESODBC_DSN_MAX_BODY_SIZE_MB)},
+		{&attrs->version_checking, &MK_WSTR(ESODBC_DSN_VERSION_CHECKING)},
 		{&attrs->trace_enabled, &MK_WSTR(ESODBC_DSN_TRACE_ENABLED)},
 		{&attrs->trace_file, &MK_WSTR(ESODBC_DSN_TRACE_FILE)},
 		{&attrs->trace_level, &MK_WSTR(ESODBC_DSN_TRACE_LEVEL)},
@@ -834,6 +842,9 @@ void assign_dsn_defaults(esodbc_dsn_attrs_st *attrs)
 			/*overwrite?*/FALSE);
 	res |= assign_dsn_attr(attrs, &MK_WSTR(ESODBC_DSN_MAX_BODY_SIZE_MB),
 			&MK_WSTR(ESODBC_DEF_MAX_BODY_SIZE_MB),
+			/*overwrite?*/FALSE);
+	res |= assign_dsn_attr(attrs, &MK_WSTR(ESODBC_DSN_VERSION_CHECKING),
+			&MK_WSTR(ESODBC_DEF_VERSION_CHECKING),
 			/*overwrite?*/FALSE);
 
 	/* default: no trace file */
