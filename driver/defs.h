@@ -164,7 +164,9 @@
 #define ESODBC_DEF_TRACE_ENABLED	"0"
 /* default tracing level */
 #define ESODBC_DEF_TRACE_LEVEL		"WARN"
-#define ESODBC_PWD_VAL_SUBST		"<original substituted>"
+#define ESODBC_PWD_VAL_SUBST		"<redacted>"
+/* default version checking mode: strict, major, none (dbg only) */
+#define ESODBC_DEF_VERSION_CHECKING	ESODBC_DSN_VC_STRICT
 
 /*
  *
