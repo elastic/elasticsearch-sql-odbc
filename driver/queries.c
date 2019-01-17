@@ -1831,9 +1831,8 @@ static SQLRETURN serialize_params(esodbc_stmt_st *stmt, char *dest,
 SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 {
 	SQLRETURN ret = SQL_SUCCESS;
-	size_t bodylen, pos, u8len, len;
+	size_t bodylen, pos, len;
 	char *body;
-	char u8curs[ESODBC_BODY_BUF_START_SIZE];
 	esodbc_dbc_st *dbc = stmt->hdr.dbc;
 	esodbc_desc_st *apd = stmt->apd;
 
@@ -1849,18 +1848,11 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 	bodylen = 1; /* { */
 	/* evaluate how long the stringified REST object will be */
 	if (stmt->rset.ecurs.cnt) { /* eval CURSOR object length */
-		/* convert cursor to C [mb]string. */
-		/* TODO: ansi_w2c() fits better for Base64 encoded cursors. */
-		u8len = WCS2U8(stmt->rset.ecurs.str, (int)stmt->rset.ecurs.cnt, u8curs,
-				sizeof(u8curs));
-		if (u8len <= 0) {
-			ERRH(stmt, "failed to convert cursor `" LWPDL "` to UTF8: %d.",
-				LWSTR(&stmt->rset.ecurs), WCS2U8_ERRNO());
-			RET_HDIAGS(stmt, SQL_STATE_24000);
-		}
-
+		/* assumptions: (1) the cursor is a Base64 encoded string and thus
+		 * (2) no JSON escaping needed.
+		 * (both assertions checked on copy, below). */
 		bodylen += sizeof(JSON_KEY_CURSOR) - 1; /* "cursor":  */
-		bodylen += json_escape(u8curs, u8len, NULL, 0);
+		bodylen += stmt->rset.ecurs.cnt;
 		bodylen += 2; /* 2x `"` for cursor value */
 	} else { /* eval QUERY object length */
 		bodylen += sizeof(JSON_KEY_QUERY) - 1;
@@ -1913,7 +1905,20 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 		memcpy(body + pos, JSON_KEY_CURSOR, sizeof(JSON_KEY_CURSOR) - 1);
 		pos += sizeof(JSON_KEY_CURSOR) - 1;
 		body[pos ++] = '"';
-		pos += json_escape(u8curs, u8len, body + pos, bodylen - pos);
+		if (ascii_w2c(stmt->rset.ecurs.str, body + pos,
+					stmt->rset.ecurs.cnt) <= 0) {
+			if (buff->cnt < bodylen) { /* has it been alloc'd? */
+				free(body);
+			}
+			ERRH(stmt, "failed to convert cursor `" LWPDL "` to ASCII.",
+				LWSTR(&stmt->rset.ecurs));
+			RET_HDIAGS(stmt, SQL_STATE_24000);
+		} else {
+			/* no character needs JSON escaping */
+			assert(stmt->rset.ecurs.cnt == json_escape(body + pos,
+						stmt->rset.ecurs.cnt, NULL, 0));
+			pos += stmt->rset.ecurs.cnt;
+		}
 		body[pos ++] = '"';
 	} else { /* copy QUERY object */
 		memcpy(body + pos, JSON_KEY_QUERY, sizeof(JSON_KEY_QUERY) - 1);
