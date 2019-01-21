@@ -126,7 +126,7 @@
 #define ESODBC_DSN_SAMPLE_NAME			"Elasticsearch ODBC Sample DSN"
 
 /* SQL plugin's REST endpoint for SQL */
-#define ELASTIC_SQL_PATH				"/_xpack/sql"
+#define ELASTIC_SQL_PATH				"/_sql"
 
 /* initial receive buffer size for REST answers */
 #define ESODBC_BODY_BUF_START_SIZE		(4 * 1024)

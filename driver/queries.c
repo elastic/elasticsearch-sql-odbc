@@ -1248,7 +1248,7 @@ SQLRETURN EsSQLCloseCursor(SQLHSTMT StatementHandle)
 		ERRH(stmt, "no open cursor for statement");
 		RET_HDIAGS(stmt, SQL_STATE_24000);
 	}
-	/* TODO: POST /_xpack/sql/close {"cursor":"<cursor>"} if cursor */
+	/* TODO: POST /_sql/close {"cursor":"<cursor>"} if cursor */
 	return EsSQLFreeStmt(StatementHandle, SQL_CLOSE);
 }
 
@@ -1275,6 +1275,17 @@ SQLRETURN EsSQLCancelHandle(SQLSMALLINT HandleType, SQLHANDLE InputHandle)
 {
 	/* see EsSQLCancel() */
 	DBGH(InputHandle, "canceling current handle operation -- NOOP.");
+	return SQL_SUCCESS;
+}
+
+SQLRETURN EsSQLEndTran(SQLSMALLINT HandleType, SQLHANDLE Handle,
+	SQLSMALLINT CompletionType)
+{
+	WARNH(Handle, "transaction ending requested (%hd), despite no "
+			"transactional support advertized", CompletionType);
+	if (CompletionType == SQL_ROLLBACK) {
+		RET_HDIAGS(Handle, SQL_STATE_HYC00);
+	}
 	return SQL_SUCCESS;
 }
 

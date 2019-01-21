@@ -1348,7 +1348,13 @@ SQLRETURN  SQL_API SQLCancelHandle(SQLSMALLINT HandleType,
 SQLRETURN  SQL_API SQLEndTran(SQLSMALLINT HandleType, SQLHANDLE Handle,
 	SQLSMALLINT CompletionType)
 {
-	RET_NOT_IMPLEMENTED(Handle);
+	SQLRETURN ret;
+	TRACE3(_IN, Handle, "hph", HandleType, Handle, CompletionType);
+	HND_LOCK(Handle);
+	ret = EsSQLEndTran(HandleType, Handle, CompletionType);
+	HND_UNLOCK(Handle);
+	TRACE4(_IN, Handle, "dhph", ret, HandleType, Handle, CompletionType);
+	return ret;
 }
 
 
