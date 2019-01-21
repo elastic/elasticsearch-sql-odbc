@@ -30,7 +30,6 @@
 #define TYPE_BYTE			"BYTE"
 #define TYPE_LONG			"LONG"
 #define TYPE_TEXT			"TEXT"
-#define TYPE_DATE			"DATE"
 #define TYPE_NULL			"NULL"
 /* 5 */
 #define TYPE_SHORT			"SHORT"
@@ -44,6 +43,8 @@
 #define TYPE_BOOLEAN		"BOOLEAN"
 #define TYPE_INTEGER		"INTEGER"
 #define TYPE_KEYWORD		"KEYWORD"
+/* 8 */
+#define TYPE_DATETIME		"DATETIME"
 /* 10 */
 #define TYPE_HALF_FLOAT		"HALF_FLOAT"
 /* 11 */
@@ -116,8 +117,8 @@
 #define ES_IP_TO_CSQL			SQL_C_WCHAR /* XXX: CBOR needs _CHAR */
 #define ES_IP_TO_SQL			SQL_VARCHAR
 /* 93: SQL_TYPE_TIMESTAMP -> SQL_C_TYPE_TIMESTAMP */
-#define ES_DATE_TO_CSQL			SQL_C_TYPE_TIMESTAMP
-#define ES_DATE_TO_SQL			SQL_TYPE_TIMESTAMP
+#define ES_DATETIME_TO_CSQL		SQL_C_TYPE_TIMESTAMP
+#define ES_DATETIME_TO_SQL		SQL_TYPE_TIMESTAMP
 /* -3: SQL_VARBINARY -> SQL_C_BINARY */
 #define ES_BINARY_TO_CSQL		SQL_C_BINARY
 #define ES_BINARY_TO_SQL		SQL_VARBINARY
@@ -1551,14 +1552,6 @@ static BOOL elastic_name2types(wstr_st *type_name,
 						return TRUE;
 					}
 					break;
-				case (SQLWCHAR)'d':
-					if (! wmemncasecmp(type_name->str, MK_WPTR(TYPE_DATE),
-							type_name->cnt)) {
-						*c_sql = ES_DATE_TO_CSQL;
-						*sql = ES_DATE_TO_SQL;
-						return TRUE;
-					}
-					break;
 				case (SQLWCHAR)'n':
 					if (! wmemncasecmp(type_name->str, MK_WPTR(TYPE_NULL),
 							type_name->cnt)) {
@@ -1657,6 +1650,16 @@ static BOOL elastic_name2types(wstr_st *type_name,
 						return TRUE;
 					}
 					break;
+			}
+			break;
+
+		/* 8: DATETIME */
+		case sizeof(TYPE_DATETIME) - 1:
+			if (! wmemncasecmp(type_name->str, MK_WPTR(TYPE_DATETIME),
+					type_name->cnt)) {
+				*c_sql = ES_DATETIME_TO_CSQL;
+				*sql = ES_DATETIME_TO_SQL;
+				return TRUE;
 			}
 			break;
 
