@@ -1248,7 +1248,7 @@ SQLRETURN EsSQLCloseCursor(SQLHSTMT StatementHandle)
 		ERRH(stmt, "no open cursor for statement");
 		RET_HDIAGS(stmt, SQL_STATE_24000);
 	}
-	/* TODO: POST /_sql/close {"cursor":"<cursor>"} if cursor */
+	/* TODO: POST /_xpack/sql/close {"cursor":"<cursor>"} if cursor */
 	return EsSQLFreeStmt(StatementHandle, SQL_CLOSE);
 }
 
