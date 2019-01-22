@@ -36,12 +36,12 @@ TEST_F(ConvertSQL2C_Timestamp, Timestamp2Timestamp_noTruncate) {
 #undef SQL_VAL
 #undef SQL
 #define SQL_VAL   "2345-01-23T12:34:56.789Z"
-#define SQL   "CAST(" SQL_VAL " AS DATE)"
+#define SQL   "CAST(" SQL_VAL " AS DATETIME)"
 
   const char json_answer[] = "\
 {\
   \"columns\": [\
-    {\"name\": \"" SQL "\", \"type\": \"date\"}\
+    {\"name\": \"" SQL "\", \"type\": \"DATETIME\"}\
   ],\
   \"rows\": [\
     [\"" SQL_VAL "\"]\
@@ -69,12 +69,12 @@ TEST_F(ConvertSQL2C_Timestamp, Timestamp2Timestamp_trimming) {
 #undef SQL_VAL
 #undef SQL
 #define SQL_VAL "   2345-01-23T12:34:56.789Z  "
-#define SQL   "CAST(" SQL_VAL " AS DATE)"
+#define SQL   "CAST(" SQL_VAL " AS DATETIME)"
 
   const char json_answer[] = "\
 {\
   \"columns\": [\
-    {\"name\": \"" SQL "\", \"type\": \"date\"}\
+    {\"name\": \"" SQL "\", \"type\": \"DATETIME\"}\
   ],\
   \"rows\": [\
     [\"" SQL_VAL "\"]\
@@ -201,12 +201,12 @@ TEST_F(ConvertSQL2C_Timestamp, String2Timestamp_invalidFormat_22018) {
 #undef SQL_VAL
 #undef SQL
 #define SQL_VAL "invalid 2345-01-23T12:34:56.789Z"
-#define SQL   "CAST(" SQL_VAL " AS DATE)"
+#define SQL   "CAST(" SQL_VAL " AS DATETIME)"
 
   const char json_answer[] = "\
 {\
   \"columns\": [\
-    {\"name\": \"" SQL "\", \"type\": \"date\"}\
+    {\"name\": \"" SQL "\", \"type\": \"DATETIME\"}\
   ],\
   \"rows\": [\
     [\"" SQL_VAL "\"]\
