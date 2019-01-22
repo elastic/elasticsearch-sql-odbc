@@ -1278,6 +1278,17 @@ SQLRETURN EsSQLCancelHandle(SQLSMALLINT HandleType, SQLHANDLE InputHandle)
 	return SQL_SUCCESS;
 }
 
+SQLRETURN EsSQLEndTran(SQLSMALLINT HandleType, SQLHANDLE Handle,
+	SQLSMALLINT CompletionType)
+{
+	WARNH(Handle, "transaction ending requested (%hd), despite no "
+			"transactional support advertized", CompletionType);
+	if (CompletionType == SQL_ROLLBACK) {
+		RET_HDIAGS(Handle, SQL_STATE_HYC00);
+	}
+	return SQL_SUCCESS;
+}
+
 SQLRETURN EsSQLNumResultCols(SQLHSTMT StatementHandle,
 	_Out_ SQLSMALLINT *ColumnCount)
 {
