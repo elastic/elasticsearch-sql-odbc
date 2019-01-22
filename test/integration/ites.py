@@ -10,18 +10,20 @@
 import argparse
 import os, sys, re, time
 
-from elasticsearch import spawn_elasticsearch, reset_elasticsearch, es_is_listening, AUTH_PASSWORD
-from data import index_test_data
-from install import install_driver
-from testing import run_tests
+from elasticsearch import Elasticsearch #spawn_elasticsearch, reset_elasticsearch, es_is_listening, AUTH_PASSWORD
+from data import TestData
+from install import Installer
+from testing import Testing
 
 
 def ites(args):
+	es = Elasticsearch()
+
 	# create a running instance of Elasticsearch if needed
 	if not args.pre_staged:
 		if args.es_reset:
 			es_dir = os.path.abspath(args.es_reset)
-			reset_elasticsearch(es_dir)
+			es.reset(es_dir)
 		else:
 			assert(args.root_dir)
 			root_dir = os.path.abspath(args.root_dir)
@@ -36,27 +38,28 @@ def ites(args):
 				raise Exception("failed to determine Elasticsearch version to test against (params: driver: %s, "
 						"version: %s)" % (args.driver, args.version))
 
-			spawn_elasticsearch(version, root_dir, args.ephemeral)
-	elif not es_is_listening(AUTH_PASSWORD):
+			es.spawn(version, root_dir, args.ephemeral)
+	elif not es.is_listening(Elasticsearch.AUTH_PASSWORD):
 		raise Exception("no running prestaged Elasticsearch instance found.")
 	else:
 		print("Using pre-staged Elasticsearch.")
 
 	# add test data into it
 	if not (args.skip_indexing and args.skip_tests):
-		index_test_data(args.skip_indexing)
-		print("Data %s." % ("meta-processed" if args.skip_indexing else "indexed"))
+		data = TestData(args.skip_indexing)
+		data.load()
 
 	# install the driver
 	if args.driver:
 		driver_path = os.path.abspath(args.driver)
-		install_driver(driver_path)
-		print("Driver installed.")
+		installer = Installer(driver_path)
+		installer.install()
 
 	# run the tests
 	if not args.skip_tests:
-		run_tests()
-		print("Tests succeeded.")
+		assert(data is not None)
+		tests = Testing(data)
+		tests.perform()
 
 def main():
 	parser = argparse.ArgumentParser(description='Integration Testing with Elasticsearch.')

@@ -11,9 +11,9 @@ import json
 import time
 import hashlib
 
-from elasticsearch import AUTH_PASSWORD, REQ_TIMEOUT, ES_PORT
+from elasticsearch import Elasticsearch
 
-REQ_AUTH = ("elastic", AUTH_PASSWORD)
+REQ_AUTH = ("elastic", Elasticsearch.AUTH_PASSWORD)
 
 TABLEAU_DATASET_BASE_URL = "https://raw.githubusercontent.com/elastic/connector-plugin-sdk/120fe213c4bce30d9424c155fbd9b2ad210239e0/tests/datasets/TestV1/"
 
@@ -78,8 +78,6 @@ CALCS_PIPELINE =\
 		]
 	}
 
-CALCS_FILE = "Calcs_headers.csv"
-CALCS_INDEX = "calcs"
 
 STAPLES_TEMPLATE =\
 	{
@@ -145,14 +143,8 @@ STAPLES_TEMPLATE =\
 		}
 	}
 
-STAPLES_FILE = "Staples_utf8_headers.csv"
-STAPLES_INDEX = "staples"
 
 ES_DATASET_BASE_URL = "https://raw.githubusercontent.com/elastic/elasticsearch/6857d305270be3d987689fda37cc84b7bc18fbb3/x-pack/plugin/sql/qa/src/main/resources/"
-LIBRARY_FILE = "library.csv"
-LIBRARY_INDEX = "library"
-EMPLOYEES_FILE = "employees.csv"
-EMPLOYEES_INDEX = "employees"
 
 # python seems to slow down when operating on multiple long strings?
 BATCH_SIZE = 500
@@ -168,43 +160,6 @@ CSV_HEADER = {}
 CSV_LINES = {}
 
 
-def csv_to_json_docs(csv_text):
-	stream = io.StringIO(csv_text)
-	reader = csv.reader(stream, delimiter=',', quotechar='"')
-	
-	json_docs = []
-	header_row = next(reader)
-	cnt = 0
-	for row in reader:
-		doc = {}
-		for index, item in enumerate(row):
-			if item:
-				doc[header_row[index]] = item
-		json_docs.append(doc)
-		cnt += 1
-		#if 10 < cnt:
-		#	break
-	#print("items: %s" % cnt)
-	return json_docs
-
-
-def _docs_to_ndjson(docs, index_string):
-	ndjson = ""
-	for doc in docs:
-		ndjson += index_string + "\n"
-		ndjson += json.dumps(doc) + "\n"
-	return ndjson
-
-def docs_to_ndjson(index_name, docs):
-	index_json = {"index": {"_index": index_name, "_type": "_doc"}}
-	index_string = json.dumps(index_json)
-
-	ndjsons = []
-	for i in range(0, len(docs), BATCH_SIZE):
-		ndjson = _docs_to_ndjson(docs[i : i + BATCH_SIZE], index_string)
-		ndjsons.append(ndjson)
-	
-	return ndjsons if 1 < len(ndjsons) else ndjsons[0]
 
 
 def csv_to_ndjson(csv_text, index_name):
@@ -228,109 +183,173 @@ def csv_to_ndjson(csv_text, index_name):
 
 	return ndjson
 
-def register_md5(index_name, text, encoding):
-	md5 = hashlib.md5()
-	md5.update(bytes(text, encoding))
-	CSV_MD5[index_name] = md5.hexdigest()
 
-def register_header(index_name, text):
-	stream = io.StringIO(text)
-	header = stream.readline()
-	CSV_HEADER[index_name] = header.strip().split(",")
+class TestData(object):
 
-def remote_csv_as_ndjson(url, index_name):
-	req = requests.get(url, timeout = REQ_TIMEOUT)
-	if req.status_code != 200:
-		raise Exception("failed to fetch %s with code %s" % (url, req.status_code))
+	CALCS_FILE = "Calcs_headers.csv"
+	CALCS_INDEX = "calcs"
+	STAPLES_FILE = "Staples_utf8_headers.csv"
+	STAPLES_INDEX = "staples"
+	LIBRARY_FILE = "library.csv"
+	LIBRARY_INDEX = "library"
+	EMPLOYEES_FILE = "employees.csv"
+	EMPLOYEES_INDEX = "employees"
 
-	# TODO: CSV to NDJSON takes long for Staples with json, ujson and no-njson conversion versions: try multiprocessing
-	# (the no-json version takes even more.. why?)
-	#ndjson = csv_to_ndjson(req.text, index_name)
-	docs = csv_to_json_docs(req.text)
-	ndjson = docs_to_ndjson(index_name, docs)
+	# loaded CSV attributes
+	_csv_md5 = None
+	_csv_header = None
+	_csv_lines = None
+	#skip_indexing: load CSV and fill metas (CSV_* global dicts)
+	_skip_indexing = None
 
-	register_md5(index_name, req.text, req.encoding)
-	register_header(index_name, req.text)
-	CSV_LINES[index_name] = len(docs)
+	def __init__(self, skip_indexing=False):
+		self._csv_md5 = {}
+		self._csv_header = {}
+		self._csv_lines = {}
+		self._skip_indexing = skip_indexing
 
-	return ndjson
+	def _csv_to_json_docs(self, csv_text):
+		stream = io.StringIO(csv_text)
+		reader = csv.reader(stream, delimiter=',', quotechar='"')
+		
+		json_docs = []
+		header_row = next(reader)
+		cnt = 0
+		for row in reader:
+			doc = {}
+			for index, item in enumerate(row):
+				if item:
+					doc[header_row[index]] = item
+			json_docs.append(doc)
+			cnt += 1
+			#if 10 < cnt:
+			#	break
+		#print("items: %s" % cnt)
+		return json_docs
 
-def post_ndjson(ndjson, index_name, pipeline_name=None):
-	url = "http://localhost:%s/%s/_doc/_bulk" % (ES_PORT, index_name)
-	if pipeline_name:
-		url += "?pipeline=%s" % pipeline_name
-	with requests.post(url, data=ndjson, headers = {"Content-Type": "application/x-ndjson"}, auth=REQ_AUTH) as req:
+	def _docs_to_ndjson_batch(self, docs, index_string):
+		ndjson = ""
+		for doc in docs:
+			ndjson += index_string + "\n"
+			ndjson += json.dumps(doc) + "\n"
+		return ndjson
+
+	def _docs_to_ndjson(self, index_name, docs):
+		index_json = {"index": {"_index": index_name, "_type": "_doc"}}
+		index_string = json.dumps(index_json)
+
+		ndjsons = []
+		for i in range(0, len(docs), BATCH_SIZE):
+			ndjson = self._docs_to_ndjson_batch(docs[i : i + BATCH_SIZE], index_string)
+			ndjsons.append(ndjson)
+		
+		return ndjsons if 1 < len(ndjsons) else ndjsons[0]
+
+
+	def _register_md5(self, index_name, text, encoding):
+		md5 = hashlib.md5()
+		md5.update(bytes(text, encoding))
+		self._csv_md5[index_name] = md5.hexdigest()
+
+	def _register_header(self, index_name, text):
+		stream = io.StringIO(text)
+		header = stream.readline()
+		self._csv_header[index_name] = header.strip().split(",")
+
+	def _remote_csv_as_ndjson(self, url, index_name):
+		req = requests.get(url, timeout = Elasticsearch.REQ_TIMEOUT)
 		if req.status_code != 200:
-			raise Exception("bulk POST to %s failed with code: %s (content: %s)" % (index_name, req.status_code,
-				req.text))
-		reply = json.loads(req.text)
-		if reply["errors"]:
-			raise Exception("bulk POST to %s failed with content: %s" % (index_name, req.text))
+			raise Exception("failed to fetch %s with code %s" % (url, req.status_code))
 
-def prepare_tableau_load(file_name, index_name, index_template):
-	url = TABLEAU_DATASET_BASE_URL + file_name
-	ndjson = remote_csv_as_ndjson(url, index_name)
+		#ndjson = csv_to_ndjson(req.text, index_name)
+		docs = self._csv_to_json_docs(req.text)
+		ndjson = self._docs_to_ndjson(index_name, docs)
 
-	with requests.put("http://localhost:%s/_template/%s_template" % (ES_PORT, index_name), json=index_template,
-			auth=REQ_AUTH) as req:
-		if req.status_code != 200:
-			raise Exception("PUT %s template failed with code: %s (content: %s)" % (index_name, req.status_code,
-				req.text))
+		self._register_md5(index_name, req.text, req.encoding)
+		self._register_header(index_name, req.text)
+		self._csv_lines[index_name] = len(docs)
 
-	return ndjson
+		return ndjson
 
-def wait_for_results(index_name):
-	hits = 0
-	waiting_since = time.time()
-	while hits < MIN_INDEXED_DOCS:
-		url = "http://elastic:%s@localhost:%s/%s/_search" % (AUTH_PASSWORD, ES_PORT, index_name)
-		req = requests.get(url, timeout = REQ_TIMEOUT)
-		if req.status_code != 200:
-			raise Exception("failed to _search %s: code: %s, content: %s" % (index_name, req.status_code, req.text))
-		answer = json.loads(req.text)
-		hits = answer["hits"]["total"]["value"]
-		time.sleep(.25)
-		if REQ_TIMEOUT < time.time() - waiting_since:
-			raise Exception("index '%s' has less than %s documents indexed" % (index_name, MIN_INDEXED_DOCS))
+	def _prepare_tableau_load(self, file_name, index_name, index_template):
+		url = TABLEAU_DATASET_BASE_URL + file_name
+		ndjson = self._remote_csv_as_ndjson(url, index_name)
 
-def index_tableau_calcs(skip_indexing):
-	ndjson = prepare_tableau_load(CALCS_FILE, CALCS_INDEX, CALCS_TEMPLATE)
+		with requests.put("http://localhost:%s/_template/%s_template" % (Elasticsearch.ES_PORT, index_name),
+				json=index_template, auth=REQ_AUTH) as req:
+			if req.status_code != 200:
+				raise Exception("PUT %s template failed with code: %s (content: %s)" % (index_name, req.status_code,
+					req.text))
 
-	with requests.put("http://localhost:%s/_ingest/pipeline/parse_%s" % (ES_PORT, CALCS_INDEX), json=CALCS_PIPELINE,
-			auth=REQ_AUTH) as req:
-		if req.status_code != 200:
-			raise Exception("PUT %s pipeline failed with code: %s (content: %s) " % (CALCS_INDEX, req.status_code,
-				req.text))
+		return ndjson
 
-	if not skip_indexing:
-		post_ndjson(ndjson, CALCS_INDEX, "parse_" + CALCS_INDEX)
-		wait_for_results(CALCS_INDEX)
+	def _post_ndjson(self, ndjson, index_name, pipeline_name=None):
+		url = "http://localhost:%s/%s/_doc/_bulk" % (Elasticsearch.ES_PORT, index_name)
+		if pipeline_name:
+			url += "?pipeline=%s" % pipeline_name
+		with requests.post(url, data=ndjson, headers = {"Content-Type": "application/x-ndjson"}, auth=REQ_AUTH) as req:
+			if req.status_code != 200:
+				raise Exception("bulk POST to %s failed with code: %s (content: %s)" % (index_name, req.status_code,
+					req.text))
+			reply = json.loads(req.text)
+			if reply["errors"]:
+				raise Exception("bulk POST to %s failed with content: %s" % (index_name, req.text))
 
-def index_tableau_staples(skip_indexing):
-	ndjsons = prepare_tableau_load(STAPLES_FILE, STAPLES_INDEX, STAPLES_TEMPLATE)
-	assert(isinstance(ndjsons, list))
-	if not skip_indexing:
-		for ndjson in ndjsons:
-			post_ndjson(ndjson, STAPLES_INDEX)
-		wait_for_results(STAPLES_INDEX)
+	def _wait_for_results(self, index_name):
+		hits = 0
+		waiting_since = time.time()
+		while hits < MIN_INDEXED_DOCS:
+			url = "http://localhost:%s/%s/_search" % (Elasticsearch.ES_PORT, index_name)
+			req = requests.get(url, timeout = Elasticsearch.REQ_TIMEOUT, auth=REQ_AUTH)
+			if req.status_code != 200:
+				raise Exception("failed to _search %s: code: %s, body: %s" % (index_name, req.status_code, req.text))
+			answer = json.loads(req.text)
+			hits = answer["hits"]["total"]["value"]
+			time.sleep(.25)
+			if Elasticsearch.REQ_TIMEOUT < time.time() - waiting_since:
+				raise Exception("index '%s' has less than %s documents indexed" % (index_name, MIN_INDEXED_DOCS))
 
+	def _load_tableau_calcs(self):
+		ndjson = self._prepare_tableau_load(self.CALCS_FILE, self.CALCS_INDEX, CALCS_TEMPLATE)
 
-def index_es_library(skip_indexing):
-	ndjson = remote_csv_as_ndjson(ES_DATASET_BASE_URL + LIBRARY_FILE, LIBRARY_INDEX)
-	if not skip_indexing:
-		post_ndjson(ndjson, LIBRARY_INDEX)
-		wait_for_results(LIBRARY_INDEX)
+		with requests.put("http://localhost:%s/_ingest/pipeline/parse_%s" % (Elasticsearch.ES_PORT, self.CALCS_INDEX),
+				json=CALCS_PIPELINE, auth=REQ_AUTH) as req:
+			if req.status_code != 200:
+				raise Exception("PUT %s pipeline failed with code: %s (content: %s) " % (self.CALCS_INDEX,
+					req.status_code, req.text))
 
-def index_es_employees(skip_indexing):
-	ndjson = remote_csv_as_ndjson(ES_DATASET_BASE_URL + EMPLOYEES_FILE, EMPLOYEES_INDEX)
-	if not skip_indexing:
-		post_ndjson(ndjson, EMPLOYEES_INDEX)
-		wait_for_results(EMPLOYEES_INDEX)
+		if not self._skip_indexing:
+			self._post_ndjson(ndjson, self.CALCS_INDEX, "parse_" + self.CALCS_INDEX)
+			self._wait_for_results(self.CALCS_INDEX)
 
-def index_test_data(skip_indexing=False): #skip_indexing: load CSV and fill metas (CSV_* global dicts)
-	index_tableau_calcs(skip_indexing)
-	index_tableau_staples(skip_indexing)
-	index_es_library(skip_indexing)
-	index_es_employees(skip_indexing)
+	def _load_tableau_staples(self):
+		ndjsons = self._prepare_tableau_load(self.STAPLES_FILE, self.STAPLES_INDEX, STAPLES_TEMPLATE)
+		assert(isinstance(ndjsons, list))
+		if not self._skip_indexing:
+			for ndjson in ndjsons:
+				self._post_ndjson(ndjson, self.STAPLES_INDEX)
+			self._wait_for_results(self.STAPLES_INDEX)
+
+	def _load_elastic_library(self):
+		ndjson = self._remote_csv_as_ndjson(ES_DATASET_BASE_URL + self.LIBRARY_FILE, self.LIBRARY_INDEX)
+		if not self._skip_indexing:
+			self._post_ndjson(ndjson, self.LIBRARY_INDEX)
+			self._wait_for_results(self.LIBRARY_INDEX)
+
+	def _load_elastic_employees(self):
+		ndjson = self._remote_csv_as_ndjson(ES_DATASET_BASE_URL + self.EMPLOYEES_FILE, self.EMPLOYEES_INDEX)
+		if not self._skip_indexing:
+			self._post_ndjson(ndjson, self.EMPLOYEES_INDEX)
+			self._wait_for_results(self.EMPLOYEES_INDEX)
+
+	def load(self):
+		self._load_tableau_calcs()
+		self._load_tableau_staples()
+		self._load_elastic_library()
+		self._load_elastic_employees()
+		print("Data %s." % ("meta-processed" if self._skip_indexing else "indexed"))
+
+	def csv_attributes(self, csv_name):
+		return (self._csv_md5[csv_name],  self._csv_header[csv_name], self._csv_lines[csv_name])
 
 # vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 tw=118 :
