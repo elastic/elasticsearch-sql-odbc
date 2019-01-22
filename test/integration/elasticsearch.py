@@ -139,9 +139,17 @@ def start_elasticsearch(es_dir):
 	atexit.register(stop_es, es_proc)
 	# it takes ES a few seconds to start: don't parse output, just wait till it's online
 	waiting_since = time.time()
+	failures = 0
 	while es_proc.returncode is None:
-		if es_is_listening():
-			break
+		try:
+			if es_is_listening():
+				break
+		except Exception as e:
+			failures += 1
+			# it seems that on a "fortunate" timing, ES will return a 401 when just starting, even if no
+			# authentication is enabled at this point: try to give it more time to start
+			if 3 < failures:
+				raise e
 		time.sleep(.5)
 		if ES_START_TIMEOUT < time.time() - waiting_since:
 			raise Exception("Elasticsearch failed to start in %s seconds" % ES_START_TIMEOUT)
