@@ -1504,7 +1504,7 @@ static BOOL elastic_intervals_name2types(wstr_st *type_name,
 
 /* Maps ES/SQL type name to C SQL and SQL id values.
  * ES/SQL type ID uses ODBC spec 3.x values for most common types (ES/SQL's
- * "DATE" is an ODBC "TIMESTAMP", as an exception).
+ * "DATETIME" is an ODBC "TIMESTAMP", as an exception).
  * The values are set here, since the driver:
  * - must set these for the non-common types (KEYWORD etc.);
  * - would need to check if the above mentioned identity is still true.
