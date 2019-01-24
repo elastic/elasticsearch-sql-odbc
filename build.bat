@@ -14,6 +14,7 @@ set SRC_PATH=%~dp0
 
 call:SET_ARCH
 call:SET_CMAKE
+call:SET_PYTHON
 call:SET_BUILDS_DIR
 
 
@@ -27,6 +28,11 @@ if /i not [%ARG:help=%] == [%ARG%] (
 	goto END
 ) else if not [%ARG:?=%] == [%ARG%] (
 	call:USAGE %0
+	goto END
+)
+
+if /i not [%ARG:ctests=%] == [%ARG%] (
+	call:CTESTS
 	goto END
 )
 
@@ -80,7 +86,7 @@ if /i not [%ARG:install=%] == [%ARG%] (
 REM absence of nobuild: invoke BUILD "function";
 REM 'all' and 'test' arguments presence checked inside the "function".
 if /i [%ARG:nobuild=%] == [%ARG%] (
-	REM build libraries/tests
+	REM build libraries/utests
 	call:BUILD
 	if ERRORLEVEL 1 (
 		goto END
@@ -95,12 +101,19 @@ if /i [%ARG:nobuild=%] == [%ARG%] (
 	echo %~nx0: invoked with 'nobuild', building skipped.
 )
 
-
 REM presence of 'install'/'package': invoke respective _DO "function"
 if /i not [%ARG:install=%] == [%ARG%] (
 	call:INSTALL_DO
 ) else if /i not [%ARG:package=%] == [%ARG%] (
 	call:PACKAGE_DO
+)
+
+REM presence of 'itests': run the integration tests
+if /i not [%ARG:itests=%] == [%ARG%] (
+	call:ITESTS
+	if ERRORLEVEL 1 (
+		goto END
+	)
 )
 
 REM presence of 'regadd': call REGADD "function"
@@ -181,6 +194,31 @@ REM function to check and set cmake binary (if installed)
 
 	goto:eof
 
+:SET_PYTHON
+	py -3-64 -V >nul 2>&1
+	if ERRORLEVEL 1 (
+		echo.
+		echo %~nx0: WARNING: Python version 3 for x86_64 not found.
+		echo %~nx0:          Integration tests for this platform disabled.
+		echo.
+
+		set PY3_64=
+	) else (
+		set PY3_64=py -3-64 -tt
+	)
+
+	py -3-32 -V >nul 2>&1
+	if ERRORLEVEL 1 (
+		echo.
+		echo %~nx0: WARNING: Python version 3 for x86 not found.
+		echo %~nx0:          Integration tests for this platform disabled.
+		echo.
+
+		set PY3_32=
+	) else (
+		set PY3_32=py -3-32 -tt
+	)
+
 REM function to create dirs where to build and set corresponding build vars:
 REM build: path to either x86 or x64 build
 REM buildS: path to store the x86 and/or x64 folders (no Release/Debug
@@ -200,6 +238,7 @@ REM specific dirs, though)
 	)
 
 	SET BUILD_DIR=!BUILDS_DIR!\!TARCH!
+	SET INSTALLER_OUT_DIR=!SRC_PATH!\installer\build\out
 
 	goto:eof
 
@@ -216,12 +255,19 @@ REM USAGE function: output a usage message
 	echo    clean       : remove all the files in the build dir.
 	echo    proper      : clean libs, builds, project dirs and exit.
 	echo    type:T      : selects the build type, T: Debug or Release.
-	echo    tests       : run all the defined tests.
-	echo    suites      : run all the defined tests, individually.
-	echo    suite:S     : run one test, S.
+	echo    ctests      : run the CI testing - integration and unit tests,
+	echo                  x86 and x64 architectures in Release and Debug mode
+	echo                  - and exits. (All the other arguments are ignored.^)
+	echo    itests[:I]  : run the integration tests. If I, the path to the
+	echo                  packaged driver (installer^) is not provided, this
+	echo                  will be looked for in the installer output folder.
+	echo    utests      : run all the defined unit tests.
+	echo    suites      : run all the defined unit tests, individually.
+	echo    suite:U     : run one unit test, U.
 	echo    install[:D] : install the driver files. D, the target directory
 	echo                  path can only be specified before the project/make
-	echo                  files are generated.
+	echo                  files are generated. (This does not run the
+	echo                  installer.^)
 	echo    package[:V] : generate the installer. V is a versioning string
 	echo                  that will be added to the installer file name and can
 	echo                  can only be specified before the project/make files
@@ -232,8 +278,8 @@ REM USAGE function: output a usage message
 	echo.
 	echo Installing and packaging are mutually exclusive.
 	echo Multiple arguments can be used concurrently. Examples:
-	echo - set up a x86 build environment and running the tests:
-	echo   ^> %~1 setup 32 tests
+	echo - set up a x86 build environment and running the unit tests:
+	echo   ^> %~1 setup 32 utests
 	echo - remove any existing build and create a release archieve:
 	echo   ^> %~1 clean package:-final type:Release
 	echo.
@@ -259,9 +305,28 @@ REM USAGE function: output a usage message
 	echo                (needs Administrator privileges^).
 	echo    regdel    : deregister the driver from the registry;
 	echo                (needs Administrator privileges^).
+	echo    tests     : (deprecated^) synonym with utests.
 	echo.
 	goto:eof
 
+REM CTESTS function: run CI testing
+:CTESTS
+	echo %~nx0: Running 32-bit unit tests.
+	call %SRC_PATH%\build.bat clean setup 32 utests
+	if ERRORLEVEL 1 goto END
+	echo %~nx0: Running 64-bit unit tests.
+	call %SRC_PATH%\build.bat clean setup 64 utests
+	if ERRORLEVEL 1 goto END
+	echo %~nx0: Running 32-bit unit integration tests.
+	call %SRC_PATH%\build.bat clean setup 32 package:-SNAPSHOT type:Release itests
+	if ERRORLEVEL 1 goto END
+	echo %~nx0: Running 64-bit unit integration tests.
+	call %SRC_PATH%\build.bat clean setup 64 package:-SNAPSHOT type:Release itests
+	if ERRORLEVEL 1 goto END
+
+	echo %~nx0: SUCCESS!
+
+	goto:eof
 
 REM PROPER function: clean up the build and libs dir.
 :PROPER
@@ -287,6 +352,9 @@ REM CLEAN function: clean up the build dir.
 	)
 	REM delete all directories
 	for /d %%i in (%BUILDS_DIR%\*) do rmdir /s /q %%i >nul 2>&1
+
+	REM delete Python's bytecode if any
+	rmdir /s /q test\integration\__pycache__ >nul 2>&1
 
 	REM clean the installer too
 	!SRC_PATH!\installer\build.bat clean
@@ -453,7 +521,13 @@ REM BUILD function: build various targets
 		goto:eof
 	)
 
-	if /i not [%ARG:tests=%] == [%ARG%] (
+	if /i not [%ARG: tests=%] == [%ARG%] ( REM utests dup'd
+		echo %~nx0: building all the project.
+		MSBuild ALL_BUILD.vcxproj %MSBUILD_ARGS%
+		if ERRORLEVEL 1 (
+			goto END
+		)
+	) else if /i not [%ARG:utests=%] == [%ARG%] (
 		echo %~nx0: building all the project.
 		MSBuild ALL_BUILD.vcxproj %MSBUILD_ARGS%
 		if ERRORLEVEL 1 (
@@ -503,9 +577,14 @@ REM BUILD function: build various targets
 
 	goto:eof
 
-REM TESTS_SUITE_S function: run the compiled tests
+REM TESTS_SUITE_S function: run the compiled unit tests
 :TESTS_SUITE_S
-	if /i not [%ARG:tests=%] == [%ARG%] (
+	if /i not [%ARG: tests=%] == [%ARG%] ( REM utests dup'd
+		MSBuild RUN_TESTS.vcxproj !MSBUILD_ARGS!
+		if ERRORLEVEL 1 (
+			goto END
+		)
+	) else if /i not [%ARG:utests=%] == [%ARG%] (
 		MSBuild RUN_TESTS.vcxproj !MSBUILD_ARGS!
 		if ERRORLEVEL 1 (
 			goto END
@@ -565,13 +644,80 @@ REM PACKAGE_DO function: generate deliverable package
 		)
 		if ERRORLEVEL 1 (
 			goto END
-		) else (
-			goto:eof
 		)
 	)
 
 	goto:eof
 
+:ITESTS
+	echo %~nx0: Running integration tests.
+	set INSTALLER_PATH=
+	REM cycle through the args, look for '^itests' token and use the follow-up
+	for %%a in (%ARG:"=%) do (
+		set crr=%%a
+		if /i ["!crr:~0,6!"] == ["itests"] (
+			set INSTALLER_PATH=!crr:~7!
+		)
+	)
+	if [!INSTALLER_PATH!] == [] (
+		set X64_INSTALLER=
+		set X32_INSTALLER=
+		for %%f in (!INSTALLER_OUT_DIR!\*x86_64.msi) do (
+			if not [!X64_INSTALLER!] == [] (
+				echo %~nx0: WARNING: multiple x64 installers found.
+			)
+			set X64_INSTALLER=%%f
+		)
+		for %%f in (!INSTALLER_OUT_DIR!\*x86.msi) do (
+			if not [!X32_INSTALLER!] == [] (
+				echo %~nx0: WARNING: multiple x86 installers found.
+			)
+			set X32_INSTALLER=%%f
+		)
+	) else (
+		echo !INSTALLER_PATH! | findstr "x86_64.msi\>" >nul 2>&1
+		if ERRORLEVEL 0 (
+			set X64_INSTALLER=!INSTALLER_PATH!
+		) else (
+			echo !INSTALLER_PATH! | findstr "x86.msi\>" >nul 2>&1
+			if ERRORLEVEL 0 (
+				set X32_INSTALLER=!INSTALLER_PATH!
+			)
+		)
+	)
+
+	if [!X64_INSTALLER!] == [] if [!X32_INSTALLER!] == [] (
+		echo %~nx0: ERROR: no installer to test with available.
+		set ERRORLEVEL=1
+		goto END
+	)
+
+	if not [!X64_INSTALLER!] == [] (
+		if [!PY3_64!] == [] (
+			echo %~nx0: ERROR: no Python 3 x86_64 available.
+			set ERRORLEVEL=1
+			goto END
+		)
+		echo %~nx0: Integration testing with: !X64_INSTALLER!.
+		!PY3_64! !SRC_PATH!\test\integration\ites.py -r !BUILD_DIR! -d !X64_INSTALLER!
+		if ERRORLEVEL 1 (
+			goto END
+		)
+	)
+	if not [!X32_INSTALLER!] == [] (
+		if [!PY3_32!] == [] (
+			echo %~nx0: ERROR: no Python 3 x86 available.
+			set ERRORLEVEL=1
+			goto END
+		)
+		echo %~nx0: Integration testing with: !X32_INSTALLER!.
+		!PY3_32! !SRC_PATH!\test\integration\ites.py -r !BUILD_DIR! -d !X32_INSTALLER!
+		if ERRORLEVEL 1 (
+			goto END
+		)
+	)
+
+	goto:eof
 
 REM REGADD function: add driver into the registry
 :REGADD

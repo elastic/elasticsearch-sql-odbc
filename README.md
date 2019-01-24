@@ -109,7 +109,6 @@ Powershell is currently used to automatically generate the definition file of
 the symbols to export in the driver DLL. The definition file is required,
 since Windows' shared objects symbols are by default not exported.
 
-
 ## Building
 
 ### Windows MSVC
@@ -129,6 +128,30 @@ of script).
 The script can also take a set of parameters, run ```build.bat help``` to see
 what they mean. ```build.bat``` will build the driver itself, by invoking
 CMake and MSBuild, as needed. ```build.bat proper``` will clean the project to initial state. ```build.bat all tests``` will run the unit tests.
+
+## Testing
+
+Testing the driver is done with unit tests and integration tests.
+
+### Requirements
+
+The unit testing makes use of the Googletest framework. This is being fetched and built at testing time.
+
+The integration testing makes use of a Python application that requires the following packages installed:
+
+ * Python3, both x86 and amd64 distributions
+   - both x86 and x64 driver builds are tested;
+ * Python launcher (py)
+   - to selectively launch the right Python build;
+
+For each of the two Python releases, the following packages must be installed:
+
+ * pyodbc
+   - for ODBC access;
+ * requests
+   - for HTTP support;
+ * psutils
+   - for OS process management.
 
 ## Installation
 
