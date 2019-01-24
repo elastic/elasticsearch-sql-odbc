@@ -194,6 +194,7 @@ REM function to check and set cmake binary (if installed)
 
 	goto:eof
 
+REM function to check and set the python interpreter (if installed)
 :SET_PYTHON
 	py -3-64 -V >nul 2>&1
 	if ERRORLEVEL 1 (
@@ -218,6 +219,8 @@ REM function to check and set cmake binary (if installed)
 	) else (
 		set PY3_32=py -3-32 -tt
 	)
+
+	goto:eof
 
 REM function to create dirs where to build and set corresponding build vars:
 REM build: path to either x86 or x64 build
