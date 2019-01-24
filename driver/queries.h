@@ -28,6 +28,8 @@ SQLRETURN EsSQLBindCol(
 	SQLLEN BufferLength,
 	_Inout_opt_ SQLLEN *StrLen_or_Ind);
 SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle);
+SQLRETURN EsSQLFetchScroll(SQLHSTMT StatementHandle,
+	SQLSMALLINT FetchOrientation, SQLLEN FetchOffset);
 SQLRETURN EsSQLGetData(
 	SQLHSTMT StatementHandle,
 	SQLUSMALLINT ColumnNumber,
