@@ -204,7 +204,7 @@ REM function to check and set cmake binary (if installed)
 
 		set PY3_64=
 	) else (
-		set PY3_64=py -3-64
+		set PY3_64=py -3-64 -tt
 	)
 
 	py -3-32 -V >nul 2>&1
@@ -216,7 +216,7 @@ REM function to check and set cmake binary (if installed)
 
 		set PY3_32=
 	) else (
-		set PY3_32=py -3-32
+		set PY3_32=py -3-32 -tt
 	)
 
 REM function to create dirs where to build and set corresponding build vars:
@@ -352,6 +352,9 @@ REM CLEAN function: clean up the build dir.
 	)
 	REM delete all directories
 	for /d %%i in (%BUILDS_DIR%\*) do rmdir /s /q %%i >nul 2>&1
+
+	REM delete Python's bytecode if any
+	rmdir /s /q test\integration\__pycache__ >nul 2>&1
 
 	REM clean the installer too
 	!SRC_PATH!\installer\build.bat clean

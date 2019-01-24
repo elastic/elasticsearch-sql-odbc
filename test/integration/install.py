@@ -42,8 +42,7 @@ class Installer(object):
 				raise Exception("driver installation failed with code: %s (see "\
 						"https://docs.microsoft.com/en-us/windows/desktop/msi/error-codes)." % p.returncode)
 			print("Driver installed (%s)." % self._driver_path)
-			# TODO: requires installer MSI uninstall support
-			#atexit.register(psutil.Popen, ["msiexec.exe", "/x", self._driver_path, "/norestart", "/quiet"])
+			atexit.register(psutil.Popen, ["msiexec.exe", "/x", self._driver_path, "/norestart", "/quiet"])
 
 	def install(self):
 		if os.name == "nt":
