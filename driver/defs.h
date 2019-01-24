@@ -214,13 +214,10 @@
 #define ESODBC_SPECIAL_CHARACTERS				" !\"#$%&'()*+,-./" /*[0-9]*/ \
 	";<=>?@" /*[A-Z]*/ "[\\]^" /*[_]*/ "`" /*[a-z]*/ "{|}~"
 /* SQLFetchScroll() and SQLSetPos() capabilities.
- * TODO: NEXT, ABS, RELATIVE: pending SetPos()
- * TODO: BULK_FETC: pending bookmarks */
+ * TODO: SQL_CA1_BULK_FETCH_BY_BOOKMARK: pending bookmarks */
 #define ESODBC_FORWARD_ONLY_CURSOR_ATTRIBUTES1	(0 | \
-	SQL_CA1_NEXT | SQL_CA1_ABSOLUTE | SQL_CA1_RELATIVE | \
-	SQL_CA1_LOCK_NO_CHANGE | \
-	SQL_CA1_POS_POSITION | \
-	SQL_CA1_BULK_FETCH_BY_BOOKMARK )
+	SQL_CA1_NEXT | \
+	SQL_CA1_LOCK_NO_CHANGE ) /* tho SQLSetPos() not really supported */
 #define ESODBC_FORWARD_ONLY_CURSOR_ATTRIBUTES2	(0 | \
 	SQL_CA2_READ_ONLY_CONCURRENCY | \
 	SQL_CA2_SIMULATE_NON_UNIQUE ) /* tho no update/delete supported */

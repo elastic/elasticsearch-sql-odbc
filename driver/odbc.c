@@ -897,7 +897,15 @@ SQLRETURN  SQL_API SQLFetch(SQLHSTMT StatementHandle)
 SQLRETURN  SQL_API SQLFetchScroll(SQLHSTMT StatementHandle,
 	SQLSMALLINT FetchOrientation, SQLLEN FetchOffset)
 {
-	RET_NOT_IMPLEMENTED(StatementHandle);
+	SQLRETURN ret;
+	TRACE(_IN, StatementHandle, "phz", StatementHandle,
+			FetchOrientation, FetchOffset);
+	HND_LOCK(StatementHandle);
+	ret = EsSQLFetchScroll(StatementHandle, FetchOrientation, FetchOffset);
+	HND_UNLOCK(StatementHandle);
+	TRACE(_OUT, StatementHandle, "dphz", ret, StatementHandle,
+			FetchOrientation, FetchOffset);
+	return ret;
 }
 
 SQLRETURN SQL_API SQLGetData(

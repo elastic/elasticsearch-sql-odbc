@@ -879,6 +879,22 @@ SQLRETURN EsSQLSetStmtAttrW(
 			}
 			break;
 
+		case SQL_ATTR_CURSOR_SCROLLABLE:
+			DBGH(stmt, "setting scrollable cursor: %llu.", (SQLULEN)ValuePtr);
+			if ((SQLULEN)ValuePtr != SQL_NONSCROLLABLE) {
+				ERRH(stmt, "driver supports only non-scrollable cursors.");
+				RET_HDIAGS(stmt, SQL_STATE_HYC00);
+			}
+			break;
+
+		case SQL_ATTR_RETRIEVE_DATA:
+			DBGH(stmt, "setting data retrieving: %llu.", (SQLULEN)ValuePtr);
+			if ((SQLULEN)ValuePtr != SQL_RD_ON) {
+				WARNH(stmt, "no fetching without data retrieval possible.");
+				RET_HDIAGS(stmt, SQL_STATE_01S02);
+			}
+			break;
+
 		/* SQL Server non-standard attributes */
 		case 1226:
 		case 1227:
@@ -997,6 +1013,16 @@ SQLRETURN EsSQLGetStmtAttrW(
 		case SQL_ATTR_CURSOR_SENSITIVITY:
 			DBGH(stmt, "getting cursor sensitivity: %llu.", SQL_UNSPECIFIED);
 			*(SQLULEN *)ValuePtr = SQL_UNSPECIFIED;
+			break;
+
+		case SQL_ATTR_CURSOR_SCROLLABLE:
+			DBGH(stmt, "getting scrollable cursor: %llu.", SQL_NONSCROLLABLE);
+			*(SQLULEN *)ValuePtr = SQL_NONSCROLLABLE;
+			break;
+
+		case SQL_ATTR_RETRIEVE_DATA:
+			DBGH(stmt, "getting data retrieving: %llu.", SQL_RD_ON);
+			*(SQLULEN *)ValuePtr = SQL_RD_ON;
 			break;
 
 		default:
