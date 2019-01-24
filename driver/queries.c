@@ -998,6 +998,17 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 	return SQL_SUCCESS;
 }
 
+SQLRETURN EsSQLFetchScroll(SQLHSTMT StatementHandle,
+	SQLSMALLINT FetchOrientation, SQLLEN FetchOffset)
+{
+	if (FetchOrientation != SQL_FETCH_NEXT) {
+		ERRH(StatementHandle, "orientation %hd not supported with forward-only"
+				" cursor", FetchOrientation);
+		RET_HDIAGS(StatementHandle, SQL_STATE_HY106);
+	}
+
+	return EsSQLFetch(StatementHandle);
+}
 
 /*
  * data availability, call sanity checks and init'ing
@@ -1201,10 +1212,19 @@ SQLRETURN EsSQLSetPos(
 {
 	switch(Operation) {
 		case SQL_POSITION:
-			// FIXME
-			// check ESODBC_GETDATA_EXTENSIONS (GD_BLOCK) when implementing
-			FIXME;
-			break;
+			// check ESODBC_GETDATA_EXTENSIONS (SQL_GD_BLOCK) when implementing
+			/* setting the position with a read-only forward-only cursor would
+			 * only be useful with SQLGetData(). Since SQLFetch/Scroll() must
+			 * be called before this function and because SQLFetch() frees an
+			 * old result before getting a new one from ES/SQL to fill in the
+			 * resultset, positioning the cursor within the result set with
+			 * SQLSetPos() would require SQLFetch() to duplicate the resultset
+			 * in memory every time, just for the case that
+			 * SQLSetPos()+SQLGetData() might be used. This is just not worthy:
+			 * - don't advertise SQL_GD_BLOCK; which should then allow to:
+			 * - not support SQL_POSITION.
+			 */
+			// no break;
 
 		case SQL_REFRESH:
 		case SQL_UPDATE:
