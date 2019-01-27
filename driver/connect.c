@@ -709,7 +709,7 @@ SQLRETURN post_json(esodbc_stmt_st *stmt, const cstr_st *u8body)
 	tout = dbc->timeout < stmt->query_timeout ? stmt->query_timeout :
 		dbc->timeout;
 
-	HDRH(dbc)->diag.state = SQL_STATE_00000;
+	RESET_HDIAG(dbc);
 	code = -1; /* init value */
 	if (dbc_curl_add_post_body(dbc, tout, u8body) &&
 		dbc_curl_perform(dbc, &code, &resp)) {
@@ -769,7 +769,7 @@ static SQLRETURN check_sql_api(esodbc_dbc_st *dbc)
 
 	if (code == 200) {
 		DBGH(dbc, "SQL API test succesful.");
-		dbc->hdr.diag.state = SQL_STATE_00000;
+		RESET_HDIAG(dbc);
 	} else if (0 < code) {
 		attach_error(dbc, &resp, code);
 	} else {
@@ -1209,7 +1209,7 @@ static SQLRETURN check_server_version(esodbc_dbc_st *dbc)
 		return ret;
 	}
 
-	HDRH(dbc)->diag.state = SQL_STATE_00000;
+	RESET_HDIAG(dbc);
 	if (! dbc_curl_perform(dbc, &code, &resp)) {
 		dbc_curl_post_diag(dbc, SQL_STATE_HY000);
 		cleanup_curl(dbc);
@@ -2420,15 +2420,12 @@ SQLRETURN EsSQLDriverConnectW
 			RET_HDIAGS(dbc, SQL_STATE_HY110);
 	}
 
-	HDRH(dbc)->diag.state = SQL_STATE_00000;
+	RESET_HDIAG(dbc);
 	if (! load_es_types(dbc)) {
 		ERRH(dbc, "failed to load Elasticsearch/SQL types.");
-		TRACE;
 		if (HDRH(dbc)->diag.state) {
-			TRACE;
 			RET_STATE(HDRH(dbc)->diag.state);
 		} else {
-			TRACE;
 			RET_HDIAG(dbc, SQL_STATE_HY000,
 				"failed to load Elasticsearch/SQL types", 0);
 		}

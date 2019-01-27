@@ -12,6 +12,9 @@
 void init_diagnostic(esodbc_diag_st *dest)
 {
 	dest->state = SQL_STATE_00000;
+	dest->text[0] = '\0';
+	dest->text_len = 0;
+	dest->native_code = 0;
 	dest->row_number = SQL_NO_ROW_NUMBER;
 	dest->column_number = SQL_NO_COLUMN_NUMBER;
 }
