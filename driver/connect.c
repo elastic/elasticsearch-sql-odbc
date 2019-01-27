@@ -20,8 +20,6 @@
 /* HTTP headers default for every request */
 #define HTTP_ACCEPT_JSON		"Accept: application/json"
 #define HTTP_CONTENT_TYPE_JSON	"Content-Type: application/json; charset=utf-8"
-#define HTTP_TEST_JSON			\
-	"{\"query\": \"SELECT 0\"" JSON_KEY_VAL_MODE JSON_KEY_CLT_ID "}"
 
 /* Elasticsearch/SQL data types */
 /* 2 */
@@ -190,6 +188,9 @@ static struct curl_slist *http_headers = NULL;
  * the files are stamped with time (@ second resolution) and PID, which is not
  * enough to avoid name clashes. */
 volatile unsigned filelog_cnt = 0;
+
+
+static BOOL load_es_types(esodbc_dbc_st *dbc);
 
 BOOL connect_init()
 {
@@ -750,39 +751,6 @@ SQLRETURN post_json(esodbc_stmt_st *stmt, const cstr_st *u8body)
 	}
 end:
 	return ret;
-}
-
-static SQLRETURN check_sql_api(esodbc_dbc_st *dbc)
-{
-	long code;
-	cstr_st u8body = MK_CSTR(HTTP_TEST_JSON);
-	cstr_st resp = (cstr_st) {
-		NULL, 0
-	};
-
-	if (! (dbc_curl_add_post_body(dbc, dbc->timeout, &u8body) &&
-			dbc_curl_perform(dbc, &code, &resp))) {
-		dbc_curl_post_diag(dbc, SQL_STATE_08S01);
-		cleanup_curl(dbc);
-		code = -1; /* make sure that curl's error will surface */
-	}
-
-	if (code == 200) {
-		DBGH(dbc, "SQL API test succesful.");
-		RESET_HDIAG(dbc);
-	} else if (0 < code) {
-		attach_error(dbc, &resp, code);
-	} else {
-		/* libcurl failure */
-		assert(dbc->hdr.diag.state != SQL_STATE_00000);
-	}
-
-	if (resp.cnt) {
-		free(resp.str);
-		resp.str = NULL;
-	}
-
-	RET_STATE(dbc->hdr.diag.state);
 }
 
 static BOOL config_dbc_logging(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
@@ -1349,12 +1317,16 @@ SQLRETURN do_connect(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 		return ret;
 	}
 
-	/* check that the SQL plug-in is configured */
-	ret = check_sql_api(dbc);
-	if (! SQL_SUCCEEDED(ret)) {
-		ERRH(dbc, "test connection to URL `%s` failed!", dbc->url.str);
-	} else {
-		DBGH(dbc, "test connection to URL %s: OK.", dbc->url.str);
+	/* check that the SQL plug-in is configured: load ES/SQL data types */
+	RESET_HDIAG(dbc);
+	if (! load_es_types(dbc)) {
+		ERRH(dbc, "failed to load Elasticsearch/SQL data types.");
+		if (HDRH(dbc)->diag.state) {
+			RET_STATE(HDRH(dbc)->diag.state);
+		} else {
+			RET_HDIAG(dbc, SQL_STATE_HY000,
+				"failed to load Elasticsearch/SQL data types", 0);
+		}
 	}
 
 	return ret;
@@ -2418,17 +2390,6 @@ SQLRETURN EsSQLDriverConnectW
 		default:
 			ERRH(dbc, "unknown driver completion mode: %d", fDriverCompletion);
 			RET_HDIAGS(dbc, SQL_STATE_HY110);
-	}
-
-	RESET_HDIAG(dbc);
-	if (! load_es_types(dbc)) {
-		ERRH(dbc, "failed to load Elasticsearch/SQL types.");
-		if (HDRH(dbc)->diag.state) {
-			RET_STATE(HDRH(dbc)->diag.state);
-		} else {
-			RET_HDIAG(dbc, SQL_STATE_HY000,
-				"failed to load Elasticsearch/SQL types", 0);
-		}
 	}
 
 	/* save the original DSN and (new) server name for later inquiry by app */
