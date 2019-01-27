@@ -252,7 +252,7 @@ REM USAGE function: output a usage message
 	echo The following arguments are supported:
 	echo    help^|*?*    : output this message and exit; ?? for more options.
 	echo    32^|64       : set the architecture to x86 or x64, respectively;
-	echo                   if none is specified, autodetection is attempted.
+	echo                  if none is specified, autodetection is attempted.
 	echo    setup       : invoke MSVC's build environment setup script before
 	echo                  building (requires 2017 version or later^).
 	echo    clean       : remove all the files in the build dir.
@@ -267,10 +267,6 @@ REM USAGE function: output a usage message
 	echo    utests      : run all the defined unit tests.
 	echo    suites      : run all the defined unit tests, individually.
 	echo    suite:U     : run one unit test, U.
-	echo    install[:D] : install the driver files. D, the target directory
-	echo                  path can only be specified before the project/make
-	echo                  files are generated. (This does not run the
-	echo                  installer.^)
 	echo    package[:V] : generate the installer. V is a versioning string
 	echo                  that will be added to the installer file name and can
 	echo                  can only be specified before the project/make files
@@ -299,16 +295,21 @@ REM USAGE function: output a usage message
 		goto:eof
 	)
 	echo Extra development arguments:
-	echo    nobuild   : skip project building (the default is to build^).
-	echo    genonly   : generate project/make files, but don't build anything.
-	echo    curldll   : link libcurl dynamically.
-	echo    exports   : dump the exported symbols in the DLL after buildint it.
-	echo    depends   : dump the dependents libs of the build DLL.
-	echo    regadd    : register the driver into the registry;
-	echo                (needs Administrator privileges^).
-	echo    regdel    : deregister the driver from the registry;
-	echo                (needs Administrator privileges^).
-	echo    tests     : (deprecated^) synonym with utests.
+	echo    nobuild     : skip project building (the default is to build^).
+	echo    genonly     : generate project/make files, but don't build.
+	echo    curldll     : link libcurl dynamically.
+	echo    exports     : dump the exported symbols in the DLL after building.
+	echo    depends     : dump the dependents libs of the build DLL.
+	echo    install[:D] : install the driver files. D, the target directory
+	echo                  path can only be specified before the project/make
+	echo                  files are generated. (This does not run the
+	echo                  installer.^)
+	echo    regadd      : register the driver into the registry unde
+	echo                  'Elasticsearch ODBC' name;
+	echo                  (needs Administrator privileges^).
+	echo    regdel      : deregister the driver from the registry;
+	echo                  (needs Administrator privileges^).
+	echo    tests       : (deprecated^) synonym with utests.
 	echo.
 	goto:eof
 
