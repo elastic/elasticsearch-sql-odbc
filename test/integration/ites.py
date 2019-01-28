@@ -84,7 +84,7 @@ def main():
 	if not (args.root_dir or args.es_reset or args.pre_staged):
 		parser.error("no Elasticsearch instance or root/staged directory provided.")
 
-	if not (args.driver or args.version or args.es_reset):
+	if not (args.driver or args.version or args.es_reset or args.pre_staged):
 		parser.error("don't know what Elasticsearch version to test against.")
 
 	try:

@@ -69,6 +69,8 @@ static const char systypes_answer[] = "\
 			false, false, null, null, null, 12, 0, null, null],\
 		[\"BOOLEAN\", 16, 1, \"'\", \"'\", null, 2, false, 3, true, false,\
 			false, null, null, null, 16, 0, null, null],\
+		[\"DATE\", 91, 10, \"'\", \"'\", null, 2, false, 3, true, false,\
+			false, null, null, null, 91, 0, null, null],\
 		[\"DATETIME\", 93, 24, \"'\", \"'\", null, 2, false, 3, true, false,\
 			false, null, 3, 3, 9, 3, null, null],\
 		[\"INTERVAL_YEAR\", 101, 7, \"'\", \"'\", null, 2, false, 3, true,\
