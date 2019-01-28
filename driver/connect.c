@@ -1249,7 +1249,8 @@ static SQLRETURN check_server_version(esodbc_dbc_st *dbc)
 	/* re-read the original version (before trimming) and dup it */
 	ver_no.str = (SQLWCHAR *)UJReadString(o_number, &ver_no.cnt);
 	/* version is returned to application, which requires a NTS => +1 for \0 */
-	if (! (dbc->srv_ver.string.str = malloc(ver_no.cnt * sizeof(SQLWCHAR) + /*\0*/1))) {
+	dbc->srv_ver.string.str = malloc((ver_no.cnt + 1) * sizeof(SQLWCHAR));
+	if (! dbc->srv_ver.string.str) {
 		ERRNH(dbc, "OOM for %zd.", ver_no.cnt * sizeof(SQLWCHAR));
 		post_diagnostic(dbc, SQL_STATE_HY001, NULL, 0);
 		goto err;
@@ -1797,7 +1798,7 @@ static void set_display_size(esodbc_estype_st *es_type)
 	}
 
 	DBG("data type: %hd, display size: %lld", es_type->data_type,
-		es_type->data_type);
+		es_type->display_size);
 }
 
 static BOOL bind_types_cols(esodbc_stmt_st *stmt, estype_row_st *type_row)
