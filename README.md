@@ -103,12 +103,6 @@ Optional packages:
  * C++ profiling tools
  * Git for Windows / GitHub Extentions for VisualStudio
 
-#### Powershell
-
-Powershell is currently used to automatically generate the definition file of
-the symbols to export in the driver DLL. The definition file is required,
-since Windows' shared objects symbols are by default not exported.
-
 ## Building
 
 ### Windows MSVC

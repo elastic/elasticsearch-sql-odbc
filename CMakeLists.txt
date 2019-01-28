@@ -142,22 +142,8 @@ endif (${WIN32})
 set(DRV_SRC_DIR driver)
 aux_source_directory(${DRV_SRC_DIR} DRV_SRC)
 
-# generate Module definition file (symbols to export)
-execute_process(COMMAND
-	${CMAKE_SOURCE_DIR}/${DRV_SRC_DIR}/build_def.bat ${DRV_NAME}
-		${CMAKE_BINARY_DIR}/${DRV_NAME}.def
-	WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/${DRV_SRC_DIR}"
-	RESULT_VARIABLE CMD_RETURN
-	OUTPUT_VARIABLE CMD_OUTPUT
-	ERROR_VARIABLE CMD_OUTERR
-	)
-#	WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/${DRV_SRC_DIR}"
-if (${CMD_RETURN})
-	message(WARNING "Generating module .def file failed:")
-	message("\tret: ${CMD_RETURN}")
-	message("\tout: ${CMD_OUTPUT}")
-	message("\terr: ${CMD_OUTERR}")
-endif (${CMD_RETURN})
+# configure Module definition file (symbols to export)
+configure_file(${CMAKE_SOURCE_DIR}/driver/driver.def.cmake ${CMAKE_BINARY_DIR}/${DRV_NAME}.def)
 
 # generate installable NOTICE.txt
 execute_process(COMMAND
