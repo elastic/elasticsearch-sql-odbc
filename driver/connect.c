@@ -2397,6 +2397,9 @@ SQLRETURN EsSQLDriverConnectW
 			 * tests (see load_es_types()). */
 			assert(! dbc->hwin);
 			dbc->hwin = hwnd;
+			if (! load_es_types(dbc)) {
+				RET_HDIAGS(dbc, SQL_STATE_HY000);
+			}
 			break;
 #endif /* TESTING */
 
