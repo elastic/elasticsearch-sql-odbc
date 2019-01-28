@@ -28,6 +28,7 @@
 #define TYPE_BYTE			"BYTE"
 #define TYPE_LONG			"LONG"
 #define TYPE_TEXT			"TEXT"
+#define TYPE_DATE			"DATE"
 #define TYPE_NULL			"NULL"
 /* 5 */
 #define TYPE_SHORT			"SHORT"
@@ -114,6 +115,9 @@
 /* 12: SQL_VARCHAR -> SQL_C_WCHAR */
 #define ES_IP_TO_CSQL			SQL_C_WCHAR /* XXX: CBOR needs _CHAR */
 #define ES_IP_TO_SQL			SQL_VARCHAR
+/* 91: SQL_TYPE_DATE -> SQL_C_TYPE_DATE */
+#define ES_DATE_TO_CSQL			SQL_C_TYPE_DATE
+#define ES_DATE_TO_SQL			SQL_TYPE_DATE
 /* 93: SQL_TYPE_TIMESTAMP -> SQL_C_TYPE_TIMESTAMP */
 #define ES_DATETIME_TO_CSQL		SQL_C_TYPE_TIMESTAMP
 #define ES_DATETIME_TO_SQL		SQL_TYPE_TIMESTAMP
@@ -1522,6 +1526,14 @@ static BOOL elastic_name2types(wstr_st *type_name,
 							type_name->cnt)) {
 						*c_sql = ES_TEXT_TO_CSQL;
 						*sql = ES_TEXT_TO_SQL;
+						return TRUE;
+					}
+					break;
+				case (SQLWCHAR)'d':
+					if (! wmemncasecmp(type_name->str, MK_WPTR(TYPE_DATE),
+							type_name->cnt)) {
+						*c_sql = ES_DATE_TO_CSQL;
+						*sql = ES_DATE_TO_SQL;
 						return TRUE;
 					}
 					break;
