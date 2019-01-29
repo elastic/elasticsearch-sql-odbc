@@ -45,15 +45,16 @@ def ites(args):
 		print("Using pre-staged Elasticsearch.")
 
 	# add test data into it
-	if not (args.skip_indexing and args.skip_tests):
-		data = TestData(args.skip_indexing)
+	if args.reindex or not (args.skip_indexing and args.skip_tests):
+		data = TestData(TestData.MODE_NOINDEX if args.skip_indexing else TestData.MODE_REINDEX if args.reindex else \
+				TestData.MODE_INDEX)
 		data.load()
 
 	# install the driver
 	if args.driver:
 		driver_path = os.path.abspath(args.driver)
 		installer = Installer(driver_path)
-		installer.install()
+		installer.install(args.ephemeral)
 
 	# run the tests
 	if not args.skip_tests:
@@ -73,10 +74,15 @@ def main():
 
 	parser.add_argument("-d", "--driver", help="The path to the driver file to test; if not provided, the driver "
 			"is assumed to have been installed.")
-	parser.add_argument("-e", "--ephemeral", help="Remove the staged Elasticsearch after testing.",
-			action="store_true", default=False)
+	parser.add_argument("-e", "--ephemeral", help="Remove the staged Elasticsearch and installed driver after testing"
+			" if test is succesful.", action="store_true", default=False)
 	parser.add_argument("-t", "--skip-tests", help="Skip running the tests.", action="store_true", default=False)
-	parser.add_argument("-i", "--skip-indexing", help="Skip indexing test data.", action="store_true", default=False)
+
+	idx_grp = parser.add_mutually_exclusive_group()
+	idx_grp.add_argument("-i", "--skip-indexing", help="Skip indexing test data.", action="store_true", default=False)
+	idx_grp.add_argument("-x", "--reindex", help="Drop indices if any and (re)index test data.",
+			action="store_true", default=False)
+
 	parser.add_argument("-v", "--version", help="Elasticsearch version to test against; read from the driver file by "
 			"default.")
 

@@ -387,42 +387,54 @@ static void cleanup_curl(esodbc_dbc_st *dbc)
 
 	curl_easy_cleanup(dbc->curl);
 	dbc->curl = NULL;
+	dbc->crr_url = ESODBC_CURL_NONE;
 }
 
 /* Sets the method cURL should use (GET for root URL, POST otherwise) and the
  * URL itself.
- * Posts the cURL error as diagnostic, on failure. */
-static SQLRETURN dbc_curl_set_url(esodbc_dbc_st *dbc, BOOL for_sql)
+ * Posts the cURL error as diagnostic, on failure.
+ * Not thread safe. */
+SQLRETURN dbc_curl_set_url(esodbc_dbc_st *dbc, int url_type)
 {
-	if (for_sql) {
-		/* perform a POST */
-		dbc->curl_err = curl_easy_setopt(dbc->curl, CURLOPT_POST, 1L);
-		if (dbc->curl_err != CURLE_OK) {
-			ERRH(dbc, "libcurl: failed to set method to POST.");
+	CURLoption req_type;
+	char *url;
+
+	switch (url_type) {
+		case ESODBC_CURL_QUERY:
+			req_type = CURLOPT_POST;
+			url = (char *)dbc->url.str;
+			break;
+
+		case ESODBC_CURL_CLOSE:
+			req_type = CURLOPT_POST;
+			url = (char *)dbc->close_url.str;
+			break;
+
+		case ESODBC_CURL_ROOT:
+			req_type = CURLOPT_HTTPGET;
+			url = (char *)dbc->root_url.str;
+			break;
+
+		default:
+			ERRH(dbc, "unexpected URL type: %d.", url_type);
 			goto err;
-		}
-		/* set SQL API URL to connect to */
-		dbc->curl_err = curl_easy_setopt(dbc->curl, CURLOPT_URL, dbc->url.str);
-		if (dbc->curl_err != CURLE_OK) {
-			ERRH(dbc, "libcurl: failed to set SQL URL `%s`.", dbc->url.str);
-			goto err;
-		}
-	} else {
-		/* perform a GET */
-		dbc->curl_err = curl_easy_setopt(dbc->curl, CURLOPT_HTTPGET, 1L);
-		if (dbc->curl_err != CURLE_OK) {
-			ERRH(dbc, "libcurl: failed to set method to GET");
-			goto err;
-		}
-		/* set root URL to connect to */
-		dbc->curl_err = curl_easy_setopt(dbc->curl, CURLOPT_URL,
-				dbc->root_url.str);
-		if (dbc->curl_err != CURLE_OK) {
-			ERRH(dbc, "libcurl: failed to set URL `%s`.", dbc->url.str);
-			goto err;
-		}
 	}
 
+	/* set HTTP request type to perform */
+	dbc->curl_err = curl_easy_setopt(dbc->curl, req_type, 1L);
+	if (dbc->curl_err != CURLE_OK) {
+		ERRH(dbc, "libcurl: failed to set method for URL type %d.", url_type);
+		goto err;
+	}
+	/* set SQL API URL to connect to */
+	dbc->curl_err = curl_easy_setopt(dbc->curl, CURLOPT_URL, url);
+	if (dbc->curl_err != CURLE_OK) {
+		ERRH(dbc, "libcurl: failed to set URL to `%s`.", url);
+		goto err;
+	}
+
+	dbc->crr_url = url_type;
+	DBGH(dbc, "URL type set to: %d.", dbc->crr_url);
 	return SQL_SUCCESS;
 err:
 	dbc_curl_post_diag(dbc, SQL_STATE_HY000);
@@ -591,12 +603,6 @@ static SQLRETURN dbc_curl_init(esodbc_dbc_st *dbc)
 	}
 #endif /* NDEBUG */
 
-	/* set by default the URL to the SQL API */
-	ret = dbc_curl_set_url(dbc, /*for sql*/TRUE);
-	if (! SQL_SUCCEEDED(ret)) {
-		goto err;
-	}
-
 	DBGH(dbc, "libcurl: new handle 0x%p.", curl);
 	return SQL_SUCCESS;
 
@@ -687,26 +693,35 @@ err:
 /*
  * Sends a POST request with the given JSON object body.
  */
-SQLRETURN post_json(esodbc_stmt_st *stmt, const cstr_st *u8body)
+SQLRETURN post_json(esodbc_stmt_st *stmt, int url_type, const cstr_st *u8body)
 {
 	SQLRETURN ret;
 	CURLcode res = CURLE_OK;
-	esodbc_dbc_st *dbc = stmt->hdr.dbc;
+	esodbc_dbc_st *dbc = HDRH(stmt)->dbc;
 	SQLULEN tout;
-	long code;
+	long code = -1; /* = no answer available */
 	cstr_st resp = (cstr_st) {
 		NULL, 0
 	};
 
-	DBGH(stmt, "POSTing JSON [%zd] `" LCPDL "`.", u8body->cnt, LCSTR(u8body));
+	DBGH(stmt, "POSTing JSON type %d: [%zd] `" LCPDL "`.", url_type,
+			u8body->cnt, LCSTR(u8body));
 
 	ESODBC_MUX_LOCK(&dbc->curl_mux);
 
 	if (! dbc->curl) {
 		ret = dbc_curl_init(dbc);
 		if (! SQL_SUCCEEDED(ret)) {
-			ESODBC_MUX_UNLOCK(&dbc->curl_mux);
-			goto end;
+			goto err;
+		}
+	}
+
+	RESET_HDIAG(dbc);
+
+	if (dbc->crr_url != url_type) {
+		ret = dbc_curl_set_url(dbc, url_type);
+		if (! SQL_SUCCEEDED(ret)) {
+			goto err;
 		}
 	}
 
@@ -714,14 +729,15 @@ SQLRETURN post_json(esodbc_stmt_st *stmt, const cstr_st *u8body)
 	tout = dbc->timeout < stmt->query_timeout ? stmt->query_timeout :
 		dbc->timeout;
 
-	RESET_HDIAG(dbc);
 	code = -1; /* init value */
 	if (dbc_curl_add_post_body(dbc, tout, u8body) &&
 		dbc_curl_perform(dbc, &code, &resp)) {
 		if (code == 200) {
 			if (resp.cnt) {
 				ESODBC_MUX_UNLOCK(&dbc->curl_mux);
-				return attach_answer(stmt, resp.str, resp.cnt);
+				return (url_type == ESODBC_CURL_QUERY) ? 
+					attach_answer(stmt, resp.str, resp.cnt) :
+					close_es_answ_handler(stmt, resp.str, resp.cnt);
 			} else {
 				ERRH(stmt, "received 200 response code with empty body.");
 				ret = post_c_diagnostic(dbc, SQL_STATE_08S01,
@@ -730,12 +746,11 @@ SQLRETURN post_json(esodbc_stmt_st *stmt, const cstr_st *u8body)
 		}
 	} else {
 		ret = dbc_curl_post_diag(dbc, SQL_STATE_08S01);
-		code = -1; /* make sure that curl's error will surface */
 	}
+
 	/* something went wrong */
 	cleanup_curl(dbc);
-	ESODBC_MUX_UNLOCK(&dbc->curl_mux);
-
+err:
 	/* was there an error answer received correctly? */
 	if (0 < code) {
 		ret = attach_error(stmt, &resp, code);
@@ -746,6 +761,8 @@ SQLRETURN post_json(esodbc_stmt_st *stmt, const cstr_st *u8body)
 			HDRH(stmt)->diag = HDRH(dbc)->diag;
 		}
 	}
+	/* if need to copy the diag., the mux release can only be done aftewards */
+	ESODBC_MUX_UNLOCK(&dbc->curl_mux);
 
 	/* an answer might have been received, but a late curl error (like
 	 * fetching the result code) could have occurred. */
@@ -753,7 +770,7 @@ SQLRETURN post_json(esodbc_stmt_st *stmt, const cstr_st *u8body)
 		free(resp.str);
 		resp.str = NULL;
 	}
-end:
+
 	return ret;
 }
 
@@ -877,7 +894,7 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	}
 
 	/*
-	 * SQL URL of the cluster
+	 * SQL close and query URL of the cluster
 	 */
 	/* Note: libcurl won't check hostname validity, it'll just try to resolve
 	 * whatever it receives, if it can parse the URL */
@@ -885,7 +902,7 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	cnt = swprintf(url.str, sizeof(buff_url)/sizeof(*buff_url),
 			L"http" WPFCP_DESC "://"
 			WPFCP_DESC WPFWP_LDESC WPFCP_DESC ":" WPFWP_LDESC
-			ELASTIC_SQL_PATH,
+			ELASTIC_SQL_PATH /*+*/ ELASTIC_SQL_CLOSE_SUBPATH,
 			secure ? "s" : "",
 			ipv6 ? "[" : "", LWSTR(&attrs->server), ipv6 ? "]" : "",
 			LWSTR(&attrs->port));
@@ -898,13 +915,24 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	} else {
 		url.cnt = (size_t)cnt;
 	}
+	if (! wstr_to_utf8(&url, &dbc->close_url)) {
+		ERRNH(dbc, "failed to convert URL `" LWPDL "` to UTF8.", LWSTR(&url));
+		SET_HDIAG(dbc, SQL_STATE_HY000, "server SQL URL's UTF8 conversion "
+			"failed", 0);
+		goto err;
+	}
+	INFOH(dbc, "connection SQL cusor closing URL: `%s`.", dbc->close_url.str);
+
+	/* shorten the length of string in buffer, before dup'ing; it needs to be
+	 * dup'ed since libcurl needs the 0 terminator */
+	url.cnt -= sizeof(ELASTIC_SQL_CLOSE_SUBPATH) - /*\0*/1;
 	if (! wstr_to_utf8(&url, &dbc->url)) {
 		ERRNH(dbc, "failed to convert URL `" LWPDL "` to UTF8.", LWSTR(&url));
 		SET_HDIAG(dbc, SQL_STATE_HY000, "server SQL URL's UTF8 conversion "
 			"failed", 0);
 		goto err;
 	}
-	INFOH(dbc, "connection SQL URL: `%s`.", dbc->url.str);
+	INFOH(dbc, "connection SQL query URL: `%s`.", dbc->url.str);
 
 	/*
 	 * Root URL of the cluster
@@ -1088,6 +1116,13 @@ void cleanup_dbc(esodbc_dbc_st *dbc)
 	} else {
 		assert(dbc->ca_path.cnt == 0);
 	}
+	if (dbc->close_url.str) {
+		free(dbc->close_url.str);
+		dbc->close_url.str = NULL;
+		dbc->close_url.cnt = 0;
+	} else {
+		assert(dbc->close_url.cnt == 0);
+	}
 	if (dbc->url.str) {
 		free(dbc->url.str);
 		dbc->url.str = NULL;
@@ -1156,6 +1191,9 @@ void cleanup_dbc(esodbc_dbc_st *dbc)
 	}
 }
 
+/*
+ * Note: not thread safe: only usable on connection setup.
+ */
 static SQLRETURN check_server_version(esodbc_dbc_st *dbc)
 {
 	long code;
@@ -1176,7 +1214,7 @@ static SQLRETURN check_server_version(esodbc_dbc_st *dbc)
 	SQLWCHAR wbuff[sizeof(err_msg_fmt)/sizeof(err_msg_fmt[0]) + 2*32];
 	int n;
 
-	ret = dbc_curl_set_url(dbc, /*for sql*/FALSE);
+	ret = dbc_curl_set_url(dbc, ESODBC_CURL_ROOT);
 	if (! SQL_SUCCEEDED(ret)) {
 		return ret;
 	}
@@ -1314,12 +1352,6 @@ SQLRETURN do_connect(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 		return ret;
 	} else {
 		DBGH(dbc, "server version check at URL %s: OK.", dbc->url.str);
-	}
-
-	/* reset the URL to the SQL API */
-	ret = dbc_curl_set_url(dbc, /*for SQL*/TRUE);
-	if (! SQL_SUCCEEDED(ret)) {
-		return ret;
 	}
 
 	/* check that the SQL plug-in is configured: load ES/SQL data types */

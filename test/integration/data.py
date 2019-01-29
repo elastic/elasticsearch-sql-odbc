@@ -183,8 +183,11 @@ def csv_to_ndjson(csv_text, index_name):
 
 	return ndjson
 
-
 class TestData(object):
+
+	MODE_NOINDEX = 1 # load CSVs and fill metadatas (_csv_* dictionaries)
+	MODE_REINDEX = 2 # drop old indices if any and index freshly
+	MODE_INDEX = 3 # index data
 
 	CALCS_FILE = "Calcs_headers.csv"
 	CALCS_INDEX = "calcs"
@@ -199,14 +202,13 @@ class TestData(object):
 	_csv_md5 = None
 	_csv_header = None
 	_csv_lines = None
-	#skip_indexing: load CSV and fill metas (CSV_* global dicts)
-	_skip_indexing = None
+	_mode = None
 
-	def __init__(self, skip_indexing=False):
+	def __init__(self, mode=MODE_INDEX):
 		self._csv_md5 = {}
 		self._csv_header = {}
 		self._csv_lines = {}
-		self._skip_indexing = skip_indexing
+		self._mode = mode
 
 	def _csv_to_json_docs(self, csv_text):
 		stream = io.StringIO(csv_text)
@@ -214,12 +216,14 @@ class TestData(object):
 		
 		json_docs = []
 		header_row = next(reader)
+		# Staples CSV header ends in `"name" ` and the reader turns it into `"name "` => strip column names
+		header = [col.strip() for col in header_row]
 		cnt = 0
 		for row in reader:
 			doc = {}
 			for index, item in enumerate(row):
 				if item:
-					doc[header_row[index]] = item
+					doc[header[index]] = item
 			json_docs.append(doc)
 			cnt += 1
 			#if 10 < cnt:
@@ -275,11 +279,12 @@ class TestData(object):
 		url = TABLEAU_DATASET_BASE_URL + file_name
 		ndjson = self._remote_csv_as_ndjson(url, index_name)
 
-		with requests.put("http://localhost:%s/_template/%s_template" % (Elasticsearch.ES_PORT, index_name),
-				json=index_template, auth=REQ_AUTH) as req:
-			if req.status_code != 200:
-				raise Exception("PUT %s template failed with code: %s (content: %s)" % (index_name, req.status_code,
-					req.text))
+		if self.MODE_NOINDEX < self._mode:
+			with requests.put("http://localhost:%s/_template/%s_template" % (Elasticsearch.ES_PORT, index_name),
+					json=index_template, auth=REQ_AUTH) as req:
+				if req.status_code != 200:
+					raise Exception("PUT %s template failed with code: %s (content: %s)" % (index_name,
+						req.status_code, req.text))
 
 		return ndjson
 
@@ -309,36 +314,50 @@ class TestData(object):
 			if Elasticsearch.REQ_TIMEOUT < time.time() - waiting_since:
 				raise Exception("index '%s' has less than %s documents indexed" % (index_name, MIN_INDEXED_DOCS))
 
+	def _delete_if_needed(self, index_name):
+		if self._mode != self.MODE_REINDEX:
+			return
+
+		url = "http://localhost:%s/%s" % (Elasticsearch.ES_PORT, index_name)
+		with requests.delete(url, timeout = Elasticsearch.REQ_TIMEOUT, auth=REQ_AUTH) as req:
+			if req.status_code != 200 and req.status_code != 404:
+				raise Exception("Deleting index %s failed; code=%s, body: %s." %
+						(index_name, req.status_code, req.text))
+
 	def _load_tableau_calcs(self):
 		ndjson = self._prepare_tableau_load(self.CALCS_FILE, self.CALCS_INDEX, CALCS_TEMPLATE)
 
-		with requests.put("http://localhost:%s/_ingest/pipeline/parse_%s" % (Elasticsearch.ES_PORT, self.CALCS_INDEX),
-				json=CALCS_PIPELINE, auth=REQ_AUTH) as req:
-			if req.status_code != 200:
-				raise Exception("PUT %s pipeline failed with code: %s (content: %s) " % (self.CALCS_INDEX,
-					req.status_code, req.text))
+		if self.MODE_NOINDEX < self._mode:
+			self._delete_if_needed(self.CALCS_INDEX)
+			with requests.put("http://localhost:%s/_ingest/pipeline/parse_%s" % (Elasticsearch.ES_PORT,
+					self.CALCS_INDEX), json=CALCS_PIPELINE, auth=REQ_AUTH) as req:
+				if req.status_code != 200:
+					raise Exception("PUT %s pipeline failed with code: %s (content: %s) " % (self.CALCS_INDEX,
+						req.status_code, req.text))
 
-		if not self._skip_indexing:
 			self._post_ndjson(ndjson, self.CALCS_INDEX, "parse_" + self.CALCS_INDEX)
 			self._wait_for_results(self.CALCS_INDEX)
 
 	def _load_tableau_staples(self):
 		ndjsons = self._prepare_tableau_load(self.STAPLES_FILE, self.STAPLES_INDEX, STAPLES_TEMPLATE)
 		assert(isinstance(ndjsons, list))
-		if not self._skip_indexing:
+		if self.MODE_NOINDEX < self._mode:
+			self._delete_if_needed(self.STAPLES_INDEX)
 			for ndjson in ndjsons:
 				self._post_ndjson(ndjson, self.STAPLES_INDEX)
 			self._wait_for_results(self.STAPLES_INDEX)
 
 	def _load_elastic_library(self):
 		ndjson = self._remote_csv_as_ndjson(ES_DATASET_BASE_URL + self.LIBRARY_FILE, self.LIBRARY_INDEX)
-		if not self._skip_indexing:
+		if self.MODE_NOINDEX < self._mode:
+			self._delete_if_needed(self.LIBRARY_INDEX)
 			self._post_ndjson(ndjson, self.LIBRARY_INDEX)
 			self._wait_for_results(self.LIBRARY_INDEX)
 
 	def _load_elastic_employees(self):
 		ndjson = self._remote_csv_as_ndjson(ES_DATASET_BASE_URL + self.EMPLOYEES_FILE, self.EMPLOYEES_INDEX)
-		if not self._skip_indexing:
+		if self.MODE_NOINDEX < self._mode:
+			self._delete_if_needed(self.EMPLOYEES_INDEX)
 			self._post_ndjson(ndjson, self.EMPLOYEES_INDEX)
 			self._wait_for_results(self.EMPLOYEES_INDEX)
 
@@ -347,7 +366,8 @@ class TestData(object):
 		self._load_tableau_staples()
 		self._load_elastic_library()
 		self._load_elastic_employees()
-		print("Data %s." % ("meta-processed" if self._skip_indexing else "indexed"))
+		print("Data %s." % ("meta-processed" if self._mode == self.MODE_NOINDEX else "reindexed" if self._mode == \
+			self.MODE_REINDEX else "indexed"))
 
 	def csv_attributes(self, csv_name):
 		return (self._csv_md5[csv_name],  self._csv_header[csv_name], self._csv_lines[csv_name])

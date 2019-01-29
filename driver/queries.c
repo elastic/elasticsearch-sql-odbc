@@ -23,6 +23,7 @@
 #define JSON_ANSWER_ERR_RCAUSE	"root_cause"
 #define JSON_ANSWER_COL_NAME	"name"
 #define JSON_ANSWER_COL_TYPE	"type"
+#define JSON_ANSWER_CURS_CLOSE	"succeeded"
 
 
 #define MSG_INV_SRV_ANS		"Invalid server answer"
@@ -284,7 +285,7 @@ SQLRETURN TEST_API attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 		if (eccnt) {
 			/* this can happen automatically if hitting scroller size */
 			if (! stmt->hdr.dbc->fetch.max) {
-				INFOH(stmt, "no fetch size defined, but cursor returned.");
+				DBGH(stmt, "no fetch size defined, but cursor returned.");
 			}
 			if (stmt->rset.ecurs.cnt) {
 				DBGH(stmt, "replacing old cursor `" LWPDL "`.",
@@ -294,8 +295,8 @@ SQLRETURN TEST_API attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 			stmt->rset.ecurs = (wstr_st) {
 				(SQLWCHAR *)wcurs, eccnt
 			};
-			DBGH(stmt, "new elastic cursor: `" LWPDL "`[%zd].",
-				LWSTR(&stmt->rset.ecurs), stmt->rset.ecurs.cnt);
+			DBGH(stmt, "new elastic cursor: [%zd] `" LWPDL "`.",
+				stmt->rset.ecurs.cnt, LWSTR(&stmt->rset.ecurs));
 		} else {
 			WARNH(stmt, "empty cursor found in the answer.");
 		}
@@ -1261,14 +1262,84 @@ SQLRETURN EsSQLMoreResults(SQLHSTMT hstmt)
 	return SQL_NO_DATA;
 }
 
+SQLRETURN close_es_answ_handler(esodbc_stmt_st *stmt, char *buff, size_t blen)
+{
+	UJObject obj, succeeded;
+	void *state = NULL;
+	int unpacked;
+
+	const wchar_t *keys[] = {
+		MK_WPTR(JSON_ANSWER_CURS_CLOSE)
+	};
+
+	obj = UJDecode(buff, blen, NULL, &state);
+	if (! obj) {
+		ERRH(stmt, "failed to decode JSON answer: %s ([%zu] `%.*s`).",
+			state ? UJGetError(state) : "<none>", blen, blen, buff);
+		goto err;
+	}
+	unpacked = UJObjectUnpack(obj, 1, "B", keys, &succeeded);
+	if (unpacked < 1) {
+		ERRH(stmt, "failed to unpack JSON answer (`%.*s`): %s.",
+			blen, buff, UJGetError(state));
+		goto err;
+	}
+	switch (UJGetType(succeeded)) {
+		case UJT_False:
+			ERRH(stmt, "failed to close cursor on server side.");
+			assert(0);
+			/* no break: not a driver/client error -- server would answer with
+			 * an error answer */
+		case UJT_True:
+			free(buff);
+			return SQL_SUCCESS;
+
+		default:
+			ERRH(stmt, "invalid object type in answer: %d (`%.*s`).",
+				UJGetType(succeeded), blen, buff);
+	}
+err:
+	free(buff);
+	RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
+}
+
+SQLRETURN close_es_cursor(esodbc_stmt_st *stmt)
+{
+	SQLRETURN ret;
+	char buff[ESODBC_BODY_BUF_START_SIZE];
+	cstr_st body = {buff, sizeof(buff)};
+
+	if (! stmt->rset.ecurs.cnt) {
+		DBGH(stmt, "no cursor to close.");
+	}
+
+	ret = serialize_statement(stmt, &body);
+	if (SQL_SUCCEEDED(ret)) {
+		ret = post_json(stmt, ESODBC_CURL_CLOSE, &body);
+	}
+
+	if (buff != body.str) {
+		free(body.str);
+	}
+
+	DBGH(stmt, "cursor cleared (was: [%zd] `" LWPDL "`).",
+			stmt->rset.ecurs.cnt, LWSTR(&stmt->rset.ecurs));
+	/* the actual freeing occurs in clear_resultset() */
+	stmt->rset.ecurs.cnt = 0;
+	stmt->rset.ecurs.str = NULL;
+
+	return ret;
+}
+
 SQLRETURN EsSQLCloseCursor(SQLHSTMT StatementHandle)
 {
 	esodbc_stmt_st *stmt = STMH(StatementHandle);
+
 	if (! STMT_HAS_RESULTSET(stmt)) {
 		ERRH(stmt, "no open cursor for statement");
 		RET_HDIAGS(stmt, SQL_STATE_24000);
 	}
-	/* TODO: POST /_xpack/sql/close {"cursor":"<cursor>"} if cursor */
+
 	return EsSQLFreeStmt(StatementHandle, SQL_CLOSE);
 }
 
@@ -1915,9 +1986,9 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 
 	/* allocate memory for the stringified buffer, if needed */
 	if (buff->cnt < bodylen) {
-		WARNH(dbc, "local buffer too small (%zd), need %zdB; will alloc.",
+		INFOH(dbc, "local buffer too small (%zd), need %zdB; will alloc.",
 			buff->cnt, bodylen);
-		WARNH(dbc, "local buffer too small, SQL: `" LCPDL "`.",
+		INFOH(dbc, "local buffer too small, SQL: `" LCPDL "`.",
 			LCSTR(&stmt->u8sql));
 		body = malloc(bodylen);
 		if (! body) {
@@ -2043,7 +2114,7 @@ SQLRETURN EsSQLExecute(SQLHSTMT hstmt)
 
 	ret = serialize_statement(stmt, &body);
 	if (SQL_SUCCEEDED(ret)) {
-		ret = post_json(stmt, &body);
+		ret = post_json(stmt, ESODBC_CURL_QUERY, &body);
 	}
 
 	if (buff != body.str) {

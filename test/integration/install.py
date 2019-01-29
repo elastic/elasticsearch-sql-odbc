@@ -25,7 +25,7 @@ class Installer(object):
 			print("WARNING: bitness misalignment between interpreter (%s) and driver (%s): testing will likely fail" %
 					(bitness_py, bitness_driver))
 
-	def _install_driver_win(self):
+	def _install_driver_win(self, ephemeral):
 		with psutil.Popen(["msiexec.exe", "/i", self._driver_path, "/norestart", "/quiet"]) as p:
 			waiting_since = time.time()
 			while p.poll() is None:
@@ -42,11 +42,12 @@ class Installer(object):
 				raise Exception("driver installation failed with code: %s (see "\
 						"https://docs.microsoft.com/en-us/windows/desktop/msi/error-codes)." % p.returncode)
 			print("Driver installed (%s)." % self._driver_path)
-			atexit.register(psutil.Popen, ["msiexec.exe", "/x", self._driver_path, "/norestart", "/quiet"])
+			if ephemeral:
+				atexit.register(psutil.Popen, ["msiexec.exe", "/x", self._driver_path, "/norestart", "/quiet"])
 
-	def install(self):
+	def install(self, ephemeral):
 		if os.name == "nt":
-			return self._install_driver_win()
+			return self._install_driver_win(ephemeral)
 		else:
 			raise Exception("unsupported OS: %s" % os.name)
 
