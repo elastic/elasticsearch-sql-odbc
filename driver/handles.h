@@ -135,6 +135,7 @@ typedef struct struct_dbc {
 		unsigned char checking; /* first letter of DSN config option */
 	} srv_ver; /* server version */
 	cstr_st url; /* SQL URL (posts) */
+	cstr_st close_url; /* SQL close URL (posts) */
 	cstr_st root_url; /* root URL (gets) */
 	enum {
 		ESODBC_SEC_NONE = 0,
@@ -165,6 +166,12 @@ typedef struct struct_dbc {
 	CURL *curl; /* cURL handle */
 	CURLcode curl_err;
 	char curl_err_buff[CURL_ERROR_SIZE];
+	enum {
+		ESODBC_CURL_NONE = 0, /* init value */
+		ESODBC_CURL_QUERY,
+		ESODBC_CURL_CLOSE,
+		ESODBC_CURL_ROOT
+	} crr_url; /* curl is set to 'url', 'close_url' or 'root_url' (above) */
 	char *abuff; /* buffer holding the answer */
 	size_t alen; /* size of abuff */
 	size_t apos; /* current write position in the abuff */

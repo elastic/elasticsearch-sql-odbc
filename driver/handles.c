@@ -113,7 +113,6 @@ static void init_desc(esodbc_desc_st *desc, esodbc_stmt_st *stmt,
 	if (DESC_TYPE_IS_APPLICATION(type)) {
 		desc->bind_type = SQL_BIND_BY_COLUMN;
 	}
-	// XXX: assign/chain to statement?
 }
 
 static void clear_desc(esodbc_desc_st *desc, BOOL reinit)
@@ -127,6 +126,9 @@ static void clear_desc(esodbc_desc_st *desc, BOOL reinit)
 			break;
 
 		case DESC_TYPE_IRD:
+			if (HDRH(desc)->stmt->rset.ecurs.cnt) {
+				close_es_cursor(HDRH(desc)->stmt);
+			}
 			if (STMT_HAS_RESULTSET(desc->hdr.stmt)) {
 				clear_resultset(desc->hdr.stmt, reinit);
 			}
@@ -350,17 +352,14 @@ SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 
 	switch(HandleType) {
 		case SQL_HANDLE_ENV: /* Environment Handle */
-			// TODO: check if there are connections (_DBC)
 			break;
 		case SQL_HANDLE_DBC: /* Connection Handle */
-			// TODO: remove from (potential) list?
 			dbc = DBCH(Handle);
 			/* app/DM should have SQLDisconnect'ed, but just in case  */
 			cleanup_dbc(dbc);
 			ESODBC_MUX_DEL(&dbc->curl_mux);
 			break;
 		case SQL_HANDLE_STMT:
-			// TODO: remove from (potential) list?
 			stmt = STMH(Handle);
 
 			detach_sql(stmt);
@@ -381,7 +380,6 @@ SQLRETURN EsSQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
 			break;
 
 		case SQL_HANDLE_SENV: /* Shared Environment Handle */
-			// TODO: do I need to set the state into the Handle?
 			RET_STATE(SQL_STATE_HYC00);
 #if 0
 		case SQL_HANDLE_DBC_INFO_TOKEN:
@@ -454,7 +452,6 @@ SQLRETURN EsSQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option)
 		case SQL_CLOSE:
 			DBGH(stmt, "closing.");
 			clear_desc(stmt->ird, FALSE /*keep the header values*/);
-			// TODO: /_xpack/sql/close ? if still pending data?
 			break;
 
 		/* "Sets the SQL_DESC_COUNT field of the APD to 0, releasing all
