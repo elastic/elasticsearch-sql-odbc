@@ -452,7 +452,6 @@ SQLRETURN EsSQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option)
 		case SQL_CLOSE:
 			DBGH(stmt, "closing.");
 			clear_desc(stmt->ird, FALSE /*keep the header values*/);
-			// TODO: /_xpack/sql/close ? if still pending data?
 			break;
 
 		/* "Sets the SQL_DESC_COUNT field of the APD to 0, releasing all
