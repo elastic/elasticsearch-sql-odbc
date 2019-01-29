@@ -75,7 +75,7 @@ def main():
 	parser.add_argument("-d", "--driver", help="The path to the driver file to test; if not provided, the driver "
 			"is assumed to have been installed.")
 	parser.add_argument("-e", "--ephemeral", help="Remove the staged Elasticsearch and installed driver after testing"
-			" if test is succesful.", action="store_true", default=False)
+			" if test is successful.", action="store_true", default=False)
 	parser.add_argument("-t", "--skip-tests", help="Skip running the tests.", action="store_true", default=False)
 
 	idx_grp = parser.add_mutually_exclusive_group()
