@@ -63,11 +63,23 @@ class Testing(object):
 			raise Exception("index '%s' only contains %s documents (vs original %s CSV lines)" %
 					(index_name, cnt, csv_lines))
 
+	def _clear_cursor(self, index_name):
+		conn_str = CONNECT_STRING + ";MaxFetchSize=5"
+		with pyodbc.connect(conn_str) as cnxn:
+			with cnxn.execute("select 1 from %s limit 10" % index_name) as curs:
+				for i in range(3): # must be lower than MaxFetchSize, so no next page be requested
+					curs.fetchone()
+				# reuse the statment (a URL change occurs)
+				with curs.execute("select 1 from %s" % index_name) as curs2:
+					curs2.fetchall()
+		# no exception raised -> passed
+
 	def perform(self):
 		self._as_csv(TestData.LIBRARY_INDEX)
 		self._as_csv(TestData.EMPLOYEES_INDEX)
 		self._count_all(TestData.CALCS_INDEX)
 		self._count_all(TestData.STAPLES_INDEX)
+		self._clear_cursor(TestData.LIBRARY_INDEX)
 		print("Tests successful.")
 
 # vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 tw=118 :

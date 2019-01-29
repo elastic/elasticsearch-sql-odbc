@@ -127,6 +127,7 @@
 
 /* SQL plugin's REST endpoint for SQL */
 #define ELASTIC_SQL_PATH				"/_xpack/sql"
+#define ELASTIC_SQL_CLOSE_SUBPATH		"/close"
 
 /* initial receive buffer size for REST answers */
 #define ESODBC_BODY_BUF_START_SIZE		(4 * 1024)
@@ -300,14 +301,14 @@
 /*
  * System functions:
  * - supported: DATABASE, IFNULL, USER.
- * - not supported: none DATABASE, IFNULL, USER
+ * - not supported: none.
  */
 #define ESODBC_SYSTEM_FUNCTIONS					(0LU | \
 		SQL_FN_SYS_USERNAME | SQL_FN_SYS_DBNAME | SQL_FN_SYS_IFNULL)
 /*
  * Convert functions support:
- * - supported: CAST.
- * - not supported: CONVERT.
+ * - supported: CAST, CONVERT.
+ * - not supported: none.
  */
 #define ESODBC_CONVERT_FUNCTIONS				(0LU | \
 	SQL_FN_CVT_CONVERT | SQL_FN_CVT_CAST)
@@ -345,12 +346,27 @@
 #define ESODBC_SQL92_DATETIME_FUNCTIONS			0LU
 /*
  * SQL92 datetime literals support:
- * - supported: TIMESTAMP;
- * - not supported: DATE, TIME, INTERVAL: YEAR/MONTH/DAY/HOUR/MINUTE/SECOND/
+ * - supported: TIMESTAMP, INTERVAL: YEAR/MONTH/DAY/HOUR/MINUTE/SECOND/
  *   YEAR_TO_MONTH/DAY_TO_HOUR/DAY_TO_MINUTE/DAY_TO_SECOND/HOUR_TO_MINUTE/
  *   HOUR_TO_SECOND/MINUTE_TO_SECOND.
+ * - not supported: TIME.
  */
-#define ESODBC_DATETIME_LITERALS				SQL_DL_SQL92_TIMESTAMP
+#define ESODBC_DATETIME_LITERALS				(0LU | \
+		SQL_DL_SQL92_TIMESTAMP | \
+		SQL_DL_SQL92_DATE | \
+		SQL_DL_SQL92_INTERVAL_YEAR | \
+		SQL_DL_SQL92_INTERVAL_MONTH | \
+		SQL_DL_SQL92_INTERVAL_DAY | \
+		SQL_DL_SQL92_INTERVAL_HOUR | \
+		SQL_DL_SQL92_INTERVAL_MINUTE | \
+		SQL_DL_SQL92_INTERVAL_SECOND | \
+		SQL_DL_SQL92_INTERVAL_YEAR_TO_MONTH | \
+		SQL_DL_SQL92_INTERVAL_DAY_TO_HOUR | \
+		SQL_DL_SQL92_INTERVAL_DAY_TO_MINUTE | \
+		SQL_DL_SQL92_INTERVAL_DAY_TO_SECOND | \
+		SQL_DL_SQL92_INTERVAL_HOUR_TO_MINUTE | \
+		SQL_DL_SQL92_INTERVAL_HOUR_TO_SECOND | \
+		SQL_DL_SQL92_INTERVAL_MINUTE_TO_SECOND )
 /*
  * SQL92 value functions:
  * - supported: COALESCE, NULLIF
