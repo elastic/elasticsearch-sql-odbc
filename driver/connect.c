@@ -279,7 +279,9 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb,
 {
 	esodbc_dbc_st *dbc = (esodbc_dbc_st *)userdata;
 	char *wbuf;
-	size_t need, avail, have;
+	size_t avail; /* available space in current buffer */
+	size_t have; /* I have a new chunk of this size */
+	size_t need; /* new size of buffer I need */
 
 	assert(dbc->apos <= dbc->alen);
 	avail = dbc->alen - dbc->apos;
@@ -292,23 +294,23 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb,
 	if (avail < have) {
 		/* calculate how much space to allocate. start from existing length,
 		 * if set, othewise from a constant (on first allocation). */
-		for (need = dbc->alen ? dbc->alen : ESODBC_BODY_BUF_START_SIZE;
-			need < dbc->apos + have; need *= 2)
-			;
-		DBGH(dbc, "libcurl: growing buffer for new chunk of %zd "
-			"from %zd to %zd.", have, dbc->alen, need);
-		if (dbc->amax < need) { /* would I need more than max? */
+		need = dbc->alen ? dbc->alen : ESODBC_BODY_BUF_START_SIZE;
+		while (need < dbc->apos + have) {
+			need *= 2;
+		}
+		DBGH(dbc, "libcurl: need to grow buffer for new chunk of %zd "
+			"from %zd to %zd bytes.", have, dbc->alen, need);
+		if (dbc->amax && (dbc->amax < need)) { /* do I need more than max? */
 			if (dbc->amax <= (size_t)dbc->alen) { /* am I at max already? */
-				ERRH(dbc, "libcurl: can't grow past max %zd; have: %zd",
-					dbc->amax, have);
-				return 0;
-			} else { /* am not: alloc max possible (possibly still < need!) */
+				goto too_large;
+			} else { /* am not: alloc max possible (if that's enough) */
 				need = dbc->amax;
 				WARNH(dbc, "libcurl: capped buffer to max: %zd", need);
 				/* re'eval what I have available... */
 				avail = dbc->amax - dbc->apos;
-				/* ...and how much I could copy (possibly less than received)*/
-				have = have < avail ? have : avail;
+				if (avail < have) {
+					goto too_large;
+				}
 			}
 		}
 		wbuf = realloc(dbc->abuff, need);
@@ -324,7 +326,6 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb,
 	dbc->apos += have;
 	DBGH(dbc, "libcurl: copied %zdB: `%.*s`.", have, have, ptr);
 
-
 	/*
 	 * "Your callback should return the number of bytes actually taken care
 	 * of. If that amount differs from the amount passed to your callback
@@ -336,6 +337,11 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb,
 	 * details."
 	 */
 	return have;
+
+too_large:
+	ERRH(dbc, "libcurl: at %zd and can't grow past max %zd for new chunk of "
+			"%zd bytes.", dbc->apos, dbc->amax, have);
+	return 0;
 }
 
 /* post cURL error message: include CURLOPT_ERRORBUFFER if available */
@@ -729,7 +735,6 @@ SQLRETURN post_json(esodbc_stmt_st *stmt, int url_type, const cstr_st *u8body)
 	tout = dbc->timeout < stmt->query_timeout ? stmt->query_timeout :
 		dbc->timeout;
 
-	code = -1; /* init value */
 	if (dbc_curl_add_post_body(dbc, tout, u8body) &&
 		dbc_curl_perform(dbc, &code, &resp)) {
 		if (code == 200) {
@@ -1023,6 +1028,9 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 		goto err;
 	} else {
 		dbc->amax = (size_t)max_body_size * 1024 * 1024;
+		if (! dbc->amax) {
+			WARNH(dbc, "no reply body limit set.");
+		}
 	}
 	INFOH(dbc, "max body size: %zd.", dbc->amax);
 
