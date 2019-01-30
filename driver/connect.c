@@ -2756,7 +2756,9 @@ SQLRETURN EsSQLGetConnectAttrW(
 			if (! dbc->es_types) {
 				ERRH(dbc, "no connection active.");
 				RET_HDIAGS(dbc, SQL_STATE_08003);
-			} else if ((used = copy_current_catalog(dbc, (SQLWCHAR *)ValuePtr,
+			}
+			if ((used = fetch_server_attr(dbc, SQL_ATTR_CURRENT_CATALOG,
+							(SQLWCHAR *)ValuePtr,
 							(SQLSMALLINT)BufferLength)) < 0) {
 				ERRH(dbc, "failed to get current catalog.");
 				RET_STATE(dbc->hdr.diag.state);
