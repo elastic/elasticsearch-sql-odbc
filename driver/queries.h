@@ -122,7 +122,7 @@ SQLRETURN EsSQLNumParams(
 	SQLSMALLINT       *ParameterCountPtr);
 SQLRETURN EsSQLRowCount(_In_ SQLHSTMT StatementHandle, _Out_ SQLLEN *RowCount);
 
-	/* JSON body build elements */
+/* JSON body build elements */
 #define JSON_KEY_QUERY			"\"query\": " /* will always be the 1st key */
 #define JSON_KEY_CURSOR			"\"cursor\": " /* 1st key */
 #define JSON_KEY_PARAMS			", \"params\": " /* n-th key */

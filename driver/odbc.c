@@ -899,12 +899,12 @@ SQLRETURN  SQL_API SQLFetchScroll(SQLHSTMT StatementHandle,
 {
 	SQLRETURN ret;
 	TRACE(_IN, StatementHandle, "phz", StatementHandle,
-			FetchOrientation, FetchOffset);
+		FetchOrientation, FetchOffset);
 	HND_LOCK(StatementHandle);
 	ret = EsSQLFetchScroll(StatementHandle, FetchOrientation, FetchOffset);
 	HND_UNLOCK(StatementHandle);
 	TRACE(_OUT, StatementHandle, "dphz", ret, StatementHandle,
-			FetchOrientation, FetchOffset);
+		FetchOrientation, FetchOffset);
 	return ret;
 }
 

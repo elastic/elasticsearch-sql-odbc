@@ -340,7 +340,7 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb,
 
 too_large:
 	ERRH(dbc, "libcurl: at %zd and can't grow past max %zd for new chunk of "
-			"%zd bytes.", dbc->apos, dbc->amax, have);
+		"%zd bytes.", dbc->apos, dbc->amax, have);
 	return 0;
 }
 
@@ -711,7 +711,7 @@ SQLRETURN post_json(esodbc_stmt_st *stmt, int url_type, const cstr_st *u8body)
 	};
 
 	DBGH(stmt, "POSTing JSON type %d: [%zd] `" LCPDL "`.", url_type,
-			u8body->cnt, LCSTR(u8body));
+		u8body->cnt, LCSTR(u8body));
 
 	ESODBC_MUX_LOCK(&dbc->curl_mux);
 
@@ -740,7 +740,7 @@ SQLRETURN post_json(esodbc_stmt_st *stmt, int url_type, const cstr_st *u8body)
 		if (code == 200) {
 			if (resp.cnt) {
 				ESODBC_MUX_UNLOCK(&dbc->curl_mux);
-				return (url_type == ESODBC_CURL_QUERY) ? 
+				return (url_type == ESODBC_CURL_QUERY) ?
 					attach_answer(stmt, resp.str, resp.cnt) :
 					close_es_answ_handler(stmt, resp.str, resp.cnt);
 			} else {
@@ -1088,21 +1088,21 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	 * Version checking mode
 	 */
 	if (EQ_CASE_WSTR(&attrs->version_checking,
-				&MK_WSTR(ESODBC_DSN_VC_STRICT))
-			|| EQ_CASE_WSTR(&attrs->version_checking,
-				&MK_WSTR(ESODBC_DSN_VC_MAJOR))
+			&MK_WSTR(ESODBC_DSN_VC_STRICT))
+		|| EQ_CASE_WSTR(&attrs->version_checking,
+			&MK_WSTR(ESODBC_DSN_VC_MAJOR))
 #			ifndef NDEBUG
-			|| EQ_CASE_WSTR(&attrs->version_checking,
-				&MK_WSTR(ESODBC_DSN_VC_NONE))
+		|| EQ_CASE_WSTR(&attrs->version_checking,
+			&MK_WSTR(ESODBC_DSN_VC_NONE))
 #			endif /* NDEBUG */
-			) {
+	) {
 		dbc->srv_ver.checking = (unsigned char)attrs->version_checking.str[0];
 		DBGH(dbc, "version checking mode: %c.", dbc->srv_ver.checking);
 	} else {
 		ERRH(dbc, "unknown version checking mode '" LWPDL "'.",
 			LWSTR(&attrs->version_checking));
 		SET_HDIAG(dbc, SQL_STATE_HY000, "invalid version checking mode "
-				"setting", 0);
+			"setting", 0);
 		goto err;
 	}
 
@@ -1235,7 +1235,7 @@ static SQLRETURN check_server_version(esodbc_dbc_st *dbc)
 	}
 	if (! resp.cnt) {
 		ERRH(dbc, "failed to get a response with body: code=%ld, "
-				"body len: %zu.", code, resp.cnt);
+			"body len: %zu.", code, resp.cnt);
 		goto err;
 	} else if (code != 200) {
 		ret = attach_error(dbc, &resp, code);
@@ -1262,7 +1262,7 @@ static SQLRETURN check_server_version(esodbc_dbc_st *dbc)
 	}
 	ver_no.str = (SQLWCHAR *)UJReadString(o_number, &ver_no.cnt);
 	DBGH(dbc, "read version number: [%zu] `" LWPDL "`.", ver_no.cnt,
-			LWSTR(&ver_no));
+		LWSTR(&ver_no));
 
 #	ifndef NDEBUG
 	/* strip any qualifiers (=anything following a first `-`) in debug mode */
@@ -1279,7 +1279,7 @@ static SQLRETURN check_server_version(esodbc_dbc_st *dbc)
 	if (tolower(dbc->srv_ver.checking) != tolower(ESODBC_DSN_VC_NONE[0])) {
 		if (! EQ_WSTR(&ver_no, &own_ver)) {
 			ERRH(dbc, "version mismatch: server: " LWPDL ", "
-					"own: " LWPDL ".", LWSTR(&ver_no), LWSTR(&own_ver));
+				"own: " LWPDL ".", LWSTR(&ver_no), LWSTR(&own_ver));
 			n = swprintf(wbuff, sizeof(wbuff)/sizeof(wbuff[0]),
 					err_msg_fmt, LWSTR(&ver_no), LWSTR(&own_ver));
 			ret = post_diagnostic(dbc, SQL_STATE_HY000, (n <= 0) ?
@@ -1287,7 +1287,7 @@ static SQLRETURN check_server_version(esodbc_dbc_st *dbc)
 					wbuff, 0);
 		} else {
 			INFOH(dbc, "server and driver versions aligned to: " LWPDL ".",
-					LWSTR(&own_ver));
+				LWSTR(&own_ver));
 			ret = SQL_SUCCESS;
 		}
 #	ifndef NDEBUG
@@ -1306,7 +1306,7 @@ static SQLRETURN check_server_version(esodbc_dbc_st *dbc)
 		goto err;
 	} else {
 		memcpy(dbc->srv_ver.string.str, ver_no.str,
-				ver_no.cnt * sizeof(SQLWCHAR));
+			ver_no.cnt * sizeof(SQLWCHAR));
 		dbc->srv_ver.string.cnt = ver_no.cnt;
 		dbc->srv_ver.string.str[ver_no.cnt] = 0;
 	}
@@ -1319,7 +1319,7 @@ static SQLRETURN check_server_version(esodbc_dbc_st *dbc)
 err:
 	if (resp.cnt) {
 		ERRH(dbc, "failed to process server's answer: [%zu] `" LWPDL "`.",
-				resp.cnt, LCSTR(&resp));
+			resp.cnt, LCSTR(&resp));
 		free(resp.str);
 	}
 	if (state) {
@@ -1329,7 +1329,7 @@ err:
 		RET_STATE(HDRH(dbc)->diag.state);
 	} else {
 		RET_HDIAG(dbc, SQL_STATE_08S01,
-				"Failed to extract server's version", 0);
+			"Failed to extract server's version", 0);
 	}
 }
 

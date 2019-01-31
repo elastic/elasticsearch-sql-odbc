@@ -1005,7 +1005,7 @@ SQLRETURN EsSQLFetchScroll(SQLHSTMT StatementHandle,
 {
 	if (FetchOrientation != SQL_FETCH_NEXT) {
 		ERRH(StatementHandle, "orientation %hd not supported with forward-only"
-				" cursor", FetchOrientation);
+			" cursor", FetchOrientation);
 		RET_HDIAGS(StatementHandle, SQL_STATE_HY106);
 	}
 
@@ -1214,19 +1214,19 @@ SQLRETURN EsSQLSetPos(
 {
 	switch(Operation) {
 		case SQL_POSITION:
-			// check ESODBC_GETDATA_EXTENSIONS (SQL_GD_BLOCK) when implementing
-			/* setting the position with a read-only forward-only cursor would
-			 * only be useful with SQLGetData(). Since SQLFetch/Scroll() must
-			 * be called before this function and because SQLFetch() frees an
-			 * old result before getting a new one from ES/SQL to fill in the
-			 * resultset, positioning the cursor within the result set with
-			 * SQLSetPos() would require SQLFetch() to duplicate the resultset
-			 * in memory every time, just for the case that
-			 * SQLSetPos()+SQLGetData() might be used. This is just not worthy:
-			 * - don't advertise SQL_GD_BLOCK; which should then allow to:
-			 * - not support SQL_POSITION.
-			 */
-			// no break;
+		// check ESODBC_GETDATA_EXTENSIONS (SQL_GD_BLOCK) when implementing
+		/* setting the position with a read-only forward-only cursor would
+		 * only be useful with SQLGetData(). Since SQLFetch/Scroll() must
+		 * be called before this function and because SQLFetch() frees an
+		 * old result before getting a new one from ES/SQL to fill in the
+		 * resultset, positioning the cursor within the result set with
+		 * SQLSetPos() would require SQLFetch() to duplicate the resultset
+		 * in memory every time, just for the case that
+		 * SQLSetPos()+SQLGetData() might be used. This is just not worthy:
+		 * - don't advertise SQL_GD_BLOCK; which should then allow to:
+		 * - not support SQL_POSITION.
+		 */
+		// no break;
 
 		case SQL_REFRESH:
 		case SQL_UPDATE:
@@ -1289,8 +1289,8 @@ SQLRETURN close_es_answ_handler(esodbc_stmt_st *stmt, char *buff, size_t blen)
 		case UJT_False:
 			ERRH(stmt, "failed to close cursor on server side.");
 			assert(0);
-			/* no break: not a driver/client error -- server would answer with
-			 * an error answer */
+		/* no break: not a driver/client error -- server would answer with
+		 * an error answer */
 		case UJT_True:
 			free(buff);
 			return SQL_SUCCESS;
@@ -1324,7 +1324,7 @@ SQLRETURN close_es_cursor(esodbc_stmt_st *stmt)
 	}
 
 	DBGH(stmt, "cursor cleared (was: [%zd] `" LWPDL "`).",
-			stmt->rset.ecurs.cnt, LWSTR(&stmt->rset.ecurs));
+		stmt->rset.ecurs.cnt, LWSTR(&stmt->rset.ecurs));
 	/* the actual freeing occurs in clear_resultset() */
 	stmt->rset.ecurs.cnt = 0;
 	stmt->rset.ecurs.str = NULL;
@@ -1374,7 +1374,7 @@ SQLRETURN EsSQLEndTran(SQLSMALLINT HandleType, SQLHANDLE Handle,
 	SQLSMALLINT CompletionType)
 {
 	WARNH(Handle, "transaction ending requested (%hd), despite no "
-			"transactional support advertized", CompletionType);
+		"transactional support advertized", CompletionType);
 	if (CompletionType == SQL_ROLLBACK) {
 		RET_HDIAGS(Handle, SQL_STATE_HYC00);
 	}
@@ -2009,7 +2009,7 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 		pos += sizeof(JSON_KEY_CURSOR) - 1;
 		body[pos ++] = '"';
 		if (ascii_w2c(stmt->rset.ecurs.str, body + pos,
-					stmt->rset.ecurs.cnt) <= 0) {
+				stmt->rset.ecurs.cnt) <= 0) {
 			if (buff->cnt < bodylen) { /* has it been alloc'd? */
 				free(body);
 			}
@@ -2019,7 +2019,7 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 		} else {
 			/* no character needs JSON escaping */
 			assert(stmt->rset.ecurs.cnt == json_escape(body + pos,
-						stmt->rset.ecurs.cnt, NULL, 0));
+					stmt->rset.ecurs.cnt, NULL, 0));
 			pos += stmt->rset.ecurs.cnt;
 		}
 		body[pos ++] = '"';
