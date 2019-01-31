@@ -13,6 +13,7 @@
 #include "queries.h"
 #include "connect.h"
 #include "info.h"
+#include "catalogue.h"
 
 #define ORIG_DISCRIM	"IM"
 #define ORIG_CLASS_ISO	"ISO 9075"
@@ -322,6 +323,7 @@ static SQLRETURN getinfo_data_source(
 	_Out_opt_ SQLSMALLINT *StringLengthPtr)
 {
 	esodbc_dbc_st *dbc = DBCH(ConnectionHandle);
+	SQLSMALLINT used;
 
 	*handled = TRUE;
 	switch(InfoType) {
@@ -402,7 +404,20 @@ static SQLRETURN getinfo_data_source(
 			WARNH(dbc, "transactions not supported.");
 			RET_INFO(SQL_C_ULONG, 0, "txn isolation options");
 		case SQL_USER_NAME:
-			break; // TODO
+			if (! dbc->es_types) {
+				ERRH(dbc, "no connection active.");
+				RET_HDIAGS(dbc, SQL_STATE_08003);
+			}
+			used = fetch_server_attr(dbc, (SQLINTEGER)SQL_USER_NAME,
+						(SQLWCHAR *)InfoValue, BufferLength);
+			if (used < 0) {
+				ERRH(dbc, "failed to get current user.");
+				RET_STATE(dbc->hdr.diag.state);
+			}
+			if (StringLengthPtr) {
+				*StringLengthPtr = (SQLINTEGER)used;
+			}
+			return SQL_SUCCESS;
 	}
 	*handled = FALSE;
 	return SQL_ERROR;

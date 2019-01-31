@@ -17,9 +17,6 @@
 #include "queries.h"
 
 
-#define SYS_CATALOGS \
-	"SYS CATALOGS"
-
 /* SYS TABLES syntax tokens; these need to stay broken down, since this
  * query makes a difference between a predicate being '%' or left out */
 // TODO: schema, when supported
@@ -97,10 +94,10 @@ SQLRETURN EsSQLStatisticsW(
 }
 
 
-/* writes into 'dest', of size 'room', the current catalog of 'dbc'.
+/* writes into 'dest', of size 'room', the current requested attr. of 'dbc'.
  * returns negative on error, or the char count written otherwise */
-SQLSMALLINT copy_current_catalog(esodbc_dbc_st *dbc, SQLWCHAR *dest,
-	SQLSMALLINT room)
+SQLSMALLINT fetch_server_attr(esodbc_dbc_st *dbc, SQLINTEGER attr_id,
+		SQLWCHAR *dest, SQLSMALLINT room)
 {
 	esodbc_stmt_st *stmt = NULL;
 	SQLSMALLINT used = -1; /*failure*/
@@ -108,7 +105,8 @@ SQLSMALLINT copy_current_catalog(esodbc_dbc_st *dbc, SQLWCHAR *dest,
 	SQLLEN ind_len = SQL_NULL_DATA;
 	SQLWCHAR *buff;
 	static const size_t buff_cnt = ESODBC_MAX_IDENTIFIER_LEN + /*\0*/1;
-	wstr_st catalog;
+	wstr_st attr_val;
+	wstr_st attr_sql;
 
 	buff = malloc(sizeof(*buff) * buff_cnt);
 	if (! buff) {
@@ -122,8 +120,19 @@ SQLSMALLINT copy_current_catalog(esodbc_dbc_st *dbc, SQLWCHAR *dest,
 	}
 	assert(stmt);
 
-	if (! SQL_SUCCEEDED(attach_sql(stmt, MK_WPTR(SYS_CATALOGS),
-				sizeof(SYS_CATALOGS) - 1))) {
+	switch (attr_id) {
+		case SQL_ATTR_CURRENT_CATALOG:
+			attr_sql = MK_WSTR("SELECT database()");
+			break;
+		case SQL_USER_NAME:
+			attr_sql = MK_WSTR("SELECT user()");
+			break;
+		default:
+			BUGH(dbc, "unexpected attribute ID: %ld.", attr_id);
+			goto end;
+	}
+
+	if (! SQL_SUCCEEDED(attach_sql(stmt, attr_sql.str, attr_sql.cnt))) {
 		ERRH(dbc, "failed to attach query to statement.");
 		goto end;
 	}
@@ -138,17 +147,16 @@ SQLSMALLINT copy_current_catalog(esodbc_dbc_st *dbc, SQLWCHAR *dest,
 		ERRH(dbc, "failed to get result rows count.");
 		goto end;
 	} else if (row_cnt <= 0) {
-		WARNH(stmt, "Elasticsearch returned no current catalog.");
-		catalog = MK_WSTR(""); /* empty string, it's not quite an error */
+		WARNH(stmt, "received no value for attribute %ld.", attr_id);
+		attr_val = MK_WSTR(""); /* empty string, it's not quite an error */
 	} else {
-		DBGH(stmt, "Elasticsearch catalogs rows count: %ld.", row_cnt);
 		if (1 < row_cnt) {
-			WARNH(dbc, "Elasticsearch connected to %d clusters, returning "
-				"the first's name as current catalog.", row_cnt);
+			WARNH(dbc, "more than one value (%lld) available for "
+					"attribute %ld; picking first.", row_cnt, attr_id);
 		}
 
 		if (! SQL_SUCCEEDED(EsSQLBindCol(stmt, /*col#*/1, SQL_C_WCHAR, buff,
-					sizeof(*buff) * buff_cnt, &ind_len))) {
+					sizeof(*buff) * (buff_cnt - 1), &ind_len))) {
 			ERRH(dbc, "failed to bind first column.");
 			goto end;
 		}
@@ -157,20 +165,20 @@ SQLSMALLINT copy_current_catalog(esodbc_dbc_st *dbc, SQLWCHAR *dest,
 			goto end;
 		}
 		if (ind_len <= 0) {
-			WARNH(dbc, "NULL catalog received."); /*tho maybe != NULL_DATA */
-			catalog = MK_WSTR("");
+			WARNH(dbc, "NULL value received for attribute %ld.", attr_id);
+			assert(ind_len == SQL_NULL_DATA);
+			attr_val = MK_WSTR("");
 		} else {
-			catalog = (wstr_st) {
-				buff, ind_len
-			};
-			buff[ind_len] = L'\0'; /* write_wstr() expects the 0-term */
-			DBGH(dbc, "current catalog (first value returned): `" LWPDL "`.",
-				LWSTR(&catalog));
+			attr_val.str = buff;
+			attr_val.cnt = ind_len / sizeof(*buff);
+			/* 0-term room left out when binding */
+			buff[attr_val.cnt] = L'\0'; /* write_wstr() expects the 0-term */
 		}
 	}
+	DBGH(dbc, "attribute %ld value: `" LWPDL "`.", attr_id, LWSTR(&attr_val));
 
-	if (! SQL_SUCCEEDED(write_wstr(dbc, dest, &catalog, room, &used))) {
-		ERRH(dbc, "failed to copy catalog: `" LWPDL "`.", LWSTR(&catalog));
+	if (! SQL_SUCCEEDED(write_wstr(dbc, dest, &attr_val, room, &used))) {
+		ERRH(dbc, "failed to copy value: `" LWPDL "`.", LWSTR(&attr_val));
 		used = -1; /* write_wstr() can change pointer, and still fail */
 	}
 

@@ -22,7 +22,7 @@ class Testing(object):
 
 	def _reconstitute_csv(self, index_name):
 		with pyodbc.connect(CONNECT_STRING) as cnxn:
-			cnxn.setencoding(encoding='utf-8')
+			cnxn.autocommit = True
 			csv = u""
 			cols = self._data.csv_attributes(index_name)[1]
 			fields = ",".join(cols)
@@ -55,6 +55,7 @@ class Testing(object):
 	def _count_all(self, index_name):
 		cnt = 0
 		with pyodbc.connect(CONNECT_STRING) as cnxn:
+			cnxn.autocommit = True
 			with cnxn.execute("select 1 from %s" % index_name) as curs:
 				while curs.fetchone():
 					cnt += 1
@@ -66,6 +67,7 @@ class Testing(object):
 	def _clear_cursor(self, index_name):
 		conn_str = CONNECT_STRING + ";MaxFetchSize=5"
 		with pyodbc.connect(conn_str) as cnxn:
+			cnxn.autocommit = True
 			with cnxn.execute("select 1 from %s limit 10" % index_name) as curs:
 				for i in range(3): # must be lower than MaxFetchSize, so no next page be requested
 					curs.fetchone()
@@ -74,12 +76,21 @@ class Testing(object):
 					curs2.fetchall()
 		# no exception raised -> passed
 
+	def _current_user(self):
+		with pyodbc.connect(CONNECT_STRING) as cnxn:
+			cnxn.autocommit = True
+			user = cnxn.getinfo(pyodbc.SQL_USER_NAME)
+			if user != "elastic":
+				raise Exception("current username not 'elastic': %s" % user)
+
 	def perform(self):
 		self._as_csv(TestData.LIBRARY_INDEX)
 		self._as_csv(TestData.EMPLOYEES_INDEX)
 		self._count_all(TestData.CALCS_INDEX)
 		self._count_all(TestData.STAPLES_INDEX)
 		self._clear_cursor(TestData.LIBRARY_INDEX)
+		self._current_user()
+
 		print("Tests successful.")
 
 # vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 tw=118 :

@@ -239,6 +239,7 @@ SQLRETURN TEST_API attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 		ERRH(stmt, "failed to decode JSON answer: %s ([%zu] `%.*s`).",
 			stmt->rset.state ? UJGetError(stmt->rset.state) : "<none>",
 			blen, blen, buff);
+		assert(0);
 		RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
 	}
 	columns = rows = cursor = NULL;
