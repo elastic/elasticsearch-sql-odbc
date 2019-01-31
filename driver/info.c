@@ -306,7 +306,7 @@ static SQLRETURN getinfo_dbms_product(
 					StringLengthPtr);
 		case SQL_DBMS_VER:
 			DBGH(dbc, "requested: DBMS version (`" LWPDL "`).",
-					LWSTR(&dbc->srv_ver.string));
+				LWSTR(&dbc->srv_ver.string));
 			return write_wstr(dbc, InfoValue, &dbc->srv_ver.string,
 					BufferLength, StringLengthPtr);
 	}
@@ -409,7 +409,7 @@ static SQLRETURN getinfo_data_source(
 				RET_HDIAGS(dbc, SQL_STATE_08003);
 			}
 			used = fetch_server_attr(dbc, (SQLINTEGER)SQL_USER_NAME,
-						(SQLWCHAR *)InfoValue, BufferLength);
+					(SQLWCHAR *)InfoValue, BufferLength);
 			if (used < 0) {
 				ERRH(dbc, "failed to get current user.");
 				RET_STATE(dbc->hdr.diag.state);

@@ -12,7 +12,7 @@
 
 
 SQLSMALLINT fetch_server_attr(esodbc_dbc_st *dbc, SQLINTEGER attr_id,
-		SQLWCHAR *dest, SQLSMALLINT room);
+	SQLWCHAR *dest, SQLSMALLINT room);
 
 
 SQLRETURN EsSQLStatisticsW(

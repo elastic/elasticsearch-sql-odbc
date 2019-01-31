@@ -97,7 +97,7 @@ SQLRETURN EsSQLStatisticsW(
 /* writes into 'dest', of size 'room', the current requested attr. of 'dbc'.
  * returns negative on error, or the char count written otherwise */
 SQLSMALLINT fetch_server_attr(esodbc_dbc_st *dbc, SQLINTEGER attr_id,
-		SQLWCHAR *dest, SQLSMALLINT room)
+	SQLWCHAR *dest, SQLSMALLINT room)
 {
 	esodbc_stmt_st *stmt = NULL;
 	SQLSMALLINT used = -1; /*failure*/
@@ -152,7 +152,7 @@ SQLSMALLINT fetch_server_attr(esodbc_dbc_st *dbc, SQLINTEGER attr_id,
 	} else {
 		if (1 < row_cnt) {
 			WARNH(dbc, "more than one value (%lld) available for "
-					"attribute %ld; picking first.", row_cnt, attr_id);
+				"attribute %ld; picking first.", row_cnt, attr_id);
 		}
 
 		if (! SQL_SUCCEEDED(EsSQLBindCol(stmt, /*col#*/1, SQL_C_WCHAR, buff,
