@@ -144,7 +144,7 @@
  * Config defaults
  */
 /* default maximum amount of bytes to accept in REST answers */
-#define ESODBC_DEF_MAX_BODY_SIZE_MB	"10"
+#define ESODBC_DEF_MAX_BODY_SIZE_MB	"100"
 /* max number of rows to request from server */
 #define ESODBC_DEF_FETCH_SIZE		"0" // no fetch size
 /* default host to connect to */
