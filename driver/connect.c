@@ -2334,6 +2334,9 @@ SQLRETURN EsSQLDriverConnectW
 		assert(0 < res);
 	}
 	assert(attrs.driver.cnt || attrs.dsn.cnt);
+	/* Note: SAVEFILE and FILEDSN are markers for the DM, not the driver. The
+	 * DM is supposed to read from / write into the file pointed to by these
+	 * attributes. */
 
 	if (attrs.dsn.cnt) {
 		/* "The driver uses any information it retrieves from the system
