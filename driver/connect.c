@@ -313,7 +313,13 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb,
 				}
 			}
 		}
-		wbuf = realloc(dbc->abuff, need);
+		/* Add a 0-term for UJSON4C: while the lib takes the string length to
+		 * parse, it's not really safe if the string is not a NTS. Adding the
+		 * 0-term at the end of the chunk/string will ensure the library won't
+		 * read past it (though this won't prevent it from failing to parse
+		 * valid JSON within the indicated length if there's white space in
+		 * the chunk right past the indicated JSON length.) */
+		wbuf = realloc(dbc->abuff, need + /*\0*/1);
 		if (! wbuf) {
 			ERRNH(dbc, "libcurl: failed to realloc to %zdB.", need);
 			return 0;
@@ -324,6 +330,8 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb,
 
 	memcpy(dbc->abuff + dbc->apos, ptr, have);
 	dbc->apos += have;
+	/* Add the 0-term for UJSON4C (but don't count it - see above) */
+	dbc->abuff[dbc->apos] = '\0';
 	DBGH(dbc, "libcurl: copied %zdB: `%.*s`.", have, have, ptr);
 
 	/*
@@ -1245,7 +1253,9 @@ static SQLRETURN check_server_version(esodbc_dbc_st *dbc)
 
 	obj = UJDecode(resp.str, resp.cnt, /*heap f()s*/NULL, &state);
 	if (! obj) {
-		ERRH(dbc, "failed to parse as JSON");
+		ERRH(dbc, "failed to parse JSON: %s ([%zd] `" LCPDL "`).",
+			state ? UJGetError(state) : "<none>",
+			resp.cnt, LCSTR(&resp));
 		goto err;
 	}
 	memset(&o_version, 0, sizeof(o_version));
