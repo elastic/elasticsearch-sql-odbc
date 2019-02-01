@@ -340,8 +340,15 @@ namespace EsOdbcDsnEditor
 
 		private void EnableDisableActionButtons()
 		{
-			saveButton.Enabled = string.IsNullOrEmpty(textName.Text) == false
-								 && string.IsNullOrEmpty(textHostname.Text) == false;
+			if (isConnecting) {
+				// If connecting, enable the button if we have a hostname.
+				// This can be triggered by app connecting or FileDSN verifying the connection.
+				saveButton.Enabled = string.IsNullOrEmpty(textHostname.Text) == false;
+			} else {
+				// If editing a (User/System) DSN, enable the buton if both DSN name and hostname are available.
+				saveButton.Enabled = string.IsNullOrEmpty(textName.Text) == false
+									 && string.IsNullOrEmpty(textHostname.Text) == false;
+			}
 			testButton.Enabled = string.IsNullOrEmpty(textHostname.Text) == false;
 		}
 
