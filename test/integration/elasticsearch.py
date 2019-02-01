@@ -32,7 +32,8 @@ class Elasticsearch(object):
 	TERM_TIMEOUT = 5 # how long to wait for processes to die (before KILLing)
 	REQ_TIMEOUT = 20 # default GET request timeout
 	ES_PORT = 9200
-	ES_START_TIMEOUT = 30
+	ES_START_TIMEOUT = 60 # how long to wait for Elasticsearch to come online
+	ES_401_RETRIES = 8 # how many "starting" 401 answers to accept before giving up (.5s waiting inbetween)
 	AUTH_PASSWORD = "elastic"
 
 	def __init__(self):
@@ -142,7 +143,7 @@ class Elasticsearch(object):
 				failures += 1
 				# it seems that on a "fortunate" timing, ES will return a 401 when just starting, even if no
 				# authentication is enabled at this point: try to give it more time to start
-				if 3 < failures:
+				if self.ES_401_RETRIES < failures:
 					raise e
 			time.sleep(.5)
 			if self.ES_START_TIMEOUT < time.time() - waiting_since:

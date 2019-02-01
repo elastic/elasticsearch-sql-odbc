@@ -11,7 +11,7 @@ import hashlib
 from elasticsearch import Elasticsearch
 from data import TestData
 
-CONNECT_STRING = 'Driver={Elasticsearch Driver};UID=elastic;PWD=%s;Secure=0' % Elasticsearch.AUTH_PASSWORD
+CONNECT_STRING = 'Driver={Elasticsearch Driver};UID=elastic;PWD=%s;Secure=0;' % Elasticsearch.AUTH_PASSWORD
 
 class Testing(object):
 
