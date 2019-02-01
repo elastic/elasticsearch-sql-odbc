@@ -12,6 +12,15 @@ set DRIVER_BASE_NAME=esodbc
 set ARG="%*"
 set SRC_PATH=%~dp0
 
+REM presence of 'help'/'?': invoke USAGE "function" and exit
+if /i not [%ARG:help=%] == [%ARG%] (
+	call:USAGE %0
+	goto END
+) else if not [%ARG:?=%] == [%ARG%] (
+	call:USAGE %0
+	goto END
+)
+
 call:SET_ARCH
 call:SET_CMAKE
 call:SET_PYTHON
@@ -21,15 +30,6 @@ call:SET_BUILDS_DIR
 REM
 REM  Perform the building steps
 REM
-
-REM presence of 'help'/'?': invoke USAGE "function" and exit
-if /i not [%ARG:help=%] == [%ARG%] (
-	call:USAGE %0
-	goto END
-) else if not [%ARG:?=%] == [%ARG%] (
-	call:USAGE %0
-	goto END
-)
 
 if /i not [%ARG:ctests=%] == [%ARG%] (
 	call:CTESTS
