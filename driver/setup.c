@@ -237,7 +237,6 @@ BOOL SQL_API ConfigDSNW(
 
 	TRACE4(_IN, NULL, fmt_in, hwndParent, fRequest, lpszDriver,
 		lpszAttributes);
-	init_dsn_attrs(&attrs);
 
 	/* assign the Driver name; this is not the value of the Driver key in the
 	 * registry (i.e. the path to the DLL), which is actually skipped when
@@ -247,13 +246,37 @@ BOOL SQL_API ConfigDSNW(
 		wcslen(lpszDriver)
 	};
 
-	/* If there's a DSN in reveived attributes, load the config from the
-	 * registry. */
-	if (! load_system_dsn(&attrs, (SQLWCHAR *)lpszAttributes)) {
-		ERR("failed to load system DSN for driver ` " LWPD " ` and "
-			"attributes `" LWPDL "`.", LWSTR(&driver), lpszAttributes);
+	/*
+	 * If there's a DSN in received attributes, load the config from the
+	 * registry.
+	 */
+	init_dsn_attrs(&attrs);
+	/* The list - as received by ConfigDSN() - only contains the 'DSN'
+	 * keyword, though it could contain other attributes too. These are going
+	 * to be taken into account, but possibly overwritten by registry entries
+	 * (which theoretically should be the same anyways). */
+	if (! parse_00_list(&attrs, (SQLWCHAR *)lpszAttributes)) {
+		ERR("failed to parse doubly null-terminated attributes "
+			"list `" LWPD "`.", (SQLWCHAR *)lpszAttributes);
 		return FALSE;
 	}
+	/* ConfigDSN() requirement */
+	if (attrs.driver.cnt) {
+		ERR("function can not accept '" ESODBC_DSN_DRIVER "' keyword.");
+		return FALSE;
+	}
+	if (attrs.dsn.cnt) {
+		res = load_system_dsn(&attrs, /*overwrite?*/TRUE);
+		if (res <= 0) {
+			if (res < 0) {
+				log_installer_err();
+			}
+			ERR("failed to load system DSN for driver ` " LWPD " ` and "
+				"attributes `" LWPDL "`.", LWSTR(&driver), lpszAttributes);
+			return FALSE;
+		}
+	}
+
 	res = assign_dsn_attr(&attrs, &MK_WSTR(ESODBC_DSN_DRIVER), &driver,
 			/*overwrite?*/FALSE);
 	assert(0 < res);
