@@ -566,6 +566,7 @@ SQLRETURN write_wstr(SQLHANDLE hnd, SQLWCHAR *dest, wstr_st *src,
 				LWSTR(src), src->cnt, wide_avail);
 			RET_HDIAGS(hnd, SQL_STATE_01004);
 		} else {
+			assert(src->str);
 			wcsncpy(dest, src->str, src->cnt + /* 0-term */1);
 		}
 	} else {
