@@ -108,6 +108,7 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 		MK_WPTR(JSON_ANSWER_COL_NAME),
 		MK_WPTR(JSON_ANSWER_COL_TYPE)
 	};
+	static const wstr_st EMPTY_WSTR = WSTR_INIT("");
 
 	ird = stmt->ird;
 	dbc = stmt->hdr.dbc;
@@ -179,15 +180,23 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 		/* "If a base column name does not exist (as in the case of columns
 		 * that are expressions), then this variable contains an empty
 		 * string." */
-		rec->base_column_name = MK_WSTR("");
+		rec->base_column_name = EMPTY_WSTR;
 		/* "If a column does not have a label, the column name is returned. If
 		 * the column is unlabeled and unnamed, an empty string is ret" */
-		rec->label = rec->name.cnt ? rec->name : MK_WSTR("");
+		rec->label = rec->name.cnt ? rec->name : EMPTY_WSTR;
 
 		assert(rec->name.str && rec->label.str);
 		rec->unnamed = (rec->name.cnt || rec->label.cnt) ?
 			SQL_NAMED : SQL_UNNAMED;
 
+		/* All rec fields must be init'ed to a valid string in case their value
+		 * is requested (and written with write_wstr()). The values would
+		 * normally be provided by the data source, this is not the case here
+		 * (yet), though. */
+		rec->base_table_name = EMPTY_WSTR;
+		rec->catalog_name = EMPTY_WSTR;
+		rec->schema_name = EMPTY_WSTR;
+		rec->table_name = EMPTY_WSTR;
 #ifndef NDEBUG
 		//dump_record(rec);
 #endif /* NDEBUG */
