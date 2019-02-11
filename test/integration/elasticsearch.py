@@ -22,6 +22,7 @@ from subprocess import PIPE
 ARTIF_URL = "https://artifacts-api.elastic.co/v1/versions"
 ES_PROJECT = "elasticsearch"
 PACKAGING = "zip"
+ES_ARCH = "-windows-x86_64"
 
 K1 = 1024
 M1 = K1 * K1
@@ -50,7 +51,7 @@ class Elasticsearch(object):
 		builds = req.json()["builds"]
 
 		# file name to download
-		file_name = "%s-%s.%s" % (ES_PROJECT, version, PACKAGING)
+		file_name = "%s-%s%s.%s" % (ES_PROJECT, version, ES_ARCH, PACKAGING)
 
 		# Determine the most recent build
 		latest_et = datetime(1, 1, 1) # latest end_time
@@ -64,7 +65,7 @@ class Elasticsearch(object):
 			if latest_et < dt_et:
 				latest_et = dt_et
 				latest_url = build_json["projects"][ES_PROJECT]["packages"][file_name]["url"]
-				break # (TODO: is this always the first entry?)
+				# break # (TODO: is this always the first entry?)
 
 		if not latest_url:
 			raise Exception("no projects reported as built")
@@ -192,7 +193,8 @@ class Elasticsearch(object):
 		with zipfile.ZipFile(es_build) as z:
 			z.extractall(stage_dir)
 
-		es_dir = es_build[: es_build.rfind('.')]
+		es_dir = es_build[: es_build.rfind('.')] # strip the extension
+		es_dir = es_dir[: -len(ES_ARCH)] # strip the arch tag
 		self._update_es_yaml(es_dir)
 
 		self._start_elasticsearch(es_dir)
