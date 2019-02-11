@@ -2384,7 +2384,7 @@ SQLRETURN EsSQLDriverConnectW
 		 * the information in the connection string." */
 		INFOH(dbc, "configuring the driver by DSN '" LWPDL "'.",
 			LWSTR(&attrs.dsn));
-		if (! read_system_info(&attrs)) {
+		if (! load_system_dsn(&attrs, /*overwrite?*/FALSE)) {
 			/* warn, but try to carry on */
 			WARNH(dbc, "failed to read system info for DSN '" LWPDL "' data.",
 				LWSTR(&attrs.dsn));
@@ -2393,7 +2393,7 @@ SQLRETURN EsSQLDriverConnectW
 				res = assign_dsn_attr(&attrs, &MK_WSTR(ESODBC_DSN_DSN),
 						&MK_WSTR("DEFAULT"), /*overwrite?*/TRUE);
 				assert(0 < res);
-				if (! read_system_info(&attrs)) {
+				if (! load_system_dsn(&attrs, /*overwrite?*/FALSE)) {
 					ERRH(dbc, "failed to read system info for default DSN.");
 					RET_HDIAGS(dbc, SQL_STATE_IM002);
 				}

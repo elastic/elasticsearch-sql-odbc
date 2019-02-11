@@ -13,10 +13,6 @@
 #include "info.h"
 #include "util.h"
 
-#define ODBC_REG_SUBKEY_PATH	"SOFTWARE\\ODBC\\ODBC.INI"
-#define REG_HKLM				"HKEY_LOCAL_MACHINE"
-#define REG_HKCU				"HKEY_CURRENT_USER"
-
 
 void TEST_API init_dsn_attrs(esodbc_dsn_attrs_st *attrs)
 {
@@ -456,7 +452,7 @@ long TEST_API write_00_list(esodbc_dsn_attrs_st *attrs,
 	return (long)pos;
 }
 
-static void log_installer_err()
+void log_installer_err()
 {
 	DWORD ecode;
 	SQLWCHAR buff[SQL_MAX_MESSAGE_LENGTH];
@@ -532,84 +528,62 @@ int system_dsn_exists(wstr_st *dsn)
 	return (! res) || (kbuff[0] != MK_WPTR('\\'));
 
 }
+
 /*
- * Reads the system entries for a DSN given into a doubly null-terminated
- * attributes list.
- *
- * The list - as received by ConfigDSN() - only contains the 'DSN' keyword,
- * though it could contain other attributes too. These are going to be taken
- * into account, but possibly overwritten by registry entries (which
- * theoretically should be the same anyways).
+ * Reads the DSN in the system (User/System section config mode dependent,
+ * SQLSetConfigMode()/~Get~).
+ * Returns positive on success, 0 on local failure, -1 on system failure.
  */
-BOOL load_system_dsn(esodbc_dsn_attrs_st *attrs, SQLWCHAR *list00)
+int load_system_dsn(esodbc_dsn_attrs_st *attrs, BOOL overwrite)
 {
 	int res;
 	SQLWCHAR buff[ESODBC_DSN_MAX_ATTR_LEN], *pos;
 	SQLWCHAR kbuff[sizeof(attrs->buff)/sizeof(attrs->buff[0])];
 	wstr_st keyword, value;
 
-	if (! parse_00_list(attrs, list00)) {
-		ERR("failed to parse doubly null-terminated attributes "
-			"list `" LWPD "`.", list00);
-		return FALSE;
-	}
-	/* ConfigDSN() requirement */
-	if (attrs->driver.cnt) {
-		ERR("function can not accept '" ESODBC_DSN_DRIVER "' keyword.");
-		return FALSE;
-	}
+	DBG("loading attributes for DSN `" LWPDL "`.", LWSTR(&attrs->dsn));
 
-	if (attrs->dsn.cnt) {
-		DBG("loading attributes for DSN `" LWPDL "`.", LWSTR(&attrs->dsn));
+	/* load available key *names* first;
+	 * it's another doubly null-terminated list (w/o values). */
+	res = SQLGetPrivateProfileStringW(attrs->dsn.str, NULL, MK_WPTR(""),
+			kbuff, sizeof(kbuff)/sizeof(kbuff[0]), MK_WPTR(SUBKEY_ODBC));
+	if (res < 0) {
+		ERR("failed to query for DSN registry keys.");
+		return -1;
+	}
+	/* for each key name, read its value and add it to 'attrs' */
+	for (pos = kbuff; *pos; pos += keyword.cnt + 1) {
+		keyword.str = pos;
+		keyword.cnt = wcslen(pos);
 
-		/* load available key *names* first;
-		 * it's another doubly null-terminated list (w/o values). */
-		res = SQLGetPrivateProfileStringW(attrs->dsn.str, NULL, MK_WPTR(""),
-				kbuff, sizeof(kbuff)/sizeof(kbuff[0]), MK_WPTR(SUBKEY_ODBC));
+		if (EQ_CASE_WSTR(&keyword, &MK_WSTR(ESODBC_DSN_DRIVER))) {
+			/* skip the 'Driver' keyword */
+			continue;
+		}
+
+		res = SQLGetPrivateProfileStringW(attrs->dsn.str, pos, MK_WPTR(""),
+				buff, sizeof(buff)/sizeof(buff[0]), MK_WPTR(SUBKEY_ODBC));
 		if (res < 0) {
-			ERR("failed to query for DSN registry keys.");
-			log_installer_err();
-			return FALSE;
+			ERR("failed to query value for DSN registry key `" LWPDL "`.",
+				LWSTR(&keyword));
+			return -1;
+		} else {
+			value.cnt = (size_t)res;
+			value.str = buff;
 		}
-		/* for each key name, read its value and add it to 'attrs' */
-		for (pos = kbuff; *pos; pos += keyword.cnt + 1) {
-			keyword.str = pos;
-			keyword.cnt = wcslen(pos);
-
-			if (EQ_CASE_WSTR(&keyword, &MK_WSTR(ESODBC_DSN_DRIVER))) {
-				/* skip the 'Driver' keyword */
-				continue;
-			}
-
-			res = SQLGetPrivateProfileStringW(attrs->dsn.str, pos, MK_WPTR(""),
-					buff, sizeof(buff)/sizeof(buff[0]), MK_WPTR(SUBKEY_ODBC));
-			if (res < 0) {
-				ERR("failed to query value for DSN registry key `" LWPDL "`.",
-					LWSTR(&keyword));
-				log_installer_err();
-				return FALSE;
-			} else {
-				value.cnt = (size_t)res;
-				value.str = buff;
-			}
-			/* assign it to the config */
-			DBG("read DSN attribute: `" LWPDL "` = `" LWPDL "`.",
-				LWSTR(&keyword), LWSTR(mask_pwd(&keyword, &value)));
-			/* assign attributes not yet given in the 00-list */
-			if (assign_dsn_attr(attrs, &keyword, &value, /*over?*/FALSE) < 0) {
-				ERR("keyword '" LWPDL "' couldn't be assigned.",
-					LWSTR(&keyword));
-				return FALSE;
-			}
+		/* assign it to the config */
+		DBG("read DSN attribute: `" LWPDL "` = `" LWPDL "`.",
+			LWSTR(&keyword), LWSTR(mask_pwd(&keyword, &value)));
+		/* assign attributes not yet given in the list */
+		if (assign_dsn_attr(attrs, &keyword, &value, overwrite) < 0) {
+			ERR("keyword '" LWPDL "' couldn't be assigned.", LWSTR(&keyword));
+			return 0;
 		}
 	}
 
-	/* Provide the user no defaults atp. (i.e. start from empty config). The
-	 * GUI will provide some defaults (ex. 9200) and config is validated
-	 * before saving. => no assign_dsn_defaults(attrs); */
-
-	return TRUE;
+	return 1;
 }
+
 
 BOOL write_system_dsn(esodbc_dsn_attrs_st *new_attrs,
 	esodbc_dsn_attrs_st *old_attrs)
@@ -858,124 +832,6 @@ void assign_dsn_defaults(esodbc_dsn_attrs_st *attrs)
 	assert(0 <= res);
 }
 
-
-#if defined(_WIN32) || defined (WIN32)
-/*
- * Reads system registry for ODBC DSN subkey named in attrs->dsn.
- * TODO: use odbccp32.dll's SQLGetPrivateProfileString() & co. instead of
- * direct registry access:
- * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlgetprivateprofilestring-function
- */
-BOOL read_system_info(esodbc_dsn_attrs_st *attrs)
-{
-	HKEY hkey;
-	BOOL ret = FALSE;
-	const char *ktree;
-	DWORD valsno/* number of values in subkey */, i, res;
-	DWORD maxvallen; /* len of longest value name */
-	DWORD maxdatalen; /* len of longest data (buffer) */
-	DWORD vallen;
-	DWORD valtype;
-	DWORD datalen;
-	SQLWCHAR val_buff[ESODBC_DSN_MAX_ATTR_LEN];
-	wstr_st val_name = {val_buff, 0};
-	SQLWCHAR data_buff[ESODBC_DSN_MAX_ATTR_LEN];
-	wstr_st val_data = {data_buff, 0};
-
-	if (swprintf(val_buff, sizeof(val_buff)/sizeof(val_buff[0]),
-			WPFCP_DESC "\\" WPFWP_LDESC,
-			ODBC_REG_SUBKEY_PATH, LWSTR(&attrs->dsn)) < 0) {
-		ERRN("failed to print registry key path.");
-		return FALSE;
-	}
-	/* try accessing local user's config first, if that fails, systems' */
-	if (RegOpenKeyExW(HKEY_CURRENT_USER, val_buff, /*options*/0, KEY_READ,
-			&hkey) != ERROR_SUCCESS) {
-		INFO("failed to open registry key `" REG_HKCU "\\" LWPD "`.",
-			val_buff);
-		if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, val_buff, /*options*/0, KEY_READ,
-				&hkey) != ERROR_SUCCESS) {
-			INFO("failed to open registry key `" REG_HKLM "\\" LWPD "`.",
-				val_buff);
-			goto end;
-		} else {
-			ktree = REG_HKLM;
-		}
-	} else {
-		ktree = REG_HKCU;
-	}
-
-	if (RegQueryInfoKeyW(hkey, /*key class*/NULL, /*len of key class*/NULL,
-			/*reserved*/NULL, /*no subkeys*/NULL, /*longest subkey*/NULL,
-			/*longest subkey class name*/NULL, &valsno, &maxvallen,
-			&maxdatalen, /*sec descr*/NULL,
-			/*update time */NULL) != ERROR_SUCCESS) {
-		ERRN("Failed to query registery key info for path `%s\\" LWPD
-			"`.", ktree, val_buff);
-		goto end;
-	} else {
-		DBG("Subkey '%s\\" LWPD "': vals: %d, lengthiest name: %d, "
-			"lengthiest data: %d.", ktree, val_buff, valsno, maxvallen,
-			maxdatalen);
-		if (sizeof(val_buff)/sizeof(val_buff[0]) < maxvallen) {
-			WARN("value name buffer too small (%d), needed: %dB.",
-				sizeof(val_buff)/sizeof(val_buff[0]), maxvallen);
-		}
-		if (sizeof(data_buff)/sizeof(data_buff[0]) < maxdatalen) {
-			WARN("value data buffer too small (%d), needed: %dB.",
-				sizeof(data_buff)/sizeof(data_buff[0]), maxdatalen);
-		}
-		/* the registry might contain other, non connection-related strings,
-		 * so these conditions are not necearily an error. */
-	}
-
-	for (i = 0; i < valsno; i ++) {
-		vallen = sizeof(val_buff) / sizeof(val_buff[0]);
-		datalen = sizeof(data_buff);
-
-		if (RegEnumValueW(hkey, i, val_buff, &vallen, /*reserved*/NULL, &valtype,
-				(BYTE *)data_buff, &datalen) != ERROR_SUCCESS) {
-			ERR("failed to read register subkey value.");
-			goto end;
-		}
-		/* vallen doesn't count the \0 */
-		val_name.cnt = vallen;
-		if (valtype != REG_SZ) {
-			INFO("skipping register value `" LWPDL "` of type %d.",
-				LWSTR(&val_name), valtype);
-			continue;
-		}
-		if (datalen <= 0) {
-			INFO("skipping value `" LWPDL "` with empty data.",
-				LWSTR(&val_name));
-			continue;
-		}
-		assert(datalen % sizeof(SQLWCHAR) == 0);
-		/* datalen counts all bytes returned, so including the \0 */
-		val_data.cnt = datalen/sizeof(SQLWCHAR) - /*\0*/1;
-
-		if ((res = assign_dsn_attr(attrs, &val_name, &val_data,
-						/*overwrite?*/FALSE)) < 0) {
-			ERR("failed to assign reg entry `" LTPDL "`: `" LTPDL "`.",
-				LTSTR(&val_name), LTSTR(&val_data));
-			goto end;
-		} else if (res == DSN_ASSIGNED) {
-			DBG("reg entry`" LTPDL "`: `" LTPDL "` assigned.",
-				LTSTR(&val_name), LTSTR(&val_data));
-		}
-		/* if == 0: entry not directly relevant to driver config
-		 * if == DSN_NOT_OVERWRITTEN: entry provisioned in the conn str. */
-	}
-
-	ret = TRUE;
-end:
-	RegCloseKey(hkey);
-
-	return ret;
-}
-#else /* defined(_WIN32) || defined (WIN32) */
-#error "unsupported platform" /* TODO */
-#endif /* defined(_WIN32) || defined (WIN32) */
 
 int validate_dsn(esodbc_dsn_attrs_st *attrs, const wchar_t *dsn_str,
 	wchar_t *err_out, size_t eo_max, BOOL on_connect)
