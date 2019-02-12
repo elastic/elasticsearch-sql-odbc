@@ -10,6 +10,8 @@ import psutil
 import ctypes
 import sys
 import atexit
+import tempfile
+import shutil
 
 from elasticsearch import Elasticsearch
 
@@ -26,7 +28,12 @@ class Installer(object):
 					(bitness_py, bitness_driver))
 
 	def _install_driver_win(self, ephemeral):
-		with psutil.Popen(["msiexec.exe", "/i", self._driver_path, "/norestart", "/quiet"]) as p:
+		(fd, log_name) = tempfile.mkstemp(suffix="-installer.log")
+		os.close(fd)
+		if ephemeral:
+			atexit.register(shutil.rmtree, log_name, ignore_errors=True)
+
+		with psutil.Popen(["msiexec.exe", "/i", self._driver_path, "/norestart", "/quiet", "/l*vx", log_name]) as p:
 			waiting_since = time.time()
 			while p.poll() is None:
 				time.sleep(.3)
@@ -39,6 +46,13 @@ class Installer(object):
 				if not ctypes.windll.shell32.IsUserAnAdmin():
 					print("WARNING: running as non-admin -- likely the failure cause, if user lacks appropriate "
 							"privileges")
+				try:
+					with open(log_name, "rb") as f:
+						print("Failed installation log (%s):\n" % log_name)
+						text = f.read()[2:] # skip the BOM to be able to decode the text
+						print(text.decode("utf-16"))
+				except Exception as e:
+					print("ERROR: failed to read log of failed intallation: %s" % e)
 				raise Exception("driver installation failed with code: %s (see "\
 						"https://docs.microsoft.com/en-us/windows/desktop/msi/error-codes)." % p.returncode)
 			print("Driver installed (%s)." % self._driver_path)
