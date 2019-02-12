@@ -304,8 +304,8 @@ REM USAGE function: output a usage message
 	echo                  path can only be specified before the project/make
 	echo                  files are generated. (This does not run the
 	echo                  installer.^)
-	echo    regadd      : register the driver into the registry unde
-	echo                  'Elasticsearch ODBC' name;
+	echo    regadd      : register the driver into the registry under
+	echo                  'Elasticsearch ODBC' name; use along 'install' param
 	echo                  (needs Administrator privileges^).
 	echo    regdel      : deregister the driver from the registry;
 	echo                  (needs Administrator privileges^).
@@ -703,7 +703,7 @@ REM PACKAGE_DO function: generate deliverable package
 			goto END
 		)
 		echo %~nx0: Integration testing with: !X64_INSTALLER!.
-		!PY3_64! !SRC_PATH!\test\integration\ites.py -r !BUILD_DIR! -d !X64_INSTALLER!
+		!PY3_64! !SRC_PATH!\test\integration\ites.py -e -r !BUILD_DIR! -d !X64_INSTALLER!
 		if ERRORLEVEL 1 (
 			goto END
 		)
@@ -715,7 +715,7 @@ REM PACKAGE_DO function: generate deliverable package
 			goto END
 		)
 		echo %~nx0: Integration testing with: !X32_INSTALLER!.
-		!PY3_32! !SRC_PATH!\test\integration\ites.py -r !BUILD_DIR! -d !X32_INSTALLER!
+		!PY3_32! !SRC_PATH!\test\integration\ites.py -e -r !BUILD_DIR! -d !X32_INSTALLER!
 		if ERRORLEVEL 1 (
 			goto END
 		)
@@ -727,6 +727,15 @@ REM REGADD function: add driver into the registry
 :REGADD
 	echo %~nx0: adding driver into the registry.
 
+	REM check if build type and install path are known
+	if [%BUILD_TYPE%] == [] (
+		echo %~nx0: ERROR: unknown built type; use 'regadd' along 'install' parameter.
+		goto END
+	)
+	if [%INSTALL_DIR%] == [] (
+		echo %~nx0: ERROR: unknown install dir; use 'regadd' along 'install' parameter.
+		goto END
+	)
 	REM check if driver exists, otherwise the filename is unknown
 	if not exist %BUILD_DIR%\%BUILD_TYPE%\%DRIVER_BASE_NAME%*.dll (
 		echo %~nx0: ERROR: driver can only be added into the registry once built.
