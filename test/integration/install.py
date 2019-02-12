@@ -33,7 +33,7 @@ class Installer(object):
 		if ephemeral:
 			atexit.register(shutil.rmtree, log_name, ignore_errors=True)
 
-		with psutil.Popen(["msiexec.exe", "/i", self._driver_path, "/norestart", "/quiet", "/lx", log_name]) as p:
+		with psutil.Popen(["msiexec.exe", "/i", self._driver_path, "/norestart", "/quiet", "/l*vx", log_name]) as p:
 			waiting_since = time.time()
 			while p.poll() is None:
 				time.sleep(.3)
