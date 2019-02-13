@@ -16,7 +16,8 @@ import tempfile
 from elasticsearch import Elasticsearch
 
 DRIVER_BASE_NAME = "Elasticsearch ODBC Driver"
-WMIC_UNINSTALL_TIMOUT = 30 # it can take quite long
+# Uninstallation can take quite a long time (over 10s)
+INSTALLATION_TIMEOUT = 30
 
 class Installer(object):
 	_driver_path = None
@@ -36,21 +37,21 @@ class Installer(object):
 	def _install_driver_win(self, ephemeral):
 		# remove any old driver (of tested bitness)
 		name_filter = "name = '%s'" % self._driver_name
+		print("Uninstalling any existing '%s' driver." % self._driver_name)
 		with psutil.Popen(["wmic", "/INTERACTIVE:OFF", "product", "where", name_filter, "call", "uninstall"],
 				stdout=PIPE, stderr=PIPE, universal_newlines=True) as p:
 			try:
-				p.wait(WMIC_UNINSTALL_TIMOUT)
-			except psutil.TimeoutExpired as e:
-				try: p.kill()
-				except: pass
-				raise Exception("wmic uninstallation killed after %s seconds" % WMIC_UNINSTALL_TIMOUT)
+				p.wait(INSTALLATION_TIMEOUT)
+			except psutil.TimeoutExpired:
+				print("ERROR: driver installation timed out: host state check recommended!")
+				raise Exception("wmic-uninstallation didn't finish after %s seconds." % INSTALLATION_TIMEOUT)
 
 			assert(p.returncode is not None)
 			out, err = p.communicate()
 			if (out): print(out)
 			if (err): print(err)
 			if p.returncode:
-				print("ERROR: driver wmic-uninstallation failed.")
+				print("ERROR: driver wmic-uninstallation failed with code: %s." % p.returncode)
 			else:
 				print("INFO: an old driver was %s." % ("uninstalled" if ("ReturnValue = 0" in out) else "not found"))
 
@@ -63,11 +64,10 @@ class Installer(object):
 		# install the new driver
 		with psutil.Popen(["msiexec.exe", "/i", self._driver_path, "/norestart", "/quiet", "/l*vx", log_name]) as p:
 			try:
-				p.wait(Elasticsearch.TERM_TIMEOUT)
+				p.wait(INSTALLATION_TIMEOUT)
 			except psutil.TimeoutExpired as e:
-				try: p.kill()
-				except: pass
-				raise Exception("installer killed after %s seconds" % Elasticsearch.TERM_TIMEOUT)
+				print("ERROR: driver uninstallation timed out: host state check recommended!")
+				raise Exception("msi-installer didn't finish after %s seconds" % INSTALLATION_TIMEOUT)
 
 			assert(p.returncode is not None)
 			if p.returncode:
