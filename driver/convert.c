@@ -256,7 +256,7 @@ SQLRETURN set_param_decdigits(esodbc_rec_st *irec,
 		 * SQL_INTERVAL_DAY_TO_SECOND, SQL_INTERVAL_HOUR_TO_SECOND, or
 		 * SQL_INTERVAL_MINUTE_TO_SECOND, the SQL_DESC_PRECISION field of the
 		 * IPD is set to DecimalDigits." */
-		case METATYPE_DATETIME:
+		case METATYPE_DATE_TIME:
 			if (irec->concise_type == SQL_TYPE_DATE) {
 				break;
 			}
@@ -293,7 +293,7 @@ SQLSMALLINT get_param_decdigits(esodbc_rec_st *irec)
 	assert(irec->desc->type == DESC_TYPE_IPD);
 
 	switch(irec->meta_type) {
-		case METATYPE_DATETIME:
+		case METATYPE_DATE_TIME:
 			if (irec->concise_type == SQL_TYPE_DATE) {
 				break;
 			}
@@ -327,7 +327,7 @@ SQLRETURN set_param_size(esodbc_rec_st *irec,
 		 * IPD is set to the value of [s]ize." */
 		case METATYPE_STRING:
 		case METATYPE_BIN:
-		case METATYPE_DATETIME:
+		case METATYPE_DATE_TIME:
 		case METATYPE_INTERVAL_WSEC:
 		case METATYPE_INTERVAL_WOSEC:
 			return EsSQLSetDescFieldW(irec->desc, param_no, SQL_DESC_LENGTH,
@@ -363,7 +363,7 @@ SQLULEN get_param_size(esodbc_rec_st *irec)
 	switch (irec->meta_type) {
 		case METATYPE_STRING:
 		case METATYPE_BIN:
-		case METATYPE_DATETIME:
+		case METATYPE_DATE_TIME:
 		case METATYPE_INTERVAL_WSEC:
 		case METATYPE_INTERVAL_WOSEC:
 			return irec->length;

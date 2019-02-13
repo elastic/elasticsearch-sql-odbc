@@ -79,7 +79,7 @@ static void set_col_size(esodbc_rec_st *rec)
 		case METATYPE_BIN:
 		/* "The defined or maximum length in bytes of the column " */
 		/* no break */
-		case METATYPE_DATETIME:
+		case METATYPE_DATE_TIME:
 			/* "number of characters in the character representation" */
 			rec->length = rec->es_type->column_size;
 			break;
@@ -1513,7 +1513,7 @@ static esodbc_estype_st *match_es_type(esodbc_rec_st *arec,
 		case METATYPE_BIN:
 			/* SQL_VARBINARY == -3 == ES/SQL BINARY */
 			return lookup_es_type(dbc, SQL_VARBINARY, /*no prec*/0);
-		case METATYPE_DATETIME:
+		case METATYPE_DATE_TIME:
 			assert(irec->concise_type == SQL_TYPE_DATE ||
 				irec->concise_type == SQL_TYPE_TIME);
 			return lookup_es_type(dbc, SQL_TYPE_TIMESTAMP, /*no prec*/0);
@@ -2235,7 +2235,7 @@ static inline SQLULEN get_col_size(esodbc_rec_st *rec)
 
 		case METATYPE_STRING:
 		case METATYPE_BIN:
-		case METATYPE_DATETIME:
+		case METATYPE_DATE_TIME:
 		case METATYPE_INTERVAL_WSEC:
 		case METATYPE_INTERVAL_WOSEC:
 		case METATYPE_BIT:
@@ -2255,7 +2255,7 @@ static inline SQLSMALLINT get_col_decdigits(esodbc_rec_st *rec)
 	assert(DESC_TYPE_IS_IMPLEMENTATION(rec->desc->type));
 
 	switch (rec->meta_type) {
-		case METATYPE_DATETIME:
+		case METATYPE_DATE_TIME:
 		case METATYPE_INTERVAL_WSEC:
 			return ESODBC_MAX_SEC_PRECISION;
 
