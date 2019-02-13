@@ -1466,7 +1466,7 @@ static SQLRETURN wstr_to_wstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	return transfer_xstr0(arec, irec, &xsrc, data_ptr, octet_len_ptr);
 }
 
-/* Converts an xstr to a TS.
+/* Converts an ISO 8601-formated xstr to a TS.
  * xstr needs to be trimmed to exact data (no padding, no 0-term counted).
  * If ts_buff is non-NULL, the xstr will be copied (possibly W-to-C converted)
  * into it. */
@@ -1532,8 +1532,9 @@ static BOOL xstr_to_timestamp_struct(esodbc_stmt_st *stmt, xstr_st *xstr,
 	return TRUE;
 }
 
-
-static BOOL parse_timedate(esodbc_stmt_st *stmt, xstr_st *xstr,
+/* Analyzes the received string as time/date/timedate(timestamp) and parses it
+ * into received 'tss' struct, indicating detected format in 'format'. */
+static BOOL parse_date_time_ts(esodbc_stmt_st *stmt, xstr_st *xstr,
 	TIMESTAMP_STRUCT *tss, SQLSMALLINT *format, cstr_st *ts_buff)
 {
 	/* template buffer: date or time values will be copied in place and
@@ -1649,7 +1650,7 @@ static SQLRETURN wstr_to_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
 				}
 				break;
 			case SQL_VARCHAR:
-				if (! parse_timedate(stmt, &xstr, tss, format, NULL)) {
+				if (! parse_date_time_ts(stmt, &xstr, tss, format, NULL)) {
 					RET_HDIAGS(stmt, SQL_STATE_22018);
 				}
 				break;
@@ -3636,7 +3637,7 @@ static SQLRETURN convert_str_to_timestamp(esodbc_stmt_st *stmt,
 	assert(dest);
 	ts_buff.str = dest;
 	ts_buff.cnt = sizeof(ESODBC_ISO8601_TEMPLATE) - 1;
-	if (! parse_timedate(stmt, &xstr, &tss, &format, &ts_buff)) {
+	if (! parse_date_time_ts(stmt, &xstr, &tss, &format, &ts_buff)) {
 		ERRH(stmt, "failed to parse input as Time/Date/Timestamp");
 		RET_HDIAGS(stmt, SQL_STATE_22008);
 	} else if (format == SQL_TYPE_TIME) {
