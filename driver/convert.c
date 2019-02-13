@@ -1642,11 +1642,12 @@ static SQLRETURN wstr_to_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 		switch (irec->concise_type) {
 			case SQL_TYPE_TIMESTAMP:
+			case SQL_TYPE_DATE: /* ES/SQL passes date as DATETIME */
 				if (! xstr_to_timestamp_struct(stmt, &xstr, tss, NULL)) {
 					RET_HDIAGS(stmt, SQL_STATE_22018);
 				}
 				if (format) {
-					*format = SQL_TYPE_TIMESTAMP;
+					*format = irec->concise_type;
 				}
 				break;
 			case SQL_VARCHAR:
@@ -1659,7 +1660,6 @@ static SQLRETURN wstr_to_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			case SQL_LONGVARCHAR:
 			case SQL_WCHAR:
 			case SQL_WLONGVARCHAR:
-			case SQL_TYPE_DATE:
 			case SQL_TYPE_TIME:
 				BUGH(stmt, "unexpected (but permitted) SQL type.");
 				RET_HDIAGS(stmt, SQL_STATE_HY004);
@@ -1686,6 +1686,7 @@ static SQLRETURN wstr_to_date(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	TIMESTAMP_STRUCT tss;
 	SQLRETURN ret;
 	SQLSMALLINT fmt;
+	esodbc_state_et state;
 
 	if (octet_len_ptr) {
 		*octet_len_ptr = sizeof(*ds);
@@ -1704,8 +1705,15 @@ static SQLRETURN wstr_to_date(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		ds->month = tss.month;
 		ds->day = tss.day;
 		if (tss.hour || tss.minute || tss.second || tss.fraction) {
-			/* value's truncated */
-			RET_HDIAGS(stmt, SQL_STATE_01S07);
+			if (fmt == SQL_TYPE_TIMESTAMP) {
+				/* value's truncated */
+				state = SQL_STATE_01S07;
+			} else {
+				ERRH(stmt, "DATE type value contains non-zero time "
+					"components: `" LWPDL "`.", chars_0 - 1, wstr);
+				state = SQL_STATE_22018;
+			}
+			RET_HDIAGS(stmt, state);
 		}
 	} else {
 		DBGH(stmt, "REC@0x%p, NULL data_ptr", arec);
@@ -2797,8 +2805,7 @@ SQLRETURN sql2c_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		if (irec->type != SQL_INTERVAL) { \
 			break; \
 		} \
-		ret = interval_iso8601_to_sql(arec, irec, wstr, &chars_0, \
-				buff); \
+		ret = interval_iso8601_to_sql(arec, irec, wstr, &chars_0, buff); \
 		if (! SQL_SUCCEEDED(ret)) { \
 			return ret; \
 		} \
