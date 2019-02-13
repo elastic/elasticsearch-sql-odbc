@@ -7,16 +7,21 @@
 import os
 import time
 import psutil
+from subprocess import PIPE
 import ctypes
 import sys
 import atexit
 import tempfile
-import shutil
 
 from elasticsearch import Elasticsearch
 
+DRIVER_BASE_NAME = "Elasticsearch ODBC Driver"
+# Uninstallation can take quite a long time (over 10s)
+INSTALLATION_TIMEOUT = 30
+
 class Installer(object):
 	_driver_path = None
+	_driver_name = None
 
 	def __init__(self, path):
 		self._driver_path = path
@@ -27,20 +32,43 @@ class Installer(object):
 			print("WARNING: bitness misalignment between interpreter (%s) and driver (%s): testing will likely fail" %
 					(bitness_py, bitness_driver))
 
+		self._driver_name = "%s (%sbit)" % (DRIVER_BASE_NAME, bitness_driver)
+
 	def _install_driver_win(self, ephemeral):
+		# remove any old driver (of tested bitness)
+		name_filter = "name = '%s'" % self._driver_name
+		print("Uninstalling any existing '%s' driver." % self._driver_name)
+		with psutil.Popen(["wmic", "/INTERACTIVE:OFF", "product", "where", name_filter, "call", "uninstall"],
+				stdout=PIPE, stderr=PIPE, universal_newlines=True) as p:
+			try:
+				p.wait(INSTALLATION_TIMEOUT)
+			except psutil.TimeoutExpired:
+				print("ERROR: driver installation timed out: host state check recommended!")
+				raise Exception("wmic-uninstallation didn't finish after %s seconds." % INSTALLATION_TIMEOUT)
+
+			assert(p.returncode is not None)
+			out, err = p.communicate()
+			if (out): print(out)
+			if (err): print(err)
+			if p.returncode:
+				print("ERROR: driver wmic-uninstallation failed with code: %s." % p.returncode)
+			else:
+				print("INFO: an old driver was %s." % ("uninstalled" if ("ReturnValue = 0" in out) else "not found"))
+
+
+		# get a file name to log the installation into
 		(fd, log_name) = tempfile.mkstemp(suffix="-installer.log")
 		os.close(fd)
 		if ephemeral:
-			atexit.register(shutil.rmtree, log_name, ignore_errors=True)
-
+			atexit.register(os.remove, log_name)
+		# install the new driver
 		with psutil.Popen(["msiexec.exe", "/i", self._driver_path, "/norestart", "/quiet", "/l*vx", log_name]) as p:
-			waiting_since = time.time()
-			while p.poll() is None:
-				time.sleep(.3)
-				if Elasticsearch.TERM_TIMEOUT < time.time() - waiting_since:
-					try: p.kill()
-					except: pass
-					raise Exception("installer killed after %s seconds" % Elasticsearch.TERM_TIMEOUT)
+			try:
+				p.wait(INSTALLATION_TIMEOUT)
+			except psutil.TimeoutExpired as e:
+				print("ERROR: driver uninstallation timed out: host state check recommended!")
+				raise Exception("msi-installer didn't finish after %s seconds" % INSTALLATION_TIMEOUT)
+
 			assert(p.returncode is not None)
 			if p.returncode:
 				if not ctypes.windll.shell32.IsUserAnAdmin():
@@ -53,6 +81,7 @@ class Installer(object):
 						print(text.decode("utf-16"))
 				except Exception as e:
 					print("ERROR: failed to read log of failed intallation: %s" % e)
+
 				raise Exception("driver installation failed with code: %s (see "\
 						"https://docs.microsoft.com/en-us/windows/desktop/msi/error-codes)." % p.returncode)
 			print("Driver installed (%s)." % self._driver_path)
