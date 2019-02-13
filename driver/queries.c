@@ -281,6 +281,7 @@ SQLRETURN TEST_API attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 		stmt->rset.nrows = 0;
 #endif /*0*/
 	} else {
+		stmt->nset ++;
 		/* the cast is made safe by the decoding format indicator for array  */
 		stmt->rset.nrows = (size_t)UJLengthArray(rows);
 		stmt->tf_rows += stmt->rset.nrows;
@@ -934,8 +935,8 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 			DBGH(stmt, "ES/app data/buffer types found compatible.");
 	}
 
-	DBGH(stmt, "(`" LCPDL "`); cursor @ %zd / %zd.", LCSTR(&stmt->u8sql),
-		stmt->rset.vrows, stmt->rset.nrows);
+	DBGH(stmt, "cursor @ row %zu / %zu in page #%zu. (SQL: `" LCPDL "`).",
+		stmt->rset.vrows, stmt->rset.nrows, stmt->nset, LCSTR(&stmt->u8sql));
 
 	/* reset SQLGetData state, to reset fetch position */
 	STMT_GD_RESET(stmt);
@@ -2059,6 +2060,9 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 			memcpy(body + pos, dbc->fetch.str, dbc->fetch.slen);
 			pos += dbc->fetch.slen;
 		}
+
+		/* reset the page counter when the params change */
+		stmt->nset = 0;
 	}
 	/* "mode": */
 	memcpy(body + pos, JSON_KEY_VAL_MODE, sizeof(JSON_KEY_VAL_MODE) - 1);
@@ -2176,7 +2180,7 @@ SQLRETURN EsSQLExecDirectW
 	if (SQL_SUCCEEDED(ret)) {
 		ret = EsSQLExecute(stmt);
 	}
-#ifndef NDEBUG
+#ifdef NDEBUG
 	/* no reason to keep it (it can't be re-executed), except for debugging */
 	detach_sql(stmt);
 #endif /* NDEBUG */
