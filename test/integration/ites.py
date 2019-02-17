@@ -46,8 +46,14 @@ def ites(args):
 
 	# add test data into it
 	if args.reindex or not (args.skip_indexing and args.skip_tests):
-		data = TestData(TestData.MODE_NOINDEX if args.skip_indexing else TestData.MODE_REINDEX if args.reindex else \
-				TestData.MODE_INDEX)
+		if args.skip_indexing:
+			test_mode = TestData.MODE_NOINDEX
+		elif args.reindex:
+			test_mode = TestData.MODE_REINDEX
+		else:
+			test_mode = TestData.MODE_INDEX
+
+		data = TestData(test_mode, args.csvs_dir)
 		data.load()
 
 	# install the driver
@@ -74,6 +80,8 @@ def main():
 
 	parser.add_argument("-d", "--driver", help="The path to the driver file to test; if not provided, the driver "
 			"is assumed to have been installed.")
+	parser.add_argument("-c", "--csvs_dir", help="The directory path holding the CSV files to load as test data, "
+			"as opposed to default remote built-in URLs.")
 	parser.add_argument("-e", "--ephemeral", help="Remove the staged Elasticsearch and installed driver after testing"
 			" if test is successful.", action="store_true", default=False)
 	parser.add_argument("-t", "--skip-tests", help="Skip running the tests.", action="store_true", default=False)
