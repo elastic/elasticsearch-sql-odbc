@@ -112,15 +112,18 @@ class Elasticsearch(object):
 
 	@staticmethod
 	def _stop_es(es_proc):
-		children = es_proc.children()
-		children.append(es_proc)
-		for child in children:
-			child.terminate()
-		gone, alive = psutil.wait_procs(children, timeout=Elasticsearch.TERM_TIMEOUT)
-		for child in alive:
-			child.kill()
+		try:
+			children = es_proc.children()
+			children.append(es_proc)
+			for child in children:
+				child.terminate()
+			gone, alive = psutil.wait_procs(children, timeout=Elasticsearch.TERM_TIMEOUT)
+			for child in alive:
+				child.kill()
 
-		print("Elasticsearch stopped.")
+			print("Elasticsearch stopped.")
+		except Exception as e:
+			print("ERROR: failed to stop Elasticsearch cleanly: %s" % e)
 
 	def _start_elasticsearch(self, es_dir):
 		start_script = os.path.join(es_dir, "bin", "elasticsearch")
