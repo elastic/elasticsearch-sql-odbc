@@ -10,6 +10,7 @@ import csv
 import json
 import time
 import hashlib
+import os
 
 from elasticsearch import Elasticsearch
 
@@ -202,12 +203,16 @@ class TestData(object):
 	_csv_md5 = None
 	_csv_header = None
 	_csv_lines = None
+
+	_offline_dir = None
 	_mode = None
 
-	def __init__(self, mode=MODE_INDEX):
+	def __init__(self, mode=MODE_INDEX, offline_dir=None):
 		self._csv_md5 = {}
 		self._csv_header = {}
 		self._csv_lines = {}
+
+		self._offline_dir = offline_dir
 		self._mode = mode
 
 	def _csv_to_json_docs(self, csv_text):
@@ -260,24 +265,33 @@ class TestData(object):
 		header = stream.readline()
 		self._csv_header[index_name] = header.strip().split(",")
 
-	def _remote_csv_as_ndjson(self, url, index_name):
-		req = requests.get(url, timeout = Elasticsearch.REQ_TIMEOUT)
-		if req.status_code != 200:
-			raise Exception("failed to fetch %s with code %s" % (url, req.status_code))
-
-		#ndjson = csv_to_ndjson(req.text, index_name)
-		docs = self._csv_to_json_docs(req.text)
+	def _csv_as_ndjson(self, csv_text, encoding, index_name):
+		#ndjson = csv_to_ndjson(csv_text, index_name)
+		docs = self._csv_to_json_docs(csv_text)
 		ndjson = self._docs_to_ndjson(index_name, docs)
 
-		self._register_md5(index_name, req.text, req.encoding)
-		self._register_header(index_name, req.text)
+		self._register_md5(index_name, csv_text, encoding)
+		self._register_header(index_name, csv_text)
 		self._csv_lines[index_name] = len(docs)
 
 		return ndjson
 
+	def _get_csv_as_ndjson(self, base_url, csv_name, index_name):
+		if self._offline_dir:
+			path = os.path.join(self._offline_dir, csv_name)
+			with open(path, "rb") as f:
+				return self._csv_as_ndjson(f.read().decode("utf-8"), "utf-8", index_name)
+		else:
+			assert(base_url.endswith("/"))
+			url = base_url + csv_name
+			req = requests.get(url, timeout = Elasticsearch.REQ_TIMEOUT)
+			if req.status_code != 200:
+				raise Exception("failed to fetch %s with code %s" % (url, req.status_code))
+			return self._csv_as_ndjson(req.text, req.encoding, index_name)
+
+
 	def _prepare_tableau_load(self, file_name, index_name, index_template):
-		url = TABLEAU_DATASET_BASE_URL + file_name
-		ndjson = self._remote_csv_as_ndjson(url, index_name)
+		ndjson = self._get_csv_as_ndjson(TABLEAU_DATASET_BASE_URL, file_name, index_name)
 
 		if self.MODE_NOINDEX < self._mode:
 			with requests.put("http://localhost:%s/_template/%s_template" % (Elasticsearch.ES_PORT, index_name),
@@ -348,14 +362,14 @@ class TestData(object):
 			self._wait_for_results(self.STAPLES_INDEX)
 
 	def _load_elastic_library(self):
-		ndjson = self._remote_csv_as_ndjson(ES_DATASET_BASE_URL + self.LIBRARY_FILE, self.LIBRARY_INDEX)
+		ndjson = self._get_csv_as_ndjson(ES_DATASET_BASE_URL, self.LIBRARY_FILE, self.LIBRARY_INDEX)
 		if self.MODE_NOINDEX < self._mode:
 			self._delete_if_needed(self.LIBRARY_INDEX)
 			self._post_ndjson(ndjson, self.LIBRARY_INDEX)
 			self._wait_for_results(self.LIBRARY_INDEX)
 
 	def _load_elastic_employees(self):
-		ndjson = self._remote_csv_as_ndjson(ES_DATASET_BASE_URL + self.EMPLOYEES_FILE, self.EMPLOYEES_INDEX)
+		ndjson = self._get_csv_as_ndjson(ES_DATASET_BASE_URL, self.EMPLOYEES_FILE, self.EMPLOYEES_INDEX)
 		if self.MODE_NOINDEX < self._mode:
 			self._delete_if_needed(self.EMPLOYEES_INDEX)
 			self._post_ndjson(ndjson, self.EMPLOYEES_INDEX)

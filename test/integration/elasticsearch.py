@@ -36,8 +36,14 @@ class Elasticsearch(object):
 	ES_401_RETRIES = 8 # how many "starting" 401 answers to accept before giving up (.5s waiting inbetween)
 	AUTH_PASSWORD = "elastic"
 
-	def __init__(self):
-		pass
+	_offline_dir = None
+
+	def __init__(self, offline_dir=None):
+		self._offline_dir = offline_dir
+
+	@staticmethod
+	def elasticsearch_distro_filename(version):
+		return "%s-%s.%s" % (ES_PROJECT, version, PACKAGING)
 
 	def _latest_build(self, version):
 		req = requests.get(ARTIF_URL, timeout=self.REQ_TIMEOUT)
@@ -50,7 +56,7 @@ class Elasticsearch(object):
 		builds = req.json()["builds"]
 
 		# file name to download
-		file_name = "%s-%s.%s" % (ES_PROJECT, version, PACKAGING)
+		file_name = Elasticsearch.elasticsearch_distro_filename(version)
 
 		# Determine the most recent build
 		latest_et = datetime(1, 1, 1) # latest end_time
@@ -89,16 +95,27 @@ class Elasticsearch(object):
 		return (dest_file, size)
 
 	def _fetch_elasticsearch(self, version, dest_dir):
-		print("Fetching Elasticsearch from %s: " % ARTIF_URL)
-		start_ts = time.time()
-		url = self._latest_build(version)
-		delta = time.time() - start_ts
-		print("- latest build URL determined in: %.2f sec." % delta)
+		if self._offline_dir:
+			print("Copying Elasticsearch from %s. " % self._offline_dir)
+			file_name = Elasticsearch.elasticsearch_distro_filename(version)
+			src_path = os.path.join(self._offline_dir, file_name)
+			if not os.path.isfile(src_path):
+				raise Exception("Can't find %s in offline dir %s" % (file_name, self._offline_dir))
+			dest_file = os.path.join(dest_dir, file_name)
+			shutil.copyfile(src_path, dest_file)
+		else:
+			print("Fetching Elasticsearch from %s: " % ARTIF_URL)
+			start_ts = time.time()
+			url = self._latest_build(version)
+			delta = time.time() - start_ts
+			print("- latest build URL determined in: %.2f sec." % delta)
 
-		start_ts = time.time()
-		dest_file, size = self._download_build(url, dest_dir)
-		delta = time.time() - start_ts
-		print("- build of size %.2fMB downloaded in %.2f sec (%.2f Mbps)." % (size/M1, delta, (8 * size)/(M1 * delta)))
+			start_ts = time.time()
+			dest_file, size = self._download_build(url, dest_dir)
+			delta = time.time() - start_ts
+			print("- build of size %.2fMB downloaded in %.2f sec (%.2f Mbps)." % (size/M1, delta,
+				(8 * size)/(M1 * delta)))
+
 		return dest_file
 
 	def _update_es_yaml(self, es_dir):
@@ -112,12 +129,17 @@ class Elasticsearch(object):
 	@staticmethod
 	def _stop_es(es_proc):
 		children = es_proc.children()
-		children.append(es_proc)
 		for child in children:
-			child.terminate()
-		gone, alive = psutil.wait_procs(children, timeout=Elasticsearch.TERM_TIMEOUT)
-		for child in alive:
-			child.kill()
+			child.terminate() # == kill on Win
+		children.append(es_proc)
+		try:
+			gone, alive = psutil.wait_procs(children, timeout=Elasticsearch.TERM_TIMEOUT)
+			for child in alive:
+				child.kill()
+		except Exception as e:
+			# just a warning: the batch starting ES will die after java.exe exits and psutil can throw an exception
+			# about the (.bat) process no longer existing
+			print("WARN: while killing ES: %s." % e)
 
 		print("Elasticsearch stopped.")
 
@@ -171,7 +193,7 @@ class Elasticsearch(object):
 
 		pwd = self._gen_passwords(es_dir)
 		# change passwords, easier to restart with failed tests
-		req = requests.post("http://localhost:%s/_security/user/_password" % self.ES_PORT, auth=("elastic", pwd), 
+		req = requests.post("http://localhost:%s/_security/user/_password" % self.ES_PORT, auth=("elastic", pwd),
 				json={"password": self.AUTH_PASSWORD})
 		if req.status_code != 200:
 			raise Exception("attempt to change elastic's password failed with code %s" % req.status_code)
@@ -185,7 +207,7 @@ class Elasticsearch(object):
 		stage_dir = tempfile.mkdtemp(suffix=".ITES", dir=root_dir)
 		if ephemeral:
 			atexit.register(shutil.rmtree, stage_dir, ignore_errors=True)
-		
+
 		es_build = self._fetch_elasticsearch(version, stage_dir)
 		print("ES fetched to: %s" % es_build)
 
