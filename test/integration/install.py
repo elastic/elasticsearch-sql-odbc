@@ -7,7 +7,7 @@
 import os
 import time
 import psutil
-from subprocess import PIPE
+import subprocess
 import ctypes
 import sys
 import atexit
@@ -34,12 +34,12 @@ class Installer(object):
 
 		self._driver_name = "%s (%sbit)" % (DRIVER_BASE_NAME, bitness_driver)
 
-	def _install_driver_win(self, ephemeral):
-		# remove any old driver (of tested bitness)
-		name_filter = "name = '%s'" % self._driver_name
-		print("Uninstalling any existing '%s' driver." % self._driver_name)
+	@staticmethod
+	def uninstall_driver_win(driver_name):
+		print("Uninstalling any existing '%s' driver." % driver_name)
+		name_filter = "name = '%s'" % driver_name
 		with psutil.Popen(["wmic", "/INTERACTIVE:OFF", "product", "where", name_filter, "call", "uninstall"],
-				stdout=PIPE, stderr=PIPE, universal_newlines=True) as p:
+				stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True) as p:
 			try:
 				p.wait(INSTALLATION_TIMEOUT)
 			except psutil.TimeoutExpired:
@@ -53,8 +53,12 @@ class Installer(object):
 			if p.returncode:
 				print("ERROR: driver wmic-uninstallation failed with code: %s." % p.returncode)
 			else:
-				print("INFO: an old driver was %s." % ("uninstalled" if ("ReturnValue = 0" in out) else "not found"))
+				print("INFO: an existing '%s' driver was %s." % (driver_name,
+					"uninstalled" if ("ReturnValue = 0" in out) else "not found"))
 
+	def _install_driver_win(self, ephemeral):
+		# remove any old driver (of tested bitness)
+		Installer.uninstall_driver_win(self._driver_name)
 
 		# get a file name to log the installation into
 		(fd, log_name) = tempfile.mkstemp(suffix="-installer.log")
@@ -85,15 +89,18 @@ class Installer(object):
 				raise Exception("driver installation failed with code: %s (see "\
 						"https://docs.microsoft.com/en-us/windows/desktop/msi/error-codes)." % p.returncode)
 			print("Driver installed (%s)." % self._driver_path)
+
 			if ephemeral:
-				atexit.register(psutil.Popen, ["msiexec.exe", "/x", self._driver_path, "/norestart", "/quiet"])
+				# wmic-uninstall rather than msiexec /x: the Win restart manager will (sometimes?) detect the current
+				# parent (python) process as holding a file handler with the uninstalled .msi (which is actually not
+				# the case) and will signal it (along with the build.bat, when launched by it), effectively stopping
+				# the unit testing.
+				atexit.register(Installer.uninstall_driver_win, self._driver_name)
 
 	def install(self, ephemeral):
 		if os.name == "nt":
 			return self._install_driver_win(ephemeral)
 		else:
 			raise Exception("unsupported OS: %s" % os.name)
-
-
 
 # vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 tw=118 :
