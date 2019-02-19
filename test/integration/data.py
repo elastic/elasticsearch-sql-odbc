@@ -200,15 +200,15 @@ class TestData(object):
 	_csv_header = None
 	_csv_lines = None
 
-	_csvs_dir = None
+	_offline_dir = None
 	_mode = None
 
-	def __init__(self, mode=MODE_INDEX, csvs_dir=None):
+	def __init__(self, mode=MODE_INDEX, offline_dir=None):
 		self._csv_md5 = {}
 		self._csv_header = {}
 		self._csv_lines = {}
 
-		self._csvs_dir = csvs_dir
+		self._offline_dir = offline_dir
 		self._mode = mode
 
 	def _csv_to_json_docs(self, csv_text):
@@ -273,8 +273,8 @@ class TestData(object):
 		return ndjson
 
 	def _get_csv_as_ndjson(self, base_url, csv_name, index_name):
-		if self._csvs_dir:
-			path = os.path.join(self._csvs_dir, csv_name)
+		if self._offline_dir:
+			path = os.path.join(self._offline_dir, csv_name)
 			with open(path, "rb") as f:
 				return self._csv_as_ndjson(f.read().decode("utf-8"), "utf-8", index_name)
 		else:
