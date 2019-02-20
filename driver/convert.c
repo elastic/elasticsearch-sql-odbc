@@ -256,7 +256,7 @@ SQLRETURN set_param_decdigits(esodbc_rec_st *irec,
 		 * SQL_INTERVAL_DAY_TO_SECOND, SQL_INTERVAL_HOUR_TO_SECOND, or
 		 * SQL_INTERVAL_MINUTE_TO_SECOND, the SQL_DESC_PRECISION field of the
 		 * IPD is set to DecimalDigits." */
-		case METATYPE_DATETIME:
+		case METATYPE_DATE_TIME:
 			if (irec->concise_type == SQL_TYPE_DATE) {
 				break;
 			}
@@ -293,7 +293,7 @@ SQLSMALLINT get_param_decdigits(esodbc_rec_st *irec)
 	assert(irec->desc->type == DESC_TYPE_IPD);
 
 	switch(irec->meta_type) {
-		case METATYPE_DATETIME:
+		case METATYPE_DATE_TIME:
 			if (irec->concise_type == SQL_TYPE_DATE) {
 				break;
 			}
@@ -327,7 +327,7 @@ SQLRETURN set_param_size(esodbc_rec_st *irec,
 		 * IPD is set to the value of [s]ize." */
 		case METATYPE_STRING:
 		case METATYPE_BIN:
-		case METATYPE_DATETIME:
+		case METATYPE_DATE_TIME:
 		case METATYPE_INTERVAL_WSEC:
 		case METATYPE_INTERVAL_WOSEC:
 			return EsSQLSetDescFieldW(irec->desc, param_no, SQL_DESC_LENGTH,
@@ -363,7 +363,7 @@ SQLULEN get_param_size(esodbc_rec_st *irec)
 	switch (irec->meta_type) {
 		case METATYPE_STRING:
 		case METATYPE_BIN:
-		case METATYPE_DATETIME:
+		case METATYPE_DATE_TIME:
 		case METATYPE_INTERVAL_WSEC:
 		case METATYPE_INTERVAL_WOSEC:
 			return irec->length;
@@ -1466,7 +1466,7 @@ static SQLRETURN wstr_to_wstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	return transfer_xstr0(arec, irec, &xsrc, data_ptr, octet_len_ptr);
 }
 
-/* Converts an xstr to a TS.
+/* Converts an ISO 8601-formated xstr to a TS.
  * xstr needs to be trimmed to exact data (no padding, no 0-term counted).
  * If ts_buff is non-NULL, the xstr will be copied (possibly W-to-C converted)
  * into it. */
@@ -1532,8 +1532,9 @@ static BOOL xstr_to_timestamp_struct(esodbc_stmt_st *stmt, xstr_st *xstr,
 	return TRUE;
 }
 
-
-static BOOL parse_timedate(esodbc_stmt_st *stmt, xstr_st *xstr,
+/* Analyzes the received string as time/date/timedate(timestamp) and parses it
+ * into received 'tss' struct, indicating detected format in 'format'. */
+static BOOL parse_date_time_ts(esodbc_stmt_st *stmt, xstr_st *xstr,
 	TIMESTAMP_STRUCT *tss, SQLSMALLINT *format, cstr_st *ts_buff)
 {
 	/* template buffer: date or time values will be copied in place and
@@ -1641,15 +1642,16 @@ static SQLRETURN wstr_to_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 		switch (irec->concise_type) {
 			case SQL_TYPE_TIMESTAMP:
+			case SQL_TYPE_DATE: /* ES/SQL passes date as DATETIME */
 				if (! xstr_to_timestamp_struct(stmt, &xstr, tss, NULL)) {
 					RET_HDIAGS(stmt, SQL_STATE_22018);
 				}
 				if (format) {
-					*format = SQL_TYPE_TIMESTAMP;
+					*format = irec->concise_type;
 				}
 				break;
 			case SQL_VARCHAR:
-				if (! parse_timedate(stmt, &xstr, tss, format, NULL)) {
+				if (! parse_date_time_ts(stmt, &xstr, tss, format, NULL)) {
 					RET_HDIAGS(stmt, SQL_STATE_22018);
 				}
 				break;
@@ -1658,7 +1660,6 @@ static SQLRETURN wstr_to_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			case SQL_LONGVARCHAR:
 			case SQL_WCHAR:
 			case SQL_WLONGVARCHAR:
-			case SQL_TYPE_DATE:
 			case SQL_TYPE_TIME:
 				BUGH(stmt, "unexpected (but permitted) SQL type.");
 				RET_HDIAGS(stmt, SQL_STATE_HY004);
@@ -1685,6 +1686,7 @@ static SQLRETURN wstr_to_date(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	TIMESTAMP_STRUCT tss;
 	SQLRETURN ret;
 	SQLSMALLINT fmt;
+	esodbc_state_et state;
 
 	if (octet_len_ptr) {
 		*octet_len_ptr = sizeof(*ds);
@@ -1703,8 +1705,15 @@ static SQLRETURN wstr_to_date(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		ds->month = tss.month;
 		ds->day = tss.day;
 		if (tss.hour || tss.minute || tss.second || tss.fraction) {
-			/* value's truncated */
-			RET_HDIAGS(stmt, SQL_STATE_01S07);
+			if (fmt == SQL_TYPE_TIMESTAMP) {
+				/* value's truncated */
+				state = SQL_STATE_01S07;
+			} else {
+				ERRH(stmt, "DATE type value contains non-zero time "
+					"components: `" LWPDL "`.", chars_0 - 1, wstr);
+				state = SQL_STATE_22018;
+			}
+			RET_HDIAGS(stmt, state);
 		}
 	} else {
 		DBGH(stmt, "REC@0x%p, NULL data_ptr", arec);
@@ -2796,8 +2805,7 @@ SQLRETURN sql2c_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		if (irec->type != SQL_INTERVAL) { \
 			break; \
 		} \
-		ret = interval_iso8601_to_sql(arec, irec, wstr, &chars_0, \
-				buff); \
+		ret = interval_iso8601_to_sql(arec, irec, wstr, &chars_0, buff); \
 		if (! SQL_SUCCEEDED(ret)) { \
 			return ret; \
 		} \
@@ -3636,7 +3644,7 @@ static SQLRETURN convert_str_to_timestamp(esodbc_stmt_st *stmt,
 	assert(dest);
 	ts_buff.str = dest;
 	ts_buff.cnt = sizeof(ESODBC_ISO8601_TEMPLATE) - 1;
-	if (! parse_timedate(stmt, &xstr, &tss, &format, &ts_buff)) {
+	if (! parse_date_time_ts(stmt, &xstr, &tss, &format, &ts_buff)) {
 		ERRH(stmt, "failed to parse input as Time/Date/Timestamp");
 		RET_HDIAGS(stmt, SQL_STATE_22008);
 	} else if (format == SQL_TYPE_TIME) {

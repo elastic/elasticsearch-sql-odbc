@@ -1963,7 +1963,7 @@ static void set_defaults_from_meta_type(esodbc_rec_st *rec)
 			rec->length = ESODBC_DEF_STRING_LENGTH;
 			rec->precision = ESODBC_DEF_STRING_PRECISION;
 			break;
-		case METATYPE_DATETIME:
+		case METATYPE_DATE_TIME:
 			if (rec->datetime_interval_code == SQL_CODE_DATE ||
 				rec->datetime_interval_code == SQL_CODE_TIME) {
 				rec->precision = ESODBC_DEF_DATETIME_PRECISION;
@@ -2048,7 +2048,7 @@ static esodbc_metatype_et sqltype_to_meta(SQLSMALLINT concise)
 		case SQL_TYPE_TIMESTAMP:
 			// case SQL_TYPE_UTCDATETIME:
 			// case SQL_TYPE_UTCTIME:
-			return METATYPE_DATETIME;
+			return METATYPE_DATE_TIME;
 
 		/* interval (note: SQL_INTERVAL is verbose, not concise) */
 		case SQL_INTERVAL_MONTH:
@@ -2134,7 +2134,7 @@ static esodbc_metatype_et sqlctype_to_meta(SQLSMALLINT concise)
 		case SQL_C_TYPE_TIMESTAMP:
 			// case SQL_C_TYPE_TIME_WITH_TIMEZONE:
 			// case SQL_C_TYPE_TIMESTAMP_WITH_TIMEZONE:
-			return METATYPE_DATETIME;
+			return METATYPE_DATE_TIME;
 
 		/* interval */
 		case SQL_C_INTERVAL_DAY:
@@ -2216,7 +2216,7 @@ static BOOL consistency_check(esodbc_rec_st *rec)
 
 		/* check SQL_DESC_PRECISION field */
 		/* "a time or timestamp data type" */
-		case METATYPE_DATETIME:
+		case METATYPE_DATE_TIME:
 			if (rec->concise_type == SQL_TYPE_DATE) {
 				break;
 			}
@@ -2233,7 +2233,7 @@ static BOOL consistency_check(esodbc_rec_st *rec)
 					return FALSE;
 				}
 			}
-			if (rec->meta_type == METATYPE_DATETIME) {
+			if (rec->meta_type == METATYPE_DATE_TIME) {
 				break;
 			}
 			/* check SQL_DESC_DATETIME_INTERVAL_PRECISION */

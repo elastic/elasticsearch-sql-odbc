@@ -64,7 +64,7 @@ typedef enum {
 	METATYPE_FLOAT_NUMERIC,
 	METATYPE_STRING,
 	METATYPE_BIN,
-	METATYPE_DATETIME,
+	METATYPE_DATE_TIME,
 	METATYPE_INTERVAL_WSEC,
 	METATYPE_INTERVAL_WOSEC,
 	METATYPE_BIT,
@@ -335,8 +335,10 @@ typedef struct struct_stmt {
 	 * returning to the application." */
 	SQLULEN query_timeout;
 
-	/* [current] result set (= one answer from ES/SQL; can contain a cursor) */
+	/* [current] result set (= one page from ES/SQL; can contain a cursor) */
 	resultset_st rset;
+	/* count of result sets fetched */
+	size_t nset;
 	/* total count of fetched rows for one statement (sum(resultset.nrows)) */
 	size_t tf_rows;
 	/* SQL data types conversion to SQL C compatibility (IRD.SQL -> ARD.C) */

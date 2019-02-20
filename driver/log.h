@@ -44,7 +44,7 @@
 
 /* macro for logging of Xstr_st objects */
 #define LWSTR(_wptr)	(int)(_wptr)->cnt, (_wptr)->str
-#define LCSTR(_wptr)	(int)(_wptr)->cnt, (_wptr)->str
+#define LCSTR(_cptr)	(int)(_cptr)->cnt, (_cptr)->str
 
 #ifdef UNICODE
 #	define LTSTR	LWSTR
