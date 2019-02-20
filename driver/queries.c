@@ -79,7 +79,7 @@ static void set_col_size(esodbc_rec_st *rec)
 		case METATYPE_BIN:
 		/* "The defined or maximum length in bytes of the column " */
 		/* no break */
-		case METATYPE_DATETIME:
+		case METATYPE_DATE_TIME:
 			/* "number of characters in the character representation" */
 			rec->length = rec->es_type->column_size;
 			break;
@@ -281,6 +281,7 @@ SQLRETURN TEST_API attach_answer(esodbc_stmt_st *stmt, char *buff, size_t blen)
 		stmt->rset.nrows = 0;
 #endif /*0*/
 	} else {
+		stmt->nset ++;
 		/* the cast is made safe by the decoding format indicator for array  */
 		stmt->rset.nrows = (size_t)UJLengthArray(rows);
 		stmt->tf_rows += stmt->rset.nrows;
@@ -934,8 +935,8 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 			DBGH(stmt, "ES/app data/buffer types found compatible.");
 	}
 
-	DBGH(stmt, "(`" LCPDL "`); cursor @ %zd / %zd.", LCSTR(&stmt->u8sql),
-		stmt->rset.vrows, stmt->rset.nrows);
+	DBGH(stmt, "cursor @ row %zu / %zu in page #%zu. (SQL: `" LCPDL "`).",
+		stmt->rset.vrows, stmt->rset.nrows, stmt->nset, LCSTR(&stmt->u8sql));
 
 	/* reset SQLGetData state, to reset fetch position */
 	STMT_GD_RESET(stmt);
@@ -1513,7 +1514,7 @@ static esodbc_estype_st *match_es_type(esodbc_rec_st *arec,
 		case METATYPE_BIN:
 			/* SQL_VARBINARY == -3 == ES/SQL BINARY */
 			return lookup_es_type(dbc, SQL_VARBINARY, /*no prec*/0);
-		case METATYPE_DATETIME:
+		case METATYPE_DATE_TIME:
 			assert(irec->concise_type == SQL_TYPE_DATE ||
 				irec->concise_type == SQL_TYPE_TIME);
 			return lookup_es_type(dbc, SQL_TYPE_TIMESTAMP, /*no prec*/0);
@@ -2059,6 +2060,9 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 			memcpy(body + pos, dbc->fetch.str, dbc->fetch.slen);
 			pos += dbc->fetch.slen;
 		}
+
+		/* reset the page counter when the params change */
+		stmt->nset = 0;
 	}
 	/* "mode": */
 	memcpy(body + pos, JSON_KEY_VAL_MODE, sizeof(JSON_KEY_VAL_MODE) - 1);
@@ -2176,7 +2180,7 @@ SQLRETURN EsSQLExecDirectW
 	if (SQL_SUCCEEDED(ret)) {
 		ret = EsSQLExecute(stmt);
 	}
-#ifndef NDEBUG
+#ifdef NDEBUG
 	/* no reason to keep it (it can't be re-executed), except for debugging */
 	detach_sql(stmt);
 #endif /* NDEBUG */
@@ -2235,7 +2239,7 @@ static inline SQLULEN get_col_size(esodbc_rec_st *rec)
 
 		case METATYPE_STRING:
 		case METATYPE_BIN:
-		case METATYPE_DATETIME:
+		case METATYPE_DATE_TIME:
 		case METATYPE_INTERVAL_WSEC:
 		case METATYPE_INTERVAL_WOSEC:
 		case METATYPE_BIT:
@@ -2255,7 +2259,7 @@ static inline SQLSMALLINT get_col_decdigits(esodbc_rec_st *rec)
 	assert(DESC_TYPE_IS_IMPLEMENTATION(rec->desc->type));
 
 	switch (rec->meta_type) {
-		case METATYPE_DATETIME:
+		case METATYPE_DATE_TIME:
 		case METATYPE_INTERVAL_WSEC:
 			return ESODBC_MAX_SEC_PRECISION;
 
