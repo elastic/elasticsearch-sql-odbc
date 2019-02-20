@@ -323,7 +323,11 @@ class TestData(object):
 			if req.status_code != 200:
 				raise Exception("failed to _search %s: code: %s, body: %s" % (index_name, req.status_code, req.text))
 			answer = json.loads(req.text)
-			hits = answer["hits"]["total"]["value"]
+			total = answer["hits"]["total"]
+			if type(total) is int:
+				hits = total
+			else:
+				hits = answer["hits"]["total"]["value"]
 			time.sleep(.25)
 			if Elasticsearch.REQ_TIMEOUT < time.time() - waiting_since:
 				raise Exception("index '%s' has less than %s documents indexed" % (index_name, MIN_INDEXED_DOCS))

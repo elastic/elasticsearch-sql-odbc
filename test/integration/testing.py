@@ -84,8 +84,9 @@ class Testing(object):
 				raise Exception("current username not 'elastic': %s" % user)
 
 	def perform(self):
-		self._as_csv(TestData.LIBRARY_INDEX)
-		self._as_csv(TestData.EMPLOYEES_INDEX)
+		# indexing order not preserved in 6.7
+		#self._as_csv(TestData.LIBRARY_INDEX)
+		#self._as_csv(TestData.EMPLOYEES_INDEX)
 		self._count_all(TestData.CALCS_INDEX)
 		self._count_all(TestData.STAPLES_INDEX)
 		self._clear_cursor(TestData.LIBRARY_INDEX)
