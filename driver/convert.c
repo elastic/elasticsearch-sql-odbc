@@ -1332,9 +1332,11 @@ SQLRETURN sql2c_double(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 		case SQL_C_FLOAT:
 			REJECT_IF_NULL_DEST_BUFF(stmt, data_ptr);
-			udbl = dbl < 0 ? -dbl : dbl;
-			if (udbl < FLT_MIN || FLT_MAX < udbl) {
-				REJECT_AS_OOR(stmt, dbl, /* is fixed */FALSE, SQLREAL);
+			if (dbl) {
+				udbl = dbl < 0 ? -dbl : dbl;
+				if (udbl < FLT_MIN || FLT_MAX < udbl) {
+					REJECT_AS_OOR(stmt, dbl, /* is fixed */FALSE, SQLREAL);
+				}
 			}
 			*(SQLREAL *)data_ptr = (SQLREAL)dbl;
 			write_out_octets(octet_len_ptr, sizeof(SQLREAL), irec);
