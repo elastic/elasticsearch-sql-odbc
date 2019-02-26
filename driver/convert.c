@@ -1332,9 +1332,11 @@ SQLRETURN sql2c_double(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 		case SQL_C_FLOAT:
 			REJECT_IF_NULL_DEST_BUFF(stmt, data_ptr);
-			udbl = dbl < 0 ? -dbl : dbl;
-			if (udbl < FLT_MIN || FLT_MAX < udbl) {
-				REJECT_AS_OOR(stmt, dbl, /* is fixed */FALSE, SQLREAL);
+			if (dbl) {
+				udbl = dbl < 0 ? -dbl : dbl;
+				if (udbl < FLT_MIN || FLT_MAX < udbl) {
+					REJECT_AS_OOR(stmt, dbl, /* is fixed */FALSE, SQLREAL);
+				}
 			}
 			*(SQLREAL *)data_ptr = (SQLREAL)dbl;
 			write_out_octets(octet_len_ptr, sizeof(SQLREAL), irec);
@@ -1382,15 +1384,38 @@ static SQLRETURN wstr_to_cstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 	gd_offset_apply(stmt, &xstr);
 
+	assert(xstr.w.str[xstr.w.cnt] == L'\0');
+	/* how much space would the converted string take? */
+	in_bytes = WCS2U8(xstr.w.str, (int)xstr.w.cnt + 1, NULL, 0);
+	if (in_bytes <= 0) {
+		ERRNH(stmt, "failed to convert wchar* to char* for string `"
+			LWPDL "`.", LWSTR(&xstr.w));
+		RET_HDIAGS(stmt, SQL_STATE_22018);
+	}
+	/* out length needs to be provided with no (potential) truncation. */
+	if (octet_len_ptr) {
+		/* chars_0 accounts for 0-terminator, so WCS2U8 will count that in
+		 * the output as well => trim it, since we must not count it when
+		 * indicating the length to the application */
+		out_bytes = in_bytes - 1;
+		write_out_octets(octet_len_ptr, out_bytes, irec);
+	} else {
+		DBGH(stmt, "REC@0x%p, NULL octet_len_ptr.", arec);
+	}
+
 	if (data_ptr) {
 		charp = (char *)data_ptr;
 
-		in_bytes = (int)buff_octet_size((xstr.w.cnt + 1) * sizeof(SQLWCHAR),
-				sizeof(SQLCHAR), arec, irec, &state);
+		/* calculate how much of original data could possibly be copied in
+		 * provided buffer; this will be given as a limitation to W-to-C
+		 * conversion function. */
+		in_bytes = (int)buff_octet_size(in_bytes, sizeof(SQLCHAR), arec, irec,
+				&state);
 		/* trim the original string until it fits in output buffer, with given
 		 * length limitation */
 		for (c = (int)xstr.w.cnt + 1; 0 < c; c --) {
 			out_bytes = WCS2U8(xstr.w.str, c, charp, in_bytes);
+			/* if user gives 0 as buffer size, out_bytes will also be 0 */
 			if (out_bytes <= 0) {
 				if (WCS2U8_BUFF_INSUFFICIENT) {
 					continue;
@@ -1404,10 +1429,7 @@ static SQLRETURN wstr_to_cstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			}
 		}
 
-		/* if 0's present => 0 < out_bytes */
-		assert(xstr.w.str[xstr.w.cnt] == L'\0');
 		assert(0 < out_bytes);
-		/* if user gives 0 as buffer size, out_bytes will also be 0 */
 		if (charp[out_bytes - 1]) {
 			/* ran out of buffer => not 0-terminated and truncated already */
 			charp[out_bytes - 1] = 0;
@@ -1418,28 +1440,10 @@ static SQLRETURN wstr_to_cstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		/* only update offset if data is copied out */
 		gd_offset_update(stmt, xstr.w.cnt, c);
 
-		DBGH(stmt, "REC@0x%p, data_ptr@0x%p, copied %zd bytes: `" LWPD "`.",
+		DBGH(stmt, "REC@0x%p, data_ptr@0x%p, copied %d bytes: `" LCPD "`.",
 			arec, data_ptr, out_bytes, charp);
 	} else {
 		DBGH(stmt, "REC@0x%p, NULL data_ptr.", arec);
-	}
-
-	/* if length needs to be given, calculate it (not truncated) & converted */
-	if (octet_len_ptr) {
-		out_bytes = (size_t)WCS2U8(xstr.w.str, (int)xstr.w.cnt + 1, NULL, 0);
-		if (out_bytes <= 0) {
-			ERRNH(stmt, "failed to convert wchar* to char* for string `"
-				LWPDL "`.", LWSTR(&xstr.w));
-			RET_HDIAGS(stmt, SQL_STATE_22018);
-		} else {
-			/* chars_0 accounts for 0-terminator, so WCS2U8 will count that in
-			 * the output as well => trim it, since we must not count it when
-			 * indicating the length to the application */
-			out_bytes --;
-		}
-		write_out_octets(octet_len_ptr, out_bytes, irec);
-	} else {
-		DBGH(stmt, "REC@0x%p, NULL octet_len_ptr.", arec);
 	}
 
 	if (state != SQL_STATE_00000) {

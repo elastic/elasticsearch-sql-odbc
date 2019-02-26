@@ -45,6 +45,7 @@ TEST_F(ConvertSQL2C_String, String2Char) {
 
   ret = SQLFetch(stmt);
   ASSERT_TRUE(SQL_SUCCEEDED(ret));
+  assertState(L"00000");
 
   EXPECT_EQ(ind_len, sizeof(SQL_VAL) - /*\0*/1);
   EXPECT_STREQ((char/*4gtest*/*)buff, SQL_VAL);
@@ -111,6 +112,38 @@ TEST_F(ConvertSQL2C_String, String2Char_zero_copy) {
 
   EXPECT_EQ(ind_len, sizeof(SQL_VAL) - /*\0*/1);
   EXPECT_EQ(buff[0], 'x');
+}
+
+
+TEST_F(ConvertSQL2C_String, String2Char_truncate) {
+
+#undef SQL_VAL
+#undef SQL
+#define SQL_VAL "abcdef"
+#define SQL "CAST(" SQL_VAL " AS TEXT)"
+
+  const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"text\"}\
+  ],\
+  \"rows\": [\
+    [\"" SQL_VAL "\"]\
+  ]\
+}\
+";
+  prepareStatement(json_answer);
+
+  SQLCHAR buff[(sizeof(SQL_VAL) - 1)/2 + 1];
+  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_CHAR, &buff, sizeof(buff), &ind_len);
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+  ret = SQLFetch(stmt);
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+  assertState(L"01004");
+
+  EXPECT_EQ(ind_len, sizeof(SQL_VAL) - /*\0*/1);
+  EXPECT_STREQ((char/*4gtest*/*)buff, "abc");
 }
 
 
