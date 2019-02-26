@@ -333,6 +333,39 @@ TEST_F(ConvertSQL2C_Floats, Float2Long) {
 }
 
 
+TEST_F(ConvertSQL2C_Floats, Double_zero2Float) {
+
+#undef SQL_RAW
+#undef SQL_VAL
+#undef SQL
+#define SQL_RAW 0.0
+#define SQL_VAL STR(SQL_RAW)
+#define SQL "CAST(" SQL_VAL " AS DOUBLE)"
+
+  const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"double\"}\
+  ],\
+  \"rows\": [\
+    [" SQL_VAL "]\
+  ]\
+}\
+";
+  prepareStatement(json_answer);
+
+  SQLREAL val;
+  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_FLOAT, &val, sizeof(val), &ind_len);
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+  ret = SQLFetch(stmt);
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+  EXPECT_EQ(ind_len, sizeof(val));
+  EXPECT_LE(SQL_RAW, val);
+}
+
+
 TEST_F(ConvertSQL2C_Floats, Double2Float) {
 
 #undef SQL_RAW
