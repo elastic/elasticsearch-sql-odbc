@@ -775,7 +775,7 @@ SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos)
 			case UJT_Long:
 			case UJT_LongLong:
 				ll = UJNumericLongLong(obj);
-				DBGH(stmt, "value [%zd, %d] is numeric: %lld.", rowno, i + 1,
+				DBGH(stmt, "value [%zd, %d] is integer: %lld.", rowno, i + 1,
 					ll);
 				ret = sql2c_longlong(arec, irec, pos, ll);
 				break;
