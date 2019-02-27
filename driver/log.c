@@ -4,6 +4,7 @@
  * you may not use this file except in compliance with the Elastic License.
  */
 
+#include <stdlib.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <time.h>

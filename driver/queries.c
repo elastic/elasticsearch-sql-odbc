@@ -2261,7 +2261,7 @@ static inline SQLSMALLINT get_col_decdigits(esodbc_rec_st *rec)
 	switch (rec->meta_type) {
 		case METATYPE_DATE_TIME:
 		case METATYPE_INTERVAL_WSEC:
-			return ESODBC_MAX_SEC_PRECISION;
+			return ESODBC_DEF_SEC_PRECISION;
 
 		case METATYPE_EXACT_NUMERIC:
 			return rec->es_type->maximum_scale;

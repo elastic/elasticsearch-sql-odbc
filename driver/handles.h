@@ -156,6 +156,7 @@ typedef struct struct_dbc {
 		char slen; /* string's length (w/o terminator) */
 	} fetch;
 	BOOL pack_json; /* should JSON be used in REST bodies? (vs. CBOR) */
+	BOOL apply_tz; /* should the times be converted from UTC to local TZ? */
 
 	esodbc_estype_st *es_types; /* array with ES types */
 	SQLULEN no_types; /* number of types in array */
