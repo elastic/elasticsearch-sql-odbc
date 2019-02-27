@@ -15,30 +15,32 @@
 
 namespace test {
 
-class ConvertSQL2C_Time : public ::testing::Test, public ConnectedDBC {
+class ConvertSQL2C_Time : public ::testing::Test, public ConnectedDBC
+{
 
-  protected:
-    TIME_STRUCT ts;
+	protected:
+		TIME_STRUCT ts;
 
-  void prepareAndBind(const char *jsonAnswer) {
-    prepareStatement(jsonAnswer);
+	void prepareAndBind(const char *jsonAnswer)
+	{
+		prepareStatement(jsonAnswer);
 
-    ret = SQLBindCol(stmt, /*col#*/1, SQL_C_TYPE_TIME, &ts, sizeof(ts),
-        &ind_len);
-    ASSERT_TRUE(SQL_SUCCEEDED(ret));
-  }
+		ret = SQLBindCol(stmt, /*col#*/1, SQL_C_TYPE_TIME, &ts, sizeof(ts),
+			&ind_len);
+		ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	}
 };
 
 
 /* ES/SQL 'date' is actually 'timestamp' */
-TEST_F(ConvertSQL2C_Time, Timestamp2Time) {
-
+TEST_F(ConvertSQL2C_Time, Timestamp2Time)
+{
 #undef SQL_VAL
 #undef SQL
 #define SQL_VAL "2345-01-23T12:34:56.000Z"
 #define SQL "CAST(" SQL_VAL "AS DATETIME)"
 
-  const char json_answer[] = "\
+	const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"" SQL "\", \"type\": \"DATETIME\"}\
@@ -48,25 +50,53 @@ TEST_F(ConvertSQL2C_Time, Timestamp2Time) {
   ]\
 }\
 ";
-  prepareAndBind(json_answer);
+	prepareAndBind(json_answer);
 
-  ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  EXPECT_EQ(ind_len, sizeof(ts));
-  EXPECT_EQ(ts.hour, 12);
-  EXPECT_EQ(ts.minute, 34);
-  EXPECT_EQ(ts.second, 56);
+	EXPECT_EQ(ind_len, sizeof(ts));
+	EXPECT_EQ(ts.hour, 12);
+	EXPECT_EQ(ts.minute, 34);
+	EXPECT_EQ(ts.second, 56);
 }
 
-TEST_F(ConvertSQL2C_Time, Timestamp2Time_truncate) {
+TEST_F(ConvertSQL2C_Time, Timestamp_Str2Time)
+{
+#undef SQL_VAL
+#undef SQL
+#define SQL_VAL "2345-01-23T12:34:56.000Z"
+#define SQL "CAST(" SQL_VAL "AS KEYWORD)"
 
+	const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"KEYWORD\"}\
+  ],\
+  \"rows\": [\
+    [\"" SQL_VAL "\"]\
+  ]\
+}\
+";
+	prepareAndBind(json_answer);
+
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	EXPECT_EQ(ind_len, sizeof(ts));
+	EXPECT_EQ(ts.hour, 12);
+	EXPECT_EQ(ts.minute, 34);
+	EXPECT_EQ(ts.second, 56);
+}
+
+TEST_F(ConvertSQL2C_Time, Timestamp2Time_truncate)
+{
 #undef SQL_VAL
 #undef SQL
 #define SQL_VAL "   2345-01-23T12:34:56.789Z  "
 #define SQL "CAST(" SQL_VAL "AS DATETIME)"
 
-  const char json_answer[] = "\
+	const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"" SQL "\", \"type\": \"DATETIME\"}\
@@ -76,27 +106,27 @@ TEST_F(ConvertSQL2C_Time, Timestamp2Time_truncate) {
   ]\
 }\
 ";
-  prepareAndBind(json_answer);
+	prepareAndBind(json_answer);
 
-  ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-  assertState(L"01S07");
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	assertState(L"01S07");
 
-  EXPECT_EQ(ind_len, sizeof(ts));
-  EXPECT_EQ(ts.hour, 12);
-  EXPECT_EQ(ts.minute, 34);
-  EXPECT_EQ(ts.second, 56);
+	EXPECT_EQ(ind_len, sizeof(ts));
+	EXPECT_EQ(ts.hour, 12);
+	EXPECT_EQ(ts.minute, 34);
+	EXPECT_EQ(ts.second, 56);
 }
 
 
-TEST_F(ConvertSQL2C_Time, Time2Time) {
-
+TEST_F(ConvertSQL2C_Time, Time2Time)
+{
 #undef SQL_VAL
 #undef SQL
 #define SQL_VAL "12:34:56.0"
 #define SQL "CAST(" SQL_VAL "AS TEXT)"
 
-  const char json_answer[] = "\
+	const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"" SQL_VAL "\", \"type\": \"text\"}\
@@ -106,26 +136,26 @@ TEST_F(ConvertSQL2C_Time, Time2Time) {
   ]\
 }\
 ";
-  prepareAndBind(json_answer);
+	  prepareAndBind(json_answer);
 
-  ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	  ret = SQLFetch(stmt);
+	  ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  EXPECT_EQ(ind_len, sizeof(ts));
-  EXPECT_EQ(ts.hour, 12);
-  EXPECT_EQ(ts.minute, 34);
-  EXPECT_EQ(ts.second, 56);
+	  EXPECT_EQ(ind_len, sizeof(ts));
+	  EXPECT_EQ(ts.hour, 12);
+	  EXPECT_EQ(ts.minute, 34);
+	  EXPECT_EQ(ts.second, 56);
 }
 
 
-TEST_F(ConvertSQL2C_Time, Time2Time_truncate) {
-
+TEST_F(ConvertSQL2C_Time, Time2Time_truncate)
+{
 #undef SQL_VAL
 #undef SQL
 #define SQL_VAL "12:34:56.7777777"
 #define SQL "CAST(" SQL_VAL "AS TEXT)"
 
-  const char json_answer[] = "\
+	const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"" SQL "\", \"type\": \"text\"}\
@@ -135,28 +165,28 @@ TEST_F(ConvertSQL2C_Time, Time2Time_truncate) {
   ]\
 }\
 ";
-  prepareAndBind(json_answer);
+	prepareAndBind(json_answer);
 
-  ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-  assertState(L"01S07");
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	assertState(L"01S07");
 
-  EXPECT_EQ(ind_len, sizeof(ts));
-  EXPECT_EQ(ts.hour, 12);
-  EXPECT_EQ(ts.minute, 34);
-  EXPECT_EQ(ts.second, 56);
+	EXPECT_EQ(ind_len, sizeof(ts));
+	EXPECT_EQ(ts.hour, 12);
+	EXPECT_EQ(ts.minute, 34);
+	EXPECT_EQ(ts.second, 56);
 }
 
 
-TEST_F(ConvertSQL2C_Time, Date2Time_22018) {
-
+TEST_F(ConvertSQL2C_Time, Date2Time_22018)
+{
 #undef SQL_VAL
 #undef SQL
 #define SQL_VAL "2345-01-23"
 #define SQL "CAST(" SQL_VAL "AS TEXT)"
 
-  const SQLWCHAR *sql = MK_WPTR(SQL_VAL);
-  const char json_answer[] = "\
+	const SQLWCHAR *sql = MK_WPTR(SQL_VAL);
+	const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"" SQL_VAL "\", \"type\": \"text\"}\
@@ -166,22 +196,22 @@ TEST_F(ConvertSQL2C_Time, Date2Time_22018) {
   ]\
 }\
 ";
-  prepareAndBind(json_answer);
+	prepareAndBind(json_answer);
 
-  ret = SQLFetch(stmt);
-  ASSERT_FALSE(SQL_SUCCEEDED(ret));
-  assertState(L"22018");
+	ret = SQLFetch(stmt);
+	ASSERT_FALSE(SQL_SUCCEEDED(ret));
+	assertState(L"22018");
 }
 
 
-TEST_F(ConvertSQL2C_Time, Integer2Date_violation_07006) {
-
+TEST_F(ConvertSQL2C_Time, Integer2Date_violation_07006)
+{
 #undef SQL_VAL
 #undef SQL
 #define SQL_VAL "1"
 #define SQL   "select " SQL_VAL
 
-  const char json_answer[] = "\
+	const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"select " SQL "\", \"type\": \"integer\"}\
@@ -191,13 +221,14 @@ TEST_F(ConvertSQL2C_Time, Integer2Date_violation_07006) {
   ]\
 }\
 ";
-  prepareAndBind(json_answer);
+	prepareAndBind(json_answer);
 
-  ret = SQLFetch(stmt);
-  ASSERT_FALSE(SQL_SUCCEEDED(ret));
-  assertState(L"07006");
+	ret = SQLFetch(stmt);
+	ASSERT_FALSE(SQL_SUCCEEDED(ret));
+	assertState(L"07006");
 }
 
 
 } // test namespace
 
+/* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 tw=78 : */
