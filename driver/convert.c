@@ -29,11 +29,11 @@
 	} while (0)
 
 #ifdef _WIN32
-#	ifdef _WIN64
+#	ifndef _USE_32BIT_TIME_T
 #		define MKTIME_YEAR_RANGE	"1970-3000"
-#	else /* _WIN64 */
+#	else /* !_USE_32BIT_TIME_T */
 #		define MKTIME_YEAR_RANGE	"1970-2038"
-#	endif /* _WIN64 */
+#	endif /* !_USE_32BIT_TIME_T */
 #else /* _WIN32 */
 #	error "platform not supported"
 #endif /* _WIN32 */
@@ -1617,7 +1617,7 @@ static SQLRETURN parse_date_time_ts(esodbc_stmt_st *stmt, xstr_st *xstr,
 				td.cnt ++;
 			}
 			DBGH(stmt, "SQL format translated to ISO: [%zu] `" LCPDL "`.",
-					td.cnt, LCSTR(&td));
+				td.cnt, LCSTR(&td));
 		} /* else: already in ISO8601 format */
 
 		xtd.c = td;
@@ -3986,14 +3986,14 @@ SQLRETURN c2sql_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	if (colsize && (colsize < sizeof("yyyy-mm-dd hh:mm") - 1 ||
 			colsize == 17 || colsize == 18)) {
 		ERRH(stmt, "invalid column size value: %llu; allowed: 16, 19, 20+f.",
-				colsize);
+			colsize);
 		RET_HDIAGS(stmt, SQL_STATE_HY104);
 	}
 	decdigits = get_param_decdigits(irec);
 	DBGH(stmt, "requested decimal digits: %llu.", decdigits);
 	if (ESODBC_MAX_SEC_PRECISION < decdigits) {
 		WARNH(stmt, "requested decimal digits adjusted from %hd to %d (max).",
-				decdigits, ESODBC_MAX_SEC_PRECISION);
+			decdigits, ESODBC_MAX_SEC_PRECISION);
 		decdigits = ESODBC_MAX_SEC_PRECISION;
 	}
 
