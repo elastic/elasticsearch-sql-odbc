@@ -303,6 +303,24 @@ cstr_st TEST_API *wstr_to_utf8(wstr_st *src, cstr_st *dst);
 #endif /* _WIN32 */
 
 
+/* ISO time formats lenghts.
+ * ES/SQL interface should only use UTC ('Z'ulu offset). */
+#define ISO8601_TIMESTAMP_LEN(prec)		\
+	(sizeof("yyyy-mm-ddThh:mm:ss+hh:mm") - /*\0*/1 + /*'.'*/!!prec + prec)
+#define ISO8601_TS_UTC_LEN(prec)		\
+	(sizeof("yyyy-mm-ddThh:mm:ssZ") - /*\0*/1 + /*'.'*/!!prec + prec)
+#define ISO8601_TIMESTAMP_MAX_LEN		\
+	ISO8601_TIMESTAMP_LEN(ESODBC_MAX_SEC_PRECISION)
+#define ISO8601_TIMESTAMP_MIN_LEN		\
+	ISO8601_TS_UTC_LEN(0)
+
+#define DATE_TEMPLATE_LEN				\
+	(sizeof("yyyy-mm-dd") - /*\0*/1)
+#define TIME_TEMPLATE_LEN(prec)			\
+	(sizeof("hh:mm:ss") - /*\0*/1 + /*'.'*/!!prec + prec)
+#define TIMESTAMP_TEMPLATE_LEN(prec)	\
+	(DATE_TEMPLATE_LEN + /*' '*/1 + TIME_TEMPLATE_LEN(prec))
+
 #endif /* __UTIL_H__ */
 
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */

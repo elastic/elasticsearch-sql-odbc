@@ -65,7 +65,7 @@ def ites(args):
 	# run the tests
 	if not args.skip_tests:
 		assert(data is not None)
-		tests = Testing(data)
+		tests = Testing(data, args.dsn)
 		tests.perform()
 
 def main():
@@ -78,8 +78,11 @@ def main():
 	stage_grp.add_argument("-p", "--pre-staged", help="Use a pre-staged and running Elasticsearch instance",
 			action="store_true", default=False)
 
-	parser.add_argument("-d", "--driver", help="The path to the driver file to test; if not provided, the driver "
+	driver_grp = parser.add_mutually_exclusive_group()
+	driver_grp.add_argument("-d", "--driver", help="The path to the driver file to test; if not provided, the driver "
 			"is assumed to have been installed.")
+	driver_grp.add_argument("-c", "--dsn", help="The connection string to use with a preinstalled driver; the DSN must"
+			" contain the name under which the driver to test is registered.")
 	parser.add_argument("-o", "--offline_dir", help="The directory path holding the files to copy the test data from, "
 			"as opposed to downloading them.")
 	parser.add_argument("-e", "--ephemeral", help="Remove the staged Elasticsearch and installed driver after testing"

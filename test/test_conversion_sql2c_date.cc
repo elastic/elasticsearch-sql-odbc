@@ -15,30 +15,31 @@
 
 namespace test {
 
-class ConvertSQL2C_Date : public ::testing::Test, public ConnectedDBC {
+class ConvertSQL2C_Date : public ::testing::Test, public ConnectedDBC
+{
+	protected:
+		DATE_STRUCT ds;
 
-  protected:
-    DATE_STRUCT ds;
+	void prepareAndBind(const char *json_answer)
+	{
+		prepareStatement(json_answer);
 
-  void prepareAndBind(const char *json_answer) {
-    prepareStatement(json_answer);
-
-    ret = SQLBindCol(stmt, /*col#*/1, SQL_C_TYPE_DATE, &ds, sizeof(ds),
-        &ind_len);
-    ASSERT_TRUE(SQL_SUCCEEDED(ret));
-  }
+		ret = SQLBindCol(stmt, /*col#*/1, SQL_C_TYPE_DATE, &ds, sizeof(ds),
+			&ind_len);
+		ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	}
 };
 
 
 /* ES/SQL 'date' is actually 'timestamp' */
-TEST_F(ConvertSQL2C_Date, Timestamp2Date) {
-
+TEST_F(ConvertSQL2C_Date, Timestamp2Date)
+{
 #undef SQL_VAL
 #undef SQL
 #define SQL_VAL "2345-01-23T00:00:00Z"
 #define SQL "CAST(" SQL_VAL "AS DATETIME)"
 
-  const char json_answer[] = "\
+	const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"" SQL "\", \"type\": \"DATETIME\"}\
@@ -48,25 +49,83 @@ TEST_F(ConvertSQL2C_Date, Timestamp2Date) {
   ]\
 }\
 ";
-  prepareAndBind(json_answer);
+	prepareAndBind(json_answer);
 
-  ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  EXPECT_EQ(ind_len, sizeof(ds));
-  EXPECT_EQ(ds.year, 2345);
-  EXPECT_EQ(ds.month, 1);
-  EXPECT_EQ(ds.day, 23);
+	EXPECT_EQ(ind_len, sizeof(ds));
+	EXPECT_EQ(ds.year, 2345);
+	EXPECT_EQ(ds.month, 1);
+	EXPECT_EQ(ds.day, 23);
 }
 
-TEST_F(ConvertSQL2C_Date, Timestamp2Date_truncate) {
+TEST_F(ConvertSQL2C_Date, Date2Char)
+{
+#undef SQL_VAL
+#undef SQL
+#define SQL_VAL "2345-01-23T00:00:00Z"
+#define SQL "CAST(" SQL_VAL "AS DATE)"
 
+	const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"DATE\"}\
+  ],\
+  \"rows\": [\
+    [\"" SQL_VAL "\"]\
+  ]\
+}\
+";
+	prepareStatement(json_answer);
+
+	SQLCHAR val[sizeof(SQL_VAL)];
+	ret = SQLBindCol(stmt, /*col#*/1, SQL_C_CHAR, val, sizeof(val), &ind_len);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	EXPECT_EQ(ind_len, DATE_TEMPLATE_LEN);
+	EXPECT_EQ(strncmp((char *)val, SQL_VAL, DATE_TEMPLATE_LEN), 0);
+}
+
+TEST_F(ConvertSQL2C_Date, Timestamp_Str2Date)
+{
+#undef SQL_VAL
+#undef SQL
+#define SQL_VAL "2345-01-23T00:00:00Z"
+#define SQL "CAST(" SQL_VAL "AS KEYWORD)"
+
+	const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"KEYWORD\"}\
+  ],\
+  \"rows\": [\
+    [\"" SQL_VAL "\"]\
+  ]\
+}\
+";
+	prepareAndBind(json_answer);
+
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	EXPECT_EQ(ind_len, sizeof(ds));
+	EXPECT_EQ(ds.year, 2345);
+	EXPECT_EQ(ds.month, 1);
+	EXPECT_EQ(ds.day, 23);
+}
+
+TEST_F(ConvertSQL2C_Date, Timestamp2Date_truncate)
+{
 #undef SQL_VAL
 #undef SQL
 #define SQL_VAL "   2345-01-23T12:34:56.789Z  "
 #define SQL "CAST(" SQL_VAL "AS DATETIME)"
 
-  const char json_answer[] = "\
+	const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"CAST(" SQL ")\", \"type\": \"DATETIME\"}\
@@ -76,27 +135,27 @@ TEST_F(ConvertSQL2C_Date, Timestamp2Date_truncate) {
   ]\
 }\
 ";
-  prepareAndBind(json_answer);
+	prepareAndBind(json_answer);
 
-  ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-  assertState(L"01S07");
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	assertState(L"01S07");
 
-  EXPECT_EQ(ind_len, sizeof(ds));
-  EXPECT_EQ(ds.year, 2345);
-  EXPECT_EQ(ds.month, 1);
-  EXPECT_EQ(ds.day, 23);
+	EXPECT_EQ(ind_len, sizeof(ds));
+	EXPECT_EQ(ds.year, 2345);
+	EXPECT_EQ(ds.month, 1);
+	EXPECT_EQ(ds.day, 23);
 }
 
 
-TEST_F(ConvertSQL2C_Date, Date2Date) {
-
+TEST_F(ConvertSQL2C_Date, Date2Date)
+{
 #undef SQL_VAL
 #undef SQL
 #define SQL_VAL "2345-01-23"
 #define SQL "CAST(" SQL_VAL "AS TEXT)"
 
-  const char json_answer[] = "\
+	const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"" SQL "\", \"type\": \"text\"}\
@@ -106,26 +165,26 @@ TEST_F(ConvertSQL2C_Date, Date2Date) {
   ]\
 }\
 ";
-  prepareAndBind(json_answer);
+	prepareAndBind(json_answer);
 
-  ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  EXPECT_EQ(ind_len, sizeof(ds));
-  EXPECT_EQ(ds.year, 2345);
-  EXPECT_EQ(ds.month, 1);
-  EXPECT_EQ(ds.day, 23);
+	EXPECT_EQ(ind_len, sizeof(ds));
+	EXPECT_EQ(ds.year, 2345);
+	EXPECT_EQ(ds.month, 1);
+	EXPECT_EQ(ds.day, 23);
 }
 
 
-TEST_F(ConvertSQL2C_Date, Time2Date_22018) {
-
+TEST_F(ConvertSQL2C_Date, Time2Date_22018)
+{
 #undef SQL_VAL
 #undef SQL
 #define SQL_VAL "10:10:10.1010"
 #define SQL "CAST(" SQL_VAL "AS TEXT)"
 
-  const char json_answer[] = "\
+	const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"" SQL "\", \"type\": \"text\"}\
@@ -135,22 +194,22 @@ TEST_F(ConvertSQL2C_Date, Time2Date_22018) {
   ]\
 }\
 ";
-  prepareAndBind(json_answer);
+	prepareAndBind(json_answer);
 
-  ret = SQLFetch(stmt);
-  ASSERT_FALSE(SQL_SUCCEEDED(ret));
-  assertState(L"22018");
+	ret = SQLFetch(stmt);
+	ASSERT_FALSE(SQL_SUCCEEDED(ret));
+	assertState(L"22018");
 }
 
 
-TEST_F(ConvertSQL2C_Date, Integer2Date_violation_07006) {
-
+TEST_F(ConvertSQL2C_Date, Integer2Date_violation_07006)
+{
 #undef SQL_VAL
 #undef SQL
 #define SQL_VAL "1"
 #define SQL   "select " SQL_VAL
 
-  const char json_answer[] = "\
+	const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"select " SQL "\", \"type\": \"integer\"}\
@@ -160,13 +219,14 @@ TEST_F(ConvertSQL2C_Date, Integer2Date_violation_07006) {
   ]\
 }\
 ";
-  prepareAndBind(json_answer);
+	prepareAndBind(json_answer);
 
-  ret = SQLFetch(stmt);
-  ASSERT_FALSE(SQL_SUCCEEDED(ret));
-  assertState(L"07006");
+	ret = SQLFetch(stmt);
+	ASSERT_FALSE(SQL_SUCCEEDED(ret));
+	assertState(L"07006");
 }
 
 
 } // test namespace
 
+/* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 tw=78 : */

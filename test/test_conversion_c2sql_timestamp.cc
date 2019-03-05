@@ -88,7 +88,7 @@ TEST_F(ConvertC2SQL_Timestamp, WStr_Timestamp2Timestamp_colsize_16)
 	cstr_st expect = CSTR_INIT(
 		"{\"query\": \"WStr_Timestamp2Timestamp_colsize_16\", "
 		"\"params\": [{\"type\": \"DATETIME\", "
-		"\"value\": \"1234-12-23T12:34:00Z\"}], "
+		"\"value\": \"1234-12-23T12:34Z\"}], "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -194,7 +194,7 @@ TEST_F(ConvertC2SQL_Timestamp, Timestamp2Timestamp_decdigits_7)
 	val.hour = 12;
 	val.minute = 34;
 	val.second = 56;
-	val.fraction = 78901234;
+	val.fraction = 789012340;
 	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_TYPE_TIMESTAMP,
 			SQL_TYPE_TIMESTAMP, /*size*/35, /*decdigits*/7, &val, sizeof(val),
 			/*IndLen*/NULL);
@@ -239,7 +239,7 @@ TEST_F(ConvertC2SQL_Timestamp, Binary2Timestamp_colsize_0)
 	cstr_st expect = CSTR_INIT(
 		"{\"query\": \"Binary2Timestamp_colsize_0\", "
 		"\"params\": [{\"type\": \"DATETIME\", "
-		"\"value\": \"2345-01-23T12:34:56.789Z\"}], "
+		"\"value\": \"2345-01-23T12:34:56Z\"}], "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -267,7 +267,7 @@ TEST_F(ConvertC2SQL_Timestamp, Date2Timestamp)
 	cstr_st expect = CSTR_INIT(
 		"{\"query\": \"Date2Timestamp\", "
 		"\"params\": [{\"type\": \"DATETIME\", "
-		"\"value\": \"2345-01-23T00:00:00.000Z\"}], "
+		"\"value\": \"2345-01-23T00:00:00Z\"}], "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -289,6 +289,114 @@ TEST_F(ConvertC2SQL_Timestamp, Time2Timestamp_unimplemented_HYC00)
 	assertState(L"HYC00");
 }
 
+
+class ConvertC2SQL_Timestamp_TZ : public ConvertC2SQL_Timestamp
+{
+	protected:
+	void SetUp() override
+	{
+		((esodbc_dbc_st *)dbc)->apply_tz = TRUE;
+		ASSERT_EQ(putenv("TZ=NPT-5:45NTP"), 0);
+		tzset();
+	}
+
+	void TearDown() override
+	{
+		ASSERT_EQ(putenv("TZ="), 0);
+	}
+};
+
+TEST_F(ConvertC2SQL_Timestamp_TZ, WStr_iso8601_Timestamp2Timestamp_colsize_16)
+{
+	prepareStatement();
+
+	SQLWCHAR val[] = L"1234-12-23T12:34:56.7890123Z";
+	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR,
+			SQL_TYPE_TIMESTAMP, /*size*/16, /*decdigits*/10, val, sizeof(val),
+			/*IndLen*/NULL);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	cstr_st buff = {NULL, 0};
+	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	cstr_st expect = CSTR_INIT(
+		"{\"query\": \"WStr_iso8601_Timestamp2Timestamp_colsize_16\", "
+		"\"params\": [{\"type\": \"DATETIME\", "
+		"\"value\": \"1234-12-23T12:34Z\"}], "
+		"\"mode\": \"ODBC\", " CLIENT_ID "}");
+
+	ASSERT_CSTREQ(buff, expect);
+}
+
+TEST_F(ConvertC2SQL_Timestamp_TZ, WStr_iso8601_Timestamp2Timestamp_sz23_dd4)
+{
+	prepareStatement();
+
+	SQLWCHAR val[] = L"1234-12-23T12:34:56.7890123Z";
+	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR,
+			SQL_TYPE_TIMESTAMP, /*size*/23, /*decdigits*/4, val, sizeof(val),
+			/*IndLen*/NULL);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	cstr_st buff = {NULL, 0};
+	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	cstr_st expect = CSTR_INIT(
+		"{\"query\": \"WStr_iso8601_Timestamp2Timestamp_sz23_dd4\", "
+		"\"params\": [{\"type\": \"DATETIME\", "
+		"\"value\": \"1234-12-23T12:34:56.789Z\"}], "
+		"\"mode\": \"ODBC\", " CLIENT_ID "}");
+
+	ASSERT_CSTREQ(buff, expect);
+}
+
+TEST_F(ConvertC2SQL_Timestamp_TZ, WStr_iso8601_Timestamp2Timestamp_decdig4)
+{
+	prepareStatement();
+
+	SQLWCHAR val[] = L"1234-12-23T12:34:56.7890123Z";
+	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR,
+			SQL_TYPE_TIMESTAMP, /*size*/0, /*decdigits*/4, val, sizeof(val),
+			/*IndLen*/NULL);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	cstr_st buff = {NULL, 0};
+	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	cstr_st expect = CSTR_INIT(
+		"{\"query\": \"WStr_iso8601_Timestamp2Timestamp_decdig4\", "
+		"\"params\": [{\"type\": \"DATETIME\", "
+		"\"value\": \"1234-12-23T12:34:56.7890Z\"}], "
+		"\"mode\": \"ODBC\", " CLIENT_ID "}");
+
+	ASSERT_CSTREQ(buff, expect);
+}
+
+TEST_F(ConvertC2SQL_Timestamp_TZ, WStr_SQL_Timestamp_local2Timestamp)
+{
+	prepareStatement();
+
+	SQLWCHAR val[] = L"2000-12-23 17:45:56.7890123";
+	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR,
+			SQL_TYPE_TIMESTAMP, /*size*/0, /*decdigits*/4, val, sizeof(val),
+			/*IndLen*/NULL);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	cstr_st buff = {NULL, 0};
+	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	cstr_st expect = CSTR_INIT(
+		"{\"query\": \"WStr_SQL_Timestamp_local2Timestamp\", "
+		"\"params\": [{\"type\": \"DATETIME\", "
+		"\"value\": \"2000-12-23T12:00:56.7890Z\"}], "
+		"\"mode\": \"ODBC\", " CLIENT_ID "}");
+
+	ASSERT_CSTREQ(buff, expect);
+}
 
 } // test namespace
 

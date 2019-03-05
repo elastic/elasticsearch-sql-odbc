@@ -1092,6 +1092,10 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	}
 	INFOH(dbc, "pack JSON: %s.", dbc->pack_json ? "true" : "false");
 
+	/* "apply TZ" param for time conversions */
+	dbc->apply_tz = wstr2bool(&attrs->apply_tz);
+	INFOH(dbc, "apply TZ: %s.", dbc->apply_tz ? "true" : "false");
+
 	/*
 	 * Version checking mode
 	 */
@@ -1781,7 +1785,8 @@ static void set_display_size(esodbc_estype_st *es_type)
 		case SQL_TYPE_DATE:
 		case SQL_TYPE_TIME:
 		case SQL_TYPE_TIMESTAMP: /* SQL/ES DATE */
-			es_type->display_size = sizeof(ESODBC_ISO8601_TEMPLATE) - /*0*/1;
+			es_type->display_size =
+				ISO8601_TIMESTAMP_LEN(ESODBC_DEF_SEC_PRECISION);
 			break;
 
 
@@ -1820,7 +1825,7 @@ static void set_display_size(esodbc_estype_st *es_type)
 			break;
 		case SQL_INTERVAL_SECOND:
 			es_type->display_size = ESODBC_MAX_IVL_SECOND_LEAD_PREC + /*.*/1 +
-				ESODBC_MAX_SEC_PRECISION;
+				ESODBC_DEF_SEC_PRECISION;
 			break;
 		case SQL_INTERVAL_DAY_TO_HOUR:
 			es_type->display_size = 3 + ESODBC_MAX_IVL_DAY_LEAD_PREC;
@@ -1830,18 +1835,18 @@ static void set_display_size(esodbc_estype_st *es_type)
 			break;
 		case SQL_INTERVAL_DAY_TO_SECOND:
 			es_type->display_size = 10 + ESODBC_MAX_IVL_DAY_LEAD_PREC +
-				ESODBC_MAX_SEC_PRECISION;
+				ESODBC_DEF_SEC_PRECISION;
 			break;
 		case SQL_INTERVAL_HOUR_TO_MINUTE:
 			es_type->display_size = 3 + ESODBC_MAX_IVL_HOUR_LEAD_PREC;
 			break;
 		case SQL_INTERVAL_HOUR_TO_SECOND:
 			es_type->display_size = 7 + ESODBC_MAX_IVL_HOUR_LEAD_PREC +
-				ESODBC_MAX_SEC_PRECISION;
+				ESODBC_DEF_SEC_PRECISION;
 			break;
 		case SQL_INTERVAL_MINUTE_TO_SECOND:
 			es_type->display_size = 4 + ESODBC_MAX_IVL_MINUTE_LEAD_PREC +
-				ESODBC_MAX_SEC_PRECISION;
+				ESODBC_DEF_SEC_PRECISION;
 			break;
 
 		/*

@@ -16,12 +16,15 @@ CONNECT_STRING = 'Driver={Elasticsearch Driver};UID=elastic;PWD=%s;Secure=0;' % 
 class Testing(object):
 
 	_data = None
+	_dsn = None
 
-	def __init__(self, test_data):
+	def __init__(self, test_data, dsn=None):
 		self._data = test_data
+		self._dsn = dsn if dsn else CONNECT_STRING
+		print("Using DSN: '%s'." % self._dsn)
 
 	def _reconstitute_csv(self, index_name):
-		with pyodbc.connect(CONNECT_STRING) as cnxn:
+		with pyodbc.connect(self._dsn) as cnxn:
 			cnxn.autocommit = True
 			csv = u""
 			cols = self._data.csv_attributes(index_name)[1]
@@ -54,7 +57,7 @@ class Testing(object):
 
 	def _count_all(self, index_name):
 		cnt = 0
-		with pyodbc.connect(CONNECT_STRING) as cnxn:
+		with pyodbc.connect(self._dsn) as cnxn:
 			cnxn.autocommit = True
 			with cnxn.execute("select 1 from %s" % index_name) as curs:
 				while curs.fetchone():
@@ -65,7 +68,7 @@ class Testing(object):
 					(index_name, cnt, csv_lines))
 
 	def _clear_cursor(self, index_name):
-		conn_str = CONNECT_STRING + ";MaxFetchSize=5"
+		conn_str = self._dsn + ";MaxFetchSize=5"
 		with pyodbc.connect(conn_str) as cnxn:
 			cnxn.autocommit = True
 			with cnxn.execute("select 1 from %s limit 10" % index_name) as curs:
@@ -77,7 +80,7 @@ class Testing(object):
 		# no exception raised -> passed
 
 	def _current_user(self):
-		with pyodbc.connect(CONNECT_STRING) as cnxn:
+		with pyodbc.connect(self._dsn) as cnxn:
 			cnxn.autocommit = True
 			user = cnxn.getinfo(pyodbc.SQL_USER_NAME)
 			if user != "elastic":
