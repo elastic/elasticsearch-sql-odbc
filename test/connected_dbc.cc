@@ -121,6 +121,8 @@ ConnectedDBC::ConnectedDBC()
 	SQLRETURN ret;
 	cstr_st types;
 
+	assert(getenv("TZ") == NULL);
+
 	ret = SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &env);
 	assert(SQL_SUCCEEDED(ret));
 

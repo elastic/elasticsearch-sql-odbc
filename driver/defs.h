@@ -21,6 +21,9 @@
 /* number of consecutive logging failures that will disable logging */
 #define ESODBC_LOG_MAX_RETRY		5
 
+/* the (POSIX) timezone environment variable */
+#define ESODBC_TZ_ENV_VAR			"TZ"
+
 #define ESODBC_MAX_ROW_ARRAY_SIZE	USHRT_MAX
 /* max number of ES/SQL types supported */
 #define ESODBC_MAX_NO_TYPES			64
@@ -79,6 +82,7 @@
 /* Seconds precision is currently 3, with ES/SQL's ISO8601 millis.
  * (Should move to 9 with nanosecond implementation) */
 #define ESODBC_MAX_SEC_PRECISION		9
+#define ESODBC_DEF_SEC_PRECISION		3
 /*
  * standard specified defaults:
  * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetdescfield-function##record-fields
@@ -165,6 +169,8 @@
 #define ESODBC_DEF_TRACE_ENABLED	"0"
 /* default tracing level */
 #define ESODBC_DEF_TRACE_LEVEL		"WARN"
+/* default TZ handling */
+#define ESODBC_DEF_APPLY_TZ			"no"
 #define ESODBC_PWD_VAL_SUBST		"<redacted>"
 /* default version checking mode: strict, major, none (dbg only) */
 #define ESODBC_DEF_VERSION_CHECKING	ESODBC_DSN_VC_STRICT
@@ -383,13 +389,6 @@
 #define ESODBC_SQL_OBJECT			2002
 #define ESODBC_SQL_NESTED			2002
 
-/*
- * ISO8601 template ('yyyy-mm-ddThh:mm:ss.sss+hh:mm')
- */
-#define ESODBC_ISO8601_TEMPLATE		"yyyy-mm-ddThh:mm:ss.sssssssZ"
-/* https://docs.microsoft.com/en-us/sql/relational-databases/native-client-odbc-date-time/data-type-support-for-odbc-date-and-time-improvements */
-#define ESODBC_DATE_TEMPLATE		"yyyy-mm-ddT"
-#define ESODBC_TIME_TEMPLATE		"hh:mm:ss.9999999"
 
 #endif /* __DEFS_H__ */
 
