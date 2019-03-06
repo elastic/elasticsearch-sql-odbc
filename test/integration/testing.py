@@ -79,6 +79,16 @@ class Testing(object):
 					curs2.fetchall()
 		# no exception raised -> passed
 
+	def _select_columns(self, index_name, columns):
+		with pyodbc.connect(self._dsn) as cnxn:
+			cnxn.autocommit = True
+			stmt = "select %s from %s" % (columns, index_name)
+			with cnxn.execute(stmt) as curs:
+				cnt = 0
+				while curs.fetchone():
+					cnt += 1 # no exception -> success
+				print("Selected %s rows from %s." % (cnt, index_name))
+
 	def _current_user(self):
 		with pyodbc.connect(self._dsn) as cnxn:
 			cnxn.autocommit = True
@@ -87,12 +97,14 @@ class Testing(object):
 				raise Exception("current username not 'elastic': %s" % user)
 
 	def perform(self):
+		self._current_user()
 		self._as_csv(TestData.LIBRARY_INDEX)
 		self._as_csv(TestData.EMPLOYEES_INDEX)
 		self._count_all(TestData.CALCS_INDEX)
 		self._count_all(TestData.STAPLES_INDEX)
 		self._clear_cursor(TestData.LIBRARY_INDEX)
-		self._current_user()
+		self._select_columns(TestData.FLIGHTS_INDEX, "*")
+		# TODO: add ecommerce and logs once #39700 is addressed
 
 		print("Tests successful.")
 
