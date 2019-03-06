@@ -11,6 +11,8 @@ import json
 import time
 import hashlib
 import os
+import re
+import gzip
 
 from elasticsearch import Elasticsearch
 
@@ -143,6 +145,9 @@ STAPLES_TEMPLATE =\
 
 ES_DATASET_BASE_URL = "https://raw.githubusercontent.com/elastic/elasticsearch/6857d305270be3d987689fda37cc84b7bc18fbb3/x-pack/plugin/sql/qa/src/main/resources/"
 
+KIBANA_SAMPLES_BASE_URL = "https://raw.githubusercontent.com/elastic/kibana/master/src/legacy/server/sample_data/data_sets"
+KIBANA_INDEX_PREFIX = "kibana_sample_data_"
+
 # python seems to slow down when operating on multiple long strings?
 BATCH_SIZE = 500
 
@@ -195,6 +200,11 @@ class TestData(object):
 	EMPLOYEES_FILE = "employees.csv"
 	EMPLOYEES_INDEX = "employees"
 
+	ECOMMERCE_INDEX = KIBANA_INDEX_PREFIX + "ecommerce"
+	FLIGHTS_INDEX = KIBANA_INDEX_PREFIX + "flights"
+	LOGS_INDEX = KIBANA_INDEX_PREFIX + "logs"
+
+
 	# loaded CSV attributes
 	_csv_md5 = None
 	_csv_header = None
@@ -236,7 +246,10 @@ class TestData(object):
 		ndjson = ""
 		for doc in docs:
 			ndjson += index_string + "\n"
-			ndjson += json.dumps(doc) + "\n"
+			if type(doc) is str:
+				ndjson += doc + "\n"
+			else:
+				ndjson += json.dumps(doc) + "\n"
 		return ndjson
 
 	def _docs_to_ndjson(self, index_name, docs):
@@ -247,7 +260,7 @@ class TestData(object):
 		for i in range(0, len(docs), BATCH_SIZE):
 			ndjson = self._docs_to_ndjson_batch(docs[i : i + BATCH_SIZE], index_string)
 			ndjsons.append(ndjson)
-		
+
 		return ndjsons if 1 < len(ndjsons) else ndjsons[0]
 
 
@@ -298,17 +311,20 @@ class TestData(object):
 
 		return ndjson
 
-	def _post_ndjson(self, ndjson, index_name, pipeline_name=None):
+	def _post_ndjson(self, ndjsons, index_name, pipeline_name=None):
 		url = "http://localhost:%s/%s/_doc/_bulk" % (Elasticsearch.ES_PORT, index_name)
 		if pipeline_name:
 			url += "?pipeline=%s" % pipeline_name
-		with requests.post(url, data=ndjson, headers = {"Content-Type": "application/x-ndjson"}, auth=REQ_AUTH) as req:
-			if req.status_code != 200:
-				raise Exception("bulk POST to %s failed with code: %s (content: %s)" % (index_name, req.status_code,
-					req.text))
-			reply = json.loads(req.text)
-			if reply["errors"]:
-				raise Exception("bulk POST to %s failed with content: %s" % (index_name, req.text))
+		if type(ndjsons) is not list:
+			ndjsons = [ndjsons]
+		for n in ndjsons:
+			with requests.post(url, data=n, headers = {"Content-Type": "application/x-ndjson"}, auth=REQ_AUTH) as req:
+				if req.status_code != 200:
+					raise Exception("bulk POST to %s failed with code: %s (content: %s)" % (index_name, req.status_code,
+						req.text))
+				reply = json.loads(req.text)
+				if reply["errors"]:
+					raise Exception("bulk POST to %s failed with content: %s" % (index_name, req.text))
 
 	def _wait_for_results(self, index_name):
 		hits = 0
@@ -353,8 +369,7 @@ class TestData(object):
 		assert(isinstance(ndjsons, list))
 		if self.MODE_NOINDEX < self._mode:
 			self._delete_if_needed(self.STAPLES_INDEX)
-			for ndjson in ndjsons:
-				self._post_ndjson(ndjson, self.STAPLES_INDEX)
+			self._post_ndjson(ndjsons, self.STAPLES_INDEX)
 			self._wait_for_results(self.STAPLES_INDEX)
 
 	def _load_elastic_library(self):
@@ -371,11 +386,72 @@ class TestData(object):
 			self._post_ndjson(ndjson, self.EMPLOYEES_INDEX)
 			self._wait_for_results(self.EMPLOYEES_INDEX)
 
+
+	def _get_kibana_file(self, sample_name, is_mapping=True):
+		file_name = "field_mappings.js" if is_mapping else "%s.json.gz" % sample_name
+		if self._offline_dir:
+			path = os.path.join(self._offline_dir, sample_name, file_name)
+			with open(path, "r" if is_mapping else "rb") as f:
+				return f.read()
+		else:
+			url = KIBANA_SAMPLES_BASE_URL + "/" + sample_name + "/"
+			url += file_name
+			req = requests.get(url, timeout = Elasticsearch.REQ_TIMEOUT)
+			if req.status_code != 200:
+				raise Exception("failed to GET URL %s for index %s with: code: %s, body: %s" %
+						(url, sample_name, req.status_code, req.text))
+			return req.text if is_mapping else req.content
+
+	def _put_sample_template(self, sample_name, index_name):
+		mapping = self._get_kibana_file(sample_name, True)
+		# remove comments
+		mapping = re.sub(re.compile("/\*.*?\*/", re.DOTALL) , "", mapping)
+		mapping = re.sub(r"//.*?\n" , "", mapping)
+		# translate mapping to dict string
+		brace_at = mapping.find("{")
+		if brace_at < 0:
+			raise Exception("mapping is in unknown format; original: %s" % req.text)
+		mapping = mapping[brace_at:]
+		mapping = re.sub(re.compile("([a-zA-Z_]+)\s?:", re.M), r"'\g<1>':", mapping)
+		mapping = mapping.strip("\n;")
+		mapping = "{\n'properties': %s\n}" % mapping
+		mapping = "'mappings': %s\n" % mapping
+		mapping = "{\n'index_patterns': '%s*',\n%s}" % (index_name, mapping)
+		# turn it to JSON (to deal with trailing commas past last member on a level
+		mapping = eval(mapping)
+		# PUT the built template
+		url = "http://localhost:%s/_template/%s_template" % (Elasticsearch.ES_PORT, index_name)
+		with requests.put(url, json=mapping, auth=REQ_AUTH, timeout=Elasticsearch.REQ_TIMEOUT) as req:
+			if req.status_code != 200:
+				raise Exception("PUT %s template failed with code: %s (content: %s)" % (index_name,
+						req.status_code, req.text))
+
+	def _index_sample_data(self, sample_name, index_name):
+		docs = self._get_kibana_file(sample_name, False)
+		docs = gzip.decompress(docs)
+		docs = docs.decode("utf-8")
+		docs = docs.splitlines()
+		ndjsons = self._docs_to_ndjson(index_name, docs)
+		self._post_ndjson(ndjsons, index_name)
+
+	def _load_kibana_sample(self, index_name):
+		sample_name = index_name[len(KIBANA_INDEX_PREFIX):]
+		self._delete_if_needed(index_name)
+		self._put_sample_template(sample_name, index_name)
+		self._index_sample_data(sample_name, index_name)
+
+
 	def load(self):
 		self._load_tableau_calcs()
 		self._load_tableau_staples()
+
 		self._load_elastic_library()
 		self._load_elastic_employees()
+
+		self._load_kibana_sample(self.ECOMMERCE_INDEX)
+		self._load_kibana_sample(self.FLIGHTS_INDEX)
+		self._load_kibana_sample(self.LOGS_INDEX)
+
 		print("Data %s." % ("meta-processed" if self._mode == self.MODE_NOINDEX else "reindexed" if self._mode == \
 			self.MODE_REINDEX else "indexed"))
 
