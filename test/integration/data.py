@@ -145,7 +145,7 @@ STAPLES_TEMPLATE =\
 
 ES_DATASET_BASE_URL = "https://raw.githubusercontent.com/elastic/elasticsearch/6857d305270be3d987689fda37cc84b7bc18fbb3/x-pack/plugin/sql/qa/src/main/resources/"
 
-KIBANA_SAMPLES_BASE_URL = "https://raw.githubusercontent.com/elastic/kibana/master/src/legacy/server/sample_data/data_sets"
+KIBANA_SAMPLES_BASE_URL = "https://raw.githubusercontent.com/elastic/kibana/54e498200b8b1a265becf1b27a6958e613acc3d1/src/legacy/server/sample_data/data_sets"
 KIBANA_INDEX_PREFIX = "kibana_sample_data_"
 
 # python seems to slow down when operating on multiple long strings?
