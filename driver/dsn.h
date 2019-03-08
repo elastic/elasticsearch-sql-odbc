@@ -22,6 +22,7 @@
 #define ESODBC_DSN_UID				"UID"
 #define ESODBC_DSN_SAVEFILE			"SAVEFILE"
 #define ESODBC_DSN_FILEDSN			"FILEDSN"
+#define ESODBC_DSN_CLOUD_ID			"CloudID"
 #define ESODBC_DSN_SERVER			"Server"
 #define ESODBC_DSN_PORT				"Port"
 #define ESODBC_DSN_SECURE			"Secure"
@@ -55,6 +56,7 @@ typedef struct {
 	wstr_st uid;
 	wstr_st savefile;
 	wstr_st filedsn;
+	wstr_st cloud_id;
 	wstr_st server;
 	wstr_st port;
 	wstr_st secure;
@@ -70,7 +72,7 @@ typedef struct {
 	wstr_st trace_enabled;
 	wstr_st trace_file;
 	wstr_st trace_level;
-#define ESODBC_DSN_ATTRS_COUNT	22
+#define ESODBC_DSN_ATTRS_COUNT	23
 	SQLWCHAR buff[ESODBC_DSN_ATTRS_COUNT * ESODBC_DSN_MAX_ATTR_LEN];
 } esodbc_dsn_attrs_st;
 
