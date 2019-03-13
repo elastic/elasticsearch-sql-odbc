@@ -60,7 +60,9 @@ namespace EsOdbcDsnEditor
             this.certificateFileDialog = new System.Windows.Forms.OpenFileDialog();
             this.tabConfiguration = new System.Windows.Forms.TabControl();
             this.pageBasic = new System.Windows.Forms.TabPage();
+            this.labelCloudID = new System.Windows.Forms.Label();
             this.textDescription = new System.Windows.Forms.TextBox();
+            this.textCloudID = new System.Windows.Forms.TextBox();
             this.labelDescription = new System.Windows.Forms.Label();
             this.textName = new System.Windows.Forms.TextBox();
             this.labelName = new System.Windows.Forms.Label();
@@ -75,6 +77,7 @@ namespace EsOdbcDsnEditor
             this.folderLogDirectoryDialog = new System.Windows.Forms.FolderBrowserDialog();
             this.toolTipName = new System.Windows.Forms.ToolTip(this.components);
             this.toolTipDescription = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipCloudID = new System.Windows.Forms.ToolTip(this.components);
             this.toolTipHostname = new System.Windows.Forms.ToolTip(this.components);
             this.toolTipPort = new System.Windows.Forms.ToolTip(this.components);
             this.toolTipUsername = new System.Windows.Forms.ToolTip(this.components);
@@ -100,7 +103,7 @@ namespace EsOdbcDsnEditor
             // saveButton
             // 
             this.saveButton.Location = new System.Drawing.Point(457, 541);
-            this.saveButton.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.saveButton.Margin = new System.Windows.Forms.Padding(4);
             this.saveButton.Name = "saveButton";
             this.saveButton.Size = new System.Drawing.Size(100, 28);
             this.saveButton.TabIndex = 17;
@@ -111,7 +114,7 @@ namespace EsOdbcDsnEditor
             // cancelButton
             // 
             this.cancelButton.Location = new System.Drawing.Point(560, 541);
-            this.cancelButton.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.cancelButton.Margin = new System.Windows.Forms.Padding(4);
             this.cancelButton.Name = "cancelButton";
             this.cancelButton.Size = new System.Drawing.Size(100, 28);
             this.cancelButton.TabIndex = 18;
@@ -122,7 +125,7 @@ namespace EsOdbcDsnEditor
             // testButton
             // 
             this.testButton.Location = new System.Drawing.Point(17, 541);
-            this.testButton.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.testButton.Margin = new System.Windows.Forms.Padding(4);
             this.testButton.Name = "testButton";
             this.testButton.Size = new System.Drawing.Size(156, 28);
             this.testButton.TabIndex = 16;
@@ -145,7 +148,7 @@ namespace EsOdbcDsnEditor
             // certificatePathButton
             // 
             this.certificatePathButton.Location = new System.Drawing.Point(524, 206);
-            this.certificatePathButton.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.certificatePathButton.Margin = new System.Windows.Forms.Padding(4);
             this.certificatePathButton.Name = "certificatePathButton";
             this.certificatePathButton.Size = new System.Drawing.Size(100, 28);
             this.certificatePathButton.TabIndex = 15;
@@ -156,7 +159,7 @@ namespace EsOdbcDsnEditor
             // textCertificatePath
             // 
             this.textCertificatePath.Location = new System.Drawing.Point(124, 209);
-            this.textCertificatePath.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.textCertificatePath.Margin = new System.Windows.Forms.Padding(4);
             this.textCertificatePath.MaxLength = 512;
             this.textCertificatePath.Name = "textCertificatePath";
             this.textCertificatePath.Size = new System.Drawing.Size(392, 22);
@@ -242,7 +245,7 @@ namespace EsOdbcDsnEditor
             // 
             // numericUpDownPort
             // 
-            this.numericUpDownPort.Location = new System.Drawing.Point(112, 246);
+            this.numericUpDownPort.Location = new System.Drawing.Point(112, 241);
             this.numericUpDownPort.Maximum = new decimal(new int[] {
             65535,
             0,
@@ -260,8 +263,8 @@ namespace EsOdbcDsnEditor
             // 
             // textPassword
             // 
-            this.textPassword.Location = new System.Drawing.Point(112, 324);
-            this.textPassword.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.textPassword.Location = new System.Drawing.Point(112, 343);
+            this.textPassword.Margin = new System.Windows.Forms.Padding(4);
             this.textPassword.MaxLength = 512;
             this.textPassword.Name = "textPassword";
             this.textPassword.PasswordChar = '*';
@@ -271,7 +274,7 @@ namespace EsOdbcDsnEditor
             // labelPassword
             // 
             this.labelPassword.AutoSize = true;
-            this.labelPassword.Location = new System.Drawing.Point(16, 327);
+            this.labelPassword.Location = new System.Drawing.Point(16, 346);
             this.labelPassword.Name = "labelPassword";
             this.labelPassword.Size = new System.Drawing.Size(73, 17);
             this.labelPassword.TabIndex = 6;
@@ -279,8 +282,8 @@ namespace EsOdbcDsnEditor
             // 
             // textUsername
             // 
-            this.textUsername.Location = new System.Drawing.Point(112, 284);
-            this.textUsername.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.textUsername.Location = new System.Drawing.Point(112, 303);
+            this.textUsername.Margin = new System.Windows.Forms.Padding(4);
             this.textUsername.MaxLength = 512;
             this.textUsername.Name = "textUsername";
             this.textUsername.Size = new System.Drawing.Size(229, 22);
@@ -289,7 +292,7 @@ namespace EsOdbcDsnEditor
             // labelUsername
             // 
             this.labelUsername.AutoSize = true;
-            this.labelUsername.Location = new System.Drawing.Point(16, 287);
+            this.labelUsername.Location = new System.Drawing.Point(16, 306);
             this.labelUsername.Name = "labelUsername";
             this.labelUsername.Size = new System.Drawing.Size(77, 17);
             this.labelUsername.TabIndex = 4;
@@ -297,8 +300,8 @@ namespace EsOdbcDsnEditor
             // 
             // textHostname
             // 
-            this.textHostname.Location = new System.Drawing.Point(112, 208);
-            this.textHostname.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.textHostname.Location = new System.Drawing.Point(112, 203);
+            this.textHostname.Margin = new System.Windows.Forms.Padding(4);
             this.textHostname.MaxLength = 512;
             this.textHostname.Name = "textHostname";
             this.textHostname.Size = new System.Drawing.Size(506, 22);
@@ -308,7 +311,7 @@ namespace EsOdbcDsnEditor
             // labelPort
             // 
             this.labelPort.AutoSize = true;
-            this.labelPort.Location = new System.Drawing.Point(16, 248);
+            this.labelPort.Location = new System.Drawing.Point(16, 243);
             this.labelPort.Name = "labelPort";
             this.labelPort.Size = new System.Drawing.Size(38, 17);
             this.labelPort.TabIndex = 2;
@@ -317,7 +320,7 @@ namespace EsOdbcDsnEditor
             // labelHostname
             // 
             this.labelHostname.AutoSize = true;
-            this.labelHostname.Location = new System.Drawing.Point(16, 211);
+            this.labelHostname.Location = new System.Drawing.Point(16, 206);
             this.labelHostname.Name = "labelHostname";
             this.labelHostname.Size = new System.Drawing.Size(76, 17);
             this.labelHostname.TabIndex = 0;
@@ -340,7 +343,9 @@ namespace EsOdbcDsnEditor
             // 
             // pageBasic
             // 
+            this.pageBasic.Controls.Add(this.labelCloudID);
             this.pageBasic.Controls.Add(this.textDescription);
+            this.pageBasic.Controls.Add(this.textCloudID);
             this.pageBasic.Controls.Add(this.labelDescription);
             this.pageBasic.Controls.Add(this.textName);
             this.pageBasic.Controls.Add(this.labelName);
@@ -354,21 +359,40 @@ namespace EsOdbcDsnEditor
             this.pageBasic.Controls.Add(this.textPassword);
             this.pageBasic.Location = new System.Drawing.Point(4, 25);
             this.pageBasic.Name = "pageBasic";
-            this.pageBasic.Padding = new System.Windows.Forms.Padding(3, 3, 3, 3);
+            this.pageBasic.Padding = new System.Windows.Forms.Padding(3);
             this.pageBasic.Size = new System.Drawing.Size(640, 431);
             this.pageBasic.TabIndex = 0;
             this.pageBasic.Text = "Basic";
             this.pageBasic.UseVisualStyleBackColor = true;
             // 
+            // labelCloudID
+            // 
+            this.labelCloudID.AutoSize = true;
+            this.labelCloudID.Location = new System.Drawing.Point(16, 118);
+            this.labelCloudID.Name = "labelCloudID";
+            this.labelCloudID.Size = new System.Drawing.Size(65, 17);
+            this.labelCloudID.TabIndex = 12;
+            this.labelCloudID.Text = "Cloud ID:";
+            // 
             // textDescription
             // 
             this.textDescription.Location = new System.Drawing.Point(112, 56);
-            this.textDescription.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
-            this.textDescription.MaxLength = 512;
-            this.textDescription.Multiline = true;
+            this.textDescription.Margin = new System.Windows.Forms.Padding(4);
+            this.textDescription.MaxLength = 256;
             this.textDescription.Name = "textDescription";
-            this.textDescription.Size = new System.Drawing.Size(506, 132);
-            this.textDescription.TabIndex = 3;
+            this.textDescription.Size = new System.Drawing.Size(506, 22);
+            this.textDescription.TabIndex = 11;
+            // 
+            // textCloudID
+            // 
+            this.textCloudID.Location = new System.Drawing.Point(112, 115);
+            this.textCloudID.Margin = new System.Windows.Forms.Padding(4);
+            this.textCloudID.MaxLength = 512;
+            this.textCloudID.Multiline = true;
+            this.textCloudID.Name = "textCloudID";
+            this.textCloudID.Size = new System.Drawing.Size(506, 72);
+            this.textCloudID.TabIndex = 3;
+            this.textCloudID.TextChanged += new System.EventHandler(this.TextCloudID_TextChanged);
             // 
             // labelDescription
             // 
@@ -381,8 +405,8 @@ namespace EsOdbcDsnEditor
             // 
             // textName
             // 
-            this.textName.Location = new System.Drawing.Point(112, 16);
-            this.textName.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.textName.Location = new System.Drawing.Point(112, 18);
+            this.textName.Margin = new System.Windows.Forms.Padding(4);
             this.textName.MaxLength = 256;
             this.textName.Name = "textName";
             this.textName.Size = new System.Drawing.Size(506, 22);
@@ -406,7 +430,7 @@ namespace EsOdbcDsnEditor
             this.pageSecurity.Controls.Add(this.labelCertificatePath);
             this.pageSecurity.Location = new System.Drawing.Point(4, 25);
             this.pageSecurity.Name = "pageSecurity";
-            this.pageSecurity.Padding = new System.Windows.Forms.Padding(3, 3, 3, 3);
+            this.pageSecurity.Padding = new System.Windows.Forms.Padding(3);
             this.pageSecurity.Size = new System.Drawing.Size(640, 431);
             this.pageSecurity.TabIndex = 1;
             this.pageSecurity.Text = "Security";
@@ -470,7 +494,7 @@ namespace EsOdbcDsnEditor
             // logDirectoryPathButton
             // 
             this.logDirectoryPathButton.Location = new System.Drawing.Point(526, 55);
-            this.logDirectoryPathButton.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.logDirectoryPathButton.Margin = new System.Windows.Forms.Padding(4);
             this.logDirectoryPathButton.Name = "logDirectoryPathButton";
             this.logDirectoryPathButton.Size = new System.Drawing.Size(100, 28);
             this.logDirectoryPathButton.TabIndex = 18;
@@ -481,7 +505,7 @@ namespace EsOdbcDsnEditor
             // textLogDirectoryPath
             // 
             this.textLogDirectoryPath.Location = new System.Drawing.Point(124, 57);
-            this.textLogDirectoryPath.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.textLogDirectoryPath.Margin = new System.Windows.Forms.Padding(4);
             this.textLogDirectoryPath.MaxLength = 512;
             this.textLogDirectoryPath.Name = "textLogDirectoryPath";
             this.textLogDirectoryPath.Size = new System.Drawing.Size(392, 22);
@@ -508,7 +532,7 @@ namespace EsOdbcDsnEditor
             this.Controls.Add(this.saveButton);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
-            this.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.Margin = new System.Windows.Forms.Padding(4);
             this.MaximizeBox = false;
             this.MinimizeBox = false;
             this.Name = "DsnEditorForm";
@@ -534,7 +558,9 @@ namespace EsOdbcDsnEditor
         private System.Windows.Forms.Button cancelButton;
         private System.Windows.Forms.Button testButton;
         private System.Windows.Forms.PictureBox header;
-        private System.Windows.Forms.TextBox textHostname;
+		private System.Windows.Forms.TextBox textCloudID;
+		private System.Windows.Forms.Label labelCloudID;
+		private System.Windows.Forms.TextBox textHostname;
         private System.Windows.Forms.Label labelPort;
         private System.Windows.Forms.Label labelHostname;
         private System.Windows.Forms.TextBox textPassword;
@@ -555,7 +581,6 @@ namespace EsOdbcDsnEditor
         private System.Windows.Forms.TabControl tabConfiguration;
         private System.Windows.Forms.TabPage pageBasic;
         private System.Windows.Forms.TabPage pageSecurity;
-        private System.Windows.Forms.TextBox textDescription;
         private System.Windows.Forms.Label labelDescription;
         private System.Windows.Forms.TextBox textName;
         private System.Windows.Forms.Label labelName;
@@ -569,6 +594,7 @@ namespace EsOdbcDsnEditor
         private System.Windows.Forms.CheckBox checkLoggingEnabled;
 		private System.Windows.Forms.ToolTip toolTipName;
 		private System.Windows.Forms.ToolTip toolTipDescription;
+		private System.Windows.Forms.ToolTip toolTipCloudID;
 		private System.Windows.Forms.ToolTip toolTipHostname;
 		private System.Windows.Forms.ToolTip toolTipPort;
 		private System.Windows.Forms.ToolTip toolTipUsername;
@@ -582,6 +608,7 @@ namespace EsOdbcDsnEditor
 		private System.Windows.Forms.ToolTip toolTipLogDirectoryPath;
 		private System.Windows.Forms.ToolTip toolTipLoggingEnabled;
 		private System.Windows.Forms.ToolTip toolTipLogLevel;
+		private System.Windows.Forms.TextBox textDescription;
 	}
 }
 

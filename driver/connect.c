@@ -17,6 +17,13 @@
 #include "util.h"
 #include "dsn.h"
 
+/* to access Curl_base64_decode(), not part of cURL's API */
+#ifndef CURL_STATICLIB
+#error "dynamically linked cURL library is not supported"
+#else
+#include "../lib/curl_base64.h"
+#endif /*! CURL_STATICLIB*/
+
 /* HTTP headers default for every request */
 #define HTTP_ACCEPT_JSON		"Accept: application/json"
 #define HTTP_CONTENT_TYPE_JSON	"Content-Type: application/json; charset=utf-8"
@@ -856,6 +863,204 @@ static BOOL config_dbc_logging(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	return TRUE;
 }
 
+/* Decode a Cloud ID of expected format: instance_name:base64_string
+ * (semicolon used as delimiter) and the decoded base64 string:
+ * domain_name$es_prefix$kibana_prefix (dollar used as delimiter).
+ * The instance_name, es_prefix and kibana_prefix can be missing and
+ * domain_name can be an IPv6 address.
+ * The decoded values are then used to form and assign attributes for server,
+ * port and secure DSN parameters. */
+static BOOL decode_cloud_id(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
+{
+	char buff[ESODBC_DSN_MAX_ATTR_LEN + /*\0*/1];
+	SQLWCHAR wbuff[ESODBC_DSN_MAX_ATTR_LEN + /*\0*/1];
+	unsigned char *dec;
+	int n;
+	size_t len, pos;
+	size_t semicol, dolr1, dolr2; /* indexes where to find ':' and '$'  */
+	wstr_st attr;
+
+	assert(0 < attrs->cloud_id.cnt &&
+		attrs->cloud_id.cnt <= ESODBC_DSN_MAX_ATTR_LEN);
+
+	/* find last `:` delimiter, before the Base64 string (that can't contain
+	 * semicolon) */
+	semicol = 0;
+	for (pos = attrs->cloud_id.cnt - 1; pos < (size_t)-1; pos --) {
+		if (attrs->cloud_id.str[pos] == L':') {
+			semicol = pos + 1;
+			break;
+		}
+	}
+	if (attrs->cloud_id.cnt <= semicol) {
+		ERRH(dbc, "invalid Cloud ID: [%zu] `" LWPDL "` format",
+			attrs->cloud_id.cnt, LWSTR(&attrs->cloud_id));
+		SET_HDIAG(dbc, SQL_STATE_HY000, "Invalid Cloud ID format", 0);
+		return FALSE;
+	}
+	/* convert it to C string first, then decode it  */
+	if (ascii_w2c(attrs->cloud_id.str + semicol, (SQLCHAR *)buff,
+			attrs->cloud_id.cnt - semicol) <= /*\0*/1) {
+		ERRH(dbc, "failed to convert B64 part of Cloud ID: [%zu] `" LWPDL "` "
+			"to C string.", attrs->cloud_id.cnt, LWSTR(&attrs->cloud_id));
+		SET_HDIAG(dbc, SQL_STATE_HY000, "Invalid characters in Cloud ID "
+			"parameter", 0);
+		return FALSE;
+	}
+	/* buff is now 0-term'd and can be decoded */
+	if (Curl_base64_decode(buff, &dec, &len) != CURLE_OK) {
+		ERRH(dbc, "failed to decode B64 part of  Cloud ID: [%zu] `" LWPDL "`.",
+			attrs->cloud_id.cnt, LWSTR(&attrs->cloud_id));
+		SET_HDIAG(dbc, SQL_STATE_HY000, "Invalid Base64 encoding in Cloud ID "
+			"parameter", 0);
+		return FALSE;
+	}
+	DBGH(dbc, "Cloud ID decoded to: [%zu] `" LCPDL "`.", len, len, dec);
+
+	/* find first and second `$` */
+	for (dolr1 = dolr2 = pos = 0; pos < len; pos ++) {
+		if (dec[pos] == '$') {
+			if (pos <= 0) {
+				ERRH(dbc, "delimiter '$' found on first position.");
+				goto err_malformed;
+			}
+			if (! dolr1) {
+				dolr1 = pos;
+				continue;
+			}
+			if (! dolr2) {
+				dolr2 = pos;
+				continue;
+			}
+			/* any remaining additional names can be ignored */
+			break;
+		}
+	}
+	/* if not provided, place missing (now virtual) marker at end of string */
+	if (! dolr1) {
+		dolr1 = len;
+	}
+	if (! dolr2) {
+		dolr2 = len;
+	}
+	/* find last `:` delimiter outside any IPv6 address [] */
+	semicol = 0;
+	for (pos = dolr1 - 1; pos < (size_t)-1; pos --) {
+		if (dec[pos] == ']') {
+			break;
+		}
+		if (dec[pos] == ':') {
+			if (pos == 0 || pos == dolr1 - 1) {
+				ERRH(dbc, "port delimiter ':' found on position %zu/%zu",
+					pos, dolr1 - 1);
+				goto err_malformed;
+			}
+			semicol = pos;
+			break;
+		}
+	}
+	/* if not provided, place it at the end */
+	if (! semicol) {
+		semicol = dolr1;
+	}
+
+	/*
+	 * build and assign the 'server' attribute
+	 */
+	if (dolr1 < dolr2) { /* is there a name for the elasticsearch node? */
+		pos = dolr2 - dolr1 - 1;
+		memcpy(buff, dec + dolr1 + 1, pos);
+		buff[pos ++] = '.';
+	} else {
+		pos = 0;
+	}
+	/* copy the common part of the name */
+	memcpy(buff + pos, dec, semicol);
+	pos += semicol;
+
+	n = ascii_c2w(buff, wbuff, pos);
+	/* it can only fail on non-ASCII chars, which are checked already */
+	assert(0 < n);
+	attr.cnt = (size_t)n - 1;
+	attr.str = wbuff;
+
+	/* if 'server' attribute is also provided, it must have the same value */
+	if (attrs->server.cnt) {
+		if (! EQ_WSTR(&attrs->server, &attr)) {
+			ERRH(dbc, "server parameter (`" LWPDL "`) differs from value in "
+				"CloudID (`" LWPDL "`).", LWSTR(&attrs->server), LWSTR(&attr));
+			goto err_exists;
+		}
+	} else {
+		n = assign_dsn_attr(attrs, &MK_WSTR(ESODBC_DSN_SERVER), &attr, TRUE);
+		assert(n == DSN_ASSIGNED);
+	}
+
+	/*
+	 * build and assign the 'port' attribute
+	 */
+	if (semicol < dolr1) { /* has the port been provided in the encoding? */
+		pos = dolr1 - semicol - 1;
+		memcpy(buff, dec + semicol + 1, pos);
+	} else {
+		pos = sizeof(ESODBC_DEF_CLOUD_PORT) /*+\0*/;
+		memcpy(buff, ESODBC_DEF_CLOUD_PORT, pos);
+	}
+	n = ascii_c2w(buff, wbuff, pos);
+	assert(0 < n); /* see above why */
+	attr.cnt = (size_t)n - 1;
+	attr.str = wbuff;
+
+	/* if 'port' attribute is also provided, it must have the same value */
+	if (attrs->port.cnt) {
+		if (! EQ_WSTR(&attrs->port, &attr)) {
+			ERRH(dbc, "port parameter (`" LWPDL "`) differs from value in "
+				"CloudID (`" LWPDL "`) or its default (`%s`).",
+				LWSTR(&attrs->port), LWSTR(&attr), ESODBC_DEF_CLOUD_PORT);
+			goto err_exists;
+		}
+	} else {
+		n = assign_dsn_attr(attrs, &MK_WSTR(ESODBC_DSN_PORT), &attr, TRUE);
+		assert(n == DSN_ASSIGNED);
+	}
+
+	/*
+	 * build and assign the 'security' setting
+	 */
+	pos = sizeof(ESODBC_DEF_CLOUD_SECURE) - 1;
+	assert(pos == 1);
+	wbuff[0] = (SQLWCHAR)ESODBC_DEF_CLOUD_SECURE[0];
+	wbuff[1] = L'\0';
+	attr.cnt = pos;
+	attr.str = wbuff;
+
+	if (attrs->secure.cnt) {
+		if (! EQ_WSTR(&attrs->secure, &attr)) {
+			ERRH(dbc, "secure parameter (`" LWPDL "`) differs from default "
+				"value for cloud (`%s`).", LWSTR(&attrs->secure),
+				ESODBC_DEF_CLOUD_SECURE);
+			goto err_exists;
+		}
+	} else {
+		n = assign_dsn_attr(attrs, &MK_WSTR(ESODBC_DSN_SECURE), &attr, TRUE);
+		assert(n == DSN_ASSIGNED);
+	}
+
+	free(dec);
+	return TRUE;
+
+err_malformed:
+	ERRH(dbc, "invalid Cloud ID B64 part: [%zu] `" LCPDL "`.", len, len, dec);
+	SET_HDIAG(dbc, SQL_STATE_HY000, "Malformed Cloud ID parameter", 0);
+	free(dec);
+	return FALSE;
+
+err_exists:
+	free(dec);
+	SET_HDIAG(dbc, SQL_STATE_HY000, "Invalid DSN configuration", 0);
+	return FALSE;
+}
+
 /*
  * init dbc from configured attributes
  */
@@ -875,6 +1080,10 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	if (! config_dbc_logging(dbc, attrs)) {
 		/* attempt global logging the error */
 		ERRH(dbc, "failed to setup DBC logging");
+		goto err;
+	}
+
+	if (attrs->cloud_id.cnt && (! decode_cloud_id(dbc, attrs))) {
 		goto err;
 	}
 

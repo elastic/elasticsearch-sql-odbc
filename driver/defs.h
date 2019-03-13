@@ -155,10 +155,14 @@
 //#define ESODBC_DEF_SERVER			"localhost"
 /* to allow loopback capture on Win10 */
 #define ESODBC_DEF_SERVER			"127.0.0.1"
-/* Elasticsearch'es default port */
+/* Elasticsearch's default port */
 #define ESODBC_DEF_PORT				"9200"
+/* Elasticsearch on Cloud default port */
+#define ESODBC_DEF_CLOUD_PORT		"9243"
 /* default security setting: use SSL */
 #define ESODBC_DEF_SECURE			"1"
+/* default cloud security setting: check revoke */
+#define ESODBC_DEF_CLOUD_SECURE		"4"
 /* default global request timeout (0: no timeout) */
 #define ESODBC_DEF_TIMEOUT			"0"
 /* don't follow redirection from the server  */

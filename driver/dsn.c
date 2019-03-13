@@ -63,6 +63,7 @@ int assign_dsn_attr(esodbc_dsn_attrs_st *attrs,
 		{&MK_WSTR(ESODBC_DSN_UID), &attrs->uid},
 		{&MK_WSTR(ESODBC_DSN_SAVEFILE), &attrs->savefile},
 		{&MK_WSTR(ESODBC_DSN_FILEDSN), &attrs->filedsn},
+		{&MK_WSTR(ESODBC_DSN_CLOUD_ID), &attrs->cloud_id},
 		{&MK_WSTR(ESODBC_DSN_SERVER), &attrs->server},
 		{&MK_WSTR(ESODBC_DSN_PORT), &attrs->port},
 		{&MK_WSTR(ESODBC_DSN_SECURE), &attrs->secure},
@@ -392,6 +393,7 @@ long TEST_API write_00_list(esodbc_dsn_attrs_st *attrs,
 		{&MK_WSTR(ESODBC_DSN_UID), &attrs->uid},
 		{&MK_WSTR(ESODBC_DSN_SAVEFILE), &attrs->savefile},
 		{&MK_WSTR(ESODBC_DSN_FILEDSN), &attrs->filedsn},
+		{&MK_WSTR(ESODBC_DSN_CLOUD_ID), &attrs->cloud_id},
 		{&MK_WSTR(ESODBC_DSN_SERVER), &attrs->server},
 		{&MK_WSTR(ESODBC_DSN_PORT), &attrs->port},
 		{&MK_WSTR(ESODBC_DSN_SECURE), &attrs->secure},
@@ -612,6 +614,10 @@ BOOL write_system_dsn(esodbc_dsn_attrs_st *new_attrs,
 		/* SAVEILE */
 		/* FILEDSN */
 		{
+			&MK_WSTR(ESODBC_DSN_CLOUD_ID), &new_attrs->cloud_id,
+			old_attrs ? &old_attrs->cloud_id : NULL
+		},
+		{
 			&MK_WSTR(ESODBC_DSN_SERVER), &new_attrs->server,
 			old_attrs ? &old_attrs->server : NULL
 		},
@@ -734,6 +740,7 @@ long TEST_API write_connection_string(esodbc_dsn_attrs_st *attrs,
 		{&attrs->uid, &MK_WSTR(ESODBC_DSN_UID)},
 		{&attrs->savefile, &MK_WSTR(ESODBC_DSN_SAVEFILE)},
 		{&attrs->filedsn, &MK_WSTR(ESODBC_DSN_FILEDSN)},
+		{&attrs->cloud_id, &MK_WSTR(ESODBC_DSN_CLOUD_ID)},
 		{&attrs->server, &MK_WSTR(ESODBC_DSN_SERVER)},
 		{&attrs->port, &MK_WSTR(ESODBC_DSN_PORT)},
 		{&attrs->secure, &MK_WSTR(ESODBC_DSN_SECURE)},
@@ -798,15 +805,17 @@ void assign_dsn_defaults(esodbc_dsn_attrs_st *attrs)
 {
 	int res = 0;
 
-	res |= assign_dsn_attr(attrs,
-			&MK_WSTR(ESODBC_DSN_SERVER), &MK_WSTR(ESODBC_DEF_SERVER),
-			/*overwrite?*/FALSE);
-	res |= assign_dsn_attr(attrs,
-			&MK_WSTR(ESODBC_DSN_PORT), &MK_WSTR(ESODBC_DEF_PORT),
-			/*overwrite?*/FALSE);
-	res |= assign_dsn_attr(attrs,
-			&MK_WSTR(ESODBC_DSN_SECURE), &MK_WSTR(ESODBC_DEF_SECURE),
-			/*overwrite?*/FALSE);
+	if (! attrs->cloud_id.cnt) { /* the Cloud ID will provide these attrs */
+		res |= assign_dsn_attr(attrs,
+				&MK_WSTR(ESODBC_DSN_SERVER), &MK_WSTR(ESODBC_DEF_SERVER),
+				/*overwrite?*/FALSE);
+		res |= assign_dsn_attr(attrs,
+				&MK_WSTR(ESODBC_DSN_PORT), &MK_WSTR(ESODBC_DEF_PORT),
+				/*overwrite?*/FALSE);
+		res |= assign_dsn_attr(attrs,
+				&MK_WSTR(ESODBC_DSN_SECURE), &MK_WSTR(ESODBC_DEF_SECURE),
+				/*overwrite?*/FALSE);
+	}
 	res |= assign_dsn_attr(attrs,
 			&MK_WSTR(ESODBC_DSN_TIMEOUT), &MK_WSTR(ESODBC_DEF_TIMEOUT),
 			/*overwrite?*/FALSE);
@@ -875,9 +884,10 @@ int validate_dsn(esodbc_dsn_attrs_st *attrs, const wchar_t *dsn_str,
 	/*
 	 * check on the minimum DSN set requirements
 	 */
-	if (! attrs->server.cnt) {
-		ERR("received empty server name");
-		swprintf(err_out, eo_max, L"Server hostname cannot be empty.");
+	if (! (attrs->server.cnt | attrs->cloud_id.cnt))  {
+		ERR("received empty server name and cloud ID");
+		swprintf(err_out, eo_max,
+			L"Server hostname and Cloud ID cannot be both empty.");
 		return ESODBC_DSN_INVALID_ERROR;
 	}
 	if (!on_connect && !attrs->dsn.cnt) {

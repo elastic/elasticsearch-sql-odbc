@@ -269,7 +269,7 @@ if (${WIN32})
 			${LIBCURL_LD_PATH}/libcurl_a${LIBCURL_BUILD_SUFFIX}${CMAKE_STATIC_LIBRARY_SUFFIX})
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DCURL_STATICLIB")
 		# Libraries that libcurl/WinSSL links against.
-		# Removed: wldap32 advapi32 gdi32 user32 (wth current config unused)
+		# Removed: wldap32 advapi32 gdi32 user32 (unused with current config)
 		set(LIBCURL_WIN_LIBS ws2_32 crypt32 normaliz)
 	endif (${LIBCURL_LINK_MODE} MATCHES [Dd][Ll][Ll])
 else (${WIN32})
