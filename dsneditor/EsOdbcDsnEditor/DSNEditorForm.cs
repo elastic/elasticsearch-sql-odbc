@@ -71,8 +71,7 @@ namespace EsOdbcDsnEditor
 
 			toolTipName.SetToolTip(textName, "The name the DSN will be referred by.");
 			toolTipDescription.SetToolTip(textDescription, "Allows arbitrary text, generally used for short notes about the configured connection.");
-			toolTipCloudID.SetToolTip(textCloudID, "If connecting to Elastic Cloud enter here the Cloud ID value of the deployment." + Environment.NewLine
-				+ "The Hostname, Port and Security settings will then be automatically configured.");
+			toolTipCloudID.SetToolTip(textCloudID, "The Cloud ID, if connecting to Elastic Cloud. Settings will be automatically configured.");
 			toolTipHostname.SetToolTip(textHostname, "IP address or a resolvable DNS name of the Elasticsearch instance that the driver will connect to.");
 			toolTipPort.SetToolTip(numericUpDownPort, "The port which the Elasticsearch listens on.");
 			toolTipUsername.SetToolTip(textUsername, "If security is enabled, the username configured to access the REST SQL endpoint.");
