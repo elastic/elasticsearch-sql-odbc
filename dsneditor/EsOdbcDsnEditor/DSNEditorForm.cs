@@ -65,11 +65,13 @@ namespace EsOdbcDsnEditor
 			textDescription.Text = Builder.ContainsKey("description") ? Builder["description"].ToString().StripBraces() : string.Empty;
 			textUsername.Text = Builder.ContainsKey("uid") ? Builder["uid"].ToString().StripBraces() : string.Empty;
 			textPassword.Text = Builder.ContainsKey("pwd") ? Builder["pwd"].ToString().StripBraces() : string.Empty;
+			textCloudID.Text = Builder.ContainsKey("cloudid") ? Builder["cloudid"].ToString().StripBraces() : string.Empty;
 			textHostname.Text = Builder.ContainsKey("server") ? Builder["server"].ToString().StripBraces() : string.Empty;
 			numericUpDownPort.Text = Builder.ContainsKey("port") ? Builder["port"].ToString().StripBraces() : string.Empty;
 
 			toolTipName.SetToolTip(textName, "The name the DSN will be referred by.");
 			toolTipDescription.SetToolTip(textDescription, "Allows arbitrary text, generally used for short notes about the configured connection.");
+			toolTipCloudID.SetToolTip(textCloudID, "The Cloud ID, if connecting to Elastic Cloud. Settings will be automatically configured.");
 			toolTipHostname.SetToolTip(textHostname, "IP address or a resolvable DNS name of the Elasticsearch instance that the driver will connect to.");
 			toolTipPort.SetToolTip(numericUpDownPort, "The port which the Elasticsearch listens on.");
 			toolTipUsername.SetToolTip(textUsername, "If security is enabled, the username configured to access the REST SQL endpoint.");
@@ -232,6 +234,7 @@ namespace EsOdbcDsnEditor
 			Builder["description"] = textDescription.Text;
 			Builder["uid"] = textUsername.Text;
 			Builder["pwd"] = textPassword.Text;
+			Builder["cloudid"] = "{" + textCloudID.Text.StripBraces() + "}";
 			Builder["server"] = textHostname.Text;
 			Builder["port"] = numericUpDownPort.Text;
 
@@ -334,22 +337,47 @@ namespace EsOdbcDsnEditor
 
 		private void TextHostname_TextChanged(object sender, EventArgs e) => EnableDisableActionButtons();
 
+		private void TextCloudID_TextChanged(object sender, EventArgs e) => EnableDisableActionButtons();
+
 		private void NumericUpDownPort_ValueChanged(object sender, EventArgs e) => EnableDisableActionButtons();
 
 		private void CheckLoggingEnabled_CheckedChanged(object sender, EventArgs e) => EnableDisableLoggingControls();
 
 		private void EnableDisableActionButtons()
 		{
+			if (string.IsNullOrEmpty(textCloudID.Text) == false) {
+				radioButtonDisabled.Checked = false;
+				radioEnabledNoValidation.Checked = false;
+				radioEnabledNoHostname.Checked = false;
+				radioEnabledHostname.Checked = false;
+				radioEnabledFull.Checked = false;
+				groupSSL.Enabled = false;
+				Builder.Remove("secure");
+
+				textHostname.ResetText();
+				Builder.Remove("server");
+				numericUpDownPort.ResetText();
+				Builder.Remove("port");
+			}
+			else {
+				groupSSL.Enabled = true;
+			}
+
+			textCloudID.Enabled = string.IsNullOrEmpty(textHostname.Text);
+			textHostname.Enabled = numericUpDownPort.Enabled
+				= textCertificatePath.Enabled = certificatePathButton.Enabled
+				= string.IsNullOrEmpty(textCloudID.Text);
+
 			if (isConnecting) {
 				// If connecting, enable the button if we have a hostname.
 				// This can be triggered by app connecting or FileDSN verifying the connection.
-				saveButton.Enabled = string.IsNullOrEmpty(textHostname.Text) == false;
+				saveButton.Enabled = string.IsNullOrEmpty(textHostname.Text) == false || string.IsNullOrEmpty(textCloudID.Text) == false;
 			} else {
 				// If editing a (User/System) DSN, enable the buton if both DSN name and hostname are available.
 				saveButton.Enabled = string.IsNullOrEmpty(textName.Text) == false
-									 && string.IsNullOrEmpty(textHostname.Text) == false;
+									 && (string.IsNullOrEmpty(textHostname.Text) == false || string.IsNullOrEmpty(textCloudID.Text) == false);
 			}
-			testButton.Enabled = string.IsNullOrEmpty(textHostname.Text) == false;
+			testButton.Enabled = string.IsNullOrEmpty(textHostname.Text) == false || string.IsNullOrEmpty(textCloudID.Text) == false;
 		}
 
 		private void EnableDisableLoggingControls()
