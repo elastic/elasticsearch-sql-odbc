@@ -643,7 +643,7 @@ static inline void gd_offset_update(esodbc_stmt_st *stmt, size_t cnt,
 
 
 
-/* transfer to the application a 0-terminated (but unaccounted for) cstr_st */
+/* transfer to the application a 0-terminated (but unaccounted for) xstr_st */
 static SQLRETURN transfer_xstr0(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	xstr_st *xsrc, void *data_ptr, SQLLEN *octet_len_ptr)
 {
@@ -1205,73 +1205,129 @@ static SQLRETURN double_to_binary(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	return SQL_SUCCESS;
 }
 
-/*
- * TODO!!!
- * 1. use default precision
- * 2. config for scientific notation.
- * 3. sprintf (for now)
- */
+static inline const void *floats_rep(esodbc_stmt_st *stmt, double dbl,
+	BOOL wide, int *rep)
+{
+	static const char *flt_def = "%.*f";
+	static const wchar_t *flt_wdef = L"%.*f";
+	static const char *flt_exp = "%.*E";
+	static const wchar_t *flt_wexp = L"%.*E";
+
+	esodbc_dbc_st *dbc = HDRH(stmt)->dbc;
+	double abs;
+
+	if (wide) {
+		switch (dbc->sci_floats) {
+			case ESODBC_FLTS_DEFAULT:
+				*rep = ESODBC_FLTS_DEFAULT;
+				return flt_wdef;
+			case ESODBC_FLTS_SCIENTIFIC:
+				*rep = ESODBC_FLTS_SCIENTIFIC;
+				return flt_wexp;
+			case ESODBC_FLTS_AUTO:
+				abs = (0 <= dbl) ? dbl : -dbl;
+				if (abs < 1E-3 || 1E7 <= abs) {
+					*rep = ESODBC_FLTS_SCIENTIFIC;
+					return flt_wexp;
+				} else {
+					*rep = ESODBC_FLTS_DEFAULT;
+					return flt_wdef;
+				}
+			default:
+				BUGH(stmt, "unexpected floats representation value: %d.",
+					dbc->sci_floats);
+				*rep = ESODBC_FLTS_DEFAULT;
+				return flt_wdef;
+		}
+	} else {
+		switch (dbc->sci_floats) {
+			case ESODBC_FLTS_DEFAULT:
+				*rep = ESODBC_FLTS_DEFAULT;
+				return flt_def;
+			case ESODBC_FLTS_SCIENTIFIC:
+				*rep = ESODBC_FLTS_SCIENTIFIC;
+				return flt_exp;
+			case ESODBC_FLTS_AUTO:
+				abs = (0 <= dbl) ? dbl : -dbl;
+				if (abs < 1E-3 || 1E7 <= abs) {
+					*rep = ESODBC_FLTS_SCIENTIFIC;
+					return flt_exp;
+				} else {
+					*rep = ESODBC_FLTS_DEFAULT;
+					return flt_def;
+				}
+			default:
+				BUGH(stmt, "unexpected floats representation value: %d.",
+					dbc->sci_floats);
+				*rep = ESODBC_FLTS_DEFAULT;
+				return flt_def;
+		}
+	}
+}
+
 static SQLRETURN double_to_str(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	double dbl, void *data_ptr, SQLLEN *octet_len_ptr, BOOL wide)
 {
-	long long whole;
-	unsigned long long fraction;
-	double rest;
-	SQLSMALLINT scale;
-	size_t pos, octets;
-	/* buffer unit size */
-	size_t usize = wide ? sizeof(SQLWCHAR) : sizeof(SQLCHAR);
-	esodbc_state_et state = SQL_STATE_00000;
-	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
-	/* buffer is overprovisioned for !wide, but avoids double declaration */
-	SQLCHAR buff[(2 * ESODBC_PRECISION_INT64 + /*.*/1 + /*\0*/1)
-		* sizeof(SQLWCHAR)];
-	xstr_st xstr = (xstr_st) {
-		.wide = wide,
-		.c  = (cstr_st) {
-			/* same vals for both wide and C strings */
-			.str = buff,
-			.cnt = 0
-		}
-	};
+#	define DBL_BASE10_MAX_LEN /*-0.*/3 + DBL_MANT_DIG - DBL_MIN_EXP
+	esodbc_stmt_st *stmt = HDRH(arec->desc)->stmt;
+	SQLCHAR buff[DBL_BASE10_MAX_LEN + /*\0*/1];
+	SQLWCHAR wbuff[DBL_BASE10_MAX_LEN + /*\0*/1];
+	size_t usize;
+	esodbc_state_et state;
+	xstr_st xstr;
+	SQLSMALLINT prec; /* ~ision */
+	const char *flt_fmt;
+	const wchar_t *flt_wfmt;
+	int rep;
+	size_t octets, cnt;
+	int n;
 
-	/*
-	 * split the whole and fractional parts
-	 */
-	assert(sizeof(dbl) == sizeof(whole)); /* [double]==[long long] */
-	whole = (long long)dbl;
-	rest = dbl - whole;
-
-	/* retain user defined or data source default number of fraction digits */
-	scale = 0 < arec->scale ? arec->scale : irec->es_type->maximum_scale;
-	rest *= pow10(scale);
-	rest = round(rest);
-	fraction = rest < 0 ? (unsigned long long) -rest
-		: (unsigned long long)rest;
-
-	/* copy integer part into work buffer */
-	pos = i64tot((int64_t)whole, buff, wide);
-	/* would writing just the whole part + \0 fit into the buffer? */
-	octets = buff_octet_size((pos + 1) * usize, usize, arec, irec, &state);
-	if (state) {
-		REJECT_AS_OOR(stmt, dbl, /*fixed?*/FALSE, "[STRING]<[floating.whole]");
-	} else {
-		assert(octets == (pos + 1) * usize);
-	}
-
+	/* Note: there's no way for the app to ask for a number of decimal digits
+	 * - =scale - from the driver in the conversion (setting the scale of the
+	 * ARD would apply to the C type, _[W]CHAR) except for limiting the buffer
+	 * size, which has an uneven effect, due to the variance in the number of
+	 * the whole part of the floats. */
+	/* https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/rules-for-conversions */
+	prec = irec->es_type->maximum_scale;
 	if (wide) {
-		((SQLWCHAR *)buff)[pos ++] = L'.';
+		flt_wfmt = (const wchar_t *)floats_rep(stmt, dbl, /*wide?*/TRUE, &rep);
+		/* Note: this call would fail on Win CRT on insufficient buffer */
+		n = swprintf(wbuff, DBL_BASE10_MAX_LEN + 1,flt_wfmt, prec, dbl);
+		xstr.w.str = wbuff;
 	} else {
-		((SQLCHAR *)buff)[pos ++] = '.';
+		flt_fmt = (const char *)floats_rep(stmt, dbl, /*wide?*/FALSE, &rep);
+		n = snprintf(buff, DBL_BASE10_MAX_LEN + 1, flt_fmt, prec, dbl);
+		xstr.c.str = buff;
 	}
+	if (n <= 0) {
+		/* ..if this will work this time. */
+		ERRNH(stmt, "failed to %c-print double %lf and precision %d.",
+			dbl, prec, wide ? 'W' : 'C');
+		RET_HDIAG(stmt, SQL_STATE_HY000, "failed to print double", 0);
+	}
+	xstr.c.cnt = (size_t)n;
+	assert(xstr.c.cnt == xstr.w.cnt);
+	xstr.wide = wide;
 
-	/* copy fractional part into work buffer */
-	pos += ui64tot((uint64_t)fraction, (char *)buff + pos * usize, wide);
-
-	xstr.w.cnt = pos; /*==.c.cnt*/
+	usize = wide ? sizeof(SQLWCHAR) : sizeof(SQLCHAR);
+	state = SQL_STATE_00000;
+	octets = buff_octet_size((n + 1) * usize, usize, arec, irec, &state);
+	if (state) {
+		cnt = octets / usize;
+		/* fail the call if exponential printing or default with truncation of
+		 * whole part */
+		if (rep == ESODBC_FLTS_SCIENTIFIC ||
+			cnt < xstr.c.cnt - (prec + /* radix char ('.')*/!!prec)) {
+			REJECT_AS_OOR(stmt, dbl, FALSE, "[STRING]<[floating.whole]");
+		}
+	} else {
+		assert(octets == (n + 1) * usize);
+	}
 
 	return transfer_xstr0(arec, irec, &xstr, data_ptr, octet_len_ptr);
+#	undef DBL_BASE10_MAX_LEN
 }
+
 
 SQLRETURN sql2c_double(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	SQLULEN pos, double dbl)

@@ -1986,7 +1986,7 @@ static void set_defaults_from_meta_type(esodbc_rec_st *rec)
 			break;
 		case METATYPE_FLOAT_NUMERIC:
 			if (rec->concise_type == SQL_FLOAT) { /* == SQL_C_FLOAT */
-				/* "implementation-defined default precision" */
+				/* "implementation-defined default precision for SQL_FLOAT" */
 				rec->precision = ESODBC_DEF_FLOAT_PRECISION;
 			}
 			break;
@@ -2169,14 +2169,81 @@ static esodbc_metatype_et sqlctype_to_meta(SQLSMALLINT concise)
 	return METATYPE_UNKNOWN;
 }
 
+static SQLSMALLINT sqlctype_to_es(SQLSMALLINT c_concise)
+{
+	switch (c_concise) {
+		case SQL_C_CHAR:
+		case SQL_C_WCHAR:
+			return ES_TEXT_TO_SQL;
+		case SQL_C_SHORT:
+		case SQL_C_SSHORT:
+		case SQL_C_USHORT:
+			return ES_SHORT_TO_SQL;
+		case SQL_C_LONG:
+		case SQL_C_SLONG:
+		case SQL_C_ULONG:
+			return ES_INTEGER_TO_SQL;
+		case SQL_C_FLOAT:
+			return ES_FLOAT_TO_SQL;
+		case SQL_C_DOUBLE:
+			return ES_DOUBLE_TO_SQL;
+		case SQL_C_BIT:
+		case SQL_C_TINYINT:
+		case SQL_C_STINYINT:
+		case SQL_C_UTINYINT:
+			return ES_BYTE_TO_SQL;
+		case SQL_C_SBIGINT:
+		case SQL_C_UBIGINT:
+			return ES_LONG_TO_SQL;
+		case SQL_C_BINARY:
+			return ES_BINARY_TO_SQL;
+
+		case SQL_C_TYPE_DATE:
+		case SQL_C_TYPE_TIME:
+		case SQL_C_TYPE_TIMESTAMP:
+		case SQL_C_NUMERIC:
+		case SQL_C_GUID:
+		case SQL_C_INTERVAL_DAY:
+		case SQL_C_INTERVAL_HOUR:
+		case SQL_C_INTERVAL_MINUTE:
+		case SQL_C_INTERVAL_SECOND:
+		case SQL_C_INTERVAL_DAY_TO_HOUR:
+		case SQL_C_INTERVAL_DAY_TO_MINUTE:
+		case SQL_C_INTERVAL_DAY_TO_SECOND:
+		case SQL_C_INTERVAL_HOUR_TO_MINUTE:
+		case SQL_C_INTERVAL_HOUR_TO_SECOND:
+		case SQL_C_INTERVAL_MINUTE_TO_SECOND:
+		case SQL_C_INTERVAL_MONTH:
+		case SQL_C_INTERVAL_YEAR:
+		case SQL_C_INTERVAL_YEAR_TO_MONTH:
+			/* C and SQL have the same ID mapping */
+			return c_concise;
+
+		default:
+		case SQL_C_DEFAULT:
+		/* case SQL_C_BOOKMARK: = SQL_C_UBIGINT, SQL_C_ULONG */
+		/* case SQL_C_VARBOOKMARK: = SQL_C_BINARY */
+		case SQL_C_DATE:
+		case SQL_C_TIME:
+		case SQL_C_TIMESTAMP:
+		/* case SQL_C_TYPE_TIME_WITH_TIMEZONE:
+		case SQL_C_TYPE_TIMESTAMP_WITH_TIMEZONE: */
+			break;
+	}
+	WARN("no C to ES SQL mapping exists for C type %hd.", c_concise);
+	return 0;
+}
+
 /*
  * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetdescrec-function#consistency-checks
  */
 static BOOL consistency_check(esodbc_rec_st *rec)
 {
-	SQLSMALLINT type, code;
+	SQLSMALLINT type, code, concise_type;
 	esodbc_desc_st *desc = rec->desc;
-	SQLINTEGER max_prec;
+	SQLINTEGER max_prec, column_size;
+	esodbc_estype_st *es_type;
+	esodbc_dbc_st *dbc;
 
 	/* validity of C / SQL datatypes is checked when setting the meta_type */
 	assert(METATYPE_UNKNOWN <= rec->meta_type &&
@@ -2203,13 +2270,41 @@ static BOOL consistency_check(esodbc_rec_st *rec)
 						rec->concise_type, rec->scale);
 					return FALSE;
 				}
+			} else {
+				break; /* TODO: check NUMERIC,DECIMAL bounds */
 			}
 		/* no break */
 		case METATYPE_FLOAT_NUMERIC:
-			if (rec->precision < 0 ||
-				ESODBC_MAX_FLT_PRECISION < rec->precision) {
-				ERRH(desc, "precision (%hd) out of bounds [0, %d].",
-					rec->precision, ESODBC_MAX_FLT_PRECISION);
+			if (rec->es_type) {
+				column_size = rec->es_type->column_size;
+			} else {
+				dbc = HDRH(HDRH(desc)->stmt)->dbc;
+				if (rec->concise_type == SQL_FLOAT) {
+					assert(desc->type == DESC_TYPE_IPD);
+					column_size = dbc->max_float_size;
+				} else {
+					if (DESC_TYPE_IS_APPLICATION(desc->type)) {
+						concise_type = sqlctype_to_es(rec->concise_type);
+						assert(concise_type); /* all numerics must be mapped */
+					} else {
+						concise_type = rec->concise_type;
+					}
+					if (! dbc->no_types) {
+						/* bootstraping mode still, loading types */
+						break;
+					}
+					es_type = lookup_es_type(dbc, concise_type, 0);
+					if (! es_type) {
+						BUGH(desc, "type lookup failed for concise type: %hd,"
+								" desc type: %d", concise_type, desc->type);
+						return FALSE;
+					}
+					column_size = es_type->column_size;
+				}
+			}
+			if (rec->precision < 0 || column_size < rec->precision) {
+				ERRH(desc, "precision (%hd) out of bounds [0, %ld].",
+					rec->precision, column_size);
 				return FALSE;
 			}
 			break;
