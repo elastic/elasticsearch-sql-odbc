@@ -1125,7 +1125,8 @@ SQLRETURN sql2c_longlong(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		default:
 			BUGH(stmt, "unexpected unhanlded data type: %d.",
 				get_rec_c_type(arec, irec));
-			return SQL_ERROR;
+			RET_HDIAG(stmt, SQL_STATE_HY000, "Unexpected application data "
+				"type for source of type long", 0);
 	}
 	DBGH(stmt, "REC@0x%p, data_ptr@0x%p, copied long long: %lld.", arec,
 		data_ptr, ll);
@@ -1377,7 +1378,8 @@ SQLRETURN sql2c_double(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		default:
 			BUGH(stmt, "unexpected unhanlded data type: %d.",
 				get_rec_c_type(arec, irec));
-			return SQL_ERROR;
+			RET_HDIAG(stmt, SQL_STATE_HY000, "Unexpected application data "
+				"type for source of type double", 0);
 	}
 
 	DBGH(stmt, "REC@0x%p, data_ptr@0x%p, copied double: %.6e.", arec,
@@ -3180,7 +3182,8 @@ SQLRETURN sql2c_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 		default:
 			BUGH(stmt, "unexpected unhandled data type: %d.", ctarget);
-			return SQL_ERROR;
+			RET_HDIAG(stmt, SQL_STATE_HY000, "Unexpected application data "
+				"type for source of type string", 0);
 	}
 
 	return SQL_SUCCESS;
