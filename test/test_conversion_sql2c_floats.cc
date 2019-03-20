@@ -29,7 +29,7 @@ TEST_F(ConvertSQL2C_Floats, ScaledFloat2Char_scale_default) {
 #define SQL_VAL "0.98765432100123456789" //20 fractional digits
 #define SQL "CAST(" SQL_VAL " AS SCALED_FLOAT)"
 
-  const char json_answer[] = "\
+	const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"" SQL "\", \"type\": \"scaled_float\"}\
@@ -39,18 +39,18 @@ TEST_F(ConvertSQL2C_Floats, ScaledFloat2Char_scale_default) {
   ]\
 }\
 ";
-  prepareStatement(json_answer);
+	prepareStatement(json_answer);
 
-  SQLCHAR buff[sizeof(SQL_VAL)];
-  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_CHAR, &buff, sizeof(buff), &ind_len);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	SQLCHAR buff[sizeof(SQL_VAL)];
+	ret = SQLBindCol(stmt, /*col#*/1, SQL_C_CHAR, &buff, sizeof(buff), &ind_len);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  EXPECT_EQ(ind_len , /*0.*/2 + /* max ES/SQL double scale */19);
-  //std::cerr << buff << std::endl;
-  EXPECT_EQ(memcmp(buff, SQL_VAL, /*0.*/2+/*dbl precision*/15), 0);
+	EXPECT_EQ(ind_len , /*0.*/2 + /* max ES/SQL double scale */19);
+	//std::cerr << buff << std::endl;
+	EXPECT_EQ(memcmp(buff, SQL_VAL, /*0.*/2+/*dbl precision*/15), 0);
 }
 
 
@@ -61,7 +61,7 @@ TEST_F(ConvertSQL2C_Floats, Float2Char_scale_default) {
 #define SQL_VAL "0.98765432109876543219" //20 fractional digits
 #define SQL "CAST(" SQL_VAL " AS FLOAT)"
 
-  const char json_answer[] = "\
+	const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"" SQL "\", \"type\": \"float\"}\
@@ -71,17 +71,17 @@ TEST_F(ConvertSQL2C_Floats, Float2Char_scale_default) {
   ]\
 }\
 ";
-  prepareStatement(json_answer);
+	prepareStatement(json_answer);
 
-  SQLCHAR buff[sizeof(SQL_VAL)];
-  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_CHAR, &buff, sizeof(buff), &ind_len);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	SQLCHAR buff[sizeof(SQL_VAL)];
+	ret = SQLBindCol(stmt, /*col#*/1, SQL_C_CHAR, &buff, sizeof(buff), &ind_len);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  EXPECT_EQ(ind_len , /*0.*/2 + /* max ES/SQL double scale */7);
-  EXPECT_EQ(memcmp(buff, SQL_VAL, /*0.*/2+/*float precision*/7), 0);
+	EXPECT_EQ(ind_len , /*0.*/2 + /* max ES/SQL double scale */7);
+	EXPECT_EQ(memcmp(buff, SQL_VAL, /*0.*/2+/*float precision*/7), 0);
 }
 
 
@@ -92,7 +92,7 @@ TEST_F(ConvertSQL2C_Floats, Float2WChar) {
 #define SQL_VAL "-128.998"
 #define SQL "CAST(" SQL_VAL " AS FLOAT)"
 
-  const char json_answer[] = "\
+	const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"" SQL "\", \"type\": \"float\"}\
@@ -102,18 +102,18 @@ TEST_F(ConvertSQL2C_Floats, Float2WChar) {
   ]\
 }\
 ";
-  prepareStatement(json_answer);
+	prepareStatement(json_answer);
 
-  SQLWCHAR wbuff[sizeof(SQL_VAL)];
-  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_WCHAR, &wbuff, sizeof(wbuff),
-      &ind_len);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	SQLWCHAR wbuff[sizeof(SQL_VAL)];
+	ret = SQLBindCol(stmt, /*col#*/1, SQL_C_WCHAR, &wbuff, sizeof(wbuff),
+			&ind_len);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  EXPECT_EQ(ind_len / sizeof(*wbuff), /*-128.*/5 + /*ES/SQL float scale*/7);
-  EXPECT_EQ(wmemcmp(wbuff, MK_WPTR(SQL_VAL), sizeof(SQL_VAL)-/*0*/1), 0);
+	EXPECT_EQ(ind_len / sizeof(*wbuff), /*-128.*/5 + /*ES/SQL float scale*/7);
+	EXPECT_EQ(wmemcmp(wbuff, MK_WPTR(SQL_VAL), sizeof(SQL_VAL)-/*0*/1), 0);
 }
 
 
@@ -134,20 +134,20 @@ TEST_F(ConvertSQL2C_Floats, Float2Char) {
   ]\
 }\
 ";
-  prepareStatement(json_answer);
+	prepareStatement(json_answer);
 
-  SQLCHAR buff[sizeof(SQL_VAL)];
-  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_CHAR, &buff, sizeof(buff), &ind_len);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	SQLCHAR buff[sizeof(SQL_VAL)];
+	ret = SQLBindCol(stmt, /*col#*/1, SQL_C_CHAR, &buff, sizeof(buff), &ind_len);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  // GE here, since the default scale is high, so more digits would be avail
-  EXPECT_GE(ind_len / sizeof(*buff), sizeof(SQL_VAL) - /*\0*/1);
-  double sql_val = atof((char *)SQL_VAL);
-  double buff2dbl = atof((char *)buff);
-  EXPECT_LE(fabs(sql_val - buff2dbl), .001);
+	// GE here, since the default scale is high, so more digits would be avail
+	EXPECT_GE(ind_len / sizeof(*buff), sizeof(SQL_VAL) - /*\0*/1);
+	double sql_val = atof((char *)SQL_VAL);
+	double buff2dbl = atof((char *)buff);
+	EXPECT_LE(fabs(sql_val - buff2dbl), .001);
 }
 
 
@@ -158,7 +158,7 @@ TEST_F(ConvertSQL2C_Floats, Float2WChar_dotzero) {
 #define SQL_VAL "0.0"
 #define SQL "CAST(" SQL_VAL " AS FLOAT)"
 
-  const char json_answer[] = "\
+	const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"" SQL "\", \"type\": \"float\"}\
@@ -168,20 +168,20 @@ TEST_F(ConvertSQL2C_Floats, Float2WChar_dotzero) {
   ]\
 }\
 ";
-  prepareStatement(json_answer);
+	prepareStatement(json_answer);
 
-  SQLWCHAR wbuff[sizeof(SQL_VAL)];
-  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_WCHAR, &wbuff, sizeof(wbuff),
-      &ind_len);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	SQLWCHAR wbuff[sizeof(SQL_VAL)];
+	ret = SQLBindCol(stmt, /*col#*/1, SQL_C_WCHAR, &wbuff, sizeof(wbuff),
+			&ind_len);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  EXPECT_EQ(ind_len / sizeof(*wbuff), /*0.*/2 + /*ES/SQL FLOAT scale*/7);
-  errno = 0;
-  EXPECT_EQ(wcstod(wbuff, NULL), 0);
-  EXPECT_EQ(errno, 0);
+	EXPECT_EQ(ind_len / sizeof(*wbuff), /*0.*/2 + /*ES/SQL FLOAT scale*/7);
+	errno = 0;
+	EXPECT_EQ(wcstod(wbuff, NULL), 0);
+	EXPECT_EQ(errno, 0);
 }
 
 
@@ -204,18 +204,18 @@ TEST_F(ConvertSQL2C_Floats, Float2TinyInt) {
   ]\
 }\
 ";
-  prepareStatement(json_answer);
+	prepareStatement(json_answer);
 
-  SQLSCHAR val;
-  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_TINYINT, &val, sizeof(val),
-      &ind_len);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	SQLSCHAR val;
+	ret = SQLBindCol(stmt, /*col#*/1, SQL_C_TINYINT, &val, sizeof(val),
+			&ind_len);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  EXPECT_EQ(ind_len, sizeof(val));
-  EXPECT_LE((SQLSCHAR)SQL_RAW, val);
+	EXPECT_EQ(ind_len, sizeof(val));
+	EXPECT_LE((SQLSCHAR)SQL_RAW, val);
 }
 
 
@@ -228,7 +228,7 @@ TEST_F(ConvertSQL2C_Floats, Float2UShort) {
 #define SQL_VAL STR(SQL_RAW)
 #define SQL "CAST(" SQL_VAL " AS FLOAT)"
 
-  const char json_answer[] = "\
+	const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"" SQL "\", \"type\": \"float\"}\
@@ -238,17 +238,17 @@ TEST_F(ConvertSQL2C_Floats, Float2UShort) {
   ]\
 }\
 ";
-  prepareStatement(json_answer);
+	prepareStatement(json_answer);
 
-  SQLUSMALLINT val;
-  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_USHORT, &val, sizeof(val), &ind_len);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	SQLUSMALLINT val;
+	ret = SQLBindCol(stmt, /*col#*/1, SQL_C_USHORT, &val, sizeof(val), &ind_len);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  EXPECT_EQ(ind_len, sizeof(val));
-  EXPECT_EQ((SQLUSMALLINT)SQL_RAW, val);
+	EXPECT_EQ(ind_len, sizeof(val));
+	EXPECT_EQ((SQLUSMALLINT)SQL_RAW, val);
 }
 
 
@@ -261,7 +261,7 @@ TEST_F(ConvertSQL2C_Floats, Float2Long) {
 #define SQL_VAL STR(SQL_RAW)
 #define SQL "CAST(" SQL_VAL " AS FLOAT)"
 
-  const char json_answer[] = "\
+	const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"" SQL "\", \"type\": \"float\"}\
@@ -271,17 +271,17 @@ TEST_F(ConvertSQL2C_Floats, Float2Long) {
   ]\
 }\
 ";
-  prepareStatement(json_answer);
+	prepareStatement(json_answer);
 
-  SQLINTEGER val;
-  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_LONG, &val, sizeof(val), &ind_len);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	SQLINTEGER val;
+	ret = SQLBindCol(stmt, /*col#*/1, SQL_C_LONG, &val, sizeof(val), &ind_len);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  EXPECT_EQ(ind_len, sizeof(val));
-  EXPECT_LE((SQLINTEGER)SQL_RAW, val);
+	EXPECT_EQ(ind_len, sizeof(val));
+	EXPECT_LE((SQLINTEGER)SQL_RAW, val);
 }
 
 
@@ -294,7 +294,7 @@ TEST_F(ConvertSQL2C_Floats, Double_zero2Float) {
 #define SQL_VAL STR(SQL_RAW)
 #define SQL "CAST(" SQL_VAL " AS DOUBLE)"
 
-  const char json_answer[] = "\
+	const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"" SQL "\", \"type\": \"double\"}\
@@ -304,17 +304,17 @@ TEST_F(ConvertSQL2C_Floats, Double_zero2Float) {
   ]\
 }\
 ";
-  prepareStatement(json_answer);
+	prepareStatement(json_answer);
 
-  SQLREAL val;
-  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_FLOAT, &val, sizeof(val), &ind_len);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	SQLREAL val;
+	ret = SQLBindCol(stmt, /*col#*/1, SQL_C_FLOAT, &val, sizeof(val), &ind_len);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  EXPECT_EQ(ind_len, sizeof(val));
-  EXPECT_LE(SQL_RAW, val);
+	EXPECT_EQ(ind_len, sizeof(val));
+	EXPECT_LE(SQL_RAW, val);
 }
 
 
@@ -327,7 +327,7 @@ TEST_F(ConvertSQL2C_Floats, Double2Float) {
 #define SQL_VAL STR(SQL_RAW)
 #define SQL "CAST(" SQL_VAL " AS DOUBLE)"
 
-  const char json_answer[] = "\
+	const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"" SQL "\", \"type\": \"double\"}\
@@ -337,17 +337,17 @@ TEST_F(ConvertSQL2C_Floats, Double2Float) {
   ]\
 }\
 ";
-  prepareStatement(json_answer);
+	prepareStatement(json_answer);
 
-  SQLREAL val;
-  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_FLOAT, &val, sizeof(val), &ind_len);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	SQLREAL val;
+	ret = SQLBindCol(stmt, /*col#*/1, SQL_C_FLOAT, &val, sizeof(val), &ind_len);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  EXPECT_EQ(ind_len, sizeof(val));
-  EXPECT_LE(SQL_RAW, val);
+	EXPECT_EQ(ind_len, sizeof(val));
+	EXPECT_LE(SQL_RAW, val);
 }
 
 
@@ -360,7 +360,7 @@ TEST_F(ConvertSQL2C_Floats, HalfFloat2Bit_fail_22003) {
 #define SQL_VAL STR(SQL_RAW)
 #define SQL "CAST(" SQL_VAL " AS DOUBLE)"
 
-  const char json_answer[] = "\
+	const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"" SQL "\", \"type\": \"half_float\"}\
@@ -370,15 +370,15 @@ TEST_F(ConvertSQL2C_Floats, HalfFloat2Bit_fail_22003) {
   ]\
 }\
 ";
-  prepareStatement(json_answer);
+	prepareStatement(json_answer);
 
-  SQLCHAR val;
-  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_BIT, &val, sizeof(val), &ind_len);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	SQLCHAR val;
+	ret = SQLBindCol(stmt, /*col#*/1, SQL_C_BIT, &val, sizeof(val), &ind_len);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  ret = SQLFetch(stmt);
-  ASSERT_FALSE(SQL_SUCCEEDED(ret));
-  assertState(L"22003");
+	ret = SQLFetch(stmt);
+	ASSERT_FALSE(SQL_SUCCEEDED(ret));
+	assertState(L"22003");
 }
 
 
@@ -391,7 +391,7 @@ TEST_F(ConvertSQL2C_Floats, HalfFloat2Bit_truncate_01S07) {
 #define SQL_VAL STR(SQL_RAW)
 #define SQL "CAST(" SQL_VAL " AS DOUBLE)"
 
-  const char json_answer[] = "\
+	const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"" SQL "\", \"type\": \"half_float\"}\
@@ -401,16 +401,16 @@ TEST_F(ConvertSQL2C_Floats, HalfFloat2Bit_truncate_01S07) {
   ]\
 }\
 ";
-  prepareStatement(json_answer);
+	prepareStatement(json_answer);
 
-  SQLCHAR val;
-  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_BIT, &val, sizeof(val), &ind_len);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	SQLCHAR val;
+	ret = SQLBindCol(stmt, /*col#*/1, SQL_C_BIT, &val, sizeof(val), &ind_len);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-  assertState(L"01S07");
-  ASSERT_EQ(val, 1);
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	assertState(L"01S07");
+	ASSERT_EQ(val, 1);
 }
 
 
@@ -423,7 +423,7 @@ TEST_F(ConvertSQL2C_Floats, HalfFloat2Bit) {
 #define SQL_VAL STR(SQL_RAW)
 #define SQL "CAST(" SQL_VAL " AS DOUBLE)"
 
-  const char json_answer[] = "\
+	const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"" SQL "\", \"type\": \"half_float\"}\
@@ -433,16 +433,16 @@ TEST_F(ConvertSQL2C_Floats, HalfFloat2Bit) {
   ]\
 }\
 ";
-  prepareStatement(json_answer);
+	prepareStatement(json_answer);
 
-  SQLCHAR val;
-  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_BIT, &val, sizeof(val), &ind_len);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	SQLCHAR val;
+	ret = SQLBindCol(stmt, /*col#*/1, SQL_C_BIT, &val, sizeof(val), &ind_len);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-  assertState(NULL);
-  ASSERT_EQ(val, 1);
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	assertState(NULL);
+	ASSERT_EQ(val, 1);
 }
 
 
@@ -458,7 +458,7 @@ TEST_F(ConvertSQL2C_Floats, Double2Numeric) {
 #define SQL_VAL STR(SQL_RAW)
 #define SQL "CAST(" SQL_VAL " AS DOUBLE)"
 
-  const char json_answer[] = "\
+	const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"" SQL "\", \"type\": \"double\"}\
@@ -468,37 +468,37 @@ TEST_F(ConvertSQL2C_Floats, Double2Numeric) {
   ]\
 }\
 ";
-  prepareStatement(json_answer);
+	prepareStatement(json_answer);
 
-  //
-  //set scale
-  //
-  SQLHDESC ard;
-  ret = SQLGetStmtAttr(stmt, SQL_ATTR_APP_ROW_DESC, &ard, 0, NULL);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	//
+	//set scale
+	//
+	SQLHDESC ard;
+	ret = SQLGetStmtAttr(stmt, SQL_ATTR_APP_ROW_DESC, &ard, 0, NULL);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  ret = SQLSetDescField(ard, 1, SQL_DESC_TYPE, (SQLPOINTER)SQL_C_NUMERIC, 0);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-  ret = SQLSetDescField(ard, 1, SQL_DESC_PRECISION, (SQLPOINTER)SQL_PREC, 0);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-  ret = SQLSetDescField(ard, 1, SQL_DESC_SCALE, (SQLPOINTER)SQL_SCALE, 0);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-  ret = SQLSetDescField(ard, /*col#*/1, SQL_DESC_OCTET_LENGTH_PTR,
-      (SQLPOINTER)&ind_len, 0);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ret = SQLSetDescField(ard, 1, SQL_DESC_TYPE, (SQLPOINTER)SQL_C_NUMERIC, 0);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ret = SQLSetDescField(ard, 1, SQL_DESC_PRECISION, (SQLPOINTER)SQL_PREC, 0);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ret = SQLSetDescField(ard, 1, SQL_DESC_SCALE, (SQLPOINTER)SQL_SCALE, 0);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ret = SQLSetDescField(ard, /*col#*/1, SQL_DESC_OCTET_LENGTH_PTR,
+			(SQLPOINTER)&ind_len, 0);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  SQL_NUMERIC_STRUCT val;
-  ret = SQLSetDescField(ard, 1, SQL_DESC_DATA_PTR, (SQLPOINTER) &val, 0);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	SQL_NUMERIC_STRUCT val;
+	ret = SQLSetDescField(ard, 1, SQL_DESC_DATA_PTR, (SQLPOINTER) &val, 0);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  EXPECT_EQ(ind_len, sizeof(val));
-  EXPECT_EQ(val.sign, 1);
-  EXPECT_EQ(val.scale, SQL_SCALE);
-  EXPECT_EQ(val.precision, SQL_PREC);
-  EXPECT_EQ(memcmp(val.val, "|b", 2), 0);
+	EXPECT_EQ(ind_len, sizeof(val));
+	EXPECT_EQ(val.sign, 1);
+	EXPECT_EQ(val.scale, SQL_SCALE);
+	EXPECT_EQ(val.precision, SQL_PREC);
+	EXPECT_EQ(memcmp(val.val, "|b", 2), 0);
 }
 
 
@@ -511,7 +511,7 @@ TEST_F(ConvertSQL2C_Floats, Double2Binary) {
 #define SQL_VAL STR(SQL_RAW)
 #define SQL "CAST(" SQL_VAL " AS DOUBLE)"
 
-  const char json_answer[] = "\
+	const char json_answer[] = "\
 {\
   \"columns\": [\
     {\"name\": \"" SQL "\", \"type\": \"double\"}\
@@ -521,17 +521,17 @@ TEST_F(ConvertSQL2C_Floats, Double2Binary) {
   ]\
 }\
 ";
-  prepareStatement(json_answer);
+	prepareStatement(json_answer);
 
-  SQLDOUBLE val = 0;
-  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_DOUBLE, &val, sizeof(val), &ind_len);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	SQLDOUBLE val = 0;
+	ret = SQLBindCol(stmt, /*col#*/1, SQL_C_DOUBLE, &val, sizeof(val), &ind_len);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  EXPECT_EQ(ind_len, sizeof(val));
-  EXPECT_EQ(val, SQL_RAW);
+	EXPECT_EQ(ind_len, sizeof(val));
+	EXPECT_EQ(val, SQL_RAW);
 }
 
 
