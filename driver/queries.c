@@ -1435,7 +1435,7 @@ SQLRETURN EsSQLPrepareW
  * (scaled/half_float and keyword/text) use the best matching col_size, which
  * is the smallest, that's still matching (<=) the given one. This assumes the
  * types are ordered by it (as per the spec). */
-static esodbc_estype_st *lookup_es_type(esodbc_dbc_st *dbc,
+esodbc_estype_st *lookup_es_type(esodbc_dbc_st *dbc,
 	SQLSMALLINT es_type, SQLULEN col_size)
 {
 	SQLULEN i;

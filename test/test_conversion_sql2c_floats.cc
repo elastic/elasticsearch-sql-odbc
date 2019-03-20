@@ -50,7 +50,7 @@ TEST_F(ConvertSQL2C_Floats, ScaledFloat2Char_scale_default) {
 
   EXPECT_EQ(ind_len , /*0.*/2 + /* max ES/SQL double scale */19);
   //std::cerr << buff << std::endl;
-  EXPECT_EQ(memcmp(buff, SQL_VAL, /*0.*/2+/*x64 dbl precision*/15), 0);
+  EXPECT_EQ(memcmp(buff, SQL_VAL, /*0.*/2+/*dbl precision*/15), 0);
 }
 
 
@@ -59,7 +59,7 @@ TEST_F(ConvertSQL2C_Floats, Float2Char_scale_default) {
 #undef SQL_VAL
 #undef SQL
 #define SQL_VAL "0.98765432109876543219" //20 fractional digits
-#define SQL "CAST(" SQL_VAL " AS DOUBLE)"
+#define SQL "CAST(" SQL_VAL " AS FLOAT)"
 
   const char json_answer[] = "\
 {\
@@ -81,56 +81,14 @@ TEST_F(ConvertSQL2C_Floats, Float2Char_scale_default) {
   ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
   EXPECT_EQ(ind_len , /*0.*/2 + /* max ES/SQL double scale */7);
-}
-
-
-TEST_F(ConvertSQL2C_Floats, Float2Char_scale_1) {
-
-#undef SQL_SCALE
-#undef SQL_VAL
-#undef SQL
-#define SQL_SCALE 1
-#define SQL_VAL "0.9"
-#define SQL "CAST(" SQL_VAL " AS DOUBLE)"
-
-  const char json_answer[] = "\
-{\
-  \"columns\": [\
-    {\"name\": \"" SQL "\", \"type\": \"float\"}\
-  ],\
-  \"rows\": [\
-    [" SQL_VAL "]\
-  ]\
-}\
-";
-  prepareStatement(json_answer);
-
-  // set scale
-  SQLHDESC ard;
-  ret = SQLGetStmtAttr(stmt, SQL_ATTR_APP_ROW_DESC, &ard, 0, NULL);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-  ret = SQLSetDescField(ard, /*col#*/1, SQL_DESC_SCALE, (SQLPOINTER)SQL_SCALE,
-      0);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-  SQLCHAR buff[sizeof(SQL_VAL)];
-  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_CHAR, &buff, sizeof(buff), &ind_len);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-  ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-  EXPECT_EQ(ind_len , sizeof(SQL_VAL) - 1);
-  EXPECT_STREQ((char/*4gtest*/*)buff, SQL_VAL);
+  EXPECT_EQ(memcmp(buff, SQL_VAL, /*0.*/2+/*float precision*/7), 0);
 }
 
 
 TEST_F(ConvertSQL2C_Floats, Float2WChar) {
 
-#undef SQL_SCALE
 #undef SQL_VAL
 #undef SQL
-#define SQL_SCALE 3
 #define SQL_VAL "-128.998"
 #define SQL "CAST(" SQL_VAL " AS FLOAT)"
 
@@ -146,14 +104,6 @@ TEST_F(ConvertSQL2C_Floats, Float2WChar) {
 ";
   prepareStatement(json_answer);
 
-  // set scale
-  SQLHDESC ard;
-  ret = SQLGetStmtAttr(stmt, SQL_ATTR_APP_ROW_DESC, &ard, 0, NULL);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-  ret = SQLSetDescField(ard, /*col#*/1, SQL_DESC_SCALE, (SQLPOINTER)SQL_SCALE,
-      0);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
   SQLWCHAR wbuff[sizeof(SQL_VAL)];
   ret = SQLBindCol(stmt, /*col#*/1, SQL_C_WCHAR, &wbuff, sizeof(wbuff),
       &ind_len);
@@ -162,8 +112,8 @@ TEST_F(ConvertSQL2C_Floats, Float2WChar) {
   ret = SQLFetch(stmt);
   ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  EXPECT_EQ(ind_len / sizeof(*wbuff), sizeof(SQL_VAL) - /*\0*/1);
-  EXPECT_STREQ((wchar_t/*4gtest*/*)wbuff, MK_WPTR(SQL_VAL));
+  EXPECT_EQ(ind_len / sizeof(*wbuff), /*-128.*/5 + /*ES/SQL float scale*/7);
+  EXPECT_EQ(wmemcmp(wbuff, MK_WPTR(SQL_VAL), sizeof(SQL_VAL)-/*0*/1), 0);
 }
 
 
@@ -228,8 +178,10 @@ TEST_F(ConvertSQL2C_Floats, Float2WChar_dotzero) {
   ret = SQLFetch(stmt);
   ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  EXPECT_EQ(ind_len / sizeof(*wbuff), sizeof(SQL_VAL) - /*\0*/1);
-  EXPECT_STREQ((wchar_t/*4gtest*/*)wbuff, MK_WPTR(SQL_VAL));
+  EXPECT_EQ(ind_len / sizeof(*wbuff), /*0.*/2 + /*ES/SQL FLOAT scale*/7);
+  errno = 0;
+  EXPECT_EQ(wcstod(wbuff, NULL), 0);
+  EXPECT_EQ(errno, 0);
 }
 
 

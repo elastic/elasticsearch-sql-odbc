@@ -180,20 +180,25 @@ class Elasticsearch(object):
 		if os.name == "nt":
 			pwd_script += ".bat"
 		with psutil.Popen([pwd_script, "auto", "-b"], stdout=PIPE, stderr=PIPE, universal_newlines=True) as p:
+			lines = ""
 			for line in p.stdout.readlines():
+				lines += line
 				if "PASSWORD elastic =" in line:
 					return line.split("=")[1].strip()
-			raise Exception("password generation failed with: %s" % p.stdout.read())
+			raise Exception("password generation failed with:\nOUT:%s\nERR: %s" % (lines if lines else p.stdout.read(),
+				p.stderr.read()))
 
 	def _enable_xpack(self, es_dir):
 		# start trial mode
-		req = requests.post("http://localhost:%s/_license/start_trial?acknowledge=true" % self.ES_PORT)
+		url = "http://localhost:%s/_license/start_trial?acknowledge=true" % self.ES_PORT
+		req = requests.post(url)
 		if req.status_code != 200:
-			raise Exception("starting of trial failed with status: %s" % req.status_code)
+			raise Exception("starting of trial failed with status: %s, text: %s" % (req.status_code, req.text))
 		# TODO: check content?
 
+		# setup passwords to random generated ones first...
 		pwd = self._gen_passwords(es_dir)
-		# change passwords, easier to restart with failed tests
+		# ...then change passwords, easier to restart with failed tests
 		req = requests.post("http://localhost:%s/_security/user/_password" % self.ES_PORT, auth=("elastic", pwd),
 				json={"password": self.AUTH_PASSWORD})
 		if req.status_code != 200:
@@ -251,7 +256,10 @@ class Elasticsearch(object):
 		except requests.Timeout:
 			return False
 		if req.status_code != 200:
-			raise Exception("unexpected ES response code received: %s" % req.status_code)
+			if password:
+				raise Exception("unexpected ES response code received: %s" % req.status_code)
+			else:
+				return True
 		if "You Know, for Search" not in req.text:
 			raise Exception("unexpected ES answer received: %s" % req.text)
 		return True

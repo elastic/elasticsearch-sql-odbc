@@ -13,7 +13,6 @@
 #define _CRTDBG_MAP_ALLOC
 #include <stdlib.h>
 #include <crtdbg.h>
-/* FIXME: why isn't this included in sql/~ext.h? */
 /* win function parameter attributes */
 #include <windows.h>
 #include <tchar.h>

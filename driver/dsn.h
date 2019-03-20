@@ -34,6 +34,7 @@
 #define ESODBC_DSN_MAX_FETCH_SIZE	"MaxFetchSize"
 #define ESODBC_DSN_MAX_BODY_SIZE_MB	"MaxBodySizeMB"
 #define ESODBC_DSN_APPLY_TZ			"ApplyTZ"
+#define ESODBC_DSN_SCI_FLOATS		"ScientificFloats"
 #define ESODBC_DSN_VERSION_CHECKING	"VersionChecking"
 #define ESODBC_DSN_TRACE_ENABLED	"TraceEnabled"
 #define ESODBC_DSN_TRACE_FILE		"TraceFile"
@@ -46,6 +47,10 @@
 #define ESODBC_DSN_VC_STRICT		"strict"
 #define ESODBC_DSN_VC_MAJOR			"major"
 #define ESODBC_DSN_VC_NONE			"none"
+/* Floats printing */
+#define ESODBC_DSN_FLTS_DEF			"default"
+#define ESODBC_DSN_FLTS_SCI			"scientific"
+#define ESODBC_DSN_FLTS_AUTO		"auto"
 
 /* stucture to collect all attributes in a connection string */
 typedef struct {
@@ -68,13 +73,19 @@ typedef struct {
 	wstr_st max_fetch_size;
 	wstr_st max_body_size;
 	wstr_st apply_tz;
+	wstr_st sci_floats;
 	wstr_st version_checking;
 	wstr_st trace_enabled;
 	wstr_st trace_file;
 	wstr_st trace_level;
-#define ESODBC_DSN_ATTRS_COUNT	23
+#define ESODBC_DSN_ATTRS_COUNT	24
 	SQLWCHAR buff[ESODBC_DSN_ATTRS_COUNT * ESODBC_DSN_MAX_ATTR_LEN];
+	/* DSN reading/writing functions are passed a SQLSMALLINT lenght param */
+#if SHRT_MAX < ESODBC_DSN_ATTRS_COUNT * ESODBC_DSN_MAX_ATTR_LEN
+#error "attrs buffer too large"
+#endif
 } esodbc_dsn_attrs_st;
+
 
 /* assign_dsn_attr() success codes. */
 #define DSN_NOT_MATCHED		0

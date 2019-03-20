@@ -43,7 +43,7 @@ TEST_F(Dsn, parse_write_00_list) {
 
 	esodbc_dsn_attrs_st attrs;
 	SQLWCHAR *src = MK_WPTR(SRC_STR);
-	SQLWCHAR dst[2 * sizeof(attrs.buff)/sizeof(*attrs.buff)];
+	SQLWCHAR dst[sizeof(attrs.buff)/sizeof(*attrs.buff)];
 	long written;
 
 	init_dsn_attrs(&attrs);
@@ -81,14 +81,14 @@ TEST_F(Dsn, parse_write_connection_string) {
 
 	esodbc_dsn_attrs_st attrs;
 	wstr_st src = WSTR_INIT(SRC_STR);
-	SQLWCHAR dst[2 * sizeof(attrs.buff)/sizeof(*attrs.buff)];
+	SQLWCHAR dst[sizeof(attrs.buff)/sizeof(*attrs.buff)];
 	long written;
 
 	init_dsn_attrs(&attrs);
 	ASSERT_TRUE(parse_connection_string(&attrs, src.str,
 				(SQLSMALLINT)src.cnt));
 	written = write_connection_string(&attrs, dst,
-			(SQLSMALLINT)sizeof(dst)/sizeof(*dst));
+			(SQLSMALLINT)(sizeof(dst)/sizeof(*dst)));
 	ASSERT_TRUE(0 < written);
 
 	ASSERT_TRUE(memcmp(src.str, dst, written) == 0);
@@ -120,14 +120,14 @@ TEST_F(Dsn, write_connection_string_null_str_out) {
 
 	esodbc_dsn_attrs_st attrs;
 	wstr_st src = WSTR_INIT(SRC_STR);
-	SQLWCHAR dst[2 * sizeof(attrs.buff)/sizeof(*attrs.buff)];
+	SQLWCHAR dst[sizeof(attrs.buff)/sizeof(*attrs.buff)];
 	long written, counted;
 
 	init_dsn_attrs(&attrs);
 	ASSERT_TRUE(parse_connection_string(&attrs, src.str,
 				(SQLSMALLINT)src.cnt));
 	written = write_connection_string(&attrs, dst,
-			(SQLSMALLINT)sizeof(dst)/sizeof(*dst));
+			(SQLSMALLINT)(sizeof(dst)/sizeof(*dst)));
 	ASSERT_TRUE(0 < written);
 	counted = write_connection_string(&attrs, NULL, 0);
 	ASSERT_EQ(written, counted);
