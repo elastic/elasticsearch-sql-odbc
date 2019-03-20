@@ -191,10 +191,17 @@ class Elasticsearch(object):
 	def _enable_xpack(self, es_dir):
 		# start trial mode
 		url = "http://localhost:%s/_license/start_trial?acknowledge=true" % self.ES_PORT
-		req = requests.post(url)
-		if req.status_code != 200:
-			raise Exception("starting of trial failed with status: %s, text: %s" % (req.status_code, req.text))
-		# TODO: check content?
+		failures = 0
+		while True:
+			req = requests.post(url)
+			if req.status_code == 200:
+				# TODO: check content?
+				break
+			print("starting of trial failed (#%s) with status: %s, text: %s" % (failures, req.status_code, req.text))
+			failures += 1
+			if self.ES_401_RETRIES < failures:
+				raise Exception("starting of trial failed with status: %s, text: %s" % (req.status_code, req.text))
+			time.sleep(.5)
 
 		# setup passwords to random generated ones first...
 		pwd = self._gen_passwords(es_dir)
