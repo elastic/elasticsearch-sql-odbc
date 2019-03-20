@@ -40,6 +40,7 @@ TEST_F(ConvertC2SQL_Varchar, CStr2Varchar_empty)
 		"{\"query\": \"CStr2Varchar_empty\", "
 		"\"params\": [{\"type\": \"KEYWORD\", "
 		"\"value\": \"\"}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -64,6 +65,7 @@ TEST_F(ConvertC2SQL_Varchar, WStr2Varchar_empty)
 		"{\"query\": \"WStr2Varchar_empty\", "
 		"\"params\": [{\"type\": \"KEYWORD\", "
 		"\"value\": \"\"}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -88,6 +90,7 @@ TEST_F(ConvertC2SQL_Varchar, WStr2Varchar_ansi)
 		"{\"query\": \"WStr2Varchar_ansi\", "
 		"\"params\": [{\"type\": \"KEYWORD\", "
 		"\"value\": \"0123abcABC\"}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -112,6 +115,7 @@ TEST_F(ConvertC2SQL_Varchar, CStr2Varchar)
 		"{\"query\": \"CStr2Varchar\", "
 		"\"params\": [{\"type\": \"KEYWORD\", "
 		"\"value\": \"0123abcABC\"}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -136,6 +140,7 @@ TEST_F(ConvertC2SQL_Varchar, WStr2Varchar_ansi_jsonescape)
 		"{\"query\": \"WStr2Varchar_ansi_jsonescape\", "
 		"\"params\": [{\"type\": \"KEYWORD\", "
 		"\"value\": \"START_{xxx}=\\\"yyy\\\"\\r__END\"}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -160,6 +165,7 @@ TEST_F(ConvertC2SQL_Varchar, CStr2Varchar_jsonescape)
 		"{\"query\": \"CStr2Varchar_jsonescape\", "
 		"\"params\": [{\"type\": \"KEYWORD\", "
 		"\"value\": \"START_{xxx}=\\\"yyy\\\"\\r__END\"}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -184,6 +190,7 @@ TEST_F(ConvertC2SQL_Varchar, WStr2Varchar_u8_jsonescape)
 		"{\"query\": \"WStr2Varchar_u8_jsonescape\", "
 		"\"params\": [{\"type\": \"KEYWORD\", "
 		"\"value\": \"START_\\\"A\u00C4o\u00F6U\u00FC\\\"__END\"}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -208,6 +215,7 @@ TEST_F(ConvertC2SQL_Varchar, WStr2Varchar_u8_fullescape)
 		"{\"query\": \"WStr2Varchar_u8_fullescape\", "
 		"\"params\": [{\"type\": \"KEYWORD\", "
 		"\"value\": \"\u00E4\u00F6\u00FC\u00C4\u00D6\u00DC\"}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -230,6 +238,7 @@ TEST_F(ConvertC2SQL_Varchar, Short2Varchar)
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"Short2Varchar\", "
 		"\"params\": [{\"type\": \"KEYWORD\", \"value\": \"-12345\"}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -253,6 +262,7 @@ TEST_F(ConvertC2SQL_Varchar, Bigint2Varchar)
 	cstr_st expect = CSTR_INIT("{\"query\": \"Bigint2Varchar\", "
 		"\"params\": [{\"type\": \"KEYWORD\", "
 		"\"value\": \"9223372036854775807\"}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -293,6 +303,7 @@ TEST_F(ConvertC2SQL_Varchar, Double2Varchar)
 	cstr_st expect = CSTR_INIT("{\"query\": \"Double2Varchar\", "
 		"\"params\": [{\"type\": \"KEYWORD\", "
 		"\"value\": \"1.2000e+00\"}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);

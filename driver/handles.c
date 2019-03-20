@@ -2226,8 +2226,8 @@ static SQLSMALLINT sqlctype_to_es(SQLSMALLINT c_concise)
 		case SQL_C_DATE:
 		case SQL_C_TIME:
 		case SQL_C_TIMESTAMP:
-		/* case SQL_C_TYPE_TIME_WITH_TIMEZONE:
-		case SQL_C_TYPE_TIMESTAMP_WITH_TIMEZONE: */
+			/* case SQL_C_TYPE_TIME_WITH_TIMEZONE:
+			case SQL_C_TYPE_TIMESTAMP_WITH_TIMEZONE: */
 			break;
 	}
 	WARN("no C to ES SQL mapping exists for C type %hd.", c_concise);
@@ -2296,7 +2296,7 @@ static BOOL consistency_check(esodbc_rec_st *rec)
 					es_type = lookup_es_type(dbc, concise_type, 0);
 					if (! es_type) {
 						BUGH(desc, "type lookup failed for concise type: %hd,"
-								" desc type: %d", concise_type, desc->type);
+							" desc type: %d", concise_type, desc->type);
 						return FALSE;
 					}
 					column_size = es_type->column_size;

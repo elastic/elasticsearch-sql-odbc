@@ -77,6 +77,7 @@ int assign_dsn_attr(esodbc_dsn_attrs_st *attrs,
 		{&MK_WSTR(ESODBC_DSN_APPLY_TZ), &attrs->apply_tz},
 		{&MK_WSTR(ESODBC_DSN_SCI_FLOATS), &attrs->sci_floats},
 		{&MK_WSTR(ESODBC_DSN_VERSION_CHECKING), &attrs->version_checking},
+		{&MK_WSTR(ESODBC_DSN_MFIELD_LENIENT), &attrs->mfield_lenient},
 		{&MK_WSTR(ESODBC_DSN_TRACE_ENABLED), &attrs->trace_enabled},
 		{&MK_WSTR(ESODBC_DSN_TRACE_FILE), &attrs->trace_file},
 		{&MK_WSTR(ESODBC_DSN_TRACE_LEVEL), &attrs->trace_level},
@@ -408,6 +409,7 @@ long TEST_API write_00_list(esodbc_dsn_attrs_st *attrs,
 		{&MK_WSTR(ESODBC_DSN_APPLY_TZ), &attrs->apply_tz},
 		{&MK_WSTR(ESODBC_DSN_SCI_FLOATS), &attrs->sci_floats},
 		{&MK_WSTR(ESODBC_DSN_VERSION_CHECKING), &attrs->version_checking},
+		{&MK_WSTR(ESODBC_DSN_MFIELD_LENIENT), &attrs->mfield_lenient},
 		{&MK_WSTR(ESODBC_DSN_TRACE_ENABLED), &attrs->trace_enabled},
 		{&MK_WSTR(ESODBC_DSN_TRACE_FILE), &attrs->trace_file},
 		{&MK_WSTR(ESODBC_DSN_TRACE_LEVEL), &attrs->trace_level},
@@ -673,6 +675,11 @@ BOOL write_system_dsn(esodbc_dsn_attrs_st *new_attrs,
 			old_attrs ? &old_attrs->version_checking : NULL
 		},
 		{
+			&MK_WSTR(ESODBC_DSN_MFIELD_LENIENT),
+			&new_attrs->mfield_lenient,
+			old_attrs ? &old_attrs->mfield_lenient : NULL
+		},
+		{
 			&MK_WSTR(ESODBC_DSN_TRACE_ENABLED), &new_attrs->trace_enabled,
 			old_attrs ? &old_attrs->trace_enabled : NULL
 		},
@@ -760,6 +767,7 @@ long TEST_API write_connection_string(esodbc_dsn_attrs_st *attrs,
 		{&attrs->apply_tz, &MK_WSTR(ESODBC_DSN_APPLY_TZ)},
 		{&attrs->sci_floats, &MK_WSTR(ESODBC_DSN_SCI_FLOATS)},
 		{&attrs->version_checking, &MK_WSTR(ESODBC_DSN_VERSION_CHECKING)},
+		{&attrs->mfield_lenient, &MK_WSTR(ESODBC_DSN_MFIELD_LENIENT)},
 		{&attrs->trace_enabled, &MK_WSTR(ESODBC_DSN_TRACE_ENABLED)},
 		{&attrs->trace_file, &MK_WSTR(ESODBC_DSN_TRACE_FILE)},
 		{&attrs->trace_level, &MK_WSTR(ESODBC_DSN_TRACE_LEVEL)},
@@ -850,6 +858,9 @@ void assign_dsn_defaults(esodbc_dsn_attrs_st *attrs)
 	res |= assign_dsn_attr(attrs,
 			&MK_WSTR(ESODBC_DSN_SCI_FLOATS), &MK_WSTR(ESODBC_DEF_SCI_FLOATS),
 			/*overwrite?*/FALSE);
+	res |= assign_dsn_attr(attrs,
+			&MK_WSTR(ESODBC_DSN_MFIELD_LENIENT),
+			&MK_WSTR(ESODBC_DEF_MFIELD_LENIENT), /*overwrite?*/FALSE);
 
 	/* default: no trace file */
 	res |= assign_dsn_attr(attrs,

@@ -1278,6 +1278,11 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 		goto err;
 	}
 
+	/* "multifield leniency" param */
+	dbc->mfield_lenient = wstr2bool(&attrs->mfield_lenient);
+	INFOH(dbc, "multifield lenient: %s.",
+		dbc->mfield_lenient ? "true" : "false");
+
 	return SQL_SUCCESS;
 err:
 	/* release allocated resources before the failure; not the diag, tho */
@@ -2611,6 +2616,10 @@ SQLRETURN EsSQLDriverConnectW
 
 #ifdef TESTING
 		case ESODBC_SQL_DRIVER_TEST:
+			ret = config_dbc(dbc, &attrs);
+			if (! SQL_SUCCEEDED(ret)) {
+				RET_HDIAGS(dbc, SQL_STATE_HY000);
+			}
 			/* abusing the window handler to pass type data for non-network
 			 * tests (see load_es_types()). */
 			assert(! dbc->hwin);

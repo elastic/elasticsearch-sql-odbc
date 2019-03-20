@@ -175,6 +175,7 @@
 #define ESODBC_PWD_VAL_SUBST		"<redacted>"
 /* default version checking mode: strict, major, none (dbg only) */
 #define ESODBC_DEF_VERSION_CHECKING	ESODBC_DSN_VC_STRICT
+#define ESODBC_DEF_MFIELD_LENIENT	"true"
 
 /*
  *
