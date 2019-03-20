@@ -66,18 +66,13 @@
 #define ESODBC_PRECISION_UINT64			20
 /* 19 = len("9223372036854775808"), 1 << 63 */
 #define ESODBC_PRECISION_INT64			19
-#define ESODBC_PRECISION_DOUBLE			308
 
 
 /* TODO: validate "implementation-defined precision" choices */
 /* default precision for DECIMAL and NUMERIC */
 #define ESODBC_DEF_DECNUM_PRECISION		19
-/* default precision for float */
-#define ESODBC_DEF_FLOAT_PRECISION		8
-/* maximum fixed numeric precision */
-#define ESODBC_MAX_FIX_PRECISION		ESODBC_PRECISION_UINT64
-/* maximum floating numeric precision */
-#define ESODBC_MAX_FLT_PRECISION		ESODBC_PRECISION_DOUBLE
+/* default precision for SQL_FLOAT (variable, vs. fixed SQL_DOUBLE/_REAL) */
+#define ESODBC_DEF_FLOAT_PRECISION		16 /* minimum = HALF_FLOAT */
 /* maximum seconds precision (i.e. sub-second accuracy) */
 /* Seconds precision is currently 3, with ES/SQL's ISO8601 millis.
  * (Should move to 9 with nanosecond implementation) */
@@ -168,13 +163,15 @@
 /* don't follow redirection from the server  */
 #define ESODBC_DEF_FOLLOW			"yes"
 /* packing of REST bodies (JSON or CBOR) */
-#define ESODBC_DEF_PACKING			"JSON"
+#define ESODBC_DEF_PACKING			ESODBC_DSN_PACK_JSON
 /* default tracing activation */
 #define ESODBC_DEF_TRACE_ENABLED	"0"
 /* default tracing level */
 #define ESODBC_DEF_TRACE_LEVEL		"WARN"
 /* default TZ handling */
 #define ESODBC_DEF_APPLY_TZ			"no"
+/* default of scientific floats printing */
+#define ESODBC_DEF_SCI_FLOATS		ESODBC_DSN_FLTS_DEF
 #define ESODBC_PWD_VAL_SUBST		"<redacted>"
 /* default version checking mode: strict, major, none (dbg only) */
 #define ESODBC_DEF_VERSION_CHECKING	ESODBC_DSN_VC_STRICT

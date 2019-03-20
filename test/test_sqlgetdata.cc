@@ -508,8 +508,7 @@ TEST_F(GetData, ScaledFloat2WChar_chunked) {
 	ASSERT_EQ(ret, SQL_SUCCESS);
 	EXPECT_EQ(ind_len , (/*0.*/2 + /* max ES/SQL double scale */19
 			- 3 * (sizeof(buff)/sizeof(SQLWCHAR) - 1)) * sizeof(SQLWCHAR));
-	/* conversion value of SQL_VAL on x64 is 0.9876543210012340224  */
-	EXPECT_STREQ((wchar_t *)buff, MK_WPTR("224"));
+	/* past double's 15 char precision/=scale comparision doesn't make sense */
 
 	ret = SQLGetData(stmt, /*col*/1, SQL_C_WCHAR, buff, sizeof(buff),
 			&ind_len);
@@ -546,7 +545,7 @@ TEST_F(GetData, ScaledFloat2WChar_whole) {
 			* sizeof(SQLWCHAR));
 	/* TODO: convert the value in the test and use it for comparison.
 	 * The below value is what the SQL_VAL converts to */
-	EXPECT_STREQ((wchar_t *)buff, MK_WPTR("0.9876543210012340224"));
+	EXPECT_EQ(wmemcmp(buff, MK_WPTR(SQL_VAL), /*0.*/2+/*dbl*/15), 0);
 }
 
 
@@ -599,8 +598,7 @@ TEST_F(GetData, ScaledFloat2Char_chunked) {
 	ASSERT_EQ(ret, SQL_SUCCESS);
 	EXPECT_EQ(ind_len , /*0.*/2 + /* max ES/SQL double scale */19
 			- 3 * (sizeof(buff) - 1));
-	/* conversion value of SQL_VAL on x64 is 0.9876543210012340224  */
-	EXPECT_STREQ((char *)buff, "224");
+	/* past double's 15 char precision/=scale comparision doesn't make sense */
 
 	ret = SQLGetData(stmt, /*col*/1, SQL_C_CHAR, buff, sizeof(buff),
 			&ind_len);

@@ -139,10 +139,10 @@ typedef struct struct_dbc {
 	cstr_st root_url; /* root URL (gets) */
 	enum {
 		ESODBC_SEC_NONE = 0,
-		ESODBC_SEC_USE_SSL,
+		ESODBC_SEC_USE_SSL, /* 1 */
 		ESODBC_SEC_CHECK_CA,
 		ESODBC_SEC_CHECK_HOST,
-		ESODBC_SEC_CHECK_REVOKE,
+		ESODBC_SEC_CHECK_REVOKE, /* 4 */
 		ESODBC_SEC_MAX /* meta */
 	} secure;
 	cstr_st ca_path;
@@ -157,6 +157,11 @@ typedef struct struct_dbc {
 	} fetch;
 	BOOL pack_json; /* should JSON be used in REST bodies? (vs. CBOR) */
 	BOOL apply_tz; /* should the times be converted from UTC to local TZ? */
+	enum {
+		ESODBC_FLTS_DEFAULT = 0,
+		ESODBC_FLTS_SCIENTIFIC,
+		ESODBC_FLTS_AUTO,
+	} sci_floats; /* floats printing on conversion */
 
 	esodbc_estype_st *es_types; /* array with ES types */
 	SQLULEN no_types; /* number of types in array */
@@ -229,6 +234,9 @@ typedef struct desc_rec {
 	SQLINTEGER		num_prec_radix; /*TODO: -> es_type? */
 
 	SQLSMALLINT		parameter_type;
+	/* "number of digits for an exact numeric type, the number of bits in the
+	 * mantissa (binary precision) for an approximate numeric type, or the
+	 * numbers of digits in the fractional seconds component "*/
 	SQLSMALLINT		precision;
 	SQLSMALLINT		rowver;
 	SQLSMALLINT		scale;

@@ -16,6 +16,8 @@ SQLRETURN TEST_API attach_error(SQLHANDLE hnd, cstr_st *body, int code);
 SQLRETURN TEST_API attach_sql(esodbc_stmt_st *stmt, const SQLWCHAR *sql,
 	size_t tlen);
 void detach_sql(esodbc_stmt_st *stmt);
+esodbc_estype_st *lookup_es_type(esodbc_dbc_st *dbc,
+	SQLSMALLINT es_type, SQLULEN col_size);
 SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff);
 SQLRETURN close_es_cursor(esodbc_stmt_st *stmt);
 SQLRETURN close_es_answ_handler(esodbc_stmt_st *stmt, char *buff, size_t blen);
