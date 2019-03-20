@@ -1268,7 +1268,7 @@ static inline const void *floats_rep(esodbc_stmt_st *stmt, double dbl,
 static SQLRETURN double_to_str(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	double dbl, void *data_ptr, SQLLEN *octet_len_ptr, BOOL wide)
 {
-#	define DBL_BASE10_MAX_LEN /*-0.*/3 + DBL_MANT_DIG - DBL_MIN_EXP
+#	define DBL_BASE10_MAX_LEN /*-0.*/3 + DBL_DIG - DBL_MIN_10_EXP
 	esodbc_stmt_st *stmt = HDRH(arec->desc)->stmt;
 	SQLCHAR buff[DBL_BASE10_MAX_LEN + /*\0*/1];
 	SQLWCHAR wbuff[DBL_BASE10_MAX_LEN + /*\0*/1];
