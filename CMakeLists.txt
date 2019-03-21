@@ -102,6 +102,13 @@ if (${WIN32})
 	# 2MB stack size
 	# set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /STACK:2097152")
 	# set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /F 2097152")
+	if ("${BARCH}" EQUAL "32")
+		# Force UJSON4C's Unicode decoder scratchpad onto the heap. Its large
+		# default size (128K) leads to stack overflow with some (older) apps.
+		set(CMAKE_C_FLAGS
+			# defined to one wchar_t/Win/UTF-16
+			"${CMAKE_C_FLAGS} /DJSON_MAX_STACK_BUFFER_SIZE=2")
+	endif ("${BARCH}" EQUAL "32")
 
 	if (${IS_UNICODE})
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DUNICODE /D_UNICODE")
