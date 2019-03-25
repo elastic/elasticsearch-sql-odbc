@@ -9,6 +9,7 @@
 #include "error.h"
 #include "handles.h"
 
+BOOL TEST_API queries_init();
 void clear_resultset(esodbc_stmt_st *stmt, BOOL on_close);
 SQLRETURN TEST_API attach_answer(esodbc_stmt_st *stmt, char *buff,
 	size_t blen);
@@ -138,6 +139,8 @@ SQLRETURN EsSQLRowCount(_In_ SQLHSTMT StatementHandle, _Out_ SQLLEN *RowCount);
 #else /* _WIN64 */
 #	define JSON_KEY_CLT_ID		", \"client_id\": \"odbc32\"" /* n-th k. */
 #endif /* _WIN64 */
+#define JSON_KEY_MULTIVAL		", \"field_multi_value_leniency\": " /* n-th */
+#define JSON_KEY_TIMEZONE		", \"time_zone\": " /* n-th key */
 
 
 #endif /* __QUERIES_H__ */

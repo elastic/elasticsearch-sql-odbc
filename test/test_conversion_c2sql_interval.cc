@@ -38,6 +38,7 @@ TEST_F(ConvertC2SQL_Interval, Bit2Interval_year)
 	cstr_st expect = CSTR_INIT("{\"query\": \"Bit2Interval_year\", "
 		"\"params\": [{\"type\": \"INTERVAL_YEAR\", "
 		"\"value\": \"P1Y\"}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -60,6 +61,7 @@ TEST_F(ConvertC2SQL_Interval, Short2Interval_month)
 	cstr_st expect = CSTR_INIT("{\"query\": \"Short2Interval_month\", "
 		"\"params\": [{\"type\": \"INTERVAL_MONTH\", "
 		"\"value\": \"P-2M\"}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -82,6 +84,7 @@ TEST_F(ConvertC2SQL_Interval, Short2Interval_month_all_0)
 	cstr_st expect = CSTR_INIT("{\"query\": \"Short2Interval_month_all_0\", "
 		"\"params\": [{\"type\": \"INTERVAL_MONTH\", "
 		"\"value\": \"P0M\"}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -104,6 +107,7 @@ TEST_F(ConvertC2SQL_Interval, Integer2Interval_day)
 	cstr_st expect = CSTR_INIT("{\"query\": \"Integer2Interval_day\", "
 		"\"params\": [{\"type\": \"INTERVAL_DAY\", "
 		"\"value\": \"P-3D\"}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -126,6 +130,7 @@ TEST_F(ConvertC2SQL_Interval, UBigInt2Interval_minute)
 	cstr_st expect = CSTR_INIT("{\"query\": \"UBigInt2Interval_minute\", "
 		"\"params\": [{\"type\": \"INTERVAL_MINUTE\", "
 		"\"value\": \"PT12345678M\"}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -148,6 +153,7 @@ TEST_F(ConvertC2SQL_Interval, SBigInt2Interval_second)
 	cstr_st expect = CSTR_INIT("{\"query\": \"SBigInt2Interval_second\", "
 		"\"params\": [{\"type\": \"INTERVAL_SECOND\", "
 		"\"value\": \"PT-123456789S\"}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -171,6 +177,7 @@ TEST_F(ConvertC2SQL_Interval, SBigInt2Interval_second_all_0)
 		"{\"query\": \"SBigInt2Interval_second_all_0\", "
 		"\"params\": [{\"type\": \"INTERVAL_SECOND\", "
 		"\"value\": \"PT0S\"}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -194,6 +201,7 @@ TEST_F(ConvertC2SQL_Interval, WStr2Interval_day_to_second)
 		"{\"query\": \"WStr2Interval_day_to_second\", "
 		"\"params\": [{\"type\": \"INTERVAL_DAY_TO_SECOND\", "
 		"\"value\": \"P-2DT-3H-4M-5.678S\"}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -217,6 +225,7 @@ TEST_F(ConvertC2SQL_Interval, CStr2Interval_hour_to_second)
 		"{\"query\": \"CStr2Interval_hour_to_second\", "
 		"\"params\": [{\"type\": \"INTERVAL_HOUR_TO_SECOND\", "
 		"\"value\": \"PT3H4M5.678S\"}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -245,6 +254,7 @@ TEST_F(ConvertC2SQL_Interval, CStr2Interval_hour_to_second_force_alloc)
 		"{\"query\": \"CStr2Interval_hour_to_second_force_alloc\", "
 		"\"params\": [{\"type\": \"INTERVAL_HOUR_TO_SECOND\", "
 		"\"value\": \"PT3H4M5.678S\"}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -273,6 +283,7 @@ TEST_F(ConvertC2SQL_Interval, Interval2Interval_year_to_month)
 		"{\"query\": \"Interval2Interval_year_to_month\", "
 		"\"params\": [{\"type\": \"INTERVAL_YEAR_TO_MONTH\", "
 		"\"value\": \"P-12Y-11M\"}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -301,6 +312,7 @@ TEST_F(ConvertC2SQL_Interval, Interval_binary2Interval_year_to_month)
 		"{\"query\": \"Interval_binary2Interval_year_to_month\", "
 		"\"params\": [{\"type\": \"INTERVAL_YEAR_TO_MONTH\", "
 		"\"value\": \"P-12Y-11M\"}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
