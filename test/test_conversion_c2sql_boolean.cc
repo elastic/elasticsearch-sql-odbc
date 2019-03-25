@@ -23,7 +23,7 @@ class ConvertC2SQL_Boolean : public ::testing::Test, public ConnectedDBC {
 
 TEST_F(ConvertC2SQL_Boolean, CStr2Boolean) /* note: test name used in test */
 {
-  prepareStatement();
+	prepareStatement();
 
 	SQLCHAR val[] = "1";
 	SQLLEN osize = SQL_NTSL;
@@ -38,6 +38,7 @@ TEST_F(ConvertC2SQL_Boolean, CStr2Boolean) /* note: test name used in test */
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"CStr2Boolean\", "
 		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": true}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -45,7 +46,7 @@ TEST_F(ConvertC2SQL_Boolean, CStr2Boolean) /* note: test name used in test */
 
 TEST_F(ConvertC2SQL_Boolean, WStr2Boolean) /* note: test name used in test */
 {
-  prepareStatement();
+	prepareStatement();
 
 	SQLWCHAR val[] = L"0X";
 	SQLLEN osize = sizeof(val[0]);
@@ -59,6 +60,7 @@ TEST_F(ConvertC2SQL_Boolean, WStr2Boolean) /* note: test name used in test */
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"WStr2Boolean\", "
 		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": false}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -66,7 +68,7 @@ TEST_F(ConvertC2SQL_Boolean, WStr2Boolean) /* note: test name used in test */
 
 TEST_F(ConvertC2SQL_Boolean, Smallint2Boolean) /* note: name used in test */
 {
-  prepareStatement();
+	prepareStatement();
 
 	SQLSMALLINT val = 1;
 	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_SSHORT,
@@ -80,6 +82,7 @@ TEST_F(ConvertC2SQL_Boolean, Smallint2Boolean) /* note: name used in test */
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"Smallint2Boolean\", "
 		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": true}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -87,7 +90,7 @@ TEST_F(ConvertC2SQL_Boolean, Smallint2Boolean) /* note: name used in test */
 
 TEST_F(ConvertC2SQL_Boolean, UShort2Boolean) /* note: name used in test */
 {
-  prepareStatement();
+	prepareStatement();
 
 	SQLUSMALLINT val = 0;
 	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_USHORT,
@@ -101,6 +104,7 @@ TEST_F(ConvertC2SQL_Boolean, UShort2Boolean) /* note: name used in test */
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"UShort2Boolean\", "
 		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": false}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -108,7 +112,7 @@ TEST_F(ConvertC2SQL_Boolean, UShort2Boolean) /* note: name used in test */
 
 TEST_F(ConvertC2SQL_Boolean, LongLong2Boolean) /* note: name used in test */
 {
-  prepareStatement();
+	prepareStatement();
 
 	SQLBIGINT val = 1;
 	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_SBIGINT,
@@ -122,6 +126,7 @@ TEST_F(ConvertC2SQL_Boolean, LongLong2Boolean) /* note: name used in test */
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"LongLong2Boolean\", "
 		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": true}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -129,7 +134,7 @@ TEST_F(ConvertC2SQL_Boolean, LongLong2Boolean) /* note: name used in test */
 
 TEST_F(ConvertC2SQL_Boolean, Float2Boolean) /* note: name used in test */
 {
-  prepareStatement();
+	prepareStatement();
 
 	SQLREAL val = 1.11f;
 	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_FLOAT,
@@ -143,6 +148,7 @@ TEST_F(ConvertC2SQL_Boolean, Float2Boolean) /* note: name used in test */
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"Float2Boolean\", "
 		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": true}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -150,7 +156,7 @@ TEST_F(ConvertC2SQL_Boolean, Float2Boolean) /* note: name used in test */
 
 TEST_F(ConvertC2SQL_Boolean, Double2Boolean) /* note: name used in test */
 {
-  prepareStatement();
+	prepareStatement();
 
 	SQLDOUBLE val = 1.11;
 	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_DOUBLE,
@@ -164,6 +170,7 @@ TEST_F(ConvertC2SQL_Boolean, Double2Boolean) /* note: name used in test */
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"Double2Boolean\", "
 		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": true}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -171,7 +178,7 @@ TEST_F(ConvertC2SQL_Boolean, Double2Boolean) /* note: name used in test */
 
 TEST_F(ConvertC2SQL_Boolean, Numeric2Boolean) /* note: name used in test */
 {
-  prepareStatement();
+	prepareStatement();
 
 	SQL_NUMERIC_STRUCT val;
 	val.sign = 0;
@@ -190,6 +197,7 @@ TEST_F(ConvertC2SQL_Boolean, Numeric2Boolean) /* note: name used in test */
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"Numeric2Boolean\", "
 		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": true}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -197,7 +205,7 @@ TEST_F(ConvertC2SQL_Boolean, Numeric2Boolean) /* note: name used in test */
 
 TEST_F(ConvertC2SQL_Boolean, Binary2Boolean) /* note: name used in test */
 {
-  prepareStatement();
+	prepareStatement();
 
 	SQLCHAR val = 0;
 	SQLLEN indlen = sizeof(val);
@@ -212,6 +220,7 @@ TEST_F(ConvertC2SQL_Boolean, Binary2Boolean) /* note: name used in test */
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"Binary2Boolean\", "
 		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": false}], "
+		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
@@ -219,7 +228,7 @@ TEST_F(ConvertC2SQL_Boolean, Binary2Boolean) /* note: name used in test */
 
 TEST_F(ConvertC2SQL_Boolean, Binary2Boolean_fail_22003)
 {
-  prepareStatement();
+	prepareStatement();
 
 	SQLCHAR val[2] = {1};
 	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_BINARY,

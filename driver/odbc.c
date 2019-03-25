@@ -34,6 +34,9 @@ static BOOL driver_init()
 	if (! connect_init()) {
 		return FALSE;
 	}
+	if (! queries_init()) {
+		return FALSE;
+	}
 #ifndef NDEBUG
 	if (_gf_log) {
 		ERR("leak reporting: on."); /* force create the log handle */

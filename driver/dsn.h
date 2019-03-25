@@ -36,6 +36,7 @@
 #define ESODBC_DSN_APPLY_TZ			"ApplyTZ"
 #define ESODBC_DSN_SCI_FLOATS		"ScientificFloats"
 #define ESODBC_DSN_VERSION_CHECKING	"VersionChecking"
+#define ESODBC_DSN_MFIELD_LENIENT	"MultiFieldLenient"
 #define ESODBC_DSN_TRACE_ENABLED	"TraceEnabled"
 #define ESODBC_DSN_TRACE_FILE		"TraceFile"
 #define ESODBC_DSN_TRACE_LEVEL		"TraceLevel"
@@ -75,10 +76,11 @@ typedef struct {
 	wstr_st apply_tz;
 	wstr_st sci_floats;
 	wstr_st version_checking;
+	wstr_st mfield_lenient;
 	wstr_st trace_enabled;
 	wstr_st trace_file;
 	wstr_st trace_level;
-#define ESODBC_DSN_ATTRS_COUNT	24
+#define ESODBC_DSN_ATTRS_COUNT	25
 	SQLWCHAR buff[ESODBC_DSN_ATTRS_COUNT * ESODBC_DSN_MAX_ATTR_LEN];
 	/* DSN reading/writing functions are passed a SQLSMALLINT lenght param */
 #if SHRT_MAX < ESODBC_DSN_ATTRS_COUNT * ESODBC_DSN_MAX_ATTR_LEN

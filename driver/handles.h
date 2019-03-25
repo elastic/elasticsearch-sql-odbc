@@ -162,6 +162,7 @@ typedef struct struct_dbc {
 		ESODBC_FLTS_SCIENTIFIC,
 		ESODBC_FLTS_AUTO,
 	} sci_floats; /* floats printing on conversion */
+	BOOL mfield_lenient; /* 'field_multi_value_leniency' request param */
 
 	esodbc_estype_st *es_types; /* array with ES types */
 	SQLULEN no_types; /* number of types in array */

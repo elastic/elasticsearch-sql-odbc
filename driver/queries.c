@@ -5,6 +5,7 @@
  */
 
 #include <float.h>
+#include <time.h>
 
 #include "queries.h"
 #include "log.h"
@@ -28,6 +29,29 @@
 
 #define MSG_INV_SRV_ANS		"Invalid server answer"
 
+static cstr_st _tz;
+
+BOOL TEST_API queries_init()
+{
+	int n;
+	long abs_tz;
+	static char time_zone[sizeof("\"-05:45\"")];
+
+	tzset();
+	abs_tz = (_timezone < 0) ? -_timezone : _timezone;
+	n = snprintf(time_zone, sizeof(time_zone), "\"%c%02ld:%02ld\"",
+			/* negative _timezone means ahead of UTC -> '+' */
+			_timezone <= 0 ? '+' : '-', abs_tz / 3600, (abs_tz % 3600) / 60);
+	if (n <= 0 || sizeof(time_zone) <= n) {
+		ERRN("failed to print timezone param for offset: %ld.", _timezone);
+		return FALSE;
+	}
+	_tz.str = time_zone;
+	_tz.cnt = n;
+	DBG("timezone request parameter: `" LCPDL "` (where "
+		ESODBC_DSN_APPLY_TZ ").", LCSTR(&_tz));
+	return TRUE;
+}
 
 
 void clear_resultset(esodbc_stmt_st *stmt, BOOL on_close)
@@ -1989,8 +2013,14 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 			bodylen += sizeof(JSON_KEY_FETCH) - /*\0*/1;
 			bodylen += dbc->fetch.slen;
 		}
+		/* "field_multi_value_leniency": true/false */
+		bodylen += sizeof(JSON_KEY_MULTIVAL) - 1;
+		bodylen += /*false*/5;
+		/* "time_zone": "-05:45" */
+		bodylen += sizeof(JSON_KEY_TIMEZONE) - 1;
+		bodylen += _tz.cnt;
 	}
-	/* TODO: request_/page_timeout, time_zone */
+	/* TODO: request_/page_timeout */
 	bodylen += sizeof(JSON_KEY_VAL_MODE) - 1; /* "mode": */
 	bodylen += sizeof(JSON_KEY_CLT_ID) - 1; /* "client_id": */
 	bodylen += 1; /* } */
@@ -2059,6 +2089,26 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 			pos += sizeof(JSON_KEY_FETCH) - 1;
 			memcpy(body + pos, dbc->fetch.str, dbc->fetch.slen);
 			pos += dbc->fetch.slen;
+		}
+		/* "field_multi_value_leniency": true/false */
+		memcpy(body + pos, JSON_KEY_MULTIVAL, sizeof(JSON_KEY_MULTIVAL) - 1);
+		pos += sizeof(JSON_KEY_MULTIVAL) - 1;
+		if (dbc->mfield_lenient) {
+			memcpy(body + pos, "true", sizeof("true") - 1);
+			pos += sizeof("true") - 1;
+		} else {
+			memcpy(body + pos, "false", sizeof("false") - 1);
+			pos += sizeof("false") - 1;
+		}
+		/* "time_zone": "-05:45" */
+		memcpy(body + pos, JSON_KEY_TIMEZONE, sizeof(JSON_KEY_TIMEZONE) - 1);
+		pos += sizeof(JSON_KEY_TIMEZONE) - 1;
+		if (dbc->apply_tz) {
+			memcpy(body + pos, _tz.str, _tz.cnt);
+			pos += _tz.cnt;
+		} else {
+			memcpy(body + pos, "\"Z\"", sizeof("\"Z\"") - 1);
+			pos += sizeof("\"Z\"") - 1;
 		}
 
 		/* reset the page counter when the params change */
