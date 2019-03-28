@@ -1030,6 +1030,9 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 			prefix = attrs->server;
 			prefix.cnt = http_prefix.cnt;
 			if (! EQ_CASE_WSTR(&prefix, &http_prefix)) {
+				if (attrs->server.cnt < https_prefix.cnt) {
+					break;
+				}
 				prefix.cnt = https_prefix.cnt;
 				if (! EQ_CASE_WSTR(&prefix, &https_prefix)) {
 					break;
