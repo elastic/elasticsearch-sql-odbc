@@ -142,6 +142,71 @@ STAPLES_TEMPLATE =\
 		}
 	}
 
+BATTERS_TEMPLATE =\
+	{
+		"index_patterns": "batters*",
+		"settings": {
+			"number_of_shards": 1
+		},
+		"mappings": {
+			"properties": {
+				"Player": {"type": "keyword"},
+				"Team": {"type": "keyword"},
+				"League": {"type": "keyword"},
+				"Year": {"type": "keyword"},
+				"Games": {"type": "double"},
+				"AB": {"type": "double"},
+				"R": {"type": "double"},
+				"H": {"type": "double"},
+				"Doubles": {"type": "double"},
+				"Triples": {"type": "double"},
+				"HR": {"type": "double"},
+				"RBI": {"type": "double"},
+				"SB": {"type": "double"},
+				"CS": {"type": "double"},
+				"BB": {"type": "double"},
+				"SO": {"type": "double"},
+				"IBB": {"type": "double"},
+				"HBP": {"type": "double"},
+				"SH": {"type": "double"},
+				"SF": {"type": "double"},
+				"GIDP": {"type": "double"},
+			}
+		}
+	}
+
+BATTERS_PIPELINE =\
+	{
+		"description": "Parsing the Batters lines",
+		"processors": [
+			{
+				"script": {
+					"lang": "painless",
+					"source":
+						"""
+						// TODO: generically iterate over source and test againt "NULL"
+						ctx.AB = ctx.AB == "NULL" ? null : ctx.AB;
+						ctx.R = ctx.R == "NULL" ? null : ctx.R;
+						ctx.H = ctx.H == "NULL" ? null : ctx.H;
+						ctx.Doubles = ctx.Doubles == "NULL" ? null : ctx.Doubles;
+						ctx.Triples = ctx.Triples == "NULL" ? null : ctx.Triples;
+						ctx.HR = ctx.HR == "NULL" ? null : ctx.HR;
+						ctx.RBI = ctx.RBI == "NULL" ? null : ctx.RBI;
+						ctx.SB = ctx.SB == "NULL" ? null : ctx.SB;
+						ctx.CS = ctx.CS == "NULL" ? null : ctx.CS;
+						ctx.BB = ctx.BB == "NULL" ? null : ctx.BB;
+						ctx.SO = ctx.SO == "NULL" ? null : ctx.SO;
+						ctx.IBB = ctx.IBB == "NULL" ? null : ctx.IBB;
+						ctx.HBP = ctx.HBP == "NULL" ? null : ctx.HBP;
+						ctx.SH = ctx.SH == "NULL" ? null : ctx.SH;
+						ctx.SF = ctx.SF == "NULL" ? null : ctx.SF;
+						ctx.GIDP = ctx.GIDP == "NULL" ? null : ctx.GIDP;
+						"""
+				}
+			}
+		]
+	}
+
 
 ES_DATASET_BASE_URL = "https://raw.githubusercontent.com/elastic/elasticsearch/6857d305270be3d987689fda37cc84b7bc18fbb3/x-pack/plugin/sql/qa/src/main/resources/"
 
@@ -195,6 +260,8 @@ class TestData(object):
 	CALCS_INDEX = "calcs"
 	STAPLES_FILE = "Staples_utf8_headers.csv"
 	STAPLES_INDEX = "staples"
+	BATTERS_FILE = "Batters_headers.csv"
+	BATTERS_INDEX = "batters"
 	LIBRARY_FILE = "library.csv"
 	LIBRARY_INDEX = "library"
 	EMPLOYEES_FILE = "employees.csv"
@@ -286,6 +353,7 @@ class TestData(object):
 		return ndjson
 
 	def _get_csv_as_ndjson(self, base_url, csv_name, index_name):
+		print("Fetching CSV sample data for index '%s'." % index_name)
 		if self._offline_dir:
 			path = os.path.join(self._offline_dir, csv_name)
 			with open(path, "rb") as f:
@@ -312,6 +380,7 @@ class TestData(object):
 		return ndjson
 
 	def _post_ndjson(self, ndjsons, index_name, pipeline_name=None):
+		print("Indexing data for index '%s'." % index_name)
 		url = "http://localhost:%s/%s/_doc/_bulk" % (Elasticsearch.ES_PORT, index_name)
 		if pipeline_name:
 			url += "?pipeline=%s" % pipeline_name
@@ -327,6 +396,7 @@ class TestData(object):
 					raise Exception("bulk POST to %s failed with content: %s" % (index_name, req.text))
 
 	def _wait_for_results(self, index_name):
+		print("Waiting for indexing to finish on '%s'." % index_name)
 		hits = 0
 		waiting_since = time.time()
 		while hits < MIN_INDEXED_DOCS:
@@ -343,6 +413,7 @@ class TestData(object):
 	def _delete_if_needed(self, index_name):
 		if self._mode != self.MODE_REINDEX:
 			return
+		print("Deleting any old index '%s'." % index_name);
 
 		url = "http://localhost:%s/%s" % (Elasticsearch.ES_PORT, index_name)
 		with requests.delete(url, timeout = Elasticsearch.REQ_TIMEOUT, auth=REQ_AUTH) as req:
@@ -350,44 +421,31 @@ class TestData(object):
 				raise Exception("Deleting index %s failed; code=%s, body: %s." %
 						(index_name, req.status_code, req.text))
 
-	def _load_tableau_calcs(self):
-		ndjson = self._prepare_tableau_load(self.CALCS_FILE, self.CALCS_INDEX, CALCS_TEMPLATE)
+	def _load_tableau_sample(self, file_name, index_name, template, pipeline=None):
+		ndjsons = self._prepare_tableau_load(file_name, index_name, template)
 
 		if self.MODE_NOINDEX < self._mode:
-			self._delete_if_needed(self.CALCS_INDEX)
-			with requests.put("http://localhost:%s/_ingest/pipeline/parse_%s" % (Elasticsearch.ES_PORT,
-					self.CALCS_INDEX), json=CALCS_PIPELINE, auth=REQ_AUTH) as req:
-				if req.status_code != 200:
-					raise Exception("PUT %s pipeline failed with code: %s (content: %s) " % (self.CALCS_INDEX,
-						req.status_code, req.text))
+			self._delete_if_needed(index_name)
 
-			self._post_ndjson(ndjson, self.CALCS_INDEX, "parse_" + self.CALCS_INDEX)
-			self._wait_for_results(self.CALCS_INDEX)
+			if pipeline:
+				with requests.put("http://localhost:%s/_ingest/pipeline/parse_%s" % (Elasticsearch.ES_PORT,
+						index_name), json=pipeline, auth=REQ_AUTH) as req:
+					if req.status_code != 200:
+						raise Exception("PUT %s pipeline failed with code: %s (content: %s) " % (index_name,
+							req.status_code, req.text))
 
-	def _load_tableau_staples(self):
-		ndjsons = self._prepare_tableau_load(self.STAPLES_FILE, self.STAPLES_INDEX, STAPLES_TEMPLATE)
-		assert(isinstance(ndjsons, list))
+			self._post_ndjson(ndjsons, index_name, ("parse_" + index_name) if pipeline else None)
+			self._wait_for_results(index_name)
+
+	def _load_elastic_sample(self, file_name, index_name):
+		ndjson = self._get_csv_as_ndjson(ES_DATASET_BASE_URL, file_name, index_name)
 		if self.MODE_NOINDEX < self._mode:
-			self._delete_if_needed(self.STAPLES_INDEX)
-			self._post_ndjson(ndjsons, self.STAPLES_INDEX)
-			self._wait_for_results(self.STAPLES_INDEX)
-
-	def _load_elastic_library(self):
-		ndjson = self._get_csv_as_ndjson(ES_DATASET_BASE_URL, self.LIBRARY_FILE, self.LIBRARY_INDEX)
-		if self.MODE_NOINDEX < self._mode:
-			self._delete_if_needed(self.LIBRARY_INDEX)
-			self._post_ndjson(ndjson, self.LIBRARY_INDEX)
-			self._wait_for_results(self.LIBRARY_INDEX)
-
-	def _load_elastic_employees(self):
-		ndjson = self._get_csv_as_ndjson(ES_DATASET_BASE_URL, self.EMPLOYEES_FILE, self.EMPLOYEES_INDEX)
-		if self.MODE_NOINDEX < self._mode:
-			self._delete_if_needed(self.EMPLOYEES_INDEX)
-			self._post_ndjson(ndjson, self.EMPLOYEES_INDEX)
-			self._wait_for_results(self.EMPLOYEES_INDEX)
-
+			self._delete_if_needed(index_name)
+			self._post_ndjson(ndjson, index_name)
+			self._wait_for_results(index_name)
 
 	def _get_kibana_file(self, sample_name, is_mapping=True):
+		print("Fetching JS sample data for index '%s'." % sample_name)
 		file_name = "field_mappings.js" if is_mapping else "%s.json.gz" % sample_name
 		if self._offline_dir:
 			path = os.path.join(self._offline_dir, sample_name, file_name)
@@ -435,6 +493,8 @@ class TestData(object):
 		self._post_ndjson(ndjsons, index_name)
 
 	def _load_kibana_sample(self, index_name):
+		if self._mode <= self.MODE_NOINDEX:
+			return
 		sample_name = index_name[len(KIBANA_INDEX_PREFIX):]
 		self._delete_if_needed(index_name)
 		self._put_sample_template(sample_name, index_name)
@@ -442,11 +502,12 @@ class TestData(object):
 
 
 	def load(self):
-		self._load_tableau_calcs()
-		self._load_tableau_staples()
+		self._load_tableau_sample(self.CALCS_FILE, self.CALCS_INDEX, CALCS_TEMPLATE, CALCS_PIPELINE)
+		self._load_tableau_sample(self.STAPLES_FILE, self.STAPLES_INDEX, STAPLES_TEMPLATE)
+		self._load_tableau_sample(self.BATTERS_FILE, self.BATTERS_INDEX, BATTERS_TEMPLATE, BATTERS_PIPELINE)
 
-		self._load_elastic_library()
-		self._load_elastic_employees()
+		self._load_elastic_sample(self.LIBRARY_FILE, self.LIBRARY_INDEX)
+		self._load_elastic_sample(self.EMPLOYEES_FILE, self.EMPLOYEES_INDEX)
 
 		self._load_kibana_sample(self.ECOMMERCE_INDEX)
 		self._load_kibana_sample(self.FLIGHTS_INDEX)

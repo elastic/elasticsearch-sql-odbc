@@ -46,6 +46,7 @@ class Testing(object):
 			return csv
 
 	def _as_csv(self, index_name):
+		print("Reconstituting CSV from index '%s'." % index_name)
 		csv = self._reconstitute_csv(index_name)
 
 		md5 = hashlib.md5()
@@ -56,6 +57,7 @@ class Testing(object):
 			raise Exception("reconstituted CSV differs from original for index '%s'" % index_name)
 
 	def _count_all(self, index_name):
+		print("Counting records in index '%s.'" % index_name)
 		cnt = 0
 		with pyodbc.connect(self._dsn) as cnxn:
 			cnxn.autocommit = True
@@ -80,6 +82,7 @@ class Testing(object):
 		# no exception raised -> passed
 
 	def _select_columns(self, index_name, columns):
+		print("Selecting columns '%s' from index '%s'." % (columns, index_name))
 		with pyodbc.connect(self._dsn) as cnxn:
 			cnxn.autocommit = True
 			stmt = "select %s from %s" % (columns, index_name)
@@ -102,9 +105,11 @@ class Testing(object):
 		self._as_csv(TestData.EMPLOYEES_INDEX)
 		self._count_all(TestData.CALCS_INDEX)
 		self._count_all(TestData.STAPLES_INDEX)
+		self._count_all(TestData.BATTERS_INDEX)
 		self._clear_cursor(TestData.LIBRARY_INDEX)
 		self._select_columns(TestData.FLIGHTS_INDEX, "*")
-		# TODO: add ecommerce and logs once #39700 is addressed
+		self._select_columns(TestData.ECOMMERCE_INDEX, "*")
+		self._select_columns(TestData.LOGS_INDEX, "*")
 
 		print("Tests successful.")
 
