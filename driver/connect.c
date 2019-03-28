@@ -1001,6 +1001,9 @@ err_exists:
  */
 SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 {
+	const static wstr_st http_prefix = WSTR_INIT("http://");
+	const static wstr_st https_prefix = WSTR_INIT("https://");
+	wstr_st prefix;
 	int cnt, ipv6;
 	SQLBIGINT secure;
 	long long timeout, max_body_size, max_fetch_size;
@@ -1020,6 +1023,25 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 
 	if (attrs->cloud_id.cnt && (! decode_cloud_id(dbc, attrs))) {
 		goto err;
+	} else if (http_prefix.cnt <= attrs->server.cnt) {
+		/* make sure that user didn't input a HTTP URL (common mistake):
+		 * the error libcurl returns is not particularly descriptive */
+		do {
+			prefix = attrs->server;
+			prefix.cnt = http_prefix.cnt;
+			if (! EQ_CASE_WSTR(&prefix, &http_prefix)) {
+				prefix.cnt = https_prefix.cnt;
+				if (! EQ_CASE_WSTR(&prefix, &https_prefix)) {
+					break;
+				}
+			}
+			ERRH(dbc, "hostname `" LWPDL "` can't be a HTTP(S) URL.",
+				LWSTR(&attrs->server));
+			SET_HDIAG(dbc, SQL_STATE_HY000, "The Hostname can't be a HTTP(S) "
+				"URL: remove the 'http(s)://' prefix (and port suffix, "
+				"if present).", 0);
+			goto err;
+		} while (0);
 	}
 
 	if (str2bigint(&attrs->secure, /*wide?*/TRUE, &secure, /*stri*/TRUE) < 0) {
