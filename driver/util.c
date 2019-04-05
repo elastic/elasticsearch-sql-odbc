@@ -8,11 +8,61 @@
 #include <errno.h>
 #include <stdio.h>
 
+#include <time.h>
+#ifdef _WIN32
+#include <sys/types.h>
+#include <sys/timeb.h>
+#endif /* _WIN32 */
+
 #include "util.h"
 #include "handles.h"
 #include "error.h"
 
 
+/* total timezone plus daylight saving offset */
+BOOL tz_dst_offset(long *offset)
+{
+	char *tz;
+	long tz_dst_offt;
+	int dst_offt;
+#ifdef _WIN32
+	struct _timeb timeb;
+#endif /* _WIN32 */
+
+	/* TZ conversions */
+	tzset();
+	tz = getenv(ESODBC_TZ_ENV_VAR);
+	tz_dst_offt = _timezone;
+	/* for system's timezone, adjust offset with DST, if observed */
+	if ((! tz) && _daylight) { /* TZ sets absolute offset */
+#ifdef _WIN32
+		if (_ftime_s(&timeb)) {
+			ERRN("failed to obtain daylight saving applicability.");
+			return FALSE;
+		}
+		if (timeb.dstflag) { /* DST in effect */
+			if (_get_daylight(&dst_offt)) {
+				ERRN("failed to obtain daylight saving offset.");
+				return FALSE;
+			}
+			dst_offt *= 60 * 60; /* to seconds */
+			/* hour advances => delta from UTC lowers */
+			tz_dst_offt += -dst_offt;
+		}
+#else /* _WIN32 */
+		/* TODO: apply DST */
+#endif /* _WIN32 */
+	} else {
+		dst_offt = 0;
+	}
+	INFO("TZ: `%s`, timezone offset: %ld seconds, daylight saving: "
+		"%s%s, total offset: %ld, standard: %s, daylight: %s.",
+		tz ? tz : "<not set>", _timezone, dst_offt ? "" : "not ",
+		tz ? "considered" : "in effect", tz_dst_offt, _tzname[0], _tzname[1]);
+
+	*offset = tz_dst_offt;
+	return TRUE;
+}
 
 BOOL wstr2bool(wstr_st *val)
 {

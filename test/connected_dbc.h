@@ -17,6 +17,7 @@ extern "C" {
 #include <sqlext.h>
 
 #include "queries.h"
+#include "convert.h"
 } // extern C
 
 #if defined(_WIN32) || defined (WIN32)

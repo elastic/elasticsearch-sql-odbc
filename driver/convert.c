@@ -8,7 +8,6 @@
 #include <stdlib.h>
 #include <float.h>
 #include <math.h>
-#include <time.h>
 
 #include <timestamp.h>
 
@@ -93,11 +92,14 @@ static BOOL compat_matrix[ESSQL_NORM_RANGE][ESSQL_C_NORM_RANGE] = {FALSE};
 		/* ..otheriwse use the conversion matrix */ \
 		compat_matrix[ESSQL_TYPE_IDX(_sql)][ESSQL_C_TYPE_IDX(_csql)])
 
+/* timezone plus daylight saving (if applicable) offset, in seconds */
+static long tz_dst_offt;
+
 /* populates the compat_matrix as required in:
  * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/converting-data-from-c-to-sql-data-types
  * "from" and "to" nameing attributes below correspond to items in the
  * vertical and horizontal lists, respectively. */
-void convert_init()
+BOOL TEST_API convert_init()
 {
 	SQLSMALLINT i, j, sql, csql, lim_i, lim_j;
 	/*INDENT-OFF*/
@@ -159,8 +161,6 @@ void convert_init()
 	SQLSMALLINT csql_datetime[] = {SQL_C_TYPE_DATE, SQL_C_TYPE_TIME,
 			SQL_C_TYPE_TIMESTAMP
 		};
-
-	char *tz;
 
 	/* fill the compact block of TRUEs (growing from the upper left corner) */
 	for (i = 0; i < sizeof(block_idx_sql)/sizeof(*block_idx_sql); i ++) {
@@ -259,11 +259,7 @@ void convert_init()
 	compat_matrix[ESSQL_TYPE_IDX(sql)][ESSQL_C_TYPE_IDX(csql)] = TRUE;
 
 	/* TZ conversions */
-	tzset();
-	tz = getenv(ESODBC_TZ_ENV_VAR);
-	INFO("TZ: `%s`, timezone offset: %ld seconds, daylight saving: "
-		"%sapplicable, standard: %s, daylight: %s.", tz ? tz : "<not set>",
-		_timezone, _daylight ? "" : "not ", _tzname[0], _tzname[1]);
+	return tz_dst_offset(&tz_dst_offt);
 }
 
 
@@ -1593,12 +1589,12 @@ static SQLRETURN parse_iso8601_timestamp(esodbc_stmt_st *stmt, xstr_st *xstr,
 
 	if (! to_utc) {
 		/* apply local offset */
-		tm.tm_sec -= _timezone; /* : time.h externs */
+		tm.tm_sec -= tz_dst_offt; /* : time.h externs */
 		tm.tm_isdst = -1; /* let the system determine the daylight saving */
 		/* rebalance member values */
 		if (mktime(&tm) == (time_t)-1) {
 			ERRH(stmt, "failed to adjust timestamp `" LCPDL "` by TZ (%ld). "
-				MKTIME_FAIL_MSG, LCSTR(&ts_str), _timezone);
+				MKTIME_FAIL_MSG, LCSTR(&ts_str), tz_dst_offt);
 			RET_HDIAG(stmt, SQL_STATE_22008, "Timestamp timezone adjustment "
 				"failed. " MKTIME_FAIL_MSG, 0);
 		}
@@ -1654,16 +1650,16 @@ static SQLRETURN parse_date_time_ts(esodbc_stmt_st *stmt, xstr_st *xstr,
 
 			/* if c2sql, apply_tz will tell if time is UTC already or not */
 			if ((! sql2c) && dbc->apply_tz) {
-				/* TODO: does _timezone account for DST?? */
-				hours = -_timezone / 3600;
-				mins = _timezone < 0 ? -_timezone : _timezone;
+				hours = -tz_dst_offt / 3600;
+				mins = tz_dst_offt < 0 ? -tz_dst_offt : tz_dst_offt;
 				mins = mins % 3600;
-				assert(mins % 60 == 0);
+				assert(mins % 60 == 0); /* XXX: TZ spec accepts seconds */
 				mins /= 60;
 				n = snprintf(td.str + td.cnt, /*±00:00\0*/7, "%+03ld:%02ld",
 						hours, mins);
 				if (n <= 0) {
-					ERRNH(stmt, "failed to print TZ offset (%ld).", _timezone);
+					ERRNH(stmt, "failed to print TZ+DST offset (%ld).",
+						tz_dst_offt);
 					RET_HDIAGS(stmt, SQL_STATE_HY000);
 				}
 				td.cnt += (size_t)n;
@@ -1884,6 +1880,7 @@ static SQLRETURN wstr_to_time_struct(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	}
 
 	if (data_ptr) {
+		fmt = 0;
 		ret = wstr_to_timestamp_struct(arec, irec, &tss, NULL, wstr, chars_0,
 				&fmt);
 		if (! SQL_SUCCEEDED(ret)) {

@@ -5,7 +5,6 @@
  */
 
 #include <float.h>
-#include <time.h>
 
 #include "queries.h"
 #include "log.h"
@@ -34,16 +33,23 @@ static cstr_st _tz;
 BOOL TEST_API queries_init()
 {
 	int n;
-	long abs_tz;
+	long tz_dst_offt, abs_tz;
 	static char time_zone[sizeof("\"-05:45\"")];
 
-	tzset();
-	abs_tz = (_timezone < 0) ? -_timezone : _timezone;
+	if (! tz_dst_offset(&tz_dst_offt)) {
+		return FALSE;
+	}
+	abs_tz = (tz_dst_offt < 0) ? -tz_dst_offt : tz_dst_offt;
+	if (abs_tz % 60) { /* TZ allows :ss specification */
+		/* no way to return a diagnostic at this early stage */
+		ERR("sub-minute offsets are not supported.");
+		return FALSE;
+	}
 	n = snprintf(time_zone, sizeof(time_zone), "\"%c%02ld:%02ld\"",
-			/* negative _timezone means ahead of UTC -> '+' */
-			_timezone <= 0 ? '+' : '-', abs_tz / 3600, (abs_tz % 3600) / 60);
+			/* negative offset means ahead of UTC -> '+' */
+			tz_dst_offt <= 0 ? '+' : '-', abs_tz / 3600, (abs_tz % 3600) / 60);
 	if (n <= 0 || sizeof(time_zone) <= n) {
-		ERRN("failed to print timezone param for offset: %ld.", _timezone);
+		ERRN("failed to print timezone param for offset: %ld.", tz_dst_offt);
 		return FALSE;
 	}
 	_tz.str = time_zone;
