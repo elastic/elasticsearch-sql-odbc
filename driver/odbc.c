@@ -30,9 +30,7 @@ static BOOL driver_init()
 		return FALSE;
 	}
 	INFO("initializing driver.");
-	if (! convert_init()) {
-		return FALSE;
-	}
+	convert_init();
 	if (! connect_init()) {
 		return FALSE;
 	}

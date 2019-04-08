@@ -290,13 +290,12 @@ class ConvertSQL2C_Timestamp_TZ : public ConvertSQL2C_Timestamp
 	void SetUp() override
 	{
 		((esodbc_dbc_st *)dbc)->apply_tz = TRUE;
-		ASSERT_EQ(putenv("TZ=NPT-5:45NTP"), 0);
+		ASSERT_EQ(putenv("TZ=NPT-5:45"), 0);
 		tzset();
 
 		/* The 'time_zone' & co. params are computed once, at library load ->
 		 * need to recompute after setting the TZ. */
 		ASSERT_TRUE(queries_init());
-		ASSERT_TRUE(convert_init());
 	}
 
 	void TearDown() override

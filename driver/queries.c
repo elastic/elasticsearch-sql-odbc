@@ -28,35 +28,53 @@
 
 #define MSG_INV_SRV_ANS		"Invalid server answer"
 
-static cstr_st _tz;
+static cstr_st tz_param;
+
+static BOOL print_tz_param()
+{
+	static esodbc_mutex_lt tz_mux = ESODBC_MUX_SINIT;
+	static char time_zone[sizeof("\"-05:45\"")];
+	int n;
+	long abs_tz;
+
+	abs_tz = (_tz_dst_offt < 0) ? -_tz_dst_offt : _tz_dst_offt;
+
+	ESODBC_MUX_LOCK(&tz_mux);
+	n = snprintf(time_zone, sizeof(time_zone), "\"%c%02ld:%02ld\"",
+			/* negative offset means ahead of UTC -> '+' */
+			_tz_dst_offt <= 0 ? '+' : '-',
+			abs_tz / 3600, (abs_tz % 3600) / 60);
+	ESODBC_MUX_UNLOCK(&tz_mux);
+
+	if (n <= 0 || sizeof(time_zone) <= n) {
+		ERRN("failed to print timezone param for offset: %ld.", _tz_dst_offt);
+		return FALSE;
+	}
+	tz_param.str = time_zone;
+	tz_param.cnt = n;
+	DBG("timezone request parameter updated to: `" LCPDL "` (where "
+		ESODBC_DSN_APPLY_TZ ").", LCSTR(&tz_param));
+	return TRUE;
+}
+
+static inline BOOL update_tz_param()
+{
+	static long offset = 1; /* impossible value -> trigger an update */
+
+	if (! update_tz_dst_offset()) {
+		return FALSE;
+	}
+	if (_tz_dst_offt == offset) {
+		/* nothing changed, old printed value can be reused */
+		return TRUE;
+	}
+	offset = _tz_dst_offt;
+	return print_tz_param();
+}
 
 BOOL TEST_API queries_init()
 {
-	int n;
-	long tz_dst_offt, abs_tz;
-	static char time_zone[sizeof("\"-05:45\"")];
-
-	if (! tz_dst_offset(&tz_dst_offt)) {
-		return FALSE;
-	}
-	abs_tz = (tz_dst_offt < 0) ? -tz_dst_offt : tz_dst_offt;
-	if (abs_tz % 60) { /* TZ allows :ss specification */
-		/* no way to return a diagnostic at this early stage */
-		ERR("sub-minute offsets are not supported.");
-		return FALSE;
-	}
-	n = snprintf(time_zone, sizeof(time_zone), "\"%c%02ld:%02ld\"",
-			/* negative offset means ahead of UTC -> '+' */
-			tz_dst_offt <= 0 ? '+' : '-', abs_tz / 3600, (abs_tz % 3600) / 60);
-	if (n <= 0 || sizeof(time_zone) <= n) {
-		ERRN("failed to print timezone param for offset: %ld.", tz_dst_offt);
-		return FALSE;
-	}
-	_tz.str = time_zone;
-	_tz.cnt = n;
-	DBG("timezone request parameter: `" LCPDL "` (where "
-		ESODBC_DSN_APPLY_TZ ").", LCSTR(&_tz));
-	return TRUE;
+	return update_tz_param();
 }
 
 
@@ -1988,6 +2006,11 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 	/* enforced in EsSQLSetDescFieldW(SQL_DESC_ARRAY_SIZE) */
 	assert(apd->array_size <= 1);
 
+	if (! update_tz_param()) {
+		RET_HDIAG(stmt, SQL_STATE_HY000,
+			"Failed to update the timezone parameter", 0);
+	}
+
 	bodylen = 1; /* { */
 	/* evaluate how long the stringified REST object will be */
 	if (stmt->rset.ecurs.cnt) { /* eval CURSOR object length */
@@ -2024,7 +2047,7 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 		bodylen += /*false*/5;
 		/* "time_zone": "-05:45" */
 		bodylen += sizeof(JSON_KEY_TIMEZONE) - 1;
-		bodylen += _tz.cnt;
+		bodylen += tz_param.cnt;
 	}
 	/* TODO: request_/page_timeout */
 	bodylen += sizeof(JSON_KEY_VAL_MODE) - 1; /* "mode": */
@@ -2110,8 +2133,8 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 		memcpy(body + pos, JSON_KEY_TIMEZONE, sizeof(JSON_KEY_TIMEZONE) - 1);
 		pos += sizeof(JSON_KEY_TIMEZONE) - 1;
 		if (dbc->apply_tz) {
-			memcpy(body + pos, _tz.str, _tz.cnt);
-			pos += _tz.cnt;
+			memcpy(body + pos, tz_param.str, tz_param.cnt);
+			pos += tz_param.cnt;
 		} else {
 			memcpy(body + pos, "\"Z\"", sizeof("\"Z\"") - 1);
 			pos += sizeof("\"Z\"") - 1;

@@ -9,58 +9,61 @@
 #include <stdio.h>
 
 #include <time.h>
-#ifdef _WIN32
-#include <sys/types.h>
-#include <sys/timeb.h>
-#endif /* _WIN32 */
 
 #include "util.h"
 #include "handles.h"
 #include "error.h"
 
-
 /* total timezone plus daylight saving offset */
-BOOL tz_dst_offset(long *offset)
-{
-	char *tz;
-	long tz_dst_offt;
-	int dst_offt;
-#ifdef _WIN32
-	struct _timeb timeb;
-#endif /* _WIN32 */
+long _tz_dst_offt = 0;
 
-	/* TZ conversions */
-	tzset();
-	tz = getenv(ESODBC_TZ_ENV_VAR);
-	tz_dst_offt = _timezone;
-	/* for system's timezone, adjust offset with DST, if observed */
-	if ((! tz) && _daylight) { /* TZ sets absolute offset */
-#ifdef _WIN32
-		if (_ftime_s(&timeb)) {
-			ERRN("failed to obtain daylight saving applicability.");
+/* updates _tz_dst_offt */
+BOOL update_tz_dst_offset()
+{
+	static char *tz = NULL;
+	struct tm *tm, local, gm;
+	long tz_dst_offt;
+	time_t utc;
+
+	utc = time(NULL);
+	if (utc == (time_t)-1) {
+		ERRN("failed to read current time.");
+		return FALSE;
+	}
+	tm = localtime(&utc);
+	assert(tm); /* value returned by time() should always be valid */
+	local = *tm;
+	tm = gmtime(&utc);
+	assert(tm);
+	gm = *tm;
+
+	/* calculating the offset only works if the DST won't occur on year
+	 * end/start, which should be a safe assumption */
+	tz_dst_offt = gm.tm_yday * 24 * 3600 + gm.tm_hour * 3600 + gm.tm_min * 60;
+	tz_dst_offt -= local.tm_yday * 24 * 3600;
+	tz_dst_offt -=  local.tm_hour * 3600 + local.tm_min * 60;
+
+	if (! tz) {
+		tz = getenv(ESODBC_TZ_ENV_VAR);
+		INFO("time offset (timezone%s): %ld seconds, "
+			"TZ: `%s`, standard: `%s`, daylight: `%s`.",
+			local.tm_isdst ? "+DST" : "", tz_dst_offt,
+			tz ? tz : "<not set>", _tzname[0], _tzname[1]);
+		/* TZ allows :ss specification, but that can't be sent to ES */
+		if (local.tm_sec != gm.tm_sec) {
+			ERR("sub-minute timezone offsets are not supported.");
 			return FALSE;
 		}
-		if (timeb.dstflag) { /* DST in effect */
-			if (_get_daylight(&dst_offt)) {
-				ERRN("failed to obtain daylight saving offset.");
-				return FALSE;
-			}
-			dst_offt *= 60 * 60; /* to seconds */
-			/* hour advances => delta from UTC lowers */
-			tz_dst_offt += -dst_offt;
+		if (_tzname[1] && _tzname[1][0]) {
+			WARN("DST calculation works with 'TZ' only for US timezones. "
+				"No 'TZ' validation is performed by the driver!");
 		}
-#else /* _WIN32 */
-		/* TODO: apply DST */
-#endif /* _WIN32 */
-	} else {
-		dst_offt = 0;
+		if (! tz) {
+			tz = (char *)0x1; /* only execute this block once */
+		}
 	}
-	INFO("TZ: `%s`, timezone offset: %ld seconds, daylight saving: "
-		"%s%s, total offset: %ld, standard: %s, daylight: %s.",
-		tz ? tz : "<not set>", _timezone, dst_offt ? "" : "not ",
-		tz ? "considered" : "in effect", tz_dst_offt, _tzname[0], _tzname[1]);
 
-	*offset = tz_dst_offt;
+	_tz_dst_offt = tz_dst_offt;
 	return TRUE;
 }
 

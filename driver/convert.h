@@ -9,7 +9,7 @@
 #include "error.h"
 #include "handles.h"
 
-BOOL TEST_API convert_init();
+void TEST_API convert_init();
 
 SQLRETURN set_param_decdigits(esodbc_rec_st *irec,
 	SQLUSMALLINT param_no, SQLSMALLINT decdigits);

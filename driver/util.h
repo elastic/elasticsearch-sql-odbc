@@ -156,7 +156,6 @@ void wrtrim_ws(wstr_st *wstr);
  * Returns TRUE if character has been encounter / trimming occured. */
 BOOL wtrim_at(wstr_st *wstr, SQLWCHAR wchar);
 
-BOOL tz_dst_offset(long *offset);
 BOOL wstr2bool(wstr_st *val);
 /* Converts a [cw]str_st to a SQL(U)BIGINT.
  * If !strict, parsing stops at first non-digit char.
@@ -169,6 +168,9 @@ int str2double(void *val, BOOL wide, SQLDOUBLE *dbl, BOOL strict);
 size_t i64tot(int64_t i64, void *buff, BOOL wide);
 size_t ui64tot(uint64_t ui64, void *buff, BOOL wide);
 
+/* total timezone plus daylight saving offset */
+extern long _tz_dst_offt;
+BOOL update_tz_dst_offset();
 
 #ifdef _WIN32
 /*
