@@ -96,7 +96,7 @@ static BOOL compat_matrix[ESSQL_NORM_RANGE][ESSQL_C_NORM_RANGE] = {FALSE};
  * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/converting-data-from-c-to-sql-data-types
  * "from" and "to" nameing attributes below correspond to items in the
  * vertical and horizontal lists, respectively. */
-void TEST_API convert_init()
+void convert_init()
 {
 	SQLSMALLINT i, j, sql, csql, lim_i, lim_j;
 	/*INDENT-OFF*/

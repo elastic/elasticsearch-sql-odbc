@@ -41,7 +41,7 @@ BOOL update_tz_dst_offset()
 	 * end/start, which should be a safe assumption */
 	tz_dst_offt = gm.tm_yday * 24 * 3600 + gm.tm_hour * 3600 + gm.tm_min * 60;
 	tz_dst_offt -= local.tm_yday * 24 * 3600;
-	tz_dst_offt -=  local.tm_hour * 3600 + local.tm_min * 60;
+	tz_dst_offt -= local.tm_hour * 3600 + local.tm_min * 60;
 
 	if (! tz) {
 		tz = getenv(ESODBC_TZ_ENV_VAR);
