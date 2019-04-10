@@ -132,6 +132,65 @@ TEST_F(Util, ascii_c2w_add_0term)
 	ASSERT_STREQ((wchar_t *)wbuff, (wchar_t *)wtest);
 }
 
+TEST_F(Util, metadata_id_escape)
+{
+	SQLWCHAR dst_buff[1024];
+	wstr_st dst = {dst_buff, 0};
+	wstr_st src, exp;
+
+	src = exp = WSTR_INIT("test"); // no escaping needed
+	ASSERT_FALSE(metadata_id_escape(&src, &dst, FALSE));
+	ASSERT_TRUE(EQ_WSTR(&dst, &exp));
+
+	src = WSTR_INIT("x\\x"); // not an actual escaping -> escape
+	exp = WSTR_INIT("x\\\\x");
+	ASSERT_TRUE(metadata_id_escape(&src, &dst, FALSE));
+	ASSERT_TRUE(EQ_WSTR(&dst, &exp));
+
+	src = exp = WSTR_INIT("x\\_"); // already escaped `_`
+	ASSERT_FALSE(metadata_id_escape(&src, &dst, FALSE));
+	ASSERT_TRUE(EQ_WSTR(&dst, &exp));
+
+	src = exp = WSTR_INIT("x\\%"); // already escaped `%`
+	ASSERT_FALSE(metadata_id_escape(&src, &dst, FALSE));
+	ASSERT_TRUE(EQ_WSTR(&dst, &exp));
+
+	src = exp = WSTR_INIT("\\\\"); // `\\`, no force
+	ASSERT_FALSE(metadata_id_escape(&src, &dst, FALSE));
+	ASSERT_TRUE(EQ_WSTR(&dst, &exp));
+
+	src = WSTR_INIT("\\\\"); // `\\`, force
+	exp = WSTR_INIT("\\\\\\\\");
+	ASSERT_TRUE(metadata_id_escape(&src, &dst, TRUE));
+	ASSERT_TRUE(EQ_WSTR(&dst, &exp));
+
+	src = exp = WSTR_INIT("\\\\\\"); // `\\\`
+	ASSERT_FALSE(metadata_id_escape(&src, &dst, FALSE));
+	ASSERT_TRUE(EQ_WSTR(&dst, &exp));
+
+	src = exp = WSTR_INIT("\\"); // stand-alone `\`
+	ASSERT_FALSE(metadata_id_escape(&src, &dst, FALSE));
+	ASSERT_TRUE(EQ_WSTR(&dst, &exp));
+
+	src = WSTR_INIT("\\"); // stand-alone `\`, but forced
+	exp = WSTR_INIT("\\\\");
+	ASSERT_TRUE(metadata_id_escape(&src, &dst, TRUE));
+	ASSERT_TRUE(EQ_WSTR(&dst, &exp));
+
+	src = exp = WSTR_INIT("%"); // stand-alone `\`
+	ASSERT_FALSE(metadata_id_escape(&src, &dst, FALSE));
+	ASSERT_TRUE(EQ_WSTR(&dst, &exp));
+
+	src = WSTR_INIT("%"); // stand-alone `\`, but forced
+	exp = WSTR_INIT("\\%");
+	ASSERT_TRUE(metadata_id_escape(&src, &dst, TRUE));
+	ASSERT_TRUE(EQ_WSTR(&dst, &exp));
+
+	src = exp = WSTR_INIT(""); // empty string
+	ASSERT_FALSE(metadata_id_escape(&src, &dst, TRUE));
+	ASSERT_TRUE(EQ_WSTR(&dst, &exp));
+}
+
 } // test namespace
 
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */

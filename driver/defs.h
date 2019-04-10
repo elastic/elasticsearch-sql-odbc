@@ -49,6 +49,7 @@
 #define ESODBC_ALL_COLUMNS			"%"
 #define ESODBC_STRING_DELIM			"'"
 #define ESODBC_QUOTE_CHAR			"\""
+#define ESODBC_CHAR_ESCAPE			'\\'
 #define ESODBC_PATTERN_ESCAPE		"\\"
 #define ESODBC_CATALOG_SEPARATOR	":"
 #define ESODBC_CATALOG_TERM			"catalog"
@@ -176,6 +177,7 @@
 /* default version checking mode: strict, major, none (dbg only) */
 #define ESODBC_DEF_VERSION_CHECKING	ESODBC_DSN_VC_STRICT
 #define ESODBC_DEF_MFIELD_LENIENT	"true"
+#define ESODBC_DEF_ESC_PVA			"true"
 
 /*
  *

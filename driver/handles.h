@@ -163,6 +163,7 @@ typedef struct struct_dbc {
 		ESODBC_FLTS_AUTO,
 	} sci_floats; /* floats printing on conversion */
 	BOOL mfield_lenient; /* 'field_multi_value_leniency' request param */
+	BOOL auto_esc_pva; /* auto-escape PVA args in catalog functions */
 
 	esodbc_estype_st *es_types; /* array with ES types */
 	SQLULEN no_types; /* number of types in array */

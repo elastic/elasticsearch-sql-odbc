@@ -7,18 +7,22 @@
 import pyodbc
 import datetime
 import hashlib
+import unittest
 
 from elasticsearch import Elasticsearch
-from data import TestData
+from data import TestData, BATTERS_TEMPLATE
 
-CONNECT_STRING = 'Driver={Elasticsearch Driver};UID=elastic;PWD=%s;Secure=0;' % Elasticsearch.AUTH_PASSWORD
+UID = "elastic"
+CONNECT_STRING = 'Driver={Elasticsearch Driver};UID=%s;PWD=%s;Secure=0;' % (UID, Elasticsearch.AUTH_PASSWORD)
+CATALOG = "distribution_run"
 
-class Testing(object):
+class Testing(unittest.TestCase):
 
 	_data = None
 	_dsn = None
 
 	def __init__(self, test_data, dsn=None):
+		super().__init__()
 		self._data = test_data
 		self._dsn = dsn if dsn else CONNECT_STRING
 		print("Using DSN: '%s'." % self._dsn)
@@ -92,21 +96,72 @@ class Testing(object):
 					cnt += 1 # no exception -> success
 				print("Selected %s rows from %s." % (cnt, index_name))
 
-	def _current_user(self):
+	def _check_info(self, attr, expected):
 		with pyodbc.connect(self._dsn) as cnxn:
 			cnxn.autocommit = True
-			user = cnxn.getinfo(pyodbc.SQL_USER_NAME)
-			if user != "elastic":
-				raise Exception("current username not 'elastic': %s" % user)
+			value = cnxn.getinfo(attr)
+			self.assertEqual(value, expected)
+
+	# tables(table=None, catalog=None, schema=None, tableType=None)
+	def _catalog_tables(self, no_table_type_as=""):
+		with pyodbc.connect(self._dsn) as cnxn:
+			cnxn.autocommit = True
+			curs = cnxn.cursor()
+
+			# enumerate catalogs
+			res = curs.tables("", "%", "", no_table_type_as).fetchall()
+			self.assertEqual(len(res), 1)
+			for i in range(0,10):
+				self.assertEqual(res[0][i], None if i else CATALOG)
+			#self.assertEqual(res, [tuple([CATALOG] + [None for i in range(9)])]) # XXX?
+
+			# enumerate table types
+			res = curs.tables("", "", "", "%").fetchall()
+			self.assertEqual(len(res), 2)
+			for i in range(0,10):
+				self.assertEqual(res[0][i], None if i != 3 else 'BASE TABLE')
+				self.assertEqual(res[1][i], None if i != 3 else 'VIEW')
+
+			# enumerate tables of selected type in catalog
+			res = curs.tables(catalog="%", tableType="TABLE,VIEW").fetchall()
+			res_tables = [row[2] for row in res]
+			have_tables = [getattr(TestData, attr) for attr in dir(TestData)
+					if attr.endswith("_INDEX") and type(getattr(TestData, attr)) == str]
+			for table in have_tables:
+				self.assertTrue(table in res_tables)
+
+	# columns(table=None, catalog=None, schema=None, column=None)
+	def _catalog_columns(self, use_catalog=False):
+		with pyodbc.connect(self._dsn) as cnxn:
+			cnxn.autocommit = True
+			curs = cnxn.cursor()
+			res = curs.columns(table=TestData.BATTERS_INDEX, catalog=CATALOG if use_catalog else None).fetchall()
+			cols_have = [row[3] for row in res]
+			cols_have.sort()
+			cols_expect = [k for k in BATTERS_TEMPLATE["mappings"]["properties"].keys()]
+			cols_expect.sort()
+			self.assertEqual(cols_have, cols_expect)
 
 	def perform(self):
-		self._current_user()
+		self._check_info(pyodbc.SQL_USER_NAME, UID)
+		self._check_info(pyodbc.SQL_DATABASE_NAME, CATALOG)
+
+		# simulate catalog querying as apps do in ES/GH#40775 do
+		self._catalog_tables(no_table_type_as = "")
+		self._catalog_tables(no_table_type_as = None)
+		self._catalog_columns(use_catalog = False)
+		# pyodbc seems to not null-terminate the catalog name string, despite indicating so
+		# self._catalog_columns(use_catalog = True)
+
 		self._as_csv(TestData.LIBRARY_INDEX)
 		self._as_csv(TestData.EMPLOYEES_INDEX)
+
 		self._count_all(TestData.CALCS_INDEX)
 		self._count_all(TestData.STAPLES_INDEX)
 		self._count_all(TestData.BATTERS_INDEX)
+
 		self._clear_cursor(TestData.LIBRARY_INDEX)
+
 		self._select_columns(TestData.FLIGHTS_INDEX, "*")
 		self._select_columns(TestData.ECOMMERCE_INDEX, "*")
 		self._select_columns(TestData.LOGS_INDEX, "*")
