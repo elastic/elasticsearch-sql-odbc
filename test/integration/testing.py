@@ -131,11 +131,21 @@ class Testing(unittest.TestCase):
 				self.assertTrue(table in res_tables)
 
 	# columns(table=None, catalog=None, schema=None, column=None)
-	def _catalog_columns(self, use_catalog=False):
+	# use_surrogate: pyodbc seems to not reliably null-terminate the catalog and/or table name string,
+	# despite indicating so.
+	def _catalog_columns(self, use_catalog=False, use_surrogate=True):
 		with pyodbc.connect(self._dsn) as cnxn:
 			cnxn.autocommit = True
 			curs = cnxn.cursor()
-			res = curs.columns(table=TestData.BATTERS_INDEX, catalog=CATALOG if use_catalog else None).fetchall()
+			if not use_surrogate:
+				res = curs.columns(table=TestData.BATTERS_INDEX, catalog=CATALOG if use_catalog else None).fetchall()
+			else:
+				if use_catalog:
+					stmt = "SYS COLUMNS CATALOG '%s' TABLE LIKE '%s' ESCAPE '\\' LIKE '%%' ESCAPE '\\'" % \
+						(CATALOG, TestData.BATTERS_INDEX)
+				else:
+					stmt = "SYS COLUMNS TABLE LIKE '%s' ESCAPE '\\' LIKE '%%' ESCAPE '\\'" % TestData.BATTERS_INDEX
+				res = curs.execute(stmt)
 			cols_have = [row[3] for row in res]
 			cols_have.sort()
 			cols_expect = [k for k in BATTERS_TEMPLATE["mappings"]["properties"].keys()]
@@ -149,9 +159,9 @@ class Testing(unittest.TestCase):
 		# simulate catalog querying as apps do in ES/GH#40775 do
 		self._catalog_tables(no_table_type_as = "")
 		self._catalog_tables(no_table_type_as = None)
-		self._catalog_columns(use_catalog = False)
-		# pyodbc seems to not null-terminate the catalog name string, despite indicating so
-		# self._catalog_columns(use_catalog = True)
+		self._catalog_columns(use_catalog = False, use_surrogate = True)
+		self._catalog_columns(use_catalog = True, use_surrogate = True)
+		return
 
 		self._as_csv(TestData.LIBRARY_INDEX)
 		self._as_csv(TestData.EMPLOYEES_INDEX)
