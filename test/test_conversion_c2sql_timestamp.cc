@@ -437,14 +437,14 @@ class ConvertC2SQL_Timestamp_DST : public ConvertC2SQL_Timestamp
 		/* see note in ConvertSQL2C_Timestamp_DST's constructor in
 		 * test_conversion_sql2c_timestamp.cc */
 
-		/* 2000-01-01 12:34:56.789 */
+		/* 2000-01-01 12:00:00.120 */
 		no_dst_local.year = 2000;
 		no_dst_local.month = 1; /* Jan */
 		no_dst_local.day = 1;
 		no_dst_local.hour = 12;
 		no_dst_local.fraction = 120000000;
 
-		/* 2000-05-01 12:34:56.789 */
+		/* 2000-05-01 12:00:00 */
 		dst_local.year = 2000;
 		dst_local.month = 5; /* May */
 		dst_local.day = 1;

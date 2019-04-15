@@ -8,8 +8,6 @@
 #include <errno.h>
 #include <stdio.h>
 
-#include <time.h>
-
 #include "util.h"
 #include "handles.h"
 #include "error.h"
