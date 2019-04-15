@@ -168,10 +168,6 @@ int str2double(void *val, BOOL wide, SQLDOUBLE *dbl, BOOL strict);
 size_t i64tot(int64_t i64, void *buff, BOOL wide);
 size_t ui64tot(uint64_t ui64, void *buff, BOOL wide);
 
-/* total timezone plus daylight saving offset */
-extern long _tz_dst_offt;
-BOOL update_tz_dst_offset();
-
 #ifdef _WIN32
 /*
  * "[D]oes not null-terminate an output string if the input string length is
@@ -203,6 +199,12 @@ typedef SRWLOCK esodbc_mutex_lt;
 #define ESODBC_MUX_LOCK(_m)		AcquireSRWLockExclusive(_m)
 #define ESODBC_MUX_TRYLOCK(_m)	TryAcquireSRWLockExclusive(_m)
 #define ESODBC_MUX_UNLOCK(_m)	ReleaseSRWLockExclusive(_m)
+
+#if defined(DRIVER_BUILD) && !defined(thread_local)
+#define thread_local __declspec(thread)
+#endif /* DRIVER_BUILD && !thread_local */
+
+#define timegm _mkgmtime
 
 #else /* _WIN32 */
 

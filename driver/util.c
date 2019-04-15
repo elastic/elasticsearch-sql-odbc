@@ -14,59 +14,6 @@
 #include "handles.h"
 #include "error.h"
 
-/* total timezone plus daylight saving offset */
-long _tz_dst_offt = 0;
-
-/* updates _tz_dst_offt */
-BOOL update_tz_dst_offset()
-{
-	static char *tz = NULL;
-	struct tm *tm, local, gm;
-	long tz_dst_offt;
-	time_t utc;
-
-	utc = time(NULL);
-	if (utc == (time_t)-1) {
-		ERRN("failed to read current time.");
-		return FALSE;
-	}
-	tm = localtime(&utc);
-	assert(tm); /* value returned by time() should always be valid */
-	local = *tm;
-	tm = gmtime(&utc);
-	assert(tm);
-	gm = *tm;
-
-	/* calculating the offset only works if the DST won't occur on year
-	 * end/start, which should be a safe assumption */
-	tz_dst_offt = gm.tm_yday * 24 * 3600 + gm.tm_hour * 3600 + gm.tm_min * 60;
-	tz_dst_offt -= local.tm_yday * 24 * 3600;
-	tz_dst_offt -= local.tm_hour * 3600 + local.tm_min * 60;
-
-	if (! tz) {
-		tz = getenv(ESODBC_TZ_ENV_VAR);
-		INFO("time offset (timezone%s): %ld seconds, "
-			"TZ: `%s`, standard: `%s`, daylight: `%s`.",
-			local.tm_isdst ? "+DST" : "", tz_dst_offt,
-			tz ? tz : "<not set>", _tzname[0], _tzname[1]);
-		/* TZ allows :ss specification, but that can't be sent to ES */
-		if (local.tm_sec != gm.tm_sec) {
-			ERR("sub-minute timezone offsets are not supported.");
-			return FALSE;
-		}
-		if (_tzname[1] && _tzname[1][0]) {
-			WARN("DST calculation works with 'TZ' only for US timezones. "
-				"No 'TZ' validation is performed by the driver!");
-		}
-		if (! tz) {
-			tz = (char *)0x1; /* only execute this block once */
-		}
-	}
-
-	_tz_dst_offt = tz_dst_offt;
-	return TRUE;
-}
-
 BOOL wstr2bool(wstr_st *val)
 {
 	/*INDENT-OFF*/

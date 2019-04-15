@@ -8,6 +8,7 @@
 #include "connected_dbc.h"
 
 #include <string.h>
+#include "timestamp.h"
 
 #ifdef _WIN64
 #	define CLIENT_ID	"\"client_id\": \"odbc64\""
@@ -297,30 +298,28 @@ TEST_F(ConvertC2SQL_Timestamp, Time2Timestamp_unimplemented_HYC00)
 }
 
 
+
 class ConvertC2SQL_Timestamp_TZ : public ConvertC2SQL_Timestamp
 {
 	protected:
 	void SetUp() override
 	{
-		((esodbc_dbc_st *)dbc)->apply_tz = TRUE;
 		ASSERT_EQ(putenv("TZ=NPT-5:45"), 0);
 		tzset();
 
-		/* The 'time_zone' & co. params are computed once, at library load ->
-		 * need to recompute after setting the TZ. */
-		ASSERT_TRUE(queries_init());
+		((esodbc_dbc_st *)dbc)->apply_tz = TRUE;
+		prepareStatement();
 	}
 
 	void TearDown() override
 	{
 		ASSERT_EQ(putenv("TZ="), 0);
+		tzset();
 	}
 };
 
 TEST_F(ConvertC2SQL_Timestamp_TZ, WStr_iso8601_Timestamp2Timestamp_colsize_16)
 {
-	prepareStatement();
-
 	SQLWCHAR val[] = L"1234-12-23T12:34:56.7890123Z";
 	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR,
 			SQL_TYPE_TIMESTAMP, /*size*/16, /*decdigits*/10, val, sizeof(val),
@@ -343,8 +342,6 @@ TEST_F(ConvertC2SQL_Timestamp_TZ, WStr_iso8601_Timestamp2Timestamp_colsize_16)
 
 TEST_F(ConvertC2SQL_Timestamp_TZ, WStr_iso8601_Timestamp2Timestamp_sz23_dd4)
 {
-	prepareStatement();
-
 	SQLWCHAR val[] = L"1234-12-23T12:34:56.7890123Z";
 	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR,
 			SQL_TYPE_TIMESTAMP, /*size*/23, /*decdigits*/4, val, sizeof(val),
@@ -367,8 +364,6 @@ TEST_F(ConvertC2SQL_Timestamp_TZ, WStr_iso8601_Timestamp2Timestamp_sz23_dd4)
 
 TEST_F(ConvertC2SQL_Timestamp_TZ, WStr_iso8601_Timestamp2Timestamp_decdig4)
 {
-	prepareStatement();
-
 	SQLWCHAR val[] = L"1234-12-23T12:34:56.7890123Z";
 	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR,
 			SQL_TYPE_TIMESTAMP, /*size*/0, /*decdigits*/4, val, sizeof(val),
@@ -391,8 +386,6 @@ TEST_F(ConvertC2SQL_Timestamp_TZ, WStr_iso8601_Timestamp2Timestamp_decdig4)
 
 TEST_F(ConvertC2SQL_Timestamp_TZ, WStr_SQL_Timestamp_local2Timestamp)
 {
-	prepareStatement();
-
 	SQLWCHAR val[] = L"2000-12-23 17:45:56.7890123";
 	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR,
 			SQL_TYPE_TIMESTAMP, /*size*/0, /*decdigits*/4, val, sizeof(val),
@@ -411,6 +404,133 @@ TEST_F(ConvertC2SQL_Timestamp_TZ, WStr_SQL_Timestamp_local2Timestamp)
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
 
 	ASSERT_CSTREQ(buff, expect);
+}
+
+
+
+class ConvertC2SQL_Timestamp_DST : public ConvertC2SQL_Timestamp
+{
+	protected:
+	TIMESTAMP_STRUCT no_dst_local = {0};
+	TIMESTAMP_STRUCT dst_local = {0};
+
+	void SetUp() override
+	{
+		ASSERT_EQ(putenv("TZ="), 0);
+		tzset();
+
+		((esodbc_dbc_st *)dbc)->apply_tz = TRUE;
+		prepareStatement();
+	}
+
+	void timestamp_local_to_utc(TIMESTAMP_STRUCT *, BOOL);
+
+	BOOL dst_in_effect(TIMESTAMP_STRUCT *ts)
+	{
+		/* quick switch, only valid for the dates below */
+		return 3 < ts->month && ts->month <= 10;
+	}
+
+	public:
+	ConvertC2SQL_Timestamp_DST()
+	{
+		/* see note in ConvertSQL2C_Timestamp_DST's constructor in
+		 * test_conversion_sql2c_timestamp.cc */
+
+		/* 2000-01-01 12:34:56.789 */
+		no_dst_local.year = 2000;
+		no_dst_local.month = 1; /* Jan */
+		no_dst_local.day = 1;
+		no_dst_local.hour = 12;
+		no_dst_local.fraction = 120000000;
+
+		/* 2000-05-01 12:34:56.789 */
+		dst_local.year = 2000;
+		dst_local.month = 5; /* May */
+		dst_local.day = 1;
+		dst_local.hour = 12;
+	}
+};
+
+void ConvertC2SQL_Timestamp_DST::timestamp_local_to_utc(
+		TIMESTAMP_STRUCT *src_local, BOOL from_string)
+{
+	static const SQLSMALLINT DECDIGITS = 3;
+	static const SQLSMALLINT BUFF_SZ = 1024;
+	static const char VALUE_PREFIX[] = "\"value\": \"";
+	static const wchar_t local_fmt[] =
+		L"%04hd-%02hu-%02hu %02hu:%02hu:%02hu.%.*lu";
+
+	if (from_string) {
+		SQLWCHAR param[BUFF_SZ];
+		int n = swprintf(param, BUFF_SZ, local_fmt,
+				src_local->year, src_local->month, src_local->day,
+				src_local->hour, src_local->minute, src_local->second,
+				DECDIGITS, src_local->fraction);
+		ASSERT_TRUE(0 < n && n < BUFF_SZ);
+
+		ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR,
+				SQL_TYPE_TIMESTAMP, 0, DECDIGITS, param, n, /*IndLen*/NULL);
+	} else {
+		ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_TYPE_TIMESTAMP,
+				SQL_TYPE_TIMESTAMP, /*size*/0, /*decdigits*/3,
+				src_local, sizeof(*src_local), NULL);
+	}
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	cstr_st json = {NULL, 0};
+	ret = serialize_statement((esodbc_stmt_st *)stmt, &json);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ASSERT_TRUE(json.str != NULL);
+
+	/* extract ISO8601 value from constructed JSON */
+	char *utc_str = strstr((char *)json.str, VALUE_PREFIX);
+	ASSERT_TRUE(utc_str != NULL);
+	utc_str += sizeof(VALUE_PREFIX) - /*\0*/1;
+	char *end = strchr(utc_str, '"');
+	ASSERT_TRUE(end != NULL);
+	ASSERT_LT(utc_str, end);
+	size_t utc_str_len = end - utc_str;
+
+	/* parse and transform the extracted val to a local-time SQL timestamp */
+	timestamp_t tsp;
+	ASSERT_TRUE(timestamp_parse(utc_str, utc_str_len, &tsp) == 0);
+	struct tm utc_tm;
+	ASSERT_TRUE(timestamp_to_tm_utc(&tsp, &utc_tm) != NULL);
+	time_t utc_ts = timegm(&utc_tm);
+	ASSERT_TRUE(utc_ts != (time_t)-1);
+	struct tm *local_tm_ptr = localtime(&utc_ts);
+	ASSERT_TRUE(local_tm_ptr != NULL);
+	TIMESTAMP_STRUCT dst_local = {0};
+	TM_TO_TIMESTAMP_STRUCT(local_tm_ptr, &dst_local, src_local->fraction);
+
+	/* check if test is valid for the local machine */
+	EXPECT_TRUE((0 <= local_tm_ptr->tm_isdst) &&
+		(0 < local_tm_ptr->tm_isdst) == dst_in_effect(src_local));
+
+	/* compare source local timestamp to that UTC'd by the driver and
+	 * localtime'd back above by the test */
+	ASSERT_TRUE(memcmp(src_local, &dst_local, sizeof(dst_local)) == 0);
+}
+
+TEST_F(ConvertC2SQL_Timestamp_DST, Timestamp_no_DST_Local2UTC_TS)
+{
+	timestamp_local_to_utc(&no_dst_local, FALSE);
+}
+
+TEST_F(ConvertC2SQL_Timestamp_DST, Timestamp_DST_Local2UTC_TS)
+{
+	timestamp_local_to_utc(&dst_local, FALSE);
+}
+
+TEST_F(ConvertC2SQL_Timestamp_DST, Timestamp_no_DST_Local2UTC_WChar)
+{
+	timestamp_local_to_utc(&no_dst_local, TRUE);
+}
+
+TEST_F(ConvertC2SQL_Timestamp_DST, Timestamp_DST_Local2UTC_WChar)
+{
+	timestamp_local_to_utc(&dst_local, TRUE);
 }
 
 } // test namespace
