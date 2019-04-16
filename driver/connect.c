@@ -1307,7 +1307,7 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	dbc->mfield_lenient = wstr2bool(&attrs->mfield_lenient);
 	INFOH(dbc, "multifield lenient: %s.",
 		dbc->mfield_lenient ? "true" : "false");
-	/* auto escape patter value argument */
+	/* auto escape pattern value argument */
 	dbc->auto_esc_pva = wstr2bool(&attrs->auto_esc_pva);
 	INFOH(dbc, "auto escape PVA: %s.", dbc->auto_esc_pva ? "true" : "false");
 

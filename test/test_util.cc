@@ -181,8 +181,17 @@ TEST_F(Util, metadata_id_escape)
 	ASSERT_FALSE(metadata_id_escape(&src, &dst, FALSE));
 	ASSERT_TRUE(EQ_WSTR(&dst, &exp));
 
-	src = WSTR_INIT("%"); // stand-alone `\`, but forced
+	src = WSTR_INIT("%"); // stand-alone `%`, but forced
 	exp = WSTR_INIT("\\%");
+	ASSERT_TRUE(metadata_id_escape(&src, &dst, TRUE));
+	ASSERT_TRUE(EQ_WSTR(&dst, &exp));
+
+	src = exp = WSTR_INIT("_"); // stand-alone `_`
+	ASSERT_FALSE(metadata_id_escape(&src, &dst, FALSE));
+	ASSERT_TRUE(EQ_WSTR(&dst, &exp));
+
+	src = WSTR_INIT("_"); // stand-alone `_`, but forced
+	exp = WSTR_INIT("\\_");
 	ASSERT_TRUE(metadata_id_escape(&src, &dst, TRUE));
 	ASSERT_TRUE(EQ_WSTR(&dst, &exp));
 
