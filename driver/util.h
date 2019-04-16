@@ -265,6 +265,14 @@ SQLRETURN write_wstr(SQLHANDLE hnd, SQLWCHAR *dest, wstr_st *src,
  */
 cstr_st TEST_API *wstr_to_utf8(wstr_st *src, cstr_st *dst);
 
+/* Escape `%`, `_`, `\` characters in 'src'.
+ * If not 'force'-d, the escaping will stop on detection of pre-existing
+ * escaping(*), OR if the chars to be escaped are stand-alone.
+ * (*): invalid/incomplete escaping sequences - `\\\` -  are still considered
+ * as containing escaping.
+ * Returns: TRUE, if escaping has been applied  */
+BOOL TEST_API metadata_id_escape(wstr_st *src, wstr_st *dst, BOOL force);
+
 /*
  * Printing aids.
  */
