@@ -23,7 +23,7 @@ inline void *deferred_address(SQLSMALLINT field_id, size_t pos,
 
 SQLRETURN convertability_check(esodbc_stmt_st *stmt, SQLINTEGER idx,
 	int *conv_code);
-BOOL update_dst_date(struct tm *now);
+BOOL update_crr_date(struct tm *now);
 
 /*
  * SQL -> C SQL
