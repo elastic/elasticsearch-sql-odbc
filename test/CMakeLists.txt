@@ -57,6 +57,7 @@ file(GLOB TEST_CASES LIST_DIRECTORIES false
 message("Driver test cases: ${TEST_CASES}")
 
 set(EXTRA_SRC connected_dbc.cc)
+aux_source_directory(${CTIMESTAMP_PATH_SRC}/ CTS_SRC)
 
 # copy DLLs linked (later) against, so that test exes can load them
 file(TO_NATIVE_PATH
@@ -108,7 +109,14 @@ add_custom_target(install_shared
 
 foreach (TSRC ${TEST_CASES})
 	string(REPLACE ".cxx" "" TBIN ${TSRC})
-	add_executable(${TBIN} ${TSRC} ${EXTRA_SRC})
+
+	if (${TBIN} MATCHES ".*test_conversion_c2sql_timestamp.*")
+		# this one test requires the c-timestamp lib
+		add_executable(${TBIN} ${TSRC} ${EXTRA_SRC} ${CTS_SRC})
+	else ()
+		add_executable(${TBIN} ${TSRC} ${EXTRA_SRC})
+	endif ()
+
 	set_target_properties(${TBIN} PROPERTIES COMPILE_FLAGS ${CMAKE_C_FLAGS})
 	target_link_libraries(${TBIN} ${DRV_NAME} ${GTEST_LIB} ${GTEST_MAIN_LIB})
 	add_dependencies(${TBIN} install_shared)

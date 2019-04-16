@@ -8,6 +8,7 @@
 #include "connected_dbc.h"
 
 #include <string.h>
+#include "convert.h" /* TM_TO_TIMESTAMP_STRUCT() */
 
 /* placeholders; will be undef'd and redef'd */
 #define SQL_VAL
@@ -19,7 +20,7 @@ class ConvertSQL2C_Timestamp : public ::testing::Test, public ConnectedDBC
 {
 
 	protected:
-		TIMESTAMP_STRUCT ts;
+		TIMESTAMP_STRUCT ts = {0};
 
 	void prepareAndBind(const char *jsonAnswer)
 	{
@@ -290,13 +291,14 @@ class ConvertSQL2C_Timestamp_TZ : public ConvertSQL2C_Timestamp
 	void SetUp() override
 	{
 		((esodbc_dbc_st *)dbc)->apply_tz = TRUE;
-		ASSERT_EQ(putenv("TZ=NPT-5:45NTP"), 0);
+		ASSERT_EQ(putenv("TZ=NPT-5:45"), 0);
 		tzset();
 	}
 
 	void TearDown() override
 	{
 		ASSERT_EQ(putenv("TZ="), 0);
+		tzset();
 	}
 };
 
@@ -404,6 +406,133 @@ TEST_F(ConvertSQL2C_Timestamp_TZ, Datetime_offset_Str2Timestamp)
 #undef SQL_VAL_TS
 }
 
+
+class ConvertSQL2C_Timestamp_DST : public ConvertSQL2C_Timestamp
+{
+	protected:
+	struct tm no_dst_utc = {0};
+	struct tm dst_utc = {0};
+
+	void SetUp() override
+	{
+		ASSERT_EQ(putenv("TZ="), 0);
+		tzset();
+
+		((esodbc_dbc_st *)dbc)->apply_tz = TRUE;
+	}
+
+	void timestamp_utc_to_local(struct tm *utc, BOOL to_string);
+	void print_tm_timestamp(char *dest, size_t size,
+		const char *templ, struct tm *src);
+
+	BOOL dst_in_effect(struct tm *tm)
+	{
+		int month = tm->tm_mon + 1;
+		/* quick switch, only valid for the dates below */
+		return 3 < month && month <= 10;
+	}
+
+	public:
+	ConvertSQL2C_Timestamp_DST()
+	{
+		/* Construct the tm structs of dates when DST is not and is in effect,
+		 * respectively. The DST applicability will depend on the testing
+		 * machine's settings and tests will fail early if not suitable for
+		 * local machine. */
+
+		/* 2000-01-01T12:00:00Z */
+		no_dst_utc.tm_year = 2000 - 1900;
+		no_dst_utc.tm_mon = 0; /* Jan */
+		no_dst_utc.tm_mday = 1;
+		no_dst_utc.tm_hour = 12;
+
+		/* 2000-05-01T12:00:00Z */
+		dst_utc.tm_year = 2000 - 1900;
+		dst_utc.tm_mon = 4; /* May */
+		dst_utc.tm_mday = 1;
+		dst_utc.tm_hour = 12;
+	}
+};
+
+void ConvertSQL2C_Timestamp_DST::print_tm_timestamp(char *dest, size_t size,
+		const char *templ, struct tm *src)
+{
+	int n = snprintf(dest, size, templ,
+			src->tm_year + 1900, src->tm_mon + 1, src->tm_mday,
+			src->tm_hour, src->tm_min, src->tm_sec);
+	ASSERT_TRUE(0 < n && n < size);
+
+}
+
+void ConvertSQL2C_Timestamp_DST::timestamp_utc_to_local(struct tm *utc,
+		BOOL to_string)
+{
+	const char answer_template[] =
+		"{\"columns\": [{\"name\": \"value\", \"type\": \"DATETIME\"}],"
+		"\"rows\": [[\"%04d-%02d-%02dT%02d:%02d:%02dZ\"]]}";
+	const char expected_template[] = "%04d-%02d-%02d %02d:%02d:%02d";
+
+	utc->tm_isdst = -1; /* shouldn't matter, but set it: unknown DST */
+	time_t utc_ts = timegm(utc);
+	ASSERT_TRUE(utc_ts != (time_t)-1);
+	struct tm *local_tm_ptr = localtime(&utc_ts);
+	ASSERT_TRUE(local_tm_ptr != NULL);
+
+	TIMESTAMP_STRUCT local_ts = {0};
+	/* If this fails, the test is not suitable: the DTS applicability is not
+	 * known or in-line with used dates. */
+	EXPECT_TRUE((0 <= local_tm_ptr->tm_isdst) &&
+			(0 < local_tm_ptr->tm_isdst) == dst_in_effect(utc));
+	TM_TO_TIMESTAMP_STRUCT(local_tm_ptr, &local_ts, 0LU);
+
+	char fetched[1024], expected[1024];
+	char answer[1024];
+	ASSERT_LT(sizeof(answer_template) + ISO8601_TS_UTC_LEN(0), sizeof(answer));
+	print_tm_timestamp(answer, sizeof(answer), answer_template, utc);
+
+	if (to_string) {
+		prepareStatement(answer);
+
+		ret = SQLBindCol(stmt, /*col#*/1, SQL_C_CHAR, fetched, sizeof(fetched),
+				&ind_len);
+		ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+		print_tm_timestamp(expected, sizeof(expected), expected_template,
+				local_tm_ptr);
+	} else {
+		prepareAndBind(answer);
+	}
+
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	if (to_string) {
+		ASSERT_STREQ(fetched, expected);
+	} else {
+		ASSERT_TRUE(memcmp(&local_ts, /*fetched result*/&ts, sizeof(ts)) == 0);
+	}
+
+}
+
+TEST_F(ConvertSQL2C_Timestamp_DST, Timestamp_no_DST_UTC2Local_TS)
+{
+	timestamp_utc_to_local(&no_dst_utc, FALSE);
+}
+
+TEST_F(ConvertSQL2C_Timestamp_DST, Timestamp_DST_UTC2Local_TS)
+{
+	timestamp_utc_to_local(&dst_utc, FALSE);
+}
+
+TEST_F(ConvertSQL2C_Timestamp_DST, Timestamp_no_DST_UTC2Local_Char)
+{
+	timestamp_utc_to_local(&no_dst_utc, TRUE);
+}
+
+TEST_F(ConvertSQL2C_Timestamp_DST, Timestamp_DST_UTC2Local_Char)
+{
+	timestamp_utc_to_local(&dst_utc, TRUE);
+}
 
 
 } // test namespace

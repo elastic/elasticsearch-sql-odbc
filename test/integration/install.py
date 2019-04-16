@@ -17,7 +17,7 @@ from elasticsearch import Elasticsearch
 
 DRIVER_BASE_NAME = "Elasticsearch ODBC Driver"
 # Uninstallation can take quite a long time (over 10s)
-INSTALLATION_TIMEOUT = 30
+INSTALLATION_TIMEOUT = 60
 
 class Installer(object):
 	_driver_path = None
