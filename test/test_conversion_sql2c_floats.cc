@@ -48,7 +48,7 @@ TEST_F(ConvertSQL2C_Floats, ScaledFloat2Char_scale_default) {
 	ret = SQLFetch(stmt);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	EXPECT_EQ(ind_len , /*0.*/2 + /* max ES/SQL double scale */19);
+	EXPECT_EQ(ind_len , /*0.*/2 + /* max ES/SQL double scale */15);
 	//std::cerr << buff << std::endl;
 	EXPECT_EQ(memcmp(buff, SQL_VAL, /*0.*/2+/*dbl precision*/15), 0);
 }
