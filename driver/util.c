@@ -636,5 +636,46 @@ cstr_st TEST_API *wstr_to_utf8(wstr_st *src, cstr_st *dst)
 	return dst;
 }
 
+/* Escape `%`, `_`, `\` characters in 'src'.
+ * If not 'force'-d, the escaping will stop on detection of pre-existing
+ * escaping(*), OR if the chars to be escaped are stand-alone.
+ * (*): invalid/incomplete escaping sequences - `\\\` -  are still considered
+ * as containing escaping.
+ * Returns: TRUE, if escaping has been applied  */
+BOOL TEST_API metadata_id_escape(wstr_st *src, wstr_st *dst, BOOL force)
+{
+	size_t i, j;
+	SQLWCHAR crr, prev;
+	BOOL ret;
+
+	ret = FALSE;
+	prev = 0;
+	for (i = 0, j = 0; i <= src->cnt; i ++) {
+		crr = src->str[i];
+		switch (crr) {
+			case '%':
+			case L'_':
+			case MK_WPTR(ESODBC_CHAR_ESCAPE):
+				/* is current char already escaped OR is it stand-alone? */
+				if (prev == MK_WPTR(ESODBC_CHAR_ESCAPE) || src->cnt == 1) {
+					if (! force) {
+						wmemcpy(dst->str, src->str, src->cnt);
+						dst->cnt = src->cnt;
+						return FALSE;
+					}
+				}
+				dst->str[j ++] = MK_WPTR(ESODBC_CHAR_ESCAPE);
+				ret = TRUE;
+			/* no break */
+			default:
+				dst->str[j ++] = crr;
+		}
+		prev = crr;
+	}
+
+	dst->cnt = 0 < j ? j - 1 : 0;
+	return ret;
+}
+
 
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */
