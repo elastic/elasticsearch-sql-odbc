@@ -12,8 +12,6 @@
 #include "handles.h"
 #include "error.h"
 
-
-
 BOOL wstr2bool(wstr_st *val)
 {
 	/*INDENT-OFF*/

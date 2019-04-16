@@ -5,7 +5,6 @@
  */
 
 #include <float.h>
-#include <time.h>
 
 #include "queries.h"
 #include "log.h"
@@ -29,30 +28,109 @@
 
 #define MSG_INV_SRV_ANS		"Invalid server answer"
 
-static cstr_st _tz;
+static thread_local cstr_st tz_param;
 
-BOOL TEST_API queries_init()
+static BOOL print_tz_param(long tz_dst_offt)
 {
+	static char time_zone[sizeof("\"-05:45\"")];
 	int n;
 	long abs_tz;
-	static char time_zone[sizeof("\"-05:45\"")];
 
-	tzset();
-	abs_tz = (_timezone < 0) ? -_timezone : _timezone;
+	abs_tz = (tz_dst_offt < 0) ? -tz_dst_offt : tz_dst_offt;
+
 	n = snprintf(time_zone, sizeof(time_zone), "\"%c%02ld:%02ld\"",
-			/* negative _timezone means ahead of UTC -> '+' */
-			_timezone <= 0 ? '+' : '-', abs_tz / 3600, (abs_tz % 3600) / 60);
+			/* negative offset means ahead of UTC -> '+' */
+			tz_dst_offt <= 0 ? '+' : '-',
+			abs_tz / 3600, (abs_tz % 3600) / 60);
+
 	if (n <= 0 || sizeof(time_zone) <= n) {
-		ERRN("failed to print timezone param for offset: %ld.", _timezone);
+		ERRN("failed to print timezone param for offset: %ld.", tz_dst_offt);
 		return FALSE;
 	}
-	_tz.str = time_zone;
-	_tz.cnt = n;
-	DBG("timezone request parameter: `" LCPDL "` (where "
-		ESODBC_DSN_APPLY_TZ ").", LCSTR(&_tz));
+	tz_param.str = time_zone;
+	tz_param.cnt = n;
+	DBG("timezone request parameter updated to: `" LCPDL "` (where "
+		ESODBC_DSN_APPLY_TZ ").", LCSTR(&tz_param));
 	return TRUE;
 }
 
+/* Returns total timezone plus daylight saving offset */
+static BOOL get_tz_dst_offset(long *_tz_dst_offt, struct tm *now)
+{
+	static char *tz = NULL;
+	struct tm *tm, local, gm;
+	long tz_dst_offt;
+	time_t utc;
+
+	utc = time(NULL);
+	if (utc == (time_t)-1) {
+		ERRN("failed to read current time.");
+		return FALSE;
+	}
+	tm = localtime(&utc);
+	assert(tm); /* value returned by time() should always be valid */
+	local = *tm;
+	tm = gmtime(&utc);
+	assert(tm);
+	gm = *tm;
+
+	/* calculating the offset only works if the DST won't occur on year
+	 * end/start, which should be a safe assumption */
+	tz_dst_offt = gm.tm_yday * 24 * 3600 + gm.tm_hour * 3600 + gm.tm_min * 60;
+	tz_dst_offt -= local.tm_yday * 24 * 3600;
+	tz_dst_offt -= local.tm_hour * 3600 + local.tm_min * 60;
+
+	if (! tz) {
+		tz = getenv(ESODBC_TZ_ENV_VAR);
+		INFO("time offset (timezone%s): %ld seconds, "
+			"TZ: `%s`, standard: `%s`, daylight: `%s`.",
+			local.tm_isdst ? "+DST" : "", tz_dst_offt,
+			tz ? tz : "<not set>", _tzname[0], _tzname[1]);
+		/* TZ allows :ss specification, but that can't be sent to ES */
+		if (local.tm_sec != gm.tm_sec) {
+			ERR("sub-minute timezone offsets are not supported.");
+			return FALSE;
+		}
+		if (_tzname[1] && _tzname[1][0]) {
+			WARN("DST calculation works with 'TZ' only for US timezones. "
+				"No 'TZ' validation is performed by the driver!");
+		}
+		if (! tz) {
+			tz = (char *)0x1; /* only execute this block once */
+		}
+	}
+
+	if (now) {
+		*now = local;
+	}
+	*_tz_dst_offt = tz_dst_offt;
+	return TRUE;
+}
+
+static inline BOOL update_tz_param()
+{
+	/* offset = 1 -- impossible value -> trigger an update */
+	static thread_local long tz_dst_offt = 1;
+	long offset;
+	struct tm now;
+
+	if (! get_tz_dst_offset(&offset, &now)) {
+		return FALSE;
+	}
+	if (tz_dst_offt == offset) {
+		/* nothing changed, old printed value can be reused */
+		return TRUE;
+	}
+
+	tz_dst_offt = offset;
+	return print_tz_param(tz_dst_offt) && update_dst_date(&now);
+}
+
+BOOL queries_init()
+{
+	/* needed to correctly run the unit tests */
+	return update_tz_param();
+}
 
 void clear_resultset(esodbc_stmt_st *stmt, BOOL on_close)
 {
@@ -1982,6 +2060,11 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 	/* enforced in EsSQLSetDescFieldW(SQL_DESC_ARRAY_SIZE) */
 	assert(apd->array_size <= 1);
 
+	if (! update_tz_param()) {
+		RET_HDIAG(stmt, SQL_STATE_HY000,
+			"Failed to update the timezone parameter", 0);
+	}
+
 	bodylen = 1; /* { */
 	/* evaluate how long the stringified REST object will be */
 	if (stmt->rset.ecurs.cnt) { /* eval CURSOR object length */
@@ -2018,7 +2101,7 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 		bodylen += /*false*/5;
 		/* "time_zone": "-05:45" */
 		bodylen += sizeof(JSON_KEY_TIMEZONE) - 1;
-		bodylen += _tz.cnt;
+		bodylen += tz_param.cnt;
 	}
 	/* TODO: request_/page_timeout */
 	bodylen += sizeof(JSON_KEY_VAL_MODE) - 1; /* "mode": */
@@ -2104,8 +2187,8 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 		memcpy(body + pos, JSON_KEY_TIMEZONE, sizeof(JSON_KEY_TIMEZONE) - 1);
 		pos += sizeof(JSON_KEY_TIMEZONE) - 1;
 		if (dbc->apply_tz) {
-			memcpy(body + pos, _tz.str, _tz.cnt);
-			pos += _tz.cnt;
+			memcpy(body + pos, tz_param.str, tz_param.cnt);
+			pos += tz_param.cnt;
 		} else {
 			memcpy(body + pos, "\"Z\"", sizeof("\"Z\"") - 1);
 			pos += sizeof("\"Z\"") - 1;
