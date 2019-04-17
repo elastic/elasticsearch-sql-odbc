@@ -161,7 +161,6 @@ class Testing(unittest.TestCase):
 		self._catalog_tables(no_table_type_as = None)
 		self._catalog_columns(use_catalog = False, use_surrogate = True)
 		self._catalog_columns(use_catalog = True, use_surrogate = True)
-		return
 
 		self._as_csv(TestData.LIBRARY_INDEX)
 		self._as_csv(TestData.EMPLOYEES_INDEX)

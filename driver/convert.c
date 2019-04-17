@@ -4182,6 +4182,7 @@ static SQLRETURN struct_to_iso8601_timestamp(esodbc_stmt_st *stmt,
 SQLRETURN c2sql_date_time(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	SQLULEN pos, char *dest, size_t *len)
 {
+#	define ZERO_TIME_Z "00:00:00Z"
 	esodbc_stmt_st *stmt;
 	void *data_ptr;
 	SQLLEN *octet_len_ptr;
@@ -4272,13 +4273,32 @@ SQLRETURN c2sql_date_time(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	}
 	/*INDENT-ON*/
 
-	/* TIME datatype: shift value upwards over the DATE component */
-	if (irec->es_type->data_type == SQL_C_TYPE_TIME) {
-		/* Note: by the book, non-0 fractional seconds in timestamp should
-		 * lead to 22008 a failure. However, ES/SQL's TIME supports fractions,
-		 * so will just ignore this provision. */
-		cnt -= DATE_TEMPLATE_LEN + /*'T'*/1;
-		wmemmove(wbuff, wbuff + DATE_TEMPLATE_LEN + /*'T'*/1, cnt + /*\0*/1);
+	/* Note: these post-print fixes could be optimized out by passing the SQL
+	 * type to the respective *_to_iso8601_timestamp(), to some code clarity
+	 * expense. */
+	/* Adapt the resulting ISO8601 value to the target data type */
+	switch (irec->es_type->data_type) {
+		case SQL_C_TYPE_TIME:
+			/* shift value + \0 upwards over the DATE component */
+			/* Note: by the book, non-0 fractional seconds in timestamp should
+			 * lead to 22008 a failure. However, ES/SQL's TIME supports
+			 * fractions, so will just ignore this provision. */
+			cnt -= DATE_TEMPLATE_LEN + /*'T'*/1;
+			wmemmove(wbuff, wbuff + DATE_TEMPLATE_LEN + /*'T'*/1, cnt + 1);
+			break;
+		case SQL_C_TYPE_DATE:
+			/* if origin is a timestamp (struct or string), the time part
+			 * needs to be zeroed. */
+			if (ctype == SQL_C_TYPE_TIMESTAMP ||
+				format == SQL_C_TYPE_TIMESTAMP) {
+				assert(ISO8601_TIMESTAMP_MIN_LEN <= cnt);
+				wmemcpy(wbuff + DATE_TEMPLATE_LEN + /*'T'*/1,
+					MK_WPTR(ZERO_TIME_Z), sizeof(ZERO_TIME_Z) /*+\0*/);
+				cnt = ISO8601_TIMESTAMP_MIN_LEN;
+			}
+			break;
+		default:
+			assert(irec->es_type->data_type == SQL_C_TYPE_TIMESTAMP);
 	}
 	DBGH(stmt, "converted value: [%zu] `" LWPDL "`.", cnt, cnt, wbuff);
 
@@ -4288,6 +4308,7 @@ SQLRETURN c2sql_date_time(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 	dest[(*len) ++] = '"';
 	return SQL_SUCCESS;
+#	undef ZERO_TIME_Z
 }
 
 /* parses an interval literal string from app's char/wchar_t buffer */
