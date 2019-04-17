@@ -47,7 +47,7 @@ SQLRETURN c2sql_number(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	size_t *len);
 SQLRETURN c2sql_varchar(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	SQLULEN pos, char *dest, size_t *len);
-SQLRETURN c2sql_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
+SQLRETURN c2sql_date_time(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	SQLULEN pos, char *dest, size_t *len);
 SQLRETURN c2sql_interval(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	SQLULEN pos, char *dest, size_t *len);

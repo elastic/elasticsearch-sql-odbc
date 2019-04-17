@@ -42,7 +42,7 @@ class ConnectedDBC {
 		SQLHANDLE env, dbc, stmt;
 		SQLRETURN ret;
 		SQLLEN ind_len = SQL_NULL_DATA;
-		const char *testName;
+		const char *test_name;
 
 
 	ConnectedDBC();

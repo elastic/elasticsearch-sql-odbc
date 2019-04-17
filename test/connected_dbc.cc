@@ -165,10 +165,11 @@ void ConnectedDBC::assertState(const SQLWCHAR *state)
 
 void ConnectedDBC::prepareStatement()
 {
-	testName = ::testing::UnitTest::GetInstance()->current_test_info()->name();
-	size_t nameLen = strlen(testName);
+	test_name =
+		::testing::UnitTest::GetInstance()->current_test_info()->name();
+	size_t nameLen = strlen(test_name);
 	std::wstring wstr(nameLen, L' ');
-	ASSERT_TRUE(mbstowcs(&wstr[0], testName, nameLen + 1) != (size_t)-1);
+	ASSERT_TRUE(mbstowcs(&wstr[0], test_name, nameLen + 1) != (size_t)-1);
 
 	ret = ATTACH_SQL(stmt, &wstr[0], nameLen);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));

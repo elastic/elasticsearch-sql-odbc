@@ -1929,8 +1929,10 @@ static SQLRETURN convert_param_val(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		case SQL_VARCHAR: /* KEYWORD, TEXT */
 			return c2sql_varchar(arec, irec, pos, dest, len);
 
-		case SQL_TYPE_TIMESTAMP: /* DATE */
-			return c2sql_timestamp(arec, irec, pos, dest, len);
+		case SQL_TYPE_DATE:
+		case SQL_TYPE_TIME:
+		case SQL_TYPE_TIMESTAMP:
+			return c2sql_date_time(arec, irec, pos, dest, len);
 
 		case SQL_INTERVAL_YEAR:
 		case SQL_INTERVAL_MONTH:
