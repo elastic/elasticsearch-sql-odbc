@@ -69,10 +69,10 @@ CALCS_PIPELINE =\
 					"lang": "painless",
 					"source":
 						"""
-						ctx.bool0 = ctx.bool0 == "0" ? false : true;
-						ctx.bool1 = ctx.bool1 == "0" ? false : true;
-						ctx.bool2 = ctx.bool2 == "0" ? false : true;
-						ctx.bool3 = ctx.bool3 == "0" ? false : true;
+						ctx.bool0 = ctx.bool0 == "0" ? false : (ctx.bool0 == "1" ? true : ctx.bool0);
+						ctx.bool1 = ctx.bool1 == "0" ? false : (ctx.bool1 == "1" ? true : ctx.bool1);
+						ctx.bool2 = ctx.bool2 == "0" ? false : (ctx.bool2 == "1" ? true : ctx.bool2);
+						ctx.bool3 = ctx.bool3 == "0" ? false : (ctx.bool3 == "1" ? true : ctx.bool3);
 						"""
 				}
 			}

@@ -296,15 +296,15 @@ SQLRETURN EsSQLTablesW(
 		esrc.str = CatalogName;
 		if (NameLength1 == SQL_NTS) {
 			esrc.cnt = wcslen(esrc.str);
-			if (ESODBC_MAX_IDENTIFIER_LEN < esrc.cnt) {
-				ERRH(stmt, "catalog identifier name '" LWPDL "' too long "
-					"(%zd. max=%d).", LWSTR(&esrc), esrc.cnt,
-					ESODBC_MAX_IDENTIFIER_LEN);
-				SET_HDIAG(stmt, SQL_STATE_HY090, "catalog name too long", 0);
-				goto end;
-			}
 		} else {
 			esrc.cnt = NameLength1;
+		}
+		if (ESODBC_MAX_IDENTIFIER_LEN < esrc.cnt) {
+			ERRH(stmt, "catalog identifier name '" LWPDL "' too long "
+				"(%zd. max=%d).", LWSTR(&esrc), esrc.cnt,
+				ESODBC_MAX_IDENTIFIER_LEN);
+			SET_HDIAG(stmt, SQL_STATE_HY090, "catalog name too long", 0);
+			goto end;
 		}
 
 		if (dbc->auto_esc_pva || stmt->metadata_id) {
@@ -326,15 +326,15 @@ SQLRETURN EsSQLTablesW(
 		esrc.str = SchemaName;
 		if (NameLength2 == SQL_NTS) {
 			esrc.cnt = wcslen(esrc.str);
-			if (ESODBC_MAX_IDENTIFIER_LEN < esrc.cnt) {
-				ERRH(stmt, "schema identifier name '" LWPDL "' too long "
-					"(%zd. max=%d).", LWSTR(&esrc), esrc.cnt,
-					ESODBC_MAX_IDENTIFIER_LEN);
-				SET_HDIAG(stmt, SQL_STATE_HY090, "schema name too long", 0);
-				goto end;
-			}
 		} else {
 			esrc.cnt = NameLength2;
+		}
+		if (ESODBC_MAX_IDENTIFIER_LEN < esrc.cnt) {
+			ERRH(stmt, "schema identifier name '" LWPDL "' too long "
+				"(%zd. max=%d).", LWSTR(&esrc), esrc.cnt,
+				ESODBC_MAX_IDENTIFIER_LEN);
+			SET_HDIAG(stmt, SQL_STATE_HY090, "schema name too long", 0);
+			goto end;
 		}
 
 		/* TODO: server support needed for sch. name filtering */
@@ -350,15 +350,15 @@ SQLRETURN EsSQLTablesW(
 		esrc.str = TableName;
 		if (NameLength3 == SQL_NTS) {
 			esrc.cnt = wcslen(esrc.str);
-			if (ESODBC_MAX_IDENTIFIER_LEN < esrc.cnt) {
-				ERRH(stmt, "table identifier name '" LWPDL "' too long "
-					"(%zd. max=%d).", LWSTR(&esrc), esrc.cnt,
-					ESODBC_MAX_IDENTIFIER_LEN);
-				SET_HDIAG(stmt, SQL_STATE_HY090, "table name too long", 0);
-				goto end;
-			}
 		} else {
 			esrc.cnt = NameLength3;
+		}
+		if (ESODBC_MAX_IDENTIFIER_LEN < esrc.cnt) {
+			ERRH(stmt, "table identifier name '" LWPDL "' too long "
+				"(%zd. max=%d).", LWSTR(&esrc), esrc.cnt,
+				ESODBC_MAX_IDENTIFIER_LEN);
+			SET_HDIAG(stmt, SQL_STATE_HY090, "table name too long", 0);
+			goto end;
 		}
 
 		if (dbc->auto_esc_pva || stmt->metadata_id) {
@@ -380,15 +380,15 @@ SQLRETURN EsSQLTablesW(
 		esrc.str = TableType;
 		if (NameLength4 == SQL_NTS) {
 			esrc.cnt = wcslen(esrc.str);
-			if (ESODBC_MAX_IDENTIFIER_LEN < esrc.cnt) {
-				ERRH(stmt, "type identifier name '" LWPDL "' too long "
-					"(%zd. max=%d).", LWSTR(&esrc), esrc.cnt,
-					ESODBC_MAX_IDENTIFIER_LEN);
-				SET_HDIAG(stmt, SQL_STATE_HY090, "type name too long", 0);
-				goto end;
-			}
 		} else {
 			esrc.cnt = NameLength4;
+		}
+		if (ESODBC_MAX_IDENTIFIER_LEN < esrc.cnt) {
+			ERRH(stmt, "type identifier name '" LWPDL "' too long "
+				"(%zd. max=%d).", LWSTR(&esrc), esrc.cnt,
+				ESODBC_MAX_IDENTIFIER_LEN);
+			SET_HDIAG(stmt, SQL_STATE_HY090, "type name too long", 0);
+			goto end;
 		}
 
 		/* Only print TYPE if non-empty. This is incorrect, by the book,
@@ -453,14 +453,14 @@ SQLRETURN EsSQLColumnsW
 		catalog.str = szCatalogName;
 		if (cchCatalogName == SQL_NTS) {
 			catalog.cnt = wcslen(catalog.str);
-			if (ESODBC_MAX_IDENTIFIER_LEN < catalog.cnt) {
-				ERRH(stmt, "catalog identifier name '" LWPDL "' too long "
-					"(%d. max=%d).", LWSTR(&catalog), catalog.cnt,
-					ESODBC_MAX_IDENTIFIER_LEN);
-				RET_HDIAG(stmt, SQL_STATE_HY090, "catalog name too long", 0);
-			}
 		} else {
 			catalog.cnt = cchCatalogName;
+		}
+		if (ESODBC_MAX_IDENTIFIER_LEN < catalog.cnt) {
+			ERRH(stmt, "catalog identifier name '" LWPDL "' too long "
+				"(%d. max=%d).", LWSTR(&catalog), catalog.cnt,
+				ESODBC_MAX_IDENTIFIER_LEN);
+			RET_HDIAG(stmt, SQL_STATE_HY090, "catalog name too long", 0);
 		}
 	} else {
 		catalog.str = NULL;
@@ -471,14 +471,14 @@ SQLRETURN EsSQLColumnsW
 		schema.str = szSchemaName;
 		if (cchSchemaName == SQL_NTS) {
 			schema.cnt = wcslen(schema.str);
-			if (ESODBC_MAX_IDENTIFIER_LEN < schema.cnt) {
-				ERRH(stmt, "schema identifier name '" LWPDL "' too long "
-					"(%d. max=%d).", LWSTR(&schema), schema.cnt,
-					ESODBC_MAX_IDENTIFIER_LEN);
-				RET_HDIAG(stmt, SQL_STATE_HY090, "schema name too long", 0);
-			}
 		} else {
 			schema.cnt = cchSchemaName;
+		}
+		if (ESODBC_MAX_IDENTIFIER_LEN < schema.cnt) {
+			ERRH(stmt, "schema identifier name '" LWPDL "' too long "
+				"(%d. max=%d).", LWSTR(&schema), schema.cnt,
+				ESODBC_MAX_IDENTIFIER_LEN);
+			RET_HDIAG(stmt, SQL_STATE_HY090, "schema name too long", 0);
 		}
 	} else {
 		schema.str = MK_WPTR(SQL_ALL_SCHEMAS);
@@ -496,14 +496,14 @@ SQLRETURN EsSQLColumnsW
 		src_tab.str = szTableName;
 		if (cchTableName == SQL_NTS) {
 			src_tab.cnt = wcslen(src_tab.str);
-			if (ESODBC_MAX_IDENTIFIER_LEN < src_tab.cnt) {
-				ERRH(stmt, "table identifier name '" LWPDL "' too long "
-					"(%d. max=%d).", LWSTR(&src_tab), src_tab.cnt,
-					ESODBC_MAX_IDENTIFIER_LEN);
-				RET_HDIAG(stmt, SQL_STATE_HY090, "table name too long", 0);
-			}
 		} else {
 			src_tab.cnt = cchTableName;
+		}
+		if (ESODBC_MAX_IDENTIFIER_LEN < src_tab.cnt) {
+			ERRH(stmt, "table identifier name '" LWPDL "' too long "
+				"(%d. max=%d).", LWSTR(&src_tab), src_tab.cnt,
+				ESODBC_MAX_IDENTIFIER_LEN);
+			RET_HDIAG(stmt, SQL_STATE_HY090, "table name too long", 0);
 		}
 	} else {
 		src_tab.str = MK_WPTR(ESODBC_ALL_TABLES);
@@ -514,14 +514,14 @@ SQLRETURN EsSQLColumnsW
 		src_col.str = szColumnName;
 		if (cchColumnName == SQL_NTS) {
 			src_col.cnt = wcslen(src_col.str);
-			if (ESODBC_MAX_IDENTIFIER_LEN < src_col.cnt) {
-				ERRH(stmt, "column identifier name '" LWPDL "' too long "
-					"(%d. max=%d).", LWSTR(&src_col), src_col.cnt,
-					ESODBC_MAX_IDENTIFIER_LEN);
-				RET_HDIAG(stmt, SQL_STATE_HY090, "column name too long", 0);
-			}
 		} else {
 			src_col.cnt = cchColumnName;
+		}
+		if (ESODBC_MAX_IDENTIFIER_LEN < src_col.cnt) {
+			ERRH(stmt, "column identifier name '" LWPDL "' too long "
+				"(%d. max=%d).", LWSTR(&src_col), src_col.cnt,
+				ESODBC_MAX_IDENTIFIER_LEN);
+			RET_HDIAG(stmt, SQL_STATE_HY090, "column name too long", 0);
 		}
 	} else {
 		src_col.str = MK_WPTR(ESODBC_ALL_COLUMNS);

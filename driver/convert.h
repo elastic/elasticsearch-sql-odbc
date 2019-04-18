@@ -23,7 +23,7 @@ inline void *deferred_address(SQLSMALLINT field_id, size_t pos,
 
 SQLRETURN convertability_check(esodbc_stmt_st *stmt, SQLINTEGER idx,
 	int *conv_code);
-BOOL update_dst_date(struct tm *now);
+BOOL update_crr_date(struct tm *now);
 
 /*
  * SQL -> C SQL
@@ -47,7 +47,7 @@ SQLRETURN c2sql_number(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	size_t *len);
 SQLRETURN c2sql_varchar(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	SQLULEN pos, char *dest, size_t *len);
-SQLRETURN c2sql_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
+SQLRETURN c2sql_date_time(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	SQLULEN pos, char *dest, size_t *len);
 SQLRETURN c2sql_interval(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	SQLULEN pos, char *dest, size_t *len);

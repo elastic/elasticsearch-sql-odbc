@@ -485,30 +485,23 @@ TEST_F(GetData, ScaledFloat2WChar_chunked) {
 	ret = SQLGetData(stmt, /*col*/1, SQL_C_WCHAR, buff, sizeof(buff),
 			&ind_len);
 	ASSERT_EQ(ret, SQL_SUCCESS_WITH_INFO);
-	EXPECT_EQ(ind_len , (/*0.*/2 + /* max ES/SQL double scale */19
+	EXPECT_EQ(ind_len , (/*0.*/2 + /* max ES/SQL double scale */15
 			- 0 * (sizeof(buff)/sizeof(SQLWCHAR) - 1)) * sizeof(SQLWCHAR));
 	EXPECT_STREQ((wchar_t *)buff, MK_WPTR("0.9876"));
 
 	ret = SQLGetData(stmt, /*col*/1, SQL_C_WCHAR, buff, sizeof(buff),
 			&ind_len);
 	ASSERT_EQ(ret, SQL_SUCCESS_WITH_INFO);
-	EXPECT_EQ(ind_len , (/*0.*/2 + /* max ES/SQL double scale */19
+	EXPECT_EQ(ind_len , (/*0.*/2 + /* max ES/SQL double scale */15
 			- 1 * (sizeof(buff)/sizeof(SQLWCHAR) - 1)) * sizeof(SQLWCHAR));
 	EXPECT_STREQ((wchar_t *)buff, MK_WPTR("543210"));
 
 	ret = SQLGetData(stmt, /*col*/1, SQL_C_WCHAR, buff, sizeof(buff),
 			&ind_len);
-	ASSERT_EQ(ret, SQL_SUCCESS_WITH_INFO);
-	EXPECT_EQ(ind_len , (/*0.*/2 + /* max ES/SQL double scale */19
-			- 2 * (sizeof(buff)/sizeof(SQLWCHAR) - 1)) * sizeof(SQLWCHAR));
-	EXPECT_STREQ((wchar_t *)buff, MK_WPTR("012340"));
-
-	ret = SQLGetData(stmt, /*col*/1, SQL_C_WCHAR, buff, sizeof(buff),
-			&ind_len);
 	ASSERT_EQ(ret, SQL_SUCCESS);
-	EXPECT_EQ(ind_len , (/*0.*/2 + /* max ES/SQL double scale */19
-			- 3 * (sizeof(buff)/sizeof(SQLWCHAR) - 1)) * sizeof(SQLWCHAR));
-	/* past double's 15 char precision/=scale comparision doesn't make sense */
+	EXPECT_EQ(ind_len , (/*0.*/2 + /* max ES/SQL double scale */15
+			- 2 * (sizeof(buff)/sizeof(SQLWCHAR) - 1)) * sizeof(SQLWCHAR));
+	EXPECT_STREQ((wchar_t *)buff, MK_WPTR("01234"));
 
 	ret = SQLGetData(stmt, /*col*/1, SQL_C_WCHAR, buff, sizeof(buff),
 			&ind_len);
@@ -541,7 +534,7 @@ TEST_F(GetData, ScaledFloat2WChar_whole) {
 	ret = SQLGetData(stmt, /*col*/1, SQL_C_WCHAR, buff, sizeof(buff),
 			&ind_len);
 	ASSERT_EQ(ret, SQL_SUCCESS);
-	EXPECT_EQ(ind_len , (/*0.*/2 + /* max ES/SQL double scale */19)
+	EXPECT_EQ(ind_len , (/*0.*/2 + /* max ES/SQL double scale */15)
 			* sizeof(SQLWCHAR));
 	/* TODO: convert the value in the test and use it for comparison.
 	 * The below value is what the SQL_VAL converts to */
@@ -575,30 +568,23 @@ TEST_F(GetData, ScaledFloat2Char_chunked) {
 	ret = SQLGetData(stmt, /*col*/1, SQL_C_CHAR, buff, sizeof(buff),
 			&ind_len);
 	ASSERT_EQ(ret, SQL_SUCCESS_WITH_INFO);
-	EXPECT_EQ(ind_len , /*0.*/2 + /* max ES/SQL double scale */19
+	EXPECT_EQ(ind_len , /*0.*/2 + /* max ES/SQL double scale */15
 			- 0 * (sizeof(buff) - 1));
 	EXPECT_STREQ((char *)buff, "0.9876");
 
 	ret = SQLGetData(stmt, /*col*/1, SQL_C_CHAR, buff, sizeof(buff),
 			&ind_len);
 	ASSERT_EQ(ret, SQL_SUCCESS_WITH_INFO);
-	EXPECT_EQ(ind_len , /*0.*/2 + /* max ES/SQL double scale */19
+	EXPECT_EQ(ind_len , /*0.*/2 + /* max ES/SQL double scale */15
 			- 1 * (sizeof(buff) - 1));
 	EXPECT_STREQ((char *)buff, "543210");
 
 	ret = SQLGetData(stmt, /*col*/1, SQL_C_CHAR, buff, sizeof(buff),
 			&ind_len);
-	ASSERT_EQ(ret, SQL_SUCCESS_WITH_INFO);
-	EXPECT_EQ(ind_len , /*0.*/2 + /* max ES/SQL double scale */19
-			- 2 * (sizeof(buff) - 1));
-	EXPECT_STREQ((char *)buff, "012340");
-
-	ret = SQLGetData(stmt, /*col*/1, SQL_C_CHAR, buff, sizeof(buff),
-			&ind_len);
 	ASSERT_EQ(ret, SQL_SUCCESS);
-	EXPECT_EQ(ind_len , /*0.*/2 + /* max ES/SQL double scale */19
-			- 3 * (sizeof(buff) - 1));
-	/* past double's 15 char precision/=scale comparision doesn't make sense */
+	EXPECT_EQ(ind_len , /*0.*/2 + /* max ES/SQL double scale */15
+			- 2 * (sizeof(buff) - 1));
+	EXPECT_STREQ((char *)buff, "01234");
 
 	ret = SQLGetData(stmt, /*col*/1, SQL_C_CHAR, buff, sizeof(buff),
 			&ind_len);
@@ -631,7 +617,7 @@ TEST_F(GetData, ScaledFloat2Char_whole) {
 	ret = SQLGetData(stmt, /*col*/1, SQL_C_CHAR, buff, sizeof(buff),
 			&ind_len);
 	ASSERT_EQ(ret, SQL_SUCCESS);
-	EXPECT_EQ(ind_len , /*0.*/2 + /* max ES/SQL double scale */19);
+	EXPECT_EQ(ind_len , /*0.*/2 + /* max ES/SQL double scale */15);
 	//std::cerr << buff << std::endl;
 	EXPECT_EQ(memcmp(buff, SQL_VAL, /*0.*/2+/*x64 dbl precision*/15), 0);
 }

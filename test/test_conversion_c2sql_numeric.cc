@@ -204,7 +204,7 @@ TEST_F(ConvertC2SQL_Numeric, WStr_Double2SFloat)
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"WStr_Double2SFloat\", "
-		"\"params\": [{\"type\": \"SCALED_FLOAT\", "
+		"\"params\": [{\"type\": \"HALF_FLOAT\", "
 		"\"value\": -12345678901234567890.123456789}], "
 		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
@@ -379,7 +379,7 @@ TEST_F(ConvertC2SQL_Numeric, Double2SFloat)
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"Double2SFloat\", "
-		"\"params\": [{\"type\": \"SCALED_FLOAT\", "
+		"\"params\": [{\"type\": \"HALF_FLOAT\", "
 		"\"value\": -1.234567890123456717e+19}], "
 		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
@@ -462,7 +462,7 @@ TEST_F(ConvertC2SQL_Numeric, Bin_Double2SFloat)
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	cstr_st expect = CSTR_INIT("{\"query\": \"Bin_Double2SFloat\", "
-		"\"params\": [{\"type\": \"SCALED_FLOAT\", "
+		"\"params\": [{\"type\": \"HALF_FLOAT\", "
 		"\"value\": -1.234567890123456717e+19}], "
 		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
 		"\"mode\": \"ODBC\", " CLIENT_ID "}");
