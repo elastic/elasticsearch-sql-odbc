@@ -129,7 +129,7 @@ TEST_F(ConvertSQL2C_Time, Time_Str2Time)
 	const char json_answer[] = "\
 {\
   \"columns\": [\
-    {\"name\": \"" SQL_VAL "\", \"type\": \"text\"}\
+    {\"name\": \"" SQL "\", \"type\": \"text\"}\
   ],\
   \"rows\": [\
     [\"" SQL_VAL "\"]\
@@ -157,7 +157,7 @@ TEST_F(ConvertSQL2C_Time, Time2Time)
 	const char json_answer[] = "\
 {\
   \"columns\": [\
-    {\"name\": \"" SQL_VAL "\", \"type\": \"TIME\"}\
+    {\"name\": \"" SQL "\", \"type\": \"TIME\"}\
   ],\
   \"rows\": [\
     [\"" SQL_VAL "\"]\
@@ -216,7 +216,7 @@ TEST_F(ConvertSQL2C_Time, Time_Z2Char)
 	const char json_answer[] = "\
 {\
   \"columns\": [\
-    {\"name\": \"" SQL_VAL "\", \"type\": \"TIME\"}\
+    {\"name\": \"" SQL "\", \"type\": \"TIME\"}\
   ],\
   \"rows\": [\
     [\"" SQL_VAL "\"]\
@@ -249,7 +249,7 @@ TEST_F(ConvertSQL2C_Time, Time_Z2Char_truncate)
 	const char json_answer[] = "\
 {\
   \"columns\": [\
-    {\"name\": \"" SQL_VAL "\", \"type\": \"TIME\"}\
+    {\"name\": \"" SQL "\", \"type\": \"TIME\"}\
   ],\
   \"rows\": [\
     [\"" SQL_VAL "\"]\
@@ -282,7 +282,7 @@ TEST_F(ConvertSQL2C_Time, Time_Z2Char_truncate_22003)
 	const char json_answer[] = "\
 {\
   \"columns\": [\
-    {\"name\": \"" SQL_VAL "\", \"type\": \"TIME\"}\
+    {\"name\": \"" SQL "\", \"type\": \"TIME\"}\
   ],\
   \"rows\": [\
     [\"" SQL_VAL "\"]\
@@ -314,7 +314,7 @@ TEST_F(ConvertSQL2C_Time, Time_Offset2Char)
 	const char json_answer[] = "\
 {\
   \"columns\": [\
-    {\"name\": \"" SQL_VAL "\", \"type\": \"TIME\"}\
+    {\"name\": \"" SQL "\", \"type\": \"TIME\"}\
   ],\
   \"rows\": [\
     [\"" SQL_VAL "\"]\
@@ -347,7 +347,7 @@ TEST_F(ConvertSQL2C_Time, Date2Time_22018)
 	const char json_answer[] = "\
 {\
   \"columns\": [\
-    {\"name\": \"" SQL_VAL "\", \"type\": \"text\"}\
+    {\"name\": \"" SQL "\", \"type\": \"text\"}\
   ],\
   \"rows\": [\
     [\"" SQL_VAL "\"]\
@@ -372,7 +372,7 @@ TEST_F(ConvertSQL2C_Time, Time2Timestamp)
 	const char json_answer[] = "\
 {\
   \"columns\": [\
-    {\"name\": \"" SQL_VAL "\", \"type\": \"TIME\"}\
+    {\"name\": \"" SQL "\", \"type\": \"TIME\"}\
   ],\
   \"rows\": [\
     [\"" SQL_VAL "\"]\
