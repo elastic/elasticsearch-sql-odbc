@@ -427,12 +427,6 @@ class ConvertC2SQL_Timestamp_DST : public ConvertC2SQL_Timestamp
 
 	void timestamp_local_to_utc(TIMESTAMP_STRUCT *, BOOL);
 
-	BOOL dst_in_effect(TIMESTAMP_STRUCT *ts)
-	{
-		/* quick switch, only valid for the dates below */
-		return 3 < ts->month && ts->month <= 10;
-	}
-
 	public:
 	ConvertC2SQL_Timestamp_DST()
 	{
@@ -505,10 +499,6 @@ void ConvertC2SQL_Timestamp_DST::timestamp_local_to_utc(
 	ASSERT_TRUE(local_tm_ptr != NULL);
 	TIMESTAMP_STRUCT dst_local = {0};
 	TM_TO_TIMESTAMP_STRUCT(local_tm_ptr, &dst_local, src_local->fraction);
-
-	/* check if test is valid for the local machine */
-	EXPECT_TRUE((0 <= local_tm_ptr->tm_isdst) &&
-		(0 < local_tm_ptr->tm_isdst) == dst_in_effect(src_local));
 
 	/* compare source local timestamp to that UTC'd by the driver and
 	 * localtime'd back above by the test */

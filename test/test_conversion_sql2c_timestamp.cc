@@ -562,20 +562,12 @@ class ConvertSQL2C_Timestamp_DST : public ConvertSQL2C_Timestamp
 	void print_tm_timestamp(char *dest, size_t size,
 		const char *templ, struct tm *src);
 
-	BOOL dst_in_effect(struct tm *tm)
-	{
-		int month = tm->tm_mon + 1;
-		/* quick switch, only valid for the dates below */
-		return 3 < month && month <= 10;
-	}
-
 	public:
 	ConvertSQL2C_Timestamp_DST()
 	{
 		/* Construct the tm structs of dates when DST is not and is in effect,
 		 * respectively. The DST applicability will depend on the testing
-		 * machine's settings and tests will fail early if not suitable for
-		 * local machine. */
+		 * machine's settings. */
 
 		/* 2000-01-01T12:00:00Z */
 		no_dst_utc.tm_year = 2000 - 1900;
@@ -616,10 +608,6 @@ void ConvertSQL2C_Timestamp_DST::timestamp_utc_to_local(struct tm *utc,
 	ASSERT_TRUE(local_tm_ptr != NULL);
 
 	TIMESTAMP_STRUCT local_ts = {0};
-	/* If this fails, the test is not suitable: the DTS applicability is not
-	 * known or in-line with used dates. */
-	EXPECT_TRUE((0 <= local_tm_ptr->tm_isdst) &&
-			(0 < local_tm_ptr->tm_isdst) == dst_in_effect(utc));
 	TM_TO_TIMESTAMP_STRUCT(local_tm_ptr, &local_ts, 0LU);
 
 	char fetched[1024], expected[1024];
