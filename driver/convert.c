@@ -28,8 +28,8 @@
 #endif /* _WIN32 */
 #define MKTIME_FAIL_MSG "Outside of the " MKTIME_YEAR_RANGE "year range?"
 
-/* see "recent" meaning in parse_date_time_ts() */
-static thread_local SQLCHAR recent_date[] = "1970-01-01";
+static thread_local SQLCHAR current_date[] = "1970-01-01";
+static thread_local struct tm today;
 
 /* For fixed size (destination) types, the target buffer can't be NULL. */
 #define REJECT_IF_NULL_DEST_BUFF(_s/*tatement*/, _p/*ointer*/) \
@@ -1532,6 +1532,74 @@ static inline SQLRETURN wstr_to_wstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	return transfer_xstr0(arec, irec, &xsrc, data_ptr, octet_len_ptr);
 }
 
+static SQLRETURN tss_local_to_utc(esodbc_stmt_st *stmt, TIMESTAMP_STRUCT *tss)
+{
+	struct tm *tmp, tm;
+	time_t utc;
+
+	TIMESTAMP_STRUCT_TO_TM(tss, &tm);
+	tm.tm_isdst = -1;
+#ifndef _WIN32
+	/* ISO/C90's gmtime() is not thead safe */
+#error	"gmtime_r required for thread safety"
+#endif /* ! _WIN32 */
+	if (((utc = mktime(&tm)) == (time_t)-1) || (! (tmp = gmtime(&utc)))) {
+		ERRNH(stmt, "failed to convert local timestamp "
+			"%04hd-%02hu-%02hu %02hu:%02hu:%02hu..%lu to UTC. "
+			MKTIME_FAIL_MSG, tss->year, tss->month, tss->day,
+			tss->hour, tss->minute, tss->second, tss->fraction);
+		RET_HDIAG(stmt, SQL_STATE_22008, "Timestamp timezone adjustment "
+			"failed. " MKTIME_FAIL_MSG, errno);
+	}
+	TM_TO_TIMESTAMP_STRUCT(tmp, tss, tss->fraction);
+
+	DBGH(stmt, "UTC: `%04hd-%02hu-%02hu %02hu:%02hu:%02hu..%lu`.",
+		tss->year, tss->month, tss->day,
+		tss->hour, tss->minute, tss->second, tss->fraction);
+	return SQL_SUCCESS;
+}
+
+static inline SQLRETURN tm_utc_to_local(esodbc_stmt_st *stmt, struct tm *tm)
+{
+	time_t utc;
+	struct tm *tmp;
+
+#ifndef _WIN32
+	/* ISO/C90's localtime() is not thead safe */
+#error	"localtime_r required for thread safety"
+#endif /* ! _WIN32 */
+	if ((utc = timegm(tm)) == (time_t)-1 || ! (tmp = localtime(&utc))) {
+		ERRNH(stmt, "failed to convert local timestamp `"
+			"%04d-%02d-%02d %02d:%02d:%02d` to UTC. " MKTIME_FAIL_MSG,
+			tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
+			tm->tm_hour, tm->tm_min, tm->tm_sec);
+		RET_HDIAG(stmt, SQL_STATE_22008, "Timestamp conversion failed. "
+			MKTIME_FAIL_MSG, 0);
+	} else {
+		*tm = *tmp;
+	}
+	return SQL_SUCCESS;
+}
+
+static SQLRETURN tss_utc_to_local(esodbc_stmt_st *stmt, TIMESTAMP_STRUCT *tss)
+{
+	struct tm tm;
+	SQLRETURN res;
+
+	TIMESTAMP_STRUCT_TO_TM(tss, &tm);
+	tm.tm_isdst = -1;
+	res = tm_utc_to_local(stmt, &tm);
+	if (! SQL_SUCCEEDED(res)) {
+		return res;
+	}
+	TM_TO_TIMESTAMP_STRUCT(&tm, tss, tss->fraction);
+
+	DBGH(stmt, "local: `%04hd-%02hu-%02hu %02hu:%02hu:%02hu..%lu`.",
+		tss->year, tss->month, tss->day,
+		tss->hour, tss->minute, tss->second, tss->fraction);
+	return SQL_SUCCESS;
+}
+
 /* Parses an ISO8601 timestamp and returns the result into a TIMESTAMP_STRUCT.
  * The time is adjusted to UTC timezone or kept "local", depending on 'to_utc'
  * value (TIMESTAMP_STRUCT lacks any timezone indicator).
@@ -1546,8 +1614,8 @@ static SQLRETURN parse_iso8601_timestamp(esodbc_stmt_st *stmt, xstr_st *xstr,
 	char buff[ISO8601_TIMESTAMP_MAX_LEN + /*\0*/1];
 	cstr_st ts_str;
 	timestamp_t tsp;
-	struct tm tm, *tmp;
-	time_t utc;
+	struct tm tm;
+	SQLRETURN res;
 
 	if (xstr->wide) {
 		DBGH(stmt, "parsing `" LWPDL "` as ISO timestamp.", LWSTR(&xstr->w));
@@ -1579,13 +1647,9 @@ static SQLRETURN parse_iso8601_timestamp(esodbc_stmt_st *stmt, xstr_st *xstr,
 
 	if (! to_utc) {
 		/* convert UTC to localtime */
-		if ((utc = timegm(&tm)) == (time_t)-1 || ! (tmp = localtime(&utc))) {
-			ERRNH(stmt, "failed to convert timestamp `" LCPDL "` to UTC. "
-				MKTIME_FAIL_MSG, LCSTR(&ts_str));
-			RET_HDIAG(stmt, SQL_STATE_22008, "Timestamp conversion failed. "
-				MKTIME_FAIL_MSG, 0);
-		} else {
-			tm = *tmp;
+		res = tm_utc_to_local(stmt, &tm);
+		if (! SQL_SUCCEEDED(res)) {
+			return res;
 		}
 	}
 
@@ -1599,45 +1663,23 @@ static SQLRETURN parse_iso8601_timestamp(esodbc_stmt_st *stmt, xstr_st *xstr,
 	return SQL_SUCCESS;
 }
 
-BOOL update_dst_date(struct tm *now)
+BOOL update_crr_date(struct tm *now)
 {
 	int n;
 
 	assert(sizeof(SQLCHAR) == sizeof(char));
-	assert(sizeof(recent_date) - /*\0*/1 == DATE_TEMPLATE_LEN);
-	n = snprintf(recent_date, DATE_TEMPLATE_LEN + 1, "%04d-%02d-%02d",
+	assert(sizeof(current_date) - /*\0*/1 == DATE_TEMPLATE_LEN);
+	n = snprintf(current_date, DATE_TEMPLATE_LEN + 1, "%04d-%02d-%02d",
 			now->tm_year + 1900, now->tm_mon + 1, now->tm_mday);
 	if (n <= 0 || DATE_TEMPLATE_LEN < n) {
 		ERRN("failed to update the DST date.");
 		return FALSE;
 	}
+	today = *now;
 	return TRUE;
 }
 
-static SQLRETURN tss_local_to_utc(esodbc_stmt_st *stmt, TIMESTAMP_STRUCT *tss)
-{
-	struct tm *tmp, tm;
-	time_t utc;
-
-	TIMESTAMP_STRUCT_TO_TM(tss, &tm);
-	tm.tm_isdst = -1;
-	if (((utc = mktime(&tm)) == (time_t)-1) || (! (tmp = gmtime(&utc)))) {
-		ERRNH(stmt, "failed to convert local timestamp "
-			"%04hd-%02hu-%02hu %02hu:%02hu:%02hu..%lu to UTC. "
-			MKTIME_FAIL_MSG, tss->year, tss->month, tss->day,
-			tss->hour, tss->minute, tss->second, tss->fraction);
-		RET_HDIAG(stmt, SQL_STATE_22008, "Timestamp timezone adjustment "
-			"failed. " MKTIME_FAIL_MSG, errno);
-	}
-	TM_TO_TIMESTAMP_STRUCT(tmp, tss, tss->fraction);
-
-	DBGH(stmt, "UTC: `%04hd-%02hu-%02hu %02hu:%02hu:%02hu..%lu`.",
-		tss->year, tss->month, tss->day,
-		tss->hour, tss->minute, tss->second, tss->fraction);
-	return SQL_SUCCESS;
-}
-
-/* Analyzes the received string as time/date/timestamp(timedate) and parses it
+/* Analyze the received string as time/date/timestamp(=timedate) and parse it
  * into received 'tss' struct, indicating detected format in 'format'. */
 static SQLRETURN parse_date_time_ts(esodbc_stmt_st *stmt, xstr_st *xstr,
 	BOOL sql2c, TIMESTAMP_STRUCT *tss, SQLSMALLINT *format)
@@ -1655,8 +1697,8 @@ static SQLRETURN parse_date_time_ts(esodbc_stmt_st *stmt, xstr_st *xstr,
 	cstr_st td;/* timedate string */
 	xstr_st xtd;
 	esodbc_dbc_st *dbc = HDRH(stmt)->dbc;
-	BOOL to_utc = sql2c ? (! dbc->apply_tz) : TRUE;
-	BOOL local_to_utc;
+	BOOL src_iso;
+	SQLSMALLINT fmt;
 
 	/* W-strings will eventually require convertion to C-string for TS
 	 * conversion => do it now to simplify string analysis */
@@ -1668,101 +1710,100 @@ static SQLRETURN parse_date_time_ts(esodbc_stmt_st *stmt, xstr_st *xstr,
 	}
 	xtd.wide = FALSE;
 
-	/* could this be a TIMESTAMP (either SQL or ISO8601) value? */
-	if (TIMESTAMP_TEMPLATE_LEN(0) <= td.cnt) {
-		assert(TIMESTAMP_TEMPLATE_LEN(0) < ISO8601_TIMESTAMP_MIN_LEN);
-
-		local_to_utc = FALSE;
-		/* is this a SQL-format timestamp? (vs ISO8601) */
-		if (td.str[DATE_TEMPLATE_LEN] == ' ') { /* vs. 'T' */
-			td.str[DATE_TEMPLATE_LEN] = 'T';
-			td.str[td.cnt ++] = 'Z';
-
-			/* If the received string is a local timestamp, it needs to be
-			 * first parsed (possibly as if it were a UTC value already) and
-			 * once that's done and the TSS is available, shifted to the
-			 * actual UTC value. */
-			/* If c2sql, apply_tz will tell if time is local (apply_tz==TRUE)
-			 * or UTC (apply_tz==FALSE);
-			 * If local_to_utc==FALSE: TZ not applicable (UTC is used) or it's
-			 * an ES-originated value (sql2c==TRUE) => assume UTC: the query
-			 * can construct a SQL timestamp (i.e. the result data type is a
-			 * text/KW) that the app then wants translated to a timestamp. */
-			local_to_utc = (! sql2c) && dbc->apply_tz;
-
-			DBGH(stmt, "SQL format translated to ISO: [%zu] `" LCPDL "`. "
-				"Local to UTC: %d.", td.cnt, LCSTR(&td), local_to_utc);
-		} /* else: already in ISO8601 format */
-
-		xtd.c = td;
-		ret = parse_iso8601_timestamp(stmt, &xtd, to_utc, tss);
-		if (SQL_SUCCEEDED(ret)) {
-			if (format) {
-				*format = SQL_TYPE_TIMESTAMP;
+	do {
+		/* could this be a TIMESTAMP (either SQL or ISO8601) value? */
+		if (TIMESTAMP_TEMPLATE_LEN(0) <= td.cnt) {
+			assert(TIMESTAMP_TEMPLATE_LEN(0) < ISO8601_TIMESTAMP_MIN_LEN);
+			/* is this a SQL-format timestamp? (vs ISO8601) */
+			if (td.str[DATE_TEMPLATE_LEN] == ' ') { /* vs. 'T' */
+				/* If the received string is a local timestamp, it needs to be
+				 * first parsed (possibly as if it were a UTC value already)
+				 * and once that's done and the TSS is available, shifted to
+				 * the actual UTC value. */
+				src_iso = FALSE;
+				td.str[DATE_TEMPLATE_LEN] = 'T';
+				td.str[td.cnt ++] = 'Z';
+				DBGH(stmt, "SQL format translated to ISO: [%zu] `" LCPDL "`.",
+					td.cnt, LCSTR(&td));
+			} else { /* else: already in ISO8601 format */
+				src_iso = TRUE;
 			}
-			if (local_to_utc) {
-				ret = tss_local_to_utc(stmt, tss);
-			}
-		} else {
-			ERRH(stmt, "`" LCPDL "` is not a TIMESTAMP value.", LCSTR(&td));
+
+			xtd.c = td;
+			fmt = SQL_TYPE_TIMESTAMP;
+			break;
 		}
+
+		/* could this be a TIME value? hh:mm:ss / hh:mm:ssZ / hh:mm:ss+HH:MM */
+		if (TIME_TEMPLATE_LEN(0) <= td.cnt &&
+			td.str[2] == ':' && td.str[5] == ':') {
+			/* SQL2C, C2SQL: Time -> Timestamp: "The date portion of the
+			 * timestamp is set to the current date, and the fractional
+			 * seconds portion of the timestamp is set to zero." */
+			memcpy(templ, current_date, sizeof(current_date) - /*\0*/1);
+			/* copy active value in template and parse it as TS */
+			/* copy is safe: cnt <= [time template] < [templ] */
+			memcpy(templ + DATE_TEMPLATE_LEN + /*'T'*/1, td.str, td.cnt);
+			assert(sizeof("+HH:MM") - 1 < TIME_TEMPLATE_LEN(0));
+			sign = td.str[td.cnt - (sizeof("+HH:MM") - /*\0*/1)];
+			if (td.str[td.cnt - 1] != 'Z' && /* not a Zulu time */
+				(sign != '+' && sign != '-')) {
+				src_iso = FALSE; /* not in hh:mm:ss±HH:MM format */
+				/* there could be a varying number of fractional digits */
+				templ[DATE_TEMPLATE_LEN + /*'T'*/1 + td.cnt] = 'Z';
+				xtd.c.cnt = DATE_TEMPLATE_LEN + /*'T'*/1 + td.cnt + /*Z*/1;
+			} else {
+				src_iso = TRUE;
+				xtd.c.cnt = DATE_TEMPLATE_LEN + /*'T'*/1 + td.cnt;
+			}
+			xtd.c.str = templ;
+			fmt = SQL_TYPE_TIME;
+			break;
+		}
+
+		/* could this be a DATE value? YYYY-MM-DD */
+		if (DATE_TEMPLATE_LEN <= td.cnt &&
+			td.str[4] == '-' && td.str[7] == '-') {
+			/* copy active value in template and parse it as TS */
+			/* copy is safe: cnt <= [time template] < [templ] */
+			memcpy(templ, td.str, td.cnt);
+			xtd.c.str = templ;
+			xtd.c.cnt = sizeof(templ)/sizeof(templ[0]) - /*0*/1;
+			fmt = SQL_TYPE_DATE;
+			break;
+		}
+
+		ERRH(stmt, "`" LCPDL "` is not a valid TIME/DATE/TIMESTAMP value.",
+			LCSTR(&td));
+		RET_HDIAGS(stmt, SQL_STATE_22007);
+	} while (0);
+
+	ret = parse_iso8601_timestamp(stmt, &xtd, /*to UTC*/TRUE, tss);
+	if (! SQL_SUCCEEDED(ret)) {
+		ERRH(stmt, "`" LCPDL "` is not a TIMESTAMP value.", LCSTR(&xtd.c));
 		return ret;
 	}
-
-	/* could this be a TIME value? hh:mm:ss / hh:mm:ssZ / hh:mm:ss+HH:MM */
-	if (TIME_TEMPLATE_LEN(0) <= td.cnt &&
-		td.str[2] == ':' && td.str[5] == ':') {
-		memcpy(templ, recent_date, sizeof(recent_date) - /*\0*/1);
-		/* copy active value in template and parse it as TS */
-		/* copy is safe: cnt <= [time template] < [templ] */
-		memcpy(templ + DATE_TEMPLATE_LEN + /*'T'*/1, td.str, td.cnt);
-		assert(sizeof("+HH:MM") - 1 < TIME_TEMPLATE_LEN(0));
-		sign = td.str[td.cnt - (sizeof("+HH:MM") - /*\0*/1)];
-		if (td.str[td.cnt - 1] != 'Z' && /* not a Zulu time */
-			(sign != '+' && sign != '-')) { /* not in hh:mm:ss±HH:MM format */
-			/* there could be a varying number of fractional digits */
-			templ[DATE_TEMPLATE_LEN + /*'T'*/1 + td.cnt] = 'Z';
-			xtd.c.cnt = DATE_TEMPLATE_LEN + /*'T'*/1 + td.cnt + /*Z*/1;
-		} else {
-			xtd.c.cnt = DATE_TEMPLATE_LEN + /*'T'*/1 + td.cnt;
-		}
-		xtd.c.str = templ;
-
-		ret = parse_iso8601_timestamp(stmt, &xtd, to_utc, tss);
-		if (SQL_SUCCEEDED(ret)) {
-			tss->year = tss->month = tss->day = 0;
-			if (format) {
-				*format = SQL_TYPE_TIME;
-			}
-		} else {
-			ERRH(stmt, "`" LCPDL "` is not a TIME value.", LCSTR(&td));
-		}
-		return ret;
+	assert(fmt);
+	if (format) {
+		*format = fmt;
 	}
-
-	/* could this be a DATE value? YYYY-MM-DD */
-	if (DATE_TEMPLATE_LEN <= td.cnt && td.str[4] == '-' && td.str[7] == '-') {
-		/* copy active value in template and parse it as TS */
-		/* copy is safe: cnt <= [time template] < [templ] */
-		memcpy(templ, td.str, td.cnt);
-		xtd.c.str = templ;
-		xtd.c.cnt = sizeof(templ)/sizeof(templ[0]) - /*0*/1;
-
-		ret = parse_iso8601_timestamp(stmt, &xtd, /*to UTC*/TRUE, tss);
-		if (SQL_SUCCEEDED(ret)) {
-			tss->hour = tss->minute = tss->second = 0;
-			tss->fraction = 0;
-			if (format) {
-				*format = SQL_TYPE_DATE;
+	if (fmt == SQL_TYPE_DATE) {
+		tss->hour = tss->minute = tss->second = 0;
+		tss->fraction = 0;
+	} else {
+		if (dbc->apply_tz) {
+			if (sql2c) {
+				if (src_iso) {
+					ret = tss_utc_to_local(stmt, tss);
+				} /* else: TEXT non-ISO timestamp: leave as-is (no TZ) */
+			} else { /* c2sql */
+				if (! src_iso) {
+					ret = tss_local_to_utc(stmt, tss);
+				} /* else: ISO already */
 			}
-		} else {
-			ERRH(stmt, "`" LCPDL "` is not a DATE value.", LCSTR(&td));
 		}
-		return ret;
 	}
-
-	ERRH(stmt, "`" LCPDL "` is not a TIME/DATE/TIMESTAMP value.", LCSTR(&td));
-	RET_HDIAGS(stmt, SQL_STATE_22007);
+	return ret;
 }
 
 /*
@@ -1800,7 +1841,7 @@ static SQLRETURN wstr_to_timestamp_struct(esodbc_rec_st *arec,
 				to_utc = TRUE;
 				break;
 			case SQL_TYPE_TIMESTAMP:
-				to_utc = ! HDRH(stmt)->dbc->apply_tz;
+				to_utc = ! HDRH(stmt)->dbc->apply_tz; /*sql2c only*/
 				break;
 			} while (0);
 				ret = parse_iso8601_timestamp(stmt, &xstr, to_utc, tss);
@@ -1815,6 +1856,7 @@ static SQLRETURN wstr_to_timestamp_struct(esodbc_rec_st *arec,
 					*format = irec->concise_type;
 				}
 				break;
+			case SQL_TYPE_TIME:
 			case SQL_VARCHAR:
 				ret = parse_date_time_ts(stmt, &xstr, /*sql2c*/TRUE, tss,
 							format);
@@ -1824,13 +1866,18 @@ static SQLRETURN wstr_to_timestamp_struct(esodbc_rec_st *arec,
 						RET_HDIAGS(stmt, SQL_STATE_22018);
 					}
 				}
+				if (irec->concise_type == SQL_TYPE_TIME) {
+					/* "...and the fractional seconds field of the timestamp
+					 * structure is set to zero" */
+					assert(! format || *format == SQL_TYPE_TIME);
+					tss->fraction = 0;
+				}
 				return ret;
 
 			case SQL_CHAR:
 			case SQL_LONGVARCHAR:
 			case SQL_WCHAR:
 			case SQL_WLONGVARCHAR:
-			case SQL_TYPE_TIME:
 				BUGH(stmt, "unexpected (but permitted) SQL type.");
 				RET_HDIAGS(stmt, SQL_STATE_HY004);
 			default:
@@ -2964,8 +3011,9 @@ static SQLRETURN translate_date_iso8601_to_sql(esodbc_rec_st *arec,
 	return SQL_SUCCESS;
 }
 
-/* function will assume that 'dest' is at least ISO8601_TIMESTAMP_MAX_LEN + 1
- * characters long */
+/* Print timestamp, 0-terminated (printf'd, so \0 not counted).
+ * Function will assume that 'dest' is at least ISO8601_TIMESTAMP_MAX_LEN + 1
+ * characters long. */
 static int print_timestamp(TIMESTAMP_STRUCT *tss, BOOL iso8601,
 	SQLULEN colsize, SQLSMALLINT decdigits, wchar_t *dest)
 {
@@ -2976,7 +3024,7 @@ static int print_timestamp(TIMESTAMP_STRUCT *tss, BOOL iso8601,
 	const static wchar_t *fmt_millis = L"%04d-%02d-%02d %02d:%02d:%02d.%.*lu";
 	const static wchar_t *fmt_nomillis = L"%04d-%02d-%02d %02d:%02d:%02d";
 
-	/* see c2sql_timestamp() for an explanation of these values */
+	/* see c2sql_date_time() for an explanation of these values */
 	assert((! colsize) || (colsize == 16 || colsize == 19 || 20 < colsize));
 	lim = colsize ? colsize : TIMESTAMP_TEMPLATE_LEN(ESODBC_MAX_SEC_PRECISION);
 
@@ -3009,6 +3057,7 @@ static int print_timestamp(TIMESTAMP_STRUCT *tss, BOOL iso8601,
 			 * The 'Z' would then be on top of the colsize. */
 			dest[n] = L'Z';
 			n ++;
+			dest[n] = L'\0';
 		}
 		DBG("printed UTC %s timestamp (colsz: %lu, decdig: %hd): "
 			"[%d] `" LWPDL "`.", iso8601 ? "ISO8601" : "SQL",
@@ -3030,7 +3079,7 @@ static SQLRETURN translate_timestamp_iso8601_to_sql(esodbc_rec_st *arec,
 	int n;
 	SQLRETURN ret;
 
-	if (dbc->apply_tz) {
+	if (dbc->apply_tz) { /* sql2c only */
 		xstr.wide = TRUE;
 		xstr.w.str = (SQLWCHAR *)wstr;
 		xstr.w.cnt = *chars_0 - 1;
@@ -3062,6 +3111,55 @@ static SQLRETURN translate_timestamp_iso8601_to_sql(esodbc_rec_st *arec,
 	return SQL_SUCCESS;
 }
 
+/* transform an ISO8601/ES time str. to SQL/ODBC timestamp str. */
+static SQLRETURN translate_time_iso8601_to_sql(esodbc_rec_st *arec,
+	esodbc_rec_st *irec, const wchar_t *wstr, size_t *chars_0,
+	/*out*/wchar_t *time)
+{
+	esodbc_stmt_st *stmt = HDRH(arec->desc)->stmt;
+	esodbc_dbc_st *dbc = HDRH(stmt)->dbc;
+	int cnt;
+	xstr_st xstr;
+	SQLRETURN res;
+	TIMESTAMP_STRUCT tss;
+	SQLSMALLINT fmt;
+
+	cnt = (int)*chars_0 - 1; /* len w/o the \0 */
+	if (cnt < TIME_TEMPLATE_LEN(0)) {
+		ERRH(stmt, "`" LWPDL "` not an ISO8601 TIME value.", cnt, wstr);
+		RET_HDIAG(stmt, SQL_STATE_HY000, "Invalid server answer", 0);
+	}
+	/* if time localization OR the received TIME is not in UTC (ex.
+	 * `:ss+02:00`), normalize the format: bring to UTC and apply time offset,
+	 * if needed (i.e. apply_tz==TRUE). */
+	if (dbc->apply_tz || wstr[cnt - 1] != L'Z') {
+		xstr.wide = TRUE;
+		xstr.w.str = (SQLWCHAR *)wstr;
+		xstr.w.cnt = cnt;
+		res = parse_date_time_ts(stmt, &xstr, /*sql2c*/TRUE, &tss, &fmt);
+		if (! SQL_SUCCEEDED(res)) {
+			return res;
+		}
+		assert(fmt == SQL_TYPE_TIME);
+		cnt = print_timestamp(&tss, /*ISO?*/FALSE, /*colsz*/0,
+				ESODBC_DEF_SEC_PRECISION, time);
+		if (cnt <= 0) {
+			ERRNH(stmt, "failed to print TZ-adjusted TIME(STAMP).");
+			RET_HDIAGS(stmt, SQL_STATE_HY000);
+		}
+		cnt -= DATE_TEMPLATE_LEN + /*' '*/1;
+		wmemmove(time, time + DATE_TEMPLATE_LEN + /*' '*/1, cnt + /*\0*/1);
+		*chars_0 = cnt + 1;
+	} else { /* TIME in usable format already */
+		cnt --; /* strip trailing 'Z' */
+		wmemcpy(time, wstr, cnt);
+		time[cnt] = L'\0';
+		*chars_0 = cnt + 1;
+	}
+
+	return SQL_SUCCESS;
+}
+
 static SQLRETURN wstr_to_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	void *data_ptr, SQLLEN *octet_len_ptr,
 	const wchar_t *wstr, size_t chars_0)
@@ -3069,9 +3167,15 @@ static SQLRETURN wstr_to_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
 	wchar_t buff[INTERVAL_VAL_MAX_LEN + /*0*/1];
 	SQLRETURN ret;
+	SQLSMALLINT arec_type;
+	esodbc_state_et state;
+	size_t octets, usize, min_xfer;
 
 	/* to make use of the buffer for date_time transformations */
 	assert(ISO8601_TIMESTAMP_MAX_LEN <= INTERVAL_VAL_MAX_LEN);
+
+	arec_type = get_rec_c_type(arec, irec);
+	min_xfer = 0;
 
 	/* The time data types - intervals, date, timestamp/"datetime" - are
 	 * received from ES in ISO8601, not SQL format and need translation. This
@@ -3089,14 +3193,19 @@ static SQLRETURN wstr_to_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 					 * counted. */
 					ret = translate_date_iso8601_to_sql(arec, irec, wstr,
 							&chars_0, buff);
+					min_xfer = DATE_TEMPLATE_LEN + /*\0*/1;
 					break;
 				case SQL_TYPE_TIMESTAMP:
 					ret = translate_timestamp_iso8601_to_sql(arec, irec, wstr,
 							&chars_0, buff);
+					min_xfer = TIMESTAMP_TEMPLATE_LEN(0) + /*\0*/1;
+					break;
+				case SQL_TYPE_TIME:
+					ret = translate_time_iso8601_to_sql(arec, irec, wstr,
+							&chars_0, buff);
+					min_xfer = TIME_TEMPLATE_LEN(0) + /*\0*/1;
 					break;
 
-				case SQL_TYPE_TIME:
-					RET_HDIAGS(stmt, SQL_STATE_HYC00); // todo in ES/SQL
 				default:
 					BUGH(stmt, "unexpected concise type for datetime.");
 					RET_HDIAG(stmt, SQL_STATE_HY000, "bug encoding type", 0);
@@ -3113,9 +3222,25 @@ static SQLRETURN wstr_to_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		}
 	} while (0);
 
-	return (get_rec_c_type(arec, irec) == SQL_C_CHAR) ?
+	ret = (arec_type == SQL_C_CHAR) ?
 		wstr_to_cstr(arec, irec, data_ptr, octet_len_ptr, wstr, chars_0) :
 		wstr_to_wstr(arec, irec, data_ptr, octet_len_ptr, wstr, chars_0);
+
+	/* if truncation occured, only succeed if fractional seconds are cut out */
+	if (min_xfer && HDRH(stmt)->diag.state == SQL_STATE_01004) {
+		assert(SQL_SUCCEEDED(ret));
+
+		usize = (arec_type == SQL_C_CHAR) ? sizeof(SQLCHAR) : sizeof(SQLWCHAR);
+		assert((state = SQL_STATE_00000) == SQL_STATE_00000); /* dbg only */
+		octets = buff_octet_size(chars_0 * usize, usize, arec, irec, &state);
+		assert(state == SQL_STATE_01004);
+		if (octets/usize < min_xfer) {
+			ERRH(stmt, "buffer too small (%zu/%zu) for val [%zu] `" LWPDL "`.",
+				octets, usize, chars_0 - 1, chars_0 -1, wstr);
+			RET_HDIAGS(stmt, SQL_STATE_22003);
+		}
+	}
+	return ret;
 }
 
 /*
@@ -3421,7 +3546,8 @@ static BOOL xstr_to_number(esodbc_stmt_st *stmt, void *data_ptr,
 						/*strict?*/TRUE);
 				break;
 			default:
-				assert(0);
+				BUGH(stmt, "unexpected numerical type %hd.", dest_type);
+				res = -1;
 		}
 	} else {
 		trim_ws(&xstr->c);
@@ -3441,7 +3567,8 @@ static BOOL xstr_to_number(esodbc_stmt_st *stmt, void *data_ptr,
 						/*strict?*/TRUE);
 				break;
 			default:
-				assert(0);
+				BUGH(stmt, "unexpected numerical type %hd.", dest_type);
+				res = -1;
 		}
 	}
 
@@ -3936,11 +4063,11 @@ SQLRETURN c2sql_number(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 static SQLRETURN str_to_iso8601_timestamp(esodbc_stmt_st *stmt,
 	SQLLEN *octet_len_ptr, void *data_ptr, BOOL wide,
-	SQLULEN colsize, SQLSMALLINT decdigits, wchar_t *dest, size_t *cnt)
+	SQLULEN colsize, SQLSMALLINT decdigits, wchar_t *dest, size_t *cnt,
+	SQLSMALLINT *format)
 {
 	xstr_st xstr;
 	TIMESTAMP_STRUCT tss;
-	SQLSMALLINT format;
 	int n;
 	SQLRETURN ret;
 
@@ -3964,14 +4091,11 @@ static SQLRETURN str_to_iso8601_timestamp(esodbc_stmt_st *stmt,
 		trim_ws(&xstr.c);
 	}
 
-	ret = parse_date_time_ts(stmt, &xstr, /*sql2c*/FALSE, &tss, &format);
+	ret = parse_date_time_ts(stmt, &xstr, /*sql2c*/FALSE, &tss, format);
 	if (! SQL_SUCCEEDED(ret)) {
 		if (HDRH(stmt)->diag.state == SQL_STATE_22007) {
 			RET_HDIAGS(stmt, SQL_STATE_22008); // TODO: check the code
 		}
-	} else if (format == SQL_TYPE_TIME) {
-		ERRH(stmt, "can not convert a TIME to a TIMESTAMP value");
-		RET_HDIAGS(stmt, SQL_STATE_22018);
 	}
 
 	n = print_timestamp(&tss, /*ISO?*/TRUE, colsize, decdigits, dest);
@@ -3990,11 +4114,20 @@ static SQLRETURN struct_to_iso8601_timestamp(esodbc_stmt_st *stmt,
 {
 	TIMESTAMP_STRUCT *tss, buff;
 	DATE_STRUCT *ds;
+	TIME_STRUCT *ts;
 	int n;
 	size_t osize;
 	SQLRETURN ret;
 
 	switch (ctype) {
+		case SQL_C_TYPE_TIME:
+			TM_TO_TIMESTAMP_STRUCT(&today, &buff, 0LU);
+			ts = (TIME_STRUCT *)data_ptr;
+			buff.hour = ts->hour;
+			buff.minute = ts->minute;
+			buff.second = ts->second;
+			tss = &buff;
+			break;
 		case SQL_C_TYPE_DATE:
 			ds = (DATE_STRUCT *)data_ptr;
 			memset(&buff, 0, sizeof(buff));
@@ -4046,9 +4179,10 @@ static SQLRETURN struct_to_iso8601_timestamp(esodbc_stmt_st *stmt,
 	return SQL_SUCCESS;
 }
 
-SQLRETURN c2sql_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
+SQLRETURN c2sql_date_time(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	SQLULEN pos, char *dest, size_t *len)
 {
+#	define ZERO_TIME_Z "00:00:00Z"
 	esodbc_stmt_st *stmt;
 	void *data_ptr;
 	SQLLEN *octet_len_ptr;
@@ -4058,6 +4192,7 @@ SQLRETURN c2sql_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	SQLSMALLINT decdigits;
 	wchar_t wbuff[ISO8601_TIMESTAMP_MAX_LEN + /*\0*/1];
 	size_t cnt;
+	SQLSMALLINT format;
 	int n;
 
 	if (! dest) {
@@ -4095,23 +4230,34 @@ SQLRETURN c2sql_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		decdigits = ESODBC_MAX_SEC_PRECISION;
 	}
 
+	/*INDENT-OFF*/
 	switch ((ctype = get_rec_c_type(arec, irec))) {
 		case SQL_C_CHAR:
 		case SQL_C_WCHAR:
 			ret = str_to_iso8601_timestamp(stmt, octet_len_ptr, data_ptr,
-					ctype == SQL_C_WCHAR, colsize, decdigits, wbuff, &cnt);
+					ctype == SQL_C_WCHAR, colsize, decdigits, wbuff, &cnt,
+					&format);
 			if (! SQL_SUCCEEDED(ret)) {
 				return ret;
 			}
+			/* disallow DATE <-> TIME conversions */
+			if ((irec->es_type->data_type == SQL_C_TYPE_TIME &&
+					format == SQL_C_TYPE_DATE) || (format == SQL_C_TYPE_TIME &&
+					irec->es_type->data_type == SQL_C_TYPE_DATE)) {
+				ERRH(stmt, "TIME-DATE conversions are not possible.");
+				RET_HDIAGS(stmt, SQL_STATE_22018);
+			}
 			break;
 
+		do {
 		case SQL_C_TYPE_TIME:
-			// TODO; ES just prepends the Epoch date
-			ERRH(stmt, "conversion from time to timestamp not implemented.");
-			RET_HDIAG(stmt, SQL_STATE_HYC00, "conversion time to timestamp "
-				"not yet supported", 0);
-
+			/* case should have been caught by the convertibility checker */
+			assert(irec->es_type->data_type != SQL_C_TYPE_DATE);
+			break;
 		case SQL_C_TYPE_DATE:
+			assert(irec->es_type->data_type != SQL_C_TYPE_TIME);
+			break;
+		} while (0);
 		case SQL_C_BINARY:
 		case SQL_C_TYPE_TIMESTAMP:
 			ret = struct_to_iso8601_timestamp(stmt, octet_len_ptr, data_ptr,
@@ -4125,6 +4271,36 @@ SQLRETURN c2sql_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			BUGH(stmt, "can't convert SQL C type %hd to timestamp.", ctype);
 			RET_HDIAG(stmt, SQL_STATE_HY000, "bug converting parameter", 0);
 	}
+	/*INDENT-ON*/
+
+	/* Note: these post-print fixes could be optimized out by passing the SQL
+	 * type to the respective *_to_iso8601_timestamp(), to some code clarity
+	 * expense. */
+	/* Adapt the resulting ISO8601 value to the target data type */
+	switch (irec->es_type->data_type) {
+		case SQL_C_TYPE_TIME:
+			/* shift value + \0 upwards over the DATE component */
+			/* Note: by the book, non-0 fractional seconds in timestamp should
+			 * lead to 22008 a failure. However, ES/SQL's TIME supports
+			 * fractions, so will just ignore this provision. */
+			cnt -= DATE_TEMPLATE_LEN + /*'T'*/1;
+			wmemmove(wbuff, wbuff + DATE_TEMPLATE_LEN + /*'T'*/1, cnt + 1);
+			break;
+		case SQL_C_TYPE_DATE:
+			/* if origin is a timestamp (struct or string), the time part
+			 * needs to be zeroed. */
+			if (ctype == SQL_C_TYPE_TIMESTAMP ||
+				format == SQL_C_TYPE_TIMESTAMP) {
+				assert(ISO8601_TIMESTAMP_MIN_LEN <= cnt);
+				wmemcpy(wbuff + DATE_TEMPLATE_LEN + /*'T'*/1,
+					MK_WPTR(ZERO_TIME_Z), sizeof(ZERO_TIME_Z) /*+\0*/);
+				cnt = ISO8601_TIMESTAMP_MIN_LEN;
+			}
+			break;
+		default:
+			assert(irec->es_type->data_type == SQL_C_TYPE_TIMESTAMP);
+	}
+	DBGH(stmt, "converted value: [%zu] `" LWPDL "`.", cnt, cnt, wbuff);
 
 	n = ascii_w2c(wbuff, dest + *len, cnt);
 	assert(0 < n); /* printed "in-house", no special chars, shouldn't fail */
@@ -4132,6 +4308,7 @@ SQLRETURN c2sql_timestamp(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 	dest[(*len) ++] = '"';
 	return SQL_SUCCESS;
+#	undef ZERO_TIME_Z
 }
 
 /* parses an interval literal string from app's char/wchar_t buffer */
@@ -4523,7 +4700,7 @@ SQLRETURN c2sql_varchar(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		case SQL_C_TYPE_TIME:
 		case SQL_C_TYPE_TIMESTAMP:
 			// TODO: leave it a timestamp, or actual DATE/TIME/TS?
-			return c2sql_timestamp(arec, irec, pos, dest, len);
+			return c2sql_date_time(arec, irec, pos, dest, len);
 
 		// case SQL_C_GUID:
 		default:

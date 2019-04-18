@@ -67,6 +67,111 @@ TEST_F(ConvertSQL2C_Timestamp, Datetime2Timestamp)
 }
 
 
+TEST_F(ConvertSQL2C_Timestamp, Datetime2Time_01S07)
+{
+#undef SQL_VAL
+#undef SQL
+#define SQL_VAL   "2345-01-23T12:34:56.789Z"
+#define SQL   "CAST(" SQL_VAL " AS DATETIME)"
+
+	const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"DATETIME\"}\
+  ],\
+  \"rows\": [\
+    [\"" SQL_VAL "\"]\
+  ]\
+}\
+";
+	prepareStatement(json_answer);
+
+	TIME_STRUCT ts = {0};
+	ret = SQLBindCol(stmt, /*col#*/1, SQL_C_TYPE_TIME, &ts,
+			sizeof(ts), &ind_len);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	assertState(L"01S07");
+
+	EXPECT_EQ(ind_len, sizeof(ts));
+	EXPECT_EQ(ts.hour, 12);
+	EXPECT_EQ(ts.minute, 34);
+	EXPECT_EQ(ts.second, 56);
+}
+
+
+TEST_F(ConvertSQL2C_Timestamp, Datetime2Date_01S07)
+{
+#undef SQL_VAL
+#undef SQL
+#define SQL_VAL   "2345-01-23T12:34:56.789Z"
+#define SQL   "CAST(" SQL_VAL " AS DATETIME)"
+
+	const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"DATETIME\"}\
+  ],\
+  \"rows\": [\
+    [\"" SQL_VAL "\"]\
+  ]\
+}\
+";
+	prepareStatement(json_answer);
+
+	DATE_STRUCT ds = {0};
+	ret = SQLBindCol(stmt, /*col#*/1, SQL_C_TYPE_DATE, &ds,
+			sizeof(ds), &ind_len);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	assertState(L"01S07");
+
+	EXPECT_EQ(ind_len, sizeof(ds));
+	EXPECT_EQ(ds.year, 2345);
+	EXPECT_EQ(ds.month, 1);
+	EXPECT_EQ(ds.day, 23);
+}
+
+
+TEST_F(ConvertSQL2C_Timestamp, Datetime2Date)
+{
+#undef SQL_VAL
+#undef SQL
+#define SQL_VAL   "2345-01-23T00:00:00.000Z"
+#define SQL   "CAST(" SQL_VAL " AS DATETIME)"
+
+	const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"DATETIME\"}\
+  ],\
+  \"rows\": [\
+    [\"" SQL_VAL "\"]\
+  ]\
+}\
+";
+	prepareStatement(json_answer);
+
+	DATE_STRUCT ds = {0};
+	ret = SQLBindCol(stmt, /*col#*/1, SQL_C_TYPE_DATE, &ds,
+			sizeof(ds), &ind_len);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	assertState(L"00000");
+
+	EXPECT_EQ(ind_len, sizeof(ds));
+	EXPECT_EQ(ds.year, 2345);
+	EXPECT_EQ(ds.month, 1);
+	EXPECT_EQ(ds.day, 23);
+}
+
+
 TEST_F(ConvertSQL2C_Timestamp, Datetime2Char)
 {
 #undef SQL_VAL
@@ -96,6 +201,71 @@ TEST_F(ConvertSQL2C_Timestamp, Datetime2Char)
 
 	EXPECT_EQ(ind_len, ISO8601_TS_UTC_LEN(ESODBC_DEF_SEC_PRECISION) - /*Z*/1);
 	EXPECT_STREQ(SQL_VAL_TS, (char *)val);
+#undef SQL_VAL_TS
+}
+
+
+TEST_F(ConvertSQL2C_Timestamp, Datetime2Char_truncate)
+{
+#undef SQL_VAL
+#undef SQL
+#define SQL_VAL     "2345-01-23T12:34:56.789Z"
+#define SQL_VAL_TS  "2345-01-23 12:34:56.789"
+#define SQL   "CAST(" SQL_VAL " AS DATETIME)"
+
+	const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"DATETIME\"}\
+  ],\
+  \"rows\": [\
+    [\"" SQL_VAL "\"]\
+  ]\
+}\
+";
+	prepareStatement(json_answer);
+
+	SQLCHAR val[sizeof(SQL_VAL_TS) - 2];
+	ret = SQLBindCol(stmt, /*col#*/1, SQL_C_CHAR, val, sizeof(val), &ind_len);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	assertState(L"01004");
+
+	EXPECT_EQ(ind_len, ISO8601_TS_UTC_LEN(ESODBC_DEF_SEC_PRECISION) - /*Z*/1);
+	EXPECT_EQ(memcmp(SQL_VAL_TS, (char *)val, sizeof(val) - 1), 0);
+#undef SQL_VAL_TS
+}
+
+
+TEST_F(ConvertSQL2C_Timestamp, Datetime2Char_truncate_22003)
+{
+#undef SQL_VAL
+#undef SQL
+#define SQL_VAL     "2345-01-23T12:34:56.789Z"
+#define SQL_VAL_TS  "2345-01-23 12:34:56.789"
+#define SQL   "CAST(" SQL_VAL " AS DATETIME)"
+
+	const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"DATETIME\"}\
+  ],\
+  \"rows\": [\
+    [\"" SQL_VAL "\"]\
+  ]\
+}\
+";
+	prepareStatement(json_answer);
+
+	SQLCHAR val[sizeof(SQL_VAL_TS)/2];
+	ret = SQLBindCol(stmt, /*col#*/1, SQL_C_CHAR, val, sizeof(val), &ind_len);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	ret = SQLFetch(stmt);
+	ASSERT_FALSE(SQL_SUCCEEDED(ret));
+	assertState(L"22003");
 #undef SQL_VAL_TS
 }
 
@@ -199,39 +369,6 @@ TEST_F(ConvertSQL2C_Timestamp, Date_Str2Timestamp)
 	EXPECT_EQ(ts.minute, 0);
 	EXPECT_EQ(ts.second, 0);
 	EXPECT_EQ(ts.fraction, 0);
-}
-
-
-TEST_F(ConvertSQL2C_Timestamp, Time_Str2Timestamp)
-{
-#undef SQL_VAL
-#undef SQL
-#define SQL_VAL "10:10:10.1010"
-#define SQL   "CAST(" SQL_VAL " AS TEXT)"
-
-	const char json_answer[] = "\
-{\
-  \"columns\": [\
-    {\"name\": \"" SQL "\", \"type\": \"text\"}\
-  ],\
-  \"rows\": [\
-    [\"" SQL_VAL "\"]\
-  ]\
-}\
-";
-	prepareAndBind(json_answer);
-
-	ret = SQLFetch(stmt);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	EXPECT_EQ(ind_len, sizeof(ts));
-	EXPECT_EQ(ts.year, 0);
-	EXPECT_EQ(ts.month, 0);
-	EXPECT_EQ(ts.day, 0);
-	EXPECT_EQ(ts.hour, 10);
-	EXPECT_EQ(ts.minute, 10);
-	EXPECT_EQ(ts.second, 10);
-	EXPECT_EQ(ts.fraction, 101000000);
 }
 
 
@@ -460,7 +597,7 @@ void ConvertSQL2C_Timestamp_DST::print_tm_timestamp(char *dest, size_t size,
 	int n = snprintf(dest, size, templ,
 			src->tm_year + 1900, src->tm_mon + 1, src->tm_mday,
 			src->tm_hour, src->tm_min, src->tm_sec);
-	ASSERT_TRUE(0 < n && n < size);
+	ASSERT_TRUE(0 < n && n < (int)size);
 
 }
 

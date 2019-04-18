@@ -111,19 +111,21 @@ static inline BOOL update_tz_param()
 {
 	/* offset = 1 -- impossible value -> trigger an update */
 	static thread_local long tz_dst_offt = 1;
+	static thread_local int tm_yday = -1;
 	long offset;
 	struct tm now;
 
 	if (! get_tz_dst_offset(&offset, &now)) {
 		return FALSE;
 	}
-	if (tz_dst_offt == offset) {
-		/* nothing changed, old printed value can be reused */
+	if (tz_dst_offt == offset && tm_yday == now.tm_yday) {
+		/* nothing changed, previously set values can be reused */
 		return TRUE;
+	} else {
+		tz_dst_offt = offset;
+		tm_yday = now.tm_yday;
 	}
-
-	tz_dst_offt = offset;
-	return print_tz_param(tz_dst_offt) && update_dst_date(&now);
+	return print_tz_param(tz_dst_offt) && update_crr_date(&now);
 }
 
 BOOL queries_init()
@@ -1927,8 +1929,10 @@ static SQLRETURN convert_param_val(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		case SQL_VARCHAR: /* KEYWORD, TEXT */
 			return c2sql_varchar(arec, irec, pos, dest, len);
 
-		case SQL_TYPE_TIMESTAMP: /* DATE */
-			return c2sql_timestamp(arec, irec, pos, dest, len);
+		case SQL_TYPE_DATE:
+		case SQL_TYPE_TIME:
+		case SQL_TYPE_TIMESTAMP:
+			return c2sql_date_time(arec, irec, pos, dest, len);
 
 		case SQL_INTERVAL_YEAR:
 		case SQL_INTERVAL_MONTH:

@@ -36,6 +36,7 @@
 #define TYPE_LONG			"LONG"
 #define TYPE_TEXT			"TEXT"
 #define TYPE_DATE			"DATE"
+#define TYPE_TIME			"TIME"
 #define TYPE_NULL			"NULL"
 /* 5 */
 #define TYPE_SHORT			"SHORT"
@@ -1749,7 +1750,7 @@ static BOOL elastic_name2types(wstr_st *type_name,
 			}
 			break;
 
-		/* 4: BYTE, LONG, TEXT, DATE, NULL */
+		/* 4: BYTE, LONG, TEXT, DATE, TIME, NULL */
 		case sizeof(TYPE_BYTE) - 1:
 			switch (tolower(type_name->str[0])) {
 				case (SQLWCHAR)'b':
@@ -1768,11 +1769,17 @@ static BOOL elastic_name2types(wstr_st *type_name,
 						return TRUE;
 					}
 					break;
-				case (SQLWCHAR)'t':
+				case (SQLWCHAR)'t': /* TEXT, TIME */
 					if (! wmemncasecmp(type_name->str, MK_WPTR(TYPE_TEXT),
 							type_name->cnt)) {
 						*c_sql = ES_TEXT_TO_CSQL;
 						*sql = ES_TEXT_TO_SQL;
+						return TRUE;
+					}
+					if (! wmemncasecmp(type_name->str, MK_WPTR(TYPE_TIME),
+							type_name->cnt)) {
+						*c_sql = SQL_C_TYPE_TIME;
+						*sql = SQL_TYPE_TIME;
 						return TRUE;
 					}
 					break;

@@ -90,6 +90,34 @@ TEST_F(ConvertSQL2C_Date, Date2Char)
 	EXPECT_EQ(strncmp((char *)val, SQL_VAL, DATE_TEMPLATE_LEN), 0);
 }
 
+TEST_F(ConvertSQL2C_Date, Date2Char_truncate_22003)
+{
+#undef SQL_VAL
+#undef SQL
+#define SQL_VAL "2345-01-23T00:00:00Z"
+#define SQL "CAST(" SQL_VAL "AS DATE)"
+
+	const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"DATE\"}\
+  ],\
+  \"rows\": [\
+    [\"" SQL_VAL "\"]\
+  ]\
+}\
+";
+	prepareStatement(json_answer);
+
+	SQLCHAR val[sizeof(SQL_VAL) / 2];
+	ret = SQLBindCol(stmt, /*col#*/1, SQL_C_CHAR, val, sizeof(val), &ind_len);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	ret = SQLFetch(stmt);
+	ASSERT_FALSE(SQL_SUCCEEDED(ret));
+	assertState(L"22003");
+}
+
 TEST_F(ConvertSQL2C_Date, Timestamp_Str2Date)
 {
 #undef SQL_VAL
