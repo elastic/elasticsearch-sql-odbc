@@ -14,7 +14,7 @@ from data import TestData, BATTERS_TEMPLATE
 
 UID = "elastic"
 CONNECT_STRING = 'Driver={Elasticsearch Driver};UID=%s;PWD=%s;Secure=0;' % (UID, Elasticsearch.AUTH_PASSWORD)
-CATALOG = "distribution_run"
+CATALOG = "elasticsearch"
 
 class Testing(unittest.TestCase):
 
