@@ -1540,15 +1540,6 @@ TEST_F(ConvertSQL2C_Interval, Iso8601_hour_to_second2WChar)
 			&ind_len);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	SQLHDESC ard;
-  ret = SQLGetStmtAttr(stmt, SQL_ATTR_APP_ROW_DESC, &ard, 0, NULL);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-  ret = SQLSetDescField(ard, 1, SQL_DESC_PRECISION, (SQLPOINTER)3, 0);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-	// data ptr is reset by direct desc field setting
-  ret = SQLSetDescField(ard, 1, SQL_DESC_DATA_PTR, (SQLPOINTER)wbuff, 0);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
 	ret = SQLFetch(stmt);
   ASSERT_TRUE(SQL_SUCCEEDED(ret));
   EXPECT_EQ(ind_len, sizeof(SQLWCHAR) * (sizeof("2:3:4.555") - /*\0*/1));
@@ -1578,19 +1569,11 @@ TEST_F(ConvertSQL2C_Interval, Iso8601_minute_to_second2Char)
 			&ind_len);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	SQLHDESC ard;
-  ret = SQLGetStmtAttr(stmt, SQL_ATTR_APP_ROW_DESC, &ard, 0, NULL);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-  ret = SQLSetDescField(ard, 1, SQL_DESC_PRECISION, (SQLPOINTER)4, 0);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-	// data ptr is reset by direct desc field setting
-  ret = SQLSetDescField(ard, 1, SQL_DESC_DATA_PTR, (SQLPOINTER)buff, 0);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
 	ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-  EXPECT_EQ(ind_len, sizeof("3:4.5555") - /*\0*/1);
-	ASSERT_STREQ((char *)buff, "3:4.5555");
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	// driver truncates it to default (current) ES/SQL seconds precision
+	EXPECT_EQ(ind_len, sizeof("3:4.555") - /*\0*/1);
+	ASSERT_STREQ((char *)buff, "3:4.555");
 }
 
 TEST_F(ConvertSQL2C_Interval, Iso8601_hour_to_minute2Char)

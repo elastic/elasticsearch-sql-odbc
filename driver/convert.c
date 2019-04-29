@@ -2004,11 +2004,11 @@ static inline SQLRETURN adjust_to_precision(esodbc_rec_st *rec,
 	}
 }
 
-static SQLRETURN parse_iso8601_number(esodbc_rec_st *arec, wstr_st *wstr,
+static SQLRETURN parse_iso8601_number(esodbc_rec_st *rec, wstr_st *wstr,
 	SQLUINTEGER *uint, char *sign,
 	SQLUINTEGER *fraction, BOOL *has_fraction)
 {
-	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
+	esodbc_stmt_st *stmt = rec->desc->hdr.stmt;
 	char inc;
 	wstr_st nr;
 	int digits, fdigits;
@@ -2041,7 +2041,7 @@ static SQLRETURN parse_iso8601_number(esodbc_rec_st *arec, wstr_st *wstr,
 			ERRH(stmt, "fraction value too large (%llu).", ubint);
 			return SQL_ERROR;
 		} else {
-			ret = adjust_to_precision(arec, &ubint, fdigits);
+			ret = adjust_to_precision(rec, &ubint, fdigits);
 			assert(ubint < ULONG_MAX); /* due to previous sanity checks */
 			*fraction = (SQLUINTEGER)ubint;
 		}
@@ -2321,6 +2321,9 @@ static SQLRETURN parse_interval_field(esodbc_rec_st *rec, SQLUINTEGER limit,
 	return SQL_SUCCESS;
 }
 
+/* Interval precision:
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/interval-data-type-precision
+ */
 static SQLRETURN parse_interval_second(esodbc_rec_st *rec, SQLUINTEGER limit,
 	wstr_st *wstr, SQL_INTERVAL_STRUCT *ivl)
 {
@@ -2975,12 +2978,12 @@ static SQLRETURN interval_iso8601_to_sql(esodbc_rec_st *arec,
 
 	ivl_wstr.str = (SQLWCHAR *)wstr;
 	ivl_wstr.cnt = *chars_0 - 1;
-	ret = parse_interval_iso8601(arec, irec->es_type->data_type, &ivl_wstr,
+	ret = parse_interval_iso8601(irec, irec->es_type->data_type, &ivl_wstr,
 			&ivl);
 	if (! SQL_SUCCEEDED(ret)) {
 		return ret;
 	}
-	cnt = print_interval_sql(arec, &ivl, (SQLWCHAR *)lit);
+	cnt = print_interval_sql(irec, &ivl, (SQLWCHAR *)lit);
 	if (cnt <= 0) {
 		ERRH(stmt, "sql interval printing failed for ISO8601`" LWPDL "`.",
 			chars_0 - 1, wstr);
