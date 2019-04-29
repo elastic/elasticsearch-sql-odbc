@@ -208,10 +208,13 @@ BATTERS_PIPELINE =\
 	}
 
 
-ES_DATASET_BASE_URL = "https://raw.githubusercontent.com/elastic/elasticsearch/6857d305270be3d987689fda37cc84b7bc18fbb3/x-pack/plugin/sql/qa/src/main/resources/"
+ES_DATASET_BASE_URL = "https://raw.githubusercontent.com/elastic/elasticsearch/eda31b0ac00c952a52885902be59ac429b0ca81a/x-pack/plugin/sql/qa/src/main/resources/"
 
-KIBANA_SAMPLES_BASE_URL = "https://raw.githubusercontent.com/elastic/kibana/54e498200b8b1a265becf1b27a6958e613acc3d1/src/legacy/server/sample_data/data_sets"
+ES_PROTO_CASE_BASE_URL = "https://raw.githubusercontent.com/elastic/elasticsearch/eda31b0ac00c952a52885902be59ac429b0ca81a/x-pack/plugin/sql/qa/src/main/java/org/elasticsearch/xpack/sql/qa/"
+
+KIBANA_SAMPLES_BASE_URL = "https://raw.githubusercontent.com/elastic/kibana/3c3c9b2a154656f25e980ba3fa03d7325561c526/src/legacy/server/sample_data/data_sets"
 KIBANA_INDEX_PREFIX = "kibana_sample_data_"
+
 
 # python seems to slow down when operating on multiple long strings?
 BATCH_SIZE = 500
@@ -266,6 +269,8 @@ class TestData(object):
 	LIBRARY_INDEX = "library"
 	EMPLOYEES_FILE = "employees.csv"
 	EMPLOYEES_INDEX = "employees"
+	PROTO_CASE_FILE = "SqlProtocolTestCase.java"
+
 
 	ECOMMERCE_INDEX = KIBANA_INDEX_PREFIX + "ecommerce"
 	FLIGHTS_INDEX = KIBANA_INDEX_PREFIX + "flights"
@@ -500,6 +505,34 @@ class TestData(object):
 		self._put_sample_template(sample_name, index_name)
 		self._index_sample_data(sample_name, index_name)
 
+	def _load_proto_tests(self):
+		print("Loading SQL proto tests")
+		if self._offline_dir:
+			path = os.path.join(self._offline_dir, self.PROTO_CASE_FILE)
+			with open(path) as f:
+				case_src = f.read()
+		else:
+			url = ES_PROTO_CASE_BASE_URL + "/" + self.PROTO_CASE_FILE
+			req = requests.get(url, timeout=Elasticsearch.REQ_TIMEOUT)
+			if req.status_code != 200:
+				raise Exception("failed to fetch %s with code %s" % (url, req.status_code))
+			case_src = req.text
+
+		tests = re.findall("^\s+assertQuery\((\"[^;]*)\);", case_src, re.ASCII|re.DOTALL|re.MULTILINE)
+		tests = [re.sub("\n\s*", "", x) for x in tests]
+		# use a CSV reader to deal with commas within SQL statements
+		creader = csv.reader(tests)
+		self._proto_tests = []
+		for t in creader:
+			t = [x.strip('" ') for x in t]
+
+			assert(5 <= len(t) <= 6)
+			if len(t) == 5:
+				(query, col_name, data_type, data_val, disp_size) = t
+				cli_val = data_val
+			else:
+				(query, col_name, data_type, data_val, cli_val, disp_size) = t
+			self._proto_tests.append((query, col_name, data_type, data_val, cli_val, disp_size))
 
 	def load(self):
 		self._load_tableau_sample(self.CALCS_FILE, self.CALCS_INDEX, CALCS_TEMPLATE, CALCS_PIPELINE)
@@ -513,10 +546,15 @@ class TestData(object):
 		self._load_kibana_sample(self.FLIGHTS_INDEX)
 		self._load_kibana_sample(self.LOGS_INDEX)
 
+		self._load_proto_tests()
+
 		print("Data %s." % ("meta-processed" if self._mode == self.MODE_NOINDEX else "reindexed" if self._mode == \
 			self.MODE_REINDEX else "indexed"))
 
 	def csv_attributes(self, csv_name):
 		return (self._csv_md5[csv_name],  self._csv_header[csv_name], self._csv_lines[csv_name])
+
+	def proto_tests(self):
+		return self._proto_tests
 
 # vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 tw=118 :
