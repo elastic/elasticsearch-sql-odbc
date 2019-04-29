@@ -239,6 +239,8 @@ typedef struct desc_rec {
 	/* "number of digits for an exact numeric type, the number of bits in the
 	 * mantissa (binary precision) for an approximate numeric type, or the
 	 * numbers of digits in the fractional seconds component "*/
+	/* Intervals: "the number of decimal digits allowed in the fractional part
+	 * of the seconds value" */
 	SQLSMALLINT		precision;
 	SQLSMALLINT		rowver;
 	SQLSMALLINT		scale;
