@@ -205,7 +205,6 @@ class Testing(unittest.TestCase):
 			instance = float(data_val.strip("fF"))
 		elif data_type in ["datetime", "date", "time"]:
 			fmt = "%H:%M:%S"
-			#if data_type != "time":
 			fmt = "%Y-%m-%dT" + fmt
 			# no explicit second with microseconds directive??
 			if "." in data_val:
