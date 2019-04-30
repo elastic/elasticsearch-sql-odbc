@@ -1260,7 +1260,7 @@ TEST_F(ConvertSQL2C_Interval, Iso86012Interval_minute_to_second)
 	ASSERT_TRUE(is.intval.day_second.fraction == 666000); // def prec: 6
 }
 
-TEST_F(ConvertSQL2C_Interval, Iso86012Interval_extra_field_22018)
+TEST_F(ConvertSQL2C_Interval, Iso86012Interval_H_in_Min2Sec)
 {
 #	undef SQL_VAL
 #	undef SQL
@@ -1284,8 +1284,12 @@ TEST_F(ConvertSQL2C_Interval, Iso86012Interval_extra_field_22018)
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	ret = SQLFetch(stmt);
-	ASSERT_FALSE(SQL_SUCCEEDED(ret));
-	assertState(L"22018");
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ASSERT_TRUE(is.interval_type == SQL_IS_MINUTE_TO_SECOND);
+	ASSERT_TRUE(is.interval_sign == SQL_FALSE);
+	ASSERT_TRUE(is.intval.day_second.minute == 104);
+	ASSERT_TRUE(is.intval.day_second.second == 55);
+	ASSERT_TRUE(is.intval.day_second.fraction == 666000); // def prec: 6
 }
 
 TEST_F(ConvertSQL2C_Interval, Iso86012Interval_invalid_char_22018)
@@ -1336,6 +1340,34 @@ TEST_F(ConvertSQL2C_Interval, Iso86012Interval_repeated_valid_22018)
 	prepareStatement(json_answer);
 
 	ret = SQLBindCol(stmt, /*col#*/1, SQL_C_INTERVAL_MINUTE_TO_SECOND, &is,
+			sizeof(is), &ind_len);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	ret = SQLFetch(stmt);
+	ASSERT_FALSE(SQL_SUCCEEDED(ret));
+	assertState(L"22018");
+}
+
+TEST_F(ConvertSQL2C_Interval, Iso86012Interval_dangling_fraction_22018)
+{
+#	undef SQL_VAL
+#	undef SQL
+#	define SQL_VAL "PT60.666S" // non-minute convertible
+#	define SQL   "SELECT " SQL_VAL
+
+	const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"INTERVAL_MINUTE\"}\
+  ],\
+  \"rows\": [\
+    [\"" SQL_VAL "\"]\
+  ]\
+}\
+";
+	prepareStatement(json_answer);
+
+	ret = SQLBindCol(stmt, /*col#*/1, SQL_C_INTERVAL_MINUTE, &is,
 			sizeof(is), &ind_len);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
@@ -1540,15 +1572,6 @@ TEST_F(ConvertSQL2C_Interval, Iso8601_hour_to_second2WChar)
 			&ind_len);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	SQLHDESC ard;
-  ret = SQLGetStmtAttr(stmt, SQL_ATTR_APP_ROW_DESC, &ard, 0, NULL);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-  ret = SQLSetDescField(ard, 1, SQL_DESC_PRECISION, (SQLPOINTER)3, 0);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-	// data ptr is reset by direct desc field setting
-  ret = SQLSetDescField(ard, 1, SQL_DESC_DATA_PTR, (SQLPOINTER)wbuff, 0);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
 	ret = SQLFetch(stmt);
   ASSERT_TRUE(SQL_SUCCEEDED(ret));
   EXPECT_EQ(ind_len, sizeof(SQLWCHAR) * (sizeof("2:3:4.555") - /*\0*/1));
@@ -1578,19 +1601,11 @@ TEST_F(ConvertSQL2C_Interval, Iso8601_minute_to_second2Char)
 			&ind_len);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	SQLHDESC ard;
-  ret = SQLGetStmtAttr(stmt, SQL_ATTR_APP_ROW_DESC, &ard, 0, NULL);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-  ret = SQLSetDescField(ard, 1, SQL_DESC_PRECISION, (SQLPOINTER)4, 0);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-	// data ptr is reset by direct desc field setting
-  ret = SQLSetDescField(ard, 1, SQL_DESC_DATA_PTR, (SQLPOINTER)buff, 0);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
 	ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-  EXPECT_EQ(ind_len, sizeof("3:4.5555") - /*\0*/1);
-	ASSERT_STREQ((char *)buff, "3:4.5555");
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	// driver truncates it to default (current) ES/SQL seconds precision
+	EXPECT_EQ(ind_len, sizeof("3:4.555") - /*\0*/1);
+	ASSERT_STREQ((char *)buff, "3:4.555");
 }
 
 TEST_F(ConvertSQL2C_Interval, Iso8601_hour_to_minute2Char)
