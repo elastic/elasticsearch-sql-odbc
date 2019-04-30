@@ -2118,7 +2118,7 @@ static void *copy_types_rows(esodbc_dbc_st *dbc, estype_row_st *type_row,
 	SQLWCHAR *pos;
 	int c;
 	SQLULEN i;
-	SQLSMALLINT sql_type;
+	SQLSMALLINT sql_type, sec_prec;
 
 	/* pointer to start position where the strings will be copied in */
 	pos = (SQLWCHAR *)&types[rows_fetched];
@@ -2151,6 +2151,7 @@ static void *copy_types_rows(esodbc_dbc_st *dbc, estype_row_st *type_row,
 		} \
 	} while (0)
 
+	sec_prec = -1;
 	for (i = 0; i < rows_fetched; i ++) {
 		/* copy row data */
 		ES_TYPES_COPY_WSTR(type_name);
@@ -2233,6 +2234,20 @@ static void *copy_types_rows(esodbc_dbc_st *dbc, estype_row_st *type_row,
 			&types[i].sql_datetime_sub);
 
 		set_display_size(types + i);
+
+		/* There's no explicit coverage in the docs on how to communicate the
+		 * interval seconds precision, so will use the scales in
+		 * SQLGetTypeInfo() for that, just like for Timestamp type;
+		 * furthermore, will use Timestamp's value, since it's the same
+		 * seconds precision across all ES/SQL types with seconds component. */
+		if (types[i].data_type == SQL_TYPE_TIMESTAMP) {
+			assert(sec_prec < 0);
+			sec_prec = types[i].maximum_scale;
+		} else if (types[i].meta_type == METATYPE_INTERVAL_WSEC) {
+			assert(0 < sec_prec);
+			types[i].maximum_scale = sec_prec;
+			types[i].minimum_scale = types[i].maximum_scale;
+		}
 	}
 
 #undef ES_TYPES_COPY_INT

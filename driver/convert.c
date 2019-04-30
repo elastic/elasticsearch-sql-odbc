@@ -2004,11 +2004,11 @@ static inline SQLRETURN adjust_to_precision(esodbc_rec_st *rec,
 	}
 }
 
-static SQLRETURN parse_iso8601_number(esodbc_rec_st *arec, wstr_st *wstr,
+static SQLRETURN parse_iso8601_number(esodbc_rec_st *rec, wstr_st *wstr,
 	SQLUINTEGER *uint, char *sign,
 	SQLUINTEGER *fraction, BOOL *has_fraction)
 {
-	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
+	esodbc_stmt_st *stmt = rec->desc->hdr.stmt;
 	char inc;
 	wstr_st nr;
 	int digits, fdigits;
@@ -2041,7 +2041,7 @@ static SQLRETURN parse_iso8601_number(esodbc_rec_st *arec, wstr_st *wstr,
 			ERRH(stmt, "fraction value too large (%llu).", ubint);
 			return SQL_ERROR;
 		} else {
-			ret = adjust_to_precision(arec, &ubint, fdigits);
+			ret = adjust_to_precision(rec, &ubint, fdigits);
 			assert(ubint < ULONG_MAX); /* due to previous sanity checks */
 			*fraction = (SQLUINTEGER)ubint;
 		}
@@ -2073,13 +2073,19 @@ static SQLRETURN parse_iso8601_number(esodbc_rec_st *arec, wstr_st *wstr,
 	return ret;
 }
 
-/* parse an ISO8601 period value
- * Elasticsearch'es implementation deviates slightly, hiding the day field:
- * `INTERVAL '1 1' DAY TO HOUR` -> `PT25H` instead of `P1DT1H`. */
-static SQLRETURN parse_interval_iso8601(esodbc_rec_st *arec,
+/* Parse an ISO8601 period value.
+ * Elasticsearch'es implementation deviates from the standard by, for example:
+ * - demoting the day field: `INTERVAL '1 1' DAY TO HOUR` ->
+ *   `PT25H` instead of `P1DT1H`; `INTERVAL '1' DAY` -> `PT24H` vs. `P1D`;
+ * - promoting the hour field: `INTERVAL '61:59' MINUTE TO SECOND` ->
+ *   `PT1H1M59S` instead of `PT61M59S`; `INTERVAL '60' MINUTE` -> `PT1H` vs.
+ *   `PT60M`.
+ * - promoting the minute field: `INTERVAL '61' SECOND` -> `PT1M1S` vs.
+ *   `PT61S` */
+static SQLRETURN parse_interval_iso8601(esodbc_rec_st *rec,
 	SQLSMALLINT ctype, wstr_st *wstr, SQL_INTERVAL_STRUCT *ivl)
 {
-	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
+	esodbc_stmt_st *stmt = rec->desc->hdr.stmt;
 	char sign;
 	SQLWCHAR *crr, *end;
 	wstr_st nr;
@@ -2103,7 +2109,9 @@ static SQLRETURN parse_interval_iso8601(esodbc_rec_st *arec,
 			(1 << SQL_IS_HOUR) | (1 << SQL_IS_MINUTE) | (1 << SQL_IS_SECOND),
 			(1 << SQL_IS_MINUTE) | (1 << SQL_IS_SECOND),
 	};
+	uint16_t type2bm_ivl; /* the type bit mask for the interval */
 	SQLRETURN ret;
+	SQLUINTEGER secs; /* ~ond~ */
 
 	/* Sets a bit in a bitmask corresponding to one interval field, given
 	 * `_ivl`, or errs if already set.
@@ -2135,6 +2143,15 @@ static SQLRETURN parse_interval_iso8601(esodbc_rec_st *arec,
 		ivl->intval._ivl_field_ = uint; \
 		DBGH(stmt, "field %d assigned value %lu.", _ivl_type, uint); \
 		state = saved; \
+	} while (0)
+	/* Safe ulong addition */
+#	define ULONG_SAFE_ADD(_to, _from) \
+	do { \
+		if (ULONG_MAX - (_from) < _to) { \
+			goto err_overflow; \
+		} else { \
+			_to += _from; \
+		} \
 	} while (0)
 
 	/* the interval type will be used as bitmask indexes */
@@ -2180,7 +2197,7 @@ static SQLRETURN parse_interval_iso8601(esodbc_rec_st *arec,
 				}
 				nr.str = crr;
 				nr.cnt = end - crr;
-				ret = parse_iso8601_number(arec, &nr, &uint, &sign,
+				ret = parse_iso8601_number(rec, &nr, &uint, &sign,
 						&fraction, &has_fraction);
 				if (! SQL_SUCCEEDED(ret)) {
 					goto err_format;
@@ -2243,28 +2260,82 @@ static SQLRETURN parse_interval_iso8601(esodbc_rec_st *arec,
 
 	assert(0 < /*starts at 1*/ ivl->interval_type &&
 		ivl->interval_type < 8 * sizeof(type2bm)/sizeof(type2bm[0]));
-	/* reinstate the day field merged by ES in the hour field when:
-	 * - the day field hasn't been set;
-	 * - it is an interval with day component;
-	 * - the hour field overflows a day/24h  */
-	if (((1 << SQL_IS_DAY) & fields_bm) == 0 &&
-		(type2bm[ivl->interval_type - 1] & (1 << SQL_IS_DAY)) &&
-		24 <= ivl->intval.day_second.hour) {
-		ivl->intval.day_second.day = ivl->intval.day_second.hour / 24;
-		ivl->intval.day_second.hour = ivl->intval.day_second.hour % 24;
-		fields_bm |= 1 << SQL_IS_DAY;
+
+	type2bm_ivl = type2bm[ivl->interval_type - 1];
+	/* If the expression set fields not directly relevant to the interval AND
+	 * the interval is not of type year/-/month one (which does seem to
+	 * conform to the standard), rebalance the member values as expected by
+	 * the interval type. */
+	if ((type2bm_ivl != fields_bm) && ((type2bm_ivl &
+				((1 << SQL_CODE_YEAR) | (1 << SQL_CODE_MONTH))) == 0)) {
+		secs = ivl->intval.day_second.second;
+		ULONG_SAFE_ADD(secs, 60 * ivl->intval.day_second.minute); //...
+		ULONG_SAFE_ADD(secs, 3600 * ivl->intval.day_second.hour);
+		ULONG_SAFE_ADD(secs, 24 * 3600 * ivl->intval.day_second.day);
+		/* clear everything set, but reinstate any set fractions */
+		fields_bm = 0;
+		memset(&ivl->intval.day_second, 0, sizeof(ivl->intval.day_second));
+		ivl->intval.day_second.fraction = fraction;
+
+		if (type2bm_ivl & (1 << SQL_CODE_SECOND)) {
+			ivl->intval.day_second.second = secs;
+			fields_bm |= (1 << SQL_CODE_SECOND);
+		} else if (has_fraction) {
+			/* fraction val itself is truncated away due to precision
+			 * zero/null for intervals with no seconds component */
+			ERRH(stmt, "fraction in interval with no second component");
+			goto err_format;
+		}
+		if (type2bm_ivl & (1 << SQL_CODE_MINUTE)) {
+			if (ivl->intval.day_second.second) {
+				ivl->intval.day_second.minute =
+					ivl->intval.day_second.second / 60;
+				ivl->intval.day_second.second = secs % 60;
+			} else {
+				ivl->intval.day_second.minute = secs / 60;
+				assert(secs % 60 == 0);
+			}
+			fields_bm |= (1 << SQL_CODE_MINUTE);
+		}
+		if (type2bm_ivl & (1 << SQL_CODE_HOUR)) {
+			if (ivl->intval.day_second.minute) {
+				ivl->intval.day_second.hour =
+					ivl->intval.day_second.minute / 60;
+				ivl->intval.day_second.minute %= 60;
+			} else {
+				ivl->intval.day_second.hour = secs / 3600;
+				assert(secs % 3600 == 0);
+			}
+			fields_bm |= (1 << SQL_CODE_HOUR);
+		}
+		if (type2bm_ivl & (1 << SQL_CODE_DAY)) {
+			if (ivl->intval.day_second.hour) {
+				ivl->intval.day_second.day =
+					ivl->intval.day_second.hour / 24;
+				ivl->intval.day_second.hour %= 24;
+			} else {
+				ivl->intval.day_second.day = secs / (24 * 3600);
+				assert(secs % (24 * 3600) == 0);
+			}
+			fields_bm |= (1 << SQL_CODE_DAY);
+		}
 	}
 
 	/* Check that the ISO value has no fields set other than those allowed
 	 * for the advertised type. Since the year_month and day_second form a
 	 * union, this can't be done by checks against field values. */
-	if ((~type2bm[ivl->interval_type - 1]) & fields_bm) {
+	if (~type2bm_ivl & fields_bm) {
 		ERRH(stmt, "illegal fields (0x%hx) for interval type %hd (0x%hx).",
-			fields_bm, ctype, type2bm[ivl->interval_type - 1]);
+			fields_bm, ctype, type2bm_ivl);
 		goto err_format;
 	}
 
 	return ret;
+
+err_overflow:
+	ERRH(stmt, "integer overflow while normalizing ISO8601 format [%zu] `"
+		LWPDL "`.", wstr->cnt, LWSTR(wstr));
+	RET_HDIAGS(stmt, SQL_STATE_22015);
 err_parse:
 	ERRH(stmt, "unexpected current char `%c` in state %d.", *crr, state);
 err_format:
@@ -2274,6 +2345,7 @@ err_format:
 
 #	undef ASSIGN_FIELD
 #	undef SET_BITMASK_OR_ERR
+#	undef ULONG_SAFE_ADD
 }
 
 /* Parse one field of the value.
@@ -2321,6 +2393,9 @@ static SQLRETURN parse_interval_field(esodbc_rec_st *rec, SQLUINTEGER limit,
 	return SQL_SUCCESS;
 }
 
+/* Interval precision:
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/interval-data-type-precision
+ */
 static SQLRETURN parse_interval_second(esodbc_rec_st *rec, SQLUINTEGER limit,
 	wstr_st *wstr, SQL_INTERVAL_STRUCT *ivl)
 {
@@ -2921,8 +2996,6 @@ static size_t print_interval_iso8601(esodbc_rec_st *rec,
 		case SQL_IS_HOUR_TO_MINUTE:
 		case SQL_IS_HOUR_TO_SECOND:
 		case SQL_IS_MINUTE_TO_SECOND:
-			// TODO: compoound year to hour, ES/SQL-style?
-			// (see parse_interval_iso8601 note)
 			PRINT_FIELD(day_second.day, 'D', /* is time comp. */FALSE);
 			t_added = FALSE;
 			PRINT_FIELD(day_second.hour, 'H', /*is time*/TRUE);
@@ -2975,12 +3048,12 @@ static SQLRETURN interval_iso8601_to_sql(esodbc_rec_st *arec,
 
 	ivl_wstr.str = (SQLWCHAR *)wstr;
 	ivl_wstr.cnt = *chars_0 - 1;
-	ret = parse_interval_iso8601(arec, irec->es_type->data_type, &ivl_wstr,
+	ret = parse_interval_iso8601(irec, irec->es_type->data_type, &ivl_wstr,
 			&ivl);
 	if (! SQL_SUCCEEDED(ret)) {
 		return ret;
 	}
-	cnt = print_interval_sql(arec, &ivl, (SQLWCHAR *)lit);
+	cnt = print_interval_sql(irec, &ivl, (SQLWCHAR *)lit);
 	if (cnt <= 0) {
 		ERRH(stmt, "sql interval printing failed for ISO8601`" LWPDL "`.",
 			chars_0 - 1, wstr);
