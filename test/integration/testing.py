@@ -8,13 +8,17 @@ import pyodbc
 import datetime
 import hashlib
 import unittest
+import re
+import struct
+import ctypes
 
 from elasticsearch import Elasticsearch
 from data import TestData, BATTERS_TEMPLATE
 
 UID = "elastic"
 CONNECT_STRING = 'Driver={Elasticsearch Driver};UID=%s;PWD=%s;Secure=0;' % (UID, Elasticsearch.AUTH_PASSWORD)
-CATALOG = "elasticsearch"
+CATALOG = "elasticsearch" # nightly built
+#CATALOG = "distribution_run" # source built
 
 class Testing(unittest.TestCase):
 
@@ -152,6 +156,126 @@ class Testing(unittest.TestCase):
 			cols_expect.sort()
 			self.assertEqual(cols_have, cols_expect)
 
+
+	# pyodbc doesn't support INTERVAL types; when installing an "output converter", it asks the ODBC driver for the
+	# binary format and currently, this is the same as a wchar_t string for INTERVALs.
+	# Also, just return None for data type 0 -- NULL
+	def _install_output_converters(self, cnxn):
+		wchar_sz = ctypes.sizeof(ctypes.c_wchar)
+		if wchar_sz == ctypes.sizeof(ctypes.c_ushort):
+			unit = "H"
+		elif wchar_sz == ctypes.sizeof(ctypes.c_uint32):
+			unit = "I"
+		else:
+			raise Exception("unsupported wchar_t size")
+
+		# wchar_t to python string
+		def _convert_interval(value):
+			cnt = len(value)
+			assert(cnt % wchar_sz == 0)
+			cnt //= wchar_sz
+			ret = ""
+			fmt = "=" + str(cnt) + unit
+			for c in struct.unpack(fmt, value):
+				ret += chr(c)
+			return ret
+
+		for x in range(101, 114): # INTERVAL types IDs
+			cnxn.add_output_converter(x, _convert_interval)
+
+		def _convert_null(value):
+			return None
+		cnxn.add_output_converter(0, _convert_null) # NULL type ID
+
+	# produce an instance of the 'data_type' out of the 'data_val' string
+	def _type_to_instance(self, data_type, data_val):
+		# Change the value read in the tests to type and format of the result expected to be
+		# returned by driver.
+		if data_type == "null":
+			instance = None
+		elif data_type.startswith("bool"):
+			instance = data_val.lower() == "true"
+		elif data_type in ["byte", "short", "integer"]:
+			instance = int(data_val)
+		elif data_type == "long":
+			instance = int(data_val.strip("lL"))
+		elif data_type == "double":
+			instance = float(data_val)
+		elif data_type == "float":
+			instance = float(data_val.strip("fF"))
+		elif data_type in ["datetime", "date", "time"]:
+			fmt = "%H:%M:%S"
+			fmt = "%Y-%m-%dT" + fmt
+			# no explicit second with microseconds directive??
+			if "." in data_val:
+				fmt += ".%f"
+			# always specify the timezone so that local-to-UTC conversion can take place
+			fmt += "%z"
+			val = data_val
+			if data_type == "time":
+				# parse Time as a Datetime, since some tests uses the ES/SQL-specific
+				# Time-with-timezone which then needs converting to UTC (as the driver does).
+				# and this conversion won't work for strptime()'ed Time values, as this uses
+				# year 1900, not UTC convertible.
+				val = "1970-02-02T" + val
+			# strptime() won't recognize Z as Zulu/UTC
+			val = val.replace("Z", "+00:00")
+			instance = datetime.datetime.strptime(val, fmt)
+			# if local time is provided, change it to UTC (as the driver does)
+			try:
+				timestamp = instance.timestamp()
+				if data_type != "datetime":
+					# The microsecond component only makes sense with Timestamp/Datetime with
+					# ODBC (the TIME_STRUCT lacks a fractional second field).
+					timestamp = int(timestamp)
+				instance = instance.utcfromtimestamp(timestamp)
+			except OSError:
+				# The value can't be UTC converted, since the test uses Datetime years before
+				# 1970 => convert it to timestamp w/o timezone.
+				instance = datetime.datetime(instance.year, instance.month, instance.day,
+						instance.hour, instance.minute, instance.second, instance.microsecond)
+
+			if data_type == "date":
+				instance = instance.date()
+			elif data_type == "time":
+				instance = instance.time()
+		else:
+			instance = data_val
+
+		return instance
+
+	def _proto_tests(self):
+		tests = self._data.proto_tests()
+		with pyodbc.connect(self._dsn) as cnxn:
+			cnxn.autocommit = True
+			self._install_output_converters(cnxn)
+			try:
+				for t in tests:
+					(query, col_name, data_type, data_val, cli_val, disp_size) = t
+					# print("T: %s, %s, %s, %s, %s, %s" % (query, col_name, data_type, data_val, cli_val, disp_size))
+					with cnxn.execute(query) as curs:
+						self.assertEqual(curs.rowcount, 1)
+						res = curs.fetchone()[0]
+
+						if data_val != cli_val: # INTERVAL tests
+							assert(query.lower().startswith("select interval"))
+							# extract the literal value (`INTERVAL -'1 1' -> `-1 1``)
+							expect = re.match("[^-]*(-?\s*'[^']*').*", query).groups()[0]
+							expect = expect.replace("'", "")
+							# filter out tests with fractional seconds:
+							# https://github.com/elastic/elasticsearch/issues/41635
+							if re.search("\d*\.\d+", expect):
+								continue
+						else: # non-INTERVAL tests
+							assert(data_type.lower() == data_type)
+							# Change the value read in the tests to type and format of the result expected to be
+							# returned by driver.
+							expect = self._type_to_instance(data_type, data_val)
+
+						self.assertEqual(res, expect)
+			finally:
+				cnxn.clear_output_converters()
+
 	def perform(self):
 		self._check_info(pyodbc.SQL_USER_NAME, UID)
 		self._check_info(pyodbc.SQL_DATABASE_NAME, CATALOG)
@@ -174,6 +298,8 @@ class Testing(unittest.TestCase):
 		self._select_columns(TestData.FLIGHTS_INDEX, "*")
 		self._select_columns(TestData.ECOMMERCE_INDEX, "*")
 		self._select_columns(TestData.LOGS_INDEX, "*")
+
+		self._proto_tests()
 
 		print("Tests successful.")
 
