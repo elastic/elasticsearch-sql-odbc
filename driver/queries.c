@@ -160,6 +160,11 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 			rec->type = rec->es_type->sql_data_type;
 			rec->datetime_interval_code = rec->es_type->sql_datetime_sub;
 			rec->meta_type = rec->es_type->meta_type;
+			/* set INTERVAL record's seconds precision */
+			if (rec->meta_type == METATYPE_INTERVAL_WSEC) {
+				assert(rec->precision == 0);
+				rec->precision = rec->es_type->maximum_scale;
+			}
 		} else if (! dbc->no_types) {
 			/* the connection doesn't have yet the types cached (this is the
 			 * caching call) and don't have access to the data itself either,
