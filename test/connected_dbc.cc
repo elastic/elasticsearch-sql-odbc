@@ -12,12 +12,6 @@ extern "C" {
 #include "defs.h"
 }
 
-#ifdef _WIN64
-#	define CLIENT_ID_PARAM	"\"client_id\": \"odbc64\""
-#else /* _WIN64 */
-#	define CLIENT_ID_PARAM	"\"client_id\": \"odbc32\""
-#endif /* _WIN64 */
-
 #include "connected_dbc.h"
 
 /*
@@ -171,13 +165,15 @@ void ConnectedDBC::assertState(const SQLWCHAR *state)
 
 void ConnectedDBC::assertRequest(const char *params, const char *tz)
 {
-	const static char *answ_templ =
-		"{\"query\": \"%s\", "
-		"\"params\": %s, "
-		"\"field_multi_value_leniency\": " ESODBC_DEF_MFIELD_LENIENT ", "
-		"\"time_zone\": %s%s%s, "
-		"\"mode\": \"ODBC\", "
-		CLIENT_ID_PARAM "}";
+	const static char *answ_templ = "{"
+		JSON_KEY_QUERY "\"%s\""
+		JSON_KEY_PARAMS "%s"
+		JSON_KEY_MULTIVAL ESODBC_DEF_MFIELD_LENIENT
+		JSON_KEY_IDX_FROZEN ESODBC_DEF_IDX_INC_FROZEN
+		JSON_KEY_TIMEZONE "%s%s%s"
+		JSON_KEY_VAL_MODE
+		JSON_KEY_CLT_ID
+		"}";
 	char expect[1024];
 	int n;
 
