@@ -2199,8 +2199,9 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 			memcpy(body + pos, tz_param.str, tz_param.cnt);
 			pos += tz_param.cnt;
 		} else {
-			memcpy(body + pos, "\"Z\"", sizeof("\"Z\"") - 1);
-			pos += sizeof("\"Z\"") - 1;
+			memcpy(body + pos, JSON_VAL_TIMEZONE_Z,
+				sizeof(JSON_VAL_TIMEZONE_Z) - 1);
+			pos += sizeof(JSON_VAL_TIMEZONE_Z) - 1;
 		}
 
 		/* reset the page counter when the params change */

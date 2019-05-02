@@ -9,13 +9,6 @@
 
 #include <string.h>
 
-#ifdef _WIN64
-#	define CLIENT_ID	"\"client_id\": \"odbc64\""
-#else /* _WIN64 */
-#	define CLIENT_ID	"\"client_id\": \"odbc32\""
-#endif /* _WIN64 */
-
-
 namespace test {
 
 class ConvertC2SQL_Numeric : public ::testing::Test, public ConnectedDBC {
@@ -32,16 +25,7 @@ TEST_F(ConvertC2SQL_Numeric, CStr_Short2Integer)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"CStr_Short2Integer\", "
-		"\"params\": [{\"type\": \"INTEGER\", \"value\": -12345}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"INTEGER\", \"value\": -12345}]");
 }
 
 TEST_F(ConvertC2SQL_Numeric, CStr_Short2Integer_fail_22001)
@@ -87,17 +71,8 @@ TEST_F(ConvertC2SQL_Numeric, CStr_LLong2Long)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"CStr_LLong2Long\", "
-		"\"params\": [{\"type\": \"LONG\", "
-		"\"value\": 9223372036854775807}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"LONG\", "
+		"\"value\": 9223372036854775807}]");
 }
 
 TEST_F(ConvertC2SQL_Numeric, CStr_LLong2Integer_fail_22003)
@@ -128,17 +103,8 @@ TEST_F(ConvertC2SQL_Numeric, CStr_Float2Long)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"CStr_Float2Long\", "
-		"\"params\": [{\"type\": \"LONG\", "
-		"\"value\": 9223372036854775806.12345}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"LONG\", "
+		"\"value\": 9223372036854775806.12345}]");
 }
 
 /* note: test name used in test */
@@ -152,16 +118,7 @@ TEST_F(ConvertC2SQL_Numeric, WStr_Byte2Integer)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"WStr_Byte2Integer\", "
-		"\"params\": [{\"type\": \"INTEGER\", \"value\": -128}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"INTEGER\", \"value\": -128}]");
 }
 
 /* note: test name used in test */
@@ -175,17 +132,8 @@ TEST_F(ConvertC2SQL_Numeric, WStr_Double2HFloat)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"WStr_Double2HFloat\", "
-		"\"params\": [{\"type\": \"HALF_FLOAT\", "
-		"\"value\": -12345678901234567890.123456789}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"HALF_FLOAT\", "
+		"\"value\": -12345678901234567890.123456789}]");
 }
 
 /* note: test name used in test */
@@ -199,17 +147,8 @@ TEST_F(ConvertC2SQL_Numeric, WStr_Double2SFloat)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"WStr_Double2SFloat\", "
-		"\"params\": [{\"type\": \"HALF_FLOAT\", "
-		"\"value\": -12345678901234567890.123456789}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"HALF_FLOAT\", "
+		"\"value\": -12345678901234567890.123456789}]");
 }
 
 TEST_F(ConvertC2SQL_Numeric, WStr_Double2Real_fail_22003)
@@ -239,16 +178,7 @@ TEST_F(ConvertC2SQL_Numeric, Short2Integer)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"Short2Integer\", "
-		"\"params\": [{\"type\": \"INTEGER\", \"value\": -12345}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"INTEGER\", \"value\": -12345}]");
 }
 
 /* note: test name used in test */
@@ -262,17 +192,8 @@ TEST_F(ConvertC2SQL_Numeric, LLong2Long)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"LLong2Long\", "
-		"\"params\": [{\"type\": \"LONG\", "
-		"\"value\": 9223372036854775807}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"LONG\", "
+		"\"value\": 9223372036854775807}]");
 }
 
 TEST_F(ConvertC2SQL_Numeric, LLong2Integer_fail_22003)
@@ -303,17 +224,8 @@ TEST_F(ConvertC2SQL_Numeric, Float2Long)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"Float2Long\", "
-		"\"params\": [{\"type\": \"LONG\", "
-		"\"value\": 9.2233720368548e+18}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"LONG\", "
+		"\"value\": 9.2233720368548e+18}]");
 }
 
 /* note: test name used in test */
@@ -327,16 +239,7 @@ TEST_F(ConvertC2SQL_Numeric, Byte2Integer)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"Byte2Integer\", "
-		"\"params\": [{\"type\": \"INTEGER\", \"value\": -128}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"INTEGER\", \"value\": -128}]");
 }
 
 /* note: test name used in test */
@@ -350,17 +253,8 @@ TEST_F(ConvertC2SQL_Numeric, Double2HFloat)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"Double2HFloat\", "
-		"\"params\": [{\"type\": \"HALF_FLOAT\", "
-		"\"value\": -1.23456789e+19}], " /* def prec is 8 */
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"HALF_FLOAT\", "
+		"\"value\": -1.23456789e+19}]"); /* def prec is 8 */
 }
 
 /* note: test name used in test */
@@ -374,17 +268,8 @@ TEST_F(ConvertC2SQL_Numeric, Double2SFloat)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"Double2SFloat\", "
-		"\"params\": [{\"type\": \"HALF_FLOAT\", "
-		"\"value\": -1.234567890123456717e+19}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"HALF_FLOAT\", "
+		"\"value\": -1.234567890123456717e+19}]");
 }
 
 TEST_F(ConvertC2SQL_Numeric, Double2Real_fail_22003)
@@ -415,17 +300,8 @@ TEST_F(ConvertC2SQL_Numeric, Bin_LLong2Long)
 			&osize);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"Bin_LLong2Long\", "
-		"\"params\": [{\"type\": \"LONG\", "
-		"\"value\": 9223372036854775807}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"LONG\", "
+		"\"value\": 9223372036854775807}]");
 }
 
 TEST_F(ConvertC2SQL_Numeric, Bin_Byte2Integer_fail_HY090)
@@ -457,17 +333,8 @@ TEST_F(ConvertC2SQL_Numeric, Bin_Double2SFloat)
 			&osize);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"Bin_Double2SFloat\", "
-		"\"params\": [{\"type\": \"HALF_FLOAT\", "
-		"\"value\": -1.234567890123456717e+19}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"HALF_FLOAT\", "
+		"\"value\": -1.234567890123456717e+19}]");
 }
 
 /* note: test name used in test */
@@ -486,17 +353,8 @@ TEST_F(ConvertC2SQL_Numeric, Numeric2HFloat)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"Numeric2HFloat\", "
-		"\"params\": [{\"type\": \"HALF_FLOAT\", "
-		"\"value\": -2.5212e+01}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"HALF_FLOAT\", "
+		"\"value\": -2.5212e+01}]");
 }
 
 } // test namespace

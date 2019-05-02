@@ -51,6 +51,9 @@ class ConnectedDBC {
 	void assertState(const SQLWCHAR *state);
 	void assertState(SQLSMALLINT htype, const SQLWCHAR *state);
 
+	void assertRequest(const char *params, const char *tz);
+	void assertRequest(const char *params);
+
 	// use the test name as SQL (for faster logs lookup)
 	void prepareStatement();
 	// use an actual SQL statement (if it might be processed)

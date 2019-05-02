@@ -12,6 +12,12 @@ extern "C" {
 #include "defs.h"
 }
 
+#ifdef _WIN64
+#	define CLIENT_ID_PARAM	"\"client_id\": \"odbc64\""
+#else /* _WIN64 */
+#	define CLIENT_ID_PARAM	"\"client_id\": \"odbc32\""
+#endif /* _WIN64 */
+
 #include "connected_dbc.h"
 
 /*
@@ -161,6 +167,42 @@ void ConnectedDBC::assertState(SQLSMALLINT htype, const SQLWCHAR *state)
 void ConnectedDBC::assertState(const SQLWCHAR *state)
 {
 	assertState(SQL_HANDLE_STMT, state);
+}
+
+void ConnectedDBC::assertRequest(const char *params, const char *tz)
+{
+	const static char *answ_templ =
+		"{\"query\": \"%s\", "
+		"\"params\": %s, "
+		"\"field_multi_value_leniency\": " ESODBC_DEF_MFIELD_LENIENT ", "
+		"\"time_zone\": %s%s%s, "
+		"\"mode\": \"ODBC\", "
+		CLIENT_ID_PARAM "}";
+	char expect[1024];
+	int n;
+
+	cstr_st actual = {NULL, 0};
+	ret = serialize_statement((esodbc_stmt_st *)stmt, &actual);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	if (tz) {
+		n = snprintf(expect, sizeof(expect), answ_templ, test_name, params,
+				"\"", tz, "\"");
+	} else {
+		n = snprintf(expect, sizeof(expect), answ_templ, test_name, params,
+				"", JSON_VAL_TIMEZONE_Z, "");
+	}
+	ASSERT_LT(actual.cnt, sizeof(expect));
+	ASSERT_EQ(n, actual.cnt);
+	ASSERT_EQ(strncmp(expect, (char *)actual.str, n), 0);
+
+	free(actual.str);
+
+}
+
+void ConnectedDBC::assertRequest(const char *params)
+{
+	assertRequest(params, NULL);
 }
 
 void ConnectedDBC::prepareStatement()
