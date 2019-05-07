@@ -148,12 +148,15 @@ class Elasticsearch(object):
 		start_script = os.path.join(es_dir, "bin", "elasticsearch")
 		if os.name == "nt":
 			start_script += ".bat"
+			creationflags = subprocess.CREATE_NEW_PROCESS_GROUP
+		else:
+			creationflags = 0
 
 		if self.is_listening():
 			raise Exception("an Elasticsearch instance is already running")
 
 		# don't daemonize to get the start logs inlined with those that this app generates
-		es_proc = psutil.Popen(start_script, close_fds=True, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+		es_proc = psutil.Popen(start_script, close_fds=True, creationflags=creationflags)
 		atexit.register(Elasticsearch._stop_es, es_proc)
 		# it takes ES a few seconds to start: don't parse output, just wait till it's online
 		waiting_since = time.time()
@@ -189,20 +192,6 @@ class Elasticsearch(object):
 				p.stderr.read()))
 
 	def _enable_xpack(self, es_dir):
-		# start trial mode
-		url = "http://localhost:%s/_license/start_trial?acknowledge=true" % self.ES_PORT
-		failures = 0
-		while True:
-			req = requests.post(url)
-			if req.status_code == 200:
-				# TODO: check content?
-				break
-			print("starting of trial failed (#%s) with status: %s, text: %s" % (failures, req.status_code, req.text))
-			failures += 1
-			if self.ES_401_RETRIES < failures:
-				raise Exception("starting of trial failed with status: %s, text: %s" % (req.status_code, req.text))
-			time.sleep(.5)
-
 		# setup passwords to random generated ones first...
 		pwd = self._gen_passwords(es_dir)
 		# ...then change passwords, easier to restart with failed tests
@@ -215,6 +204,21 @@ class Elasticsearch(object):
 				auth=("elastic", self.AUTH_PASSWORD), json={"password": self.AUTH_PASSWORD})
 		if req.status_code != 200:
 			print("ERROR: kibana user password change failed with code: %s" % req.status_code)
+
+		# start trial mode
+		auth = ("elastic", self.AUTH_PASSWORD)
+		url = "http://localhost:%s/_license/start_trial?acknowledge=true" % self.ES_PORT
+		failures = 0
+		while True:
+			req = requests.post(url, auth=auth, timeout=self.REQ_TIMEOUT)
+			if req.status_code == 200:
+				# TODO: check content?
+				break
+			print("starting of trial failed (#%s) with status: %s, text: %s" % (failures, req.status_code, req.text))
+			failures += 1
+			if self.ES_401_RETRIES < failures:
+				raise Exception("starting of trial failed with status: %s, text: %s" % (req.status_code, req.text))
+			time.sleep(.5)
 
 	def spawn(self, version, root_dir=None, ephemeral=False):
 		stage_dir = tempfile.mkdtemp(suffix=".ITES", dir=root_dir)
@@ -260,7 +264,7 @@ class Elasticsearch(object):
 		auth = ("elastic", password) if password else None
 		try:
 			req = requests.get("http://localhost:%s" % Elasticsearch.ES_PORT, auth=auth, timeout=.5)
-		except requests.Timeout:
+		except (requests.Timeout, requests.ConnectionError):
 			return False
 		if req.status_code != 200:
 			if password:

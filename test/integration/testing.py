@@ -4,7 +4,6 @@
 # you may not use this file except in compliance with the Elastic License.
 #
 
-import pyodbc
 import datetime
 import hashlib
 import unittest
@@ -30,6 +29,9 @@ class Testing(unittest.TestCase):
 		self._data = test_data
 		self._dsn = dsn if dsn else CONNECT_STRING
 		print("Using DSN: '%s'." % self._dsn)
+
+		# only import pyODBC if running tests (vs. for instance only loading test data in ES)
+		import pyodbc
 
 	def _reconstitute_csv(self, index_name):
 		with pyodbc.connect(self._dsn) as cnxn:
