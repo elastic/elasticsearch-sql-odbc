@@ -9,13 +9,6 @@
 
 #include <string.h>
 
-#ifdef _WIN64
-#	define CLIENT_ID	"\"client_id\": \"odbc64\""
-#else /* _WIN64 */
-#	define CLIENT_ID	"\"client_id\": \"odbc32\""
-#endif /* _WIN64 */
-
-
 namespace test {
 
 class ConvertC2SQL_Varchar : public ::testing::Test, public ConnectedDBC {
@@ -32,18 +25,7 @@ TEST_F(ConvertC2SQL_Varchar, CStr2Varchar_empty)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT(
-		"{\"query\": \"CStr2Varchar_empty\", "
-		"\"params\": [{\"type\": \"KEYWORD\", "
-		"\"value\": \"\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"KEYWORD\", \"value\": \"\"}]");
 }
 
 /* note: test name used in test */
@@ -57,18 +39,7 @@ TEST_F(ConvertC2SQL_Varchar, WStr2Varchar_empty)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT(
-		"{\"query\": \"WStr2Varchar_empty\", "
-		"\"params\": [{\"type\": \"KEYWORD\", "
-		"\"value\": \"\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"KEYWORD\", \"value\": \"\"}]");
 }
 
 /* note: test name used in test */
@@ -82,18 +53,7 @@ TEST_F(ConvertC2SQL_Varchar, WStr2Varchar_ansi)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT(
-		"{\"query\": \"WStr2Varchar_ansi\", "
-		"\"params\": [{\"type\": \"KEYWORD\", "
-		"\"value\": \"0123abcABC\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"KEYWORD\", \"value\": \"0123abcABC\"}]");
 }
 
 /* note: test name used in test */
@@ -107,18 +67,7 @@ TEST_F(ConvertC2SQL_Varchar, CStr2Varchar)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT(
-		"{\"query\": \"CStr2Varchar\", "
-		"\"params\": [{\"type\": \"KEYWORD\", "
-		"\"value\": \"0123abcABC\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"KEYWORD\", \"value\": \"0123abcABC\"}]");
 }
 
 /* note: test name used in test */
@@ -132,18 +81,8 @@ TEST_F(ConvertC2SQL_Varchar, WStr2Varchar_ansi_jsonescape)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT(
-		"{\"query\": \"WStr2Varchar_ansi_jsonescape\", "
-		"\"params\": [{\"type\": \"KEYWORD\", "
-		"\"value\": \"START_{xxx}=\\\"yyy\\\"\\r__END\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"KEYWORD\", "
+		"\"value\": \"START_{xxx}=\\\"yyy\\\"\\r__END\"}]");
 }
 
 /* note: test name used in test */
@@ -157,18 +96,8 @@ TEST_F(ConvertC2SQL_Varchar, CStr2Varchar_jsonescape)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT(
-		"{\"query\": \"CStr2Varchar_jsonescape\", "
-		"\"params\": [{\"type\": \"KEYWORD\", "
-		"\"value\": \"START_{xxx}=\\\"yyy\\\"\\r__END\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"KEYWORD\", "
+		"\"value\": \"START_{xxx}=\\\"yyy\\\"\\r__END\"}]");
 }
 
 /* note: test name used in test */
@@ -182,18 +111,8 @@ TEST_F(ConvertC2SQL_Varchar, WStr2Varchar_u8_jsonescape)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT(
-		"{\"query\": \"WStr2Varchar_u8_jsonescape\", "
-		"\"params\": [{\"type\": \"KEYWORD\", "
-		"\"value\": \"START_\\\"A\u00C4o\u00F6U\u00FC\\\"__END\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"KEYWORD\", "
+		"\"value\": \"START_\\\"A\u00C4o\u00F6U\u00FC\\\"__END\"}]");
 }
 
 /* note: test name used in test */
@@ -207,18 +126,8 @@ TEST_F(ConvertC2SQL_Varchar, WStr2Varchar_u8_fullescape)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT(
-		"{\"query\": \"WStr2Varchar_u8_fullescape\", "
-		"\"params\": [{\"type\": \"KEYWORD\", "
-		"\"value\": \"\u00E4\u00F6\u00FC\u00C4\u00D6\u00DC\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"KEYWORD\", "
+		"\"value\": \"\u00E4\u00F6\u00FC\u00C4\u00D6\u00DC\"}]");
 }
 
 /* note: test name used in test */
@@ -232,16 +141,7 @@ TEST_F(ConvertC2SQL_Varchar, Short2Varchar)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"Short2Varchar\", "
-		"\"params\": [{\"type\": \"KEYWORD\", \"value\": \"-12345\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"KEYWORD\", \"value\": \"-12345\"}]");
 }
 
 /* note: test name used in test */
@@ -255,17 +155,8 @@ TEST_F(ConvertC2SQL_Varchar, Bigint2Varchar)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"Bigint2Varchar\", "
-		"\"params\": [{\"type\": \"KEYWORD\", "
-		"\"value\": \"9223372036854775807\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"KEYWORD\", "
+		"\"value\": \"9223372036854775807\"}]");
 }
 
 /* note: test name used in test */
@@ -282,7 +173,7 @@ TEST_F(ConvertC2SQL_Varchar, Bigint2Varchar_fail_22003)
 	cstr_st buff = {NULL, 0};
 	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
 	ASSERT_FALSE(SQL_SUCCEEDED(ret));
-  assertState(L"22003");
+	assertState(L"22003");
 }
 
 /* note: test name used in test */
@@ -296,17 +187,8 @@ TEST_F(ConvertC2SQL_Varchar, Double2Varchar)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"Double2Varchar\", "
-		"\"params\": [{\"type\": \"KEYWORD\", "
-		"\"value\": \"1.2000e+00\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"KEYWORD\", "
+		"\"value\": \"1.2000e+00\"}]");
 }
 
 

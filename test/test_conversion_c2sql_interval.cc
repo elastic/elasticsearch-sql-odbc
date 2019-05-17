@@ -9,13 +9,6 @@
 
 #include <string.h>
 
-#ifdef _WIN64
-#	define CLIENT_ID	"\"client_id\": \"odbc64\""
-#else /* _WIN64 */
-#	define CLIENT_ID	"\"client_id\": \"odbc32\""
-#endif /* _WIN64 */
-
-
 namespace test {
 
 class ConvertC2SQL_Interval : public ::testing::Test, public ConnectedDBC {
@@ -31,17 +24,8 @@ TEST_F(ConvertC2SQL_Interval, Bit2Interval_year)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"Bit2Interval_year\", "
-		"\"params\": [{\"type\": \"INTERVAL_YEAR\", "
-		"\"value\": \"P1Y\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"INTERVAL_YEAR\", "
+		"\"value\": \"P1Y\"}]");
 }
 
 TEST_F(ConvertC2SQL_Interval, Short2Interval_month)
@@ -54,17 +38,8 @@ TEST_F(ConvertC2SQL_Interval, Short2Interval_month)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"Short2Interval_month\", "
-		"\"params\": [{\"type\": \"INTERVAL_MONTH\", "
-		"\"value\": \"P-2M\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"INTERVAL_MONTH\", "
+		"\"value\": \"P-2M\"}]");
 }
 
 TEST_F(ConvertC2SQL_Interval, Short2Interval_month_all_0)
@@ -77,17 +52,8 @@ TEST_F(ConvertC2SQL_Interval, Short2Interval_month_all_0)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"Short2Interval_month_all_0\", "
-		"\"params\": [{\"type\": \"INTERVAL_MONTH\", "
-		"\"value\": \"P0M\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"INTERVAL_MONTH\", "
+		"\"value\": \"P0M\"}]");
 }
 
 TEST_F(ConvertC2SQL_Interval, Integer2Interval_day)
@@ -100,17 +66,8 @@ TEST_F(ConvertC2SQL_Interval, Integer2Interval_day)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"Integer2Interval_day\", "
-		"\"params\": [{\"type\": \"INTERVAL_DAY\", "
-		"\"value\": \"P-3D\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"INTERVAL_DAY\", "
+		"\"value\": \"P-3D\"}]");
 }
 
 TEST_F(ConvertC2SQL_Interval, UBigInt2Interval_minute)
@@ -123,17 +80,8 @@ TEST_F(ConvertC2SQL_Interval, UBigInt2Interval_minute)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"UBigInt2Interval_minute\", "
-		"\"params\": [{\"type\": \"INTERVAL_MINUTE\", "
-		"\"value\": \"PT12345678M\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"INTERVAL_MINUTE\", "
+		"\"value\": \"PT12345678M\"}]");
 }
 
 TEST_F(ConvertC2SQL_Interval, SBigInt2Interval_second)
@@ -146,17 +94,8 @@ TEST_F(ConvertC2SQL_Interval, SBigInt2Interval_second)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"SBigInt2Interval_second\", "
-		"\"params\": [{\"type\": \"INTERVAL_SECOND\", "
-		"\"value\": \"PT-123456789S\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"INTERVAL_SECOND\", "
+		"\"value\": \"PT-123456789S\"}]");
 }
 
 TEST_F(ConvertC2SQL_Interval, SBigInt2Interval_second_all_0)
@@ -169,18 +108,8 @@ TEST_F(ConvertC2SQL_Interval, SBigInt2Interval_second_all_0)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT(
-		"{\"query\": \"SBigInt2Interval_second_all_0\", "
-		"\"params\": [{\"type\": \"INTERVAL_SECOND\", "
-		"\"value\": \"PT0S\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"INTERVAL_SECOND\", "
+		"\"value\": \"PT0S\"}]");
 }
 
 TEST_F(ConvertC2SQL_Interval, WStr2Interval_day_to_second)
@@ -193,18 +122,8 @@ TEST_F(ConvertC2SQL_Interval, WStr2Interval_day_to_second)
 			SQL_NTSL, /*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT(
-		"{\"query\": \"WStr2Interval_day_to_second\", "
-		"\"params\": [{\"type\": \"INTERVAL_DAY_TO_SECOND\", "
-		"\"value\": \"P-2DT-3H-4M-5.678S\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"INTERVAL_DAY_TO_SECOND\", "
+		"\"value\": \"P-2DT-3H-4M-5.678S\"}]");
 }
 
 TEST_F(ConvertC2SQL_Interval, CStr2Interval_hour_to_second)
@@ -217,18 +136,8 @@ TEST_F(ConvertC2SQL_Interval, CStr2Interval_hour_to_second)
 			sizeof(val) - 1, /*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT(
-		"{\"query\": \"CStr2Interval_hour_to_second\", "
-		"\"params\": [{\"type\": \"INTERVAL_HOUR_TO_SECOND\", "
-		"\"value\": \"PT3H4M5.678S\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"INTERVAL_HOUR_TO_SECOND\", "
+		"\"value\": \"PT3H4M5.678S\"}]");
 }
 
 TEST_F(ConvertC2SQL_Interval, CStr2Interval_hour_to_second_force_alloc)
@@ -246,18 +155,8 @@ TEST_F(ConvertC2SQL_Interval, CStr2Interval_hour_to_second_force_alloc)
 			0, &osize);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT(
-		"{\"query\": \"CStr2Interval_hour_to_second_force_alloc\", "
-		"\"params\": [{\"type\": \"INTERVAL_HOUR_TO_SECOND\", "
-		"\"value\": \"PT3H4M5.678S\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"INTERVAL_HOUR_TO_SECOND\", "
+		"\"value\": \"PT3H4M5.678S\"}]");
 }
 
 TEST_F(ConvertC2SQL_Interval, Interval2Interval_year_to_month)
@@ -275,18 +174,8 @@ TEST_F(ConvertC2SQL_Interval, Interval2Interval_year_to_month)
 			/*size*/2, /*decdigits*/3, &val, sizeof(val), /*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT(
-		"{\"query\": \"Interval2Interval_year_to_month\", "
-		"\"params\": [{\"type\": \"INTERVAL_YEAR_TO_MONTH\", "
-		"\"value\": \"P-12Y-11M\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"INTERVAL_YEAR_TO_MONTH\", "
+		"\"value\": \"P-12Y-11M\"}]");
 }
 
 TEST_F(ConvertC2SQL_Interval, Interval_binary2Interval_year_to_month)
@@ -304,18 +193,8 @@ TEST_F(ConvertC2SQL_Interval, Interval_binary2Interval_year_to_month)
 			/*size*/2, /*decdigits*/3, &val, sizeof(val), /*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT(
-		"{\"query\": \"Interval_binary2Interval_year_to_month\", "
-		"\"params\": [{\"type\": \"INTERVAL_YEAR_TO_MONTH\", "
-		"\"value\": \"P-12Y-11M\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"INTERVAL_YEAR_TO_MONTH\", "
+		"\"value\": \"P-12Y-11M\"}]");
 }
 
 

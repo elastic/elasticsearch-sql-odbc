@@ -9,12 +9,6 @@
 
 #include <string.h>
 
-#ifdef _WIN64
-#	define CLIENT_ID	"\"client_id\": \"odbc64\""
-#else /* _WIN64 */
-#	define CLIENT_ID	"\"client_id\": \"odbc32\""
-#endif /* _WIN64 */
-
 namespace test {
 
 class ConvertC2SQL_Boolean : public ::testing::Test, public ConnectedDBC {
@@ -32,16 +26,7 @@ TEST_F(ConvertC2SQL_Boolean, CStr2Boolean) /* note: test name used in test */
 			sizeof(val) - /*\0*/1, &osize);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"CStr2Boolean\", "
-		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": true}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"BOOLEAN\", \"value\": true}]");
 }
 
 TEST_F(ConvertC2SQL_Boolean, WStr2Boolean) /* note: test name used in test */
@@ -54,16 +39,7 @@ TEST_F(ConvertC2SQL_Boolean, WStr2Boolean) /* note: test name used in test */
 			ESODBC_SQL_BOOLEAN, /*size*/0, /*decdigits*/0, val, 0, &osize);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"WStr2Boolean\", "
-		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": false}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"BOOLEAN\", \"value\": false}]");
 }
 
 TEST_F(ConvertC2SQL_Boolean, Smallint2Boolean) /* note: name used in test */
@@ -76,16 +52,7 @@ TEST_F(ConvertC2SQL_Boolean, Smallint2Boolean) /* note: name used in test */
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"Smallint2Boolean\", "
-		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": true}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"BOOLEAN\", \"value\": true}]");
 }
 
 TEST_F(ConvertC2SQL_Boolean, UShort2Boolean) /* note: name used in test */
@@ -98,16 +65,7 @@ TEST_F(ConvertC2SQL_Boolean, UShort2Boolean) /* note: name used in test */
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"UShort2Boolean\", "
-		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": false}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"BOOLEAN\", \"value\": false}]");
 }
 
 TEST_F(ConvertC2SQL_Boolean, LongLong2Boolean) /* note: name used in test */
@@ -120,16 +78,7 @@ TEST_F(ConvertC2SQL_Boolean, LongLong2Boolean) /* note: name used in test */
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"LongLong2Boolean\", "
-		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": true}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"BOOLEAN\", \"value\": true}]");
 }
 
 TEST_F(ConvertC2SQL_Boolean, Float2Boolean) /* note: name used in test */
@@ -142,16 +91,7 @@ TEST_F(ConvertC2SQL_Boolean, Float2Boolean) /* note: name used in test */
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"Float2Boolean\", "
-		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": true}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"BOOLEAN\", \"value\": true}]");
 }
 
 TEST_F(ConvertC2SQL_Boolean, Double2Boolean) /* note: name used in test */
@@ -164,16 +104,7 @@ TEST_F(ConvertC2SQL_Boolean, Double2Boolean) /* note: name used in test */
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"Double2Boolean\", "
-		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": true}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"BOOLEAN\", \"value\": true}]");
 }
 
 TEST_F(ConvertC2SQL_Boolean, Numeric2Boolean) /* note: name used in test */
@@ -191,16 +122,7 @@ TEST_F(ConvertC2SQL_Boolean, Numeric2Boolean) /* note: name used in test */
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"Numeric2Boolean\", "
-		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": true}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"BOOLEAN\", \"value\": true}]");
 }
 
 TEST_F(ConvertC2SQL_Boolean, Binary2Boolean) /* note: name used in test */
@@ -214,16 +136,7 @@ TEST_F(ConvertC2SQL_Boolean, Binary2Boolean) /* note: name used in test */
 			&indlen);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT("{\"query\": \"Binary2Boolean\", "
-		"\"params\": [{\"type\": \"BOOLEAN\", \"value\": false}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"BOOLEAN\", \"value\": false}]");
 }
 
 TEST_F(ConvertC2SQL_Boolean, Binary2Boolean_fail_22003)
