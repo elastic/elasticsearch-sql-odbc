@@ -10,13 +10,6 @@
 #include <string.h>
 #include "timestamp.h"
 
-#ifdef _WIN64
-#	define CLIENT_ID	"\"client_id\": \"odbc64\""
-#else /* _WIN64 */
-#	define CLIENT_ID	"\"client_id\": \"odbc32\""
-#endif /* _WIN64 */
-
-
 namespace test {
 
 class ConvertC2SQL_Timestamp : public ::testing::Test, public ConnectedDBC
@@ -29,32 +22,24 @@ class ConvertC2SQL_Timestamp : public ::testing::Test, public ConnectedDBC
 
 TEST_F(ConvertC2SQL_Timestamp, CStr_Time2Timestamp)
 {
-	const static char *answ_template =
-		"{\"query\": \"%s\", "
-		"\"params\": [{\"type\": \"DATETIME\", "
-		"\"value\": \"%04d-%02d-%02dT%sZ\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}";
-
 	SQLCHAR val[] = "12:34:56.789"; // treated as utc, since apply_tz==FALSE
 	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR,
 			SQL_TYPE_TIMESTAMP, /*size*/0, /*decdigits*/3, val, sizeof(val),
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	char expected[1024];
 	time_t utc = time(NULL);
 	ASSERT_TRUE(utc != (size_t)-1);
 	struct tm *gm = gmtime(&utc);
 	ASSERT_TRUE(gm != NULL);
-	int n = snprintf(expected, sizeof(expected), answ_template, test_name,
+	char params[1024];
+	const char params_templ[] = "[{\"type\": \"DATETIME\", "
+		"\"value\": \"%04d-%02d-%02dT%sZ\"}]";
+	int n = snprintf(params, sizeof(params), params_templ,
 		gm->tm_year + 1900, gm->tm_mon + 1, gm->tm_mday, val);
-	ASSERT_TRUE(0 < n);
-	ASSERT_EQ(strncmp((char *)buff.str, expected, buff.cnt), 0);
+	ASSERT_TRUE(0 < n && n <= sizeof(params_templ) + sizeof(val));
+
+	assertRequest(params);
 }
 
 TEST_F(ConvertC2SQL_Timestamp, WStr2Timestamp_fail_22008)
@@ -81,18 +66,8 @@ TEST_F(ConvertC2SQL_Timestamp, WStr_Timestamp2Timestamp_colsize_16)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT(
-		"{\"query\": \"WStr_Timestamp2Timestamp_colsize_16\", "
-		"\"params\": [{\"type\": \"DATETIME\", "
-		"\"value\": \"1234-12-23T12:34Z\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"DATETIME\", "
+		"\"value\": \"1234-12-23T12:34Z\"}]");
 }
 
 /* note: test name used in test */
@@ -104,18 +79,8 @@ TEST_F(ConvertC2SQL_Timestamp, WStr_Timestamp2Timestamp_colsize_19)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT(
-		"{\"query\": \"WStr_Timestamp2Timestamp_colsize_19\", "
-		"\"params\": [{\"type\": \"DATETIME\", "
-		"\"value\": \"1234-12-23T12:34:56Z\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"DATETIME\", "
+		"\"value\": \"1234-12-23T12:34:56Z\"}]");
 }
 
 TEST_F(ConvertC2SQL_Timestamp, WStr_Timestamp2Timestamp_colsize_17_fail_HY104)
@@ -141,18 +106,8 @@ TEST_F(ConvertC2SQL_Timestamp, CStr_Timestamp2Timestamp_colsize_decdigits_trim)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT(
-		"{\"query\": \"CStr_Timestamp2Timestamp_colsize_decdigits_trim\", "
-		"\"params\": [{\"type\": \"DATETIME\", "
-		"\"value\": \"1234-12-23T12:34:56.78901Z\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"DATETIME\", "
+		"\"value\": \"1234-12-23T12:34:56.78901Z\"}]");
 }
 
 /* note: test name used in test */
@@ -164,18 +119,8 @@ TEST_F(ConvertC2SQL_Timestamp, CStr_Timestamp2Timestamp_colsize_decdigits_full)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT(
-		"{\"query\": \"CStr_Timestamp2Timestamp_colsize_decdigits_full\", "
-		"\"params\": [{\"type\": \"DATETIME\", "
-		"\"value\": \"1234-12-23T12:34:56.7890123Z\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"DATETIME\", "
+		"\"value\": \"1234-12-23T12:34:56.7890123Z\"}]");
 }
 
 /* note: test name used in test */
@@ -194,18 +139,8 @@ TEST_F(ConvertC2SQL_Timestamp, Timestamp2Timestamp_decdigits_7)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT(
-		"{\"query\": \"Timestamp2Timestamp_decdigits_7\", "
-		"\"params\": [{\"type\": \"DATETIME\", "
-		"\"value\": \"2345-01-23T12:34:56.7890123Z\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"DATETIME\", "
+		"\"value\": \"2345-01-23T12:34:56.7890123Z\"}]");
 }
 
 /* note: test name used in test */
@@ -225,18 +160,8 @@ TEST_F(ConvertC2SQL_Timestamp, Binary2Timestamp_colsize_0)
 			&ind_len);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT(
-		"{\"query\": \"Binary2Timestamp_colsize_0\", "
-		"\"params\": [{\"type\": \"DATETIME\", "
-		"\"value\": \"2345-01-23T12:34:56Z\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"DATETIME\", "
+		"\"value\": \"2345-01-23T12:34:56Z\"}]");
 }
 
 /* note: test name used in test */
@@ -252,29 +177,12 @@ TEST_F(ConvertC2SQL_Timestamp, Date2Timestamp)
 			NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT(
-		"{\"query\": \"Date2Timestamp\", "
-		"\"params\": [{\"type\": \"DATETIME\", "
-		"\"value\": \"2345-01-23T00:00:00Z\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"DATETIME\", "
+		"\"value\": \"2345-01-23T00:00:00Z\"}]");
 }
 
 TEST_F(ConvertC2SQL_Timestamp, Time2Timestamp)
 {
-	const static char *answ_template =
-		"{\"query\": \"%s\", "
-		"\"params\": [{\"type\": \"DATETIME\", "
-		"\"value\": \"%04d-%02d-%02dT%02hd:%02hd:%02hdZ\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"Z\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}";
-
 	TIME_STRUCT val;
 	val.hour = 12;
 	val.minute = 34;
@@ -284,26 +192,26 @@ TEST_F(ConvertC2SQL_Timestamp, Time2Timestamp)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	char expected[1024];
 	time_t utc = time(NULL);
 	ASSERT_TRUE(utc != (size_t)-1);
 	struct tm *gm = gmtime(&utc);
 	ASSERT_TRUE(gm != NULL);
-	int n = snprintf(expected, sizeof(expected), answ_template, test_name,
+	char params[1024];
+	const char params_templ[] = "[{\"type\": \"DATETIME\", "
+		"\"value\": \"%04d-%02d-%02dT%02hd:%02hd:%02hdZ\"}]";
+	int n = snprintf(params, sizeof(params), params_templ,
 		gm->tm_year + 1900, gm->tm_mon + 1, gm->tm_mday,
 		val.hour, val.minute, val.second);
-	ASSERT_TRUE(0 < n);
-	ASSERT_EQ(strncmp((char *)buff.str, expected, buff.cnt), 0);
+	ASSERT_TRUE(0 < n && n < sizeof(params_templ));
+
+	assertRequest(params);
 }
 
 
 class ConvertC2SQL_Timestamp_TZ : public ConvertC2SQL_Timestamp
 {
 	protected:
+	const char *tz = "+05:45";
 	void SetUp() override
 	{
 		ASSERT_EQ(putenv("TZ=NPT-5:45"), 0);
@@ -328,18 +236,8 @@ TEST_F(ConvertC2SQL_Timestamp_TZ, WStr_iso8601_Timestamp2Timestamp_colsize_16)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT(
-		"{\"query\": \"WStr_iso8601_Timestamp2Timestamp_colsize_16\", "
-		"\"params\": [{\"type\": \"DATETIME\", "
-		"\"value\": \"1234-12-23T12:34Z\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"+05:45\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"DATETIME\", "
+		"\"value\": \"1234-12-23T12:34Z\"}]", tz);
 }
 
 TEST_F(ConvertC2SQL_Timestamp_TZ, WStr_iso8601_Timestamp2Timestamp_sz23_dd4)
@@ -350,18 +248,8 @@ TEST_F(ConvertC2SQL_Timestamp_TZ, WStr_iso8601_Timestamp2Timestamp_sz23_dd4)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT(
-		"{\"query\": \"WStr_iso8601_Timestamp2Timestamp_sz23_dd4\", "
-		"\"params\": [{\"type\": \"DATETIME\", "
-		"\"value\": \"1234-12-23T12:34:56.789Z\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"+05:45\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"DATETIME\", "
+		"\"value\": \"1234-12-23T12:34:56.789Z\"}]", tz);
 }
 
 TEST_F(ConvertC2SQL_Timestamp_TZ, WStr_iso8601_Timestamp2Timestamp_decdig4)
@@ -372,18 +260,8 @@ TEST_F(ConvertC2SQL_Timestamp_TZ, WStr_iso8601_Timestamp2Timestamp_decdig4)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT(
-		"{\"query\": \"WStr_iso8601_Timestamp2Timestamp_decdig4\", "
-		"\"params\": [{\"type\": \"DATETIME\", "
-		"\"value\": \"1234-12-23T12:34:56.7890Z\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"+05:45\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"DATETIME\", "
+		"\"value\": \"1234-12-23T12:34:56.7890Z\"}]", tz);
 }
 
 TEST_F(ConvertC2SQL_Timestamp_TZ, WStr_SQL_Timestamp_local2Timestamp)
@@ -394,18 +272,8 @@ TEST_F(ConvertC2SQL_Timestamp_TZ, WStr_SQL_Timestamp_local2Timestamp)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	cstr_st buff = {NULL, 0};
-	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	cstr_st expect = CSTR_INIT(
-		"{\"query\": \"WStr_SQL_Timestamp_local2Timestamp\", "
-		"\"params\": [{\"type\": \"DATETIME\", "
-		"\"value\": \"2000-12-23T12:00:56.7890Z\"}], "
-		"\"field_multi_value_leniency\": true, \"time_zone\": \"+05:45\", "
-		"\"mode\": \"ODBC\", " CLIENT_ID "}");
-
-	ASSERT_CSTREQ(buff, expect);
+	assertRequest("[{\"type\": \"DATETIME\", "
+		"\"value\": \"2000-12-23T12:00:56.7890Z\"}]", tz);
 }
 
 

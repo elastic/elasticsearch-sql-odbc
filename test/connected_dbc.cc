@@ -163,6 +163,44 @@ void ConnectedDBC::assertState(const SQLWCHAR *state)
 	assertState(SQL_HANDLE_STMT, state);
 }
 
+void ConnectedDBC::assertRequest(const char *params, const char *tz)
+{
+	const static char *answ_templ = "{"
+		JSON_KEY_QUERY "\"%s\""
+		JSON_KEY_PARAMS "%s"
+		JSON_KEY_MULTIVAL ESODBC_DEF_MFIELD_LENIENT
+		JSON_KEY_IDX_FROZEN ESODBC_DEF_IDX_INC_FROZEN
+		JSON_KEY_TIMEZONE "%s%s%s"
+		JSON_KEY_VAL_MODE
+		JSON_KEY_CLT_ID
+		"}";
+	char expect[1024];
+	int n;
+
+	cstr_st actual = {NULL, 0};
+	ret = serialize_statement((esodbc_stmt_st *)stmt, &actual);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	if (tz) {
+		n = snprintf(expect, sizeof(expect), answ_templ, test_name, params,
+				"\"", tz, "\"");
+	} else {
+		n = snprintf(expect, sizeof(expect), answ_templ, test_name, params,
+				"", JSON_VAL_TIMEZONE_Z, "");
+	}
+	ASSERT_LT(actual.cnt, sizeof(expect));
+	ASSERT_EQ(n, actual.cnt);
+	ASSERT_EQ(strncmp(expect, (char *)actual.str, n), 0);
+
+	free(actual.str);
+
+}
+
+void ConnectedDBC::assertRequest(const char *params)
+{
+	assertRequest(params, NULL);
+}
+
 void ConnectedDBC::prepareStatement()
 {
 	test_name =
