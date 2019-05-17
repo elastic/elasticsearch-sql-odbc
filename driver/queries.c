@@ -1610,7 +1610,8 @@ static esodbc_estype_st *match_es_type(esodbc_rec_st *arec,
 		}
 	}
 
-	/* app specified an SQL type with no direct mapping to an ES/SQL type */
+	/* app specified an SQL type with no direct mapping to an ES/SQL type
+	 * TODO: IP, GEO? */
 	switch (irec->meta_type) {
 		case METATYPE_EXACT_NUMERIC:
 			assert(irec->concise_type == SQL_DECIMAL ||
