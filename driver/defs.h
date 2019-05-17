@@ -391,6 +391,7 @@
  * ES specific data types
  */
 #define ESODBC_SQL_BOOLEAN			16
+#define ESODBC_SQL_GEO				114
 #define ESODBC_SQL_NULL				0
 #define ESODBC_SQL_UNSUPPORTED		1111
 #define ESODBC_SQL_OBJECT			2002

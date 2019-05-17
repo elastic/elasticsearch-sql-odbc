@@ -52,6 +52,9 @@
 #define TYPE_KEYWORD		"KEYWORD"
 /* 8 */
 #define TYPE_DATETIME		"DATETIME"
+/* 9 */
+#define TYPE_GEOSHAPE		"GEO_SHAPE"
+#define TYPE_GEOPOINT		"GEO_POINT"
 /* 10 */
 #define TYPE_HALF_FLOAT		"HALF_FLOAT"
 /* 11 */
@@ -1906,6 +1909,28 @@ static BOOL elastic_name2types(wstr_st *type_name,
 			}
 			break;
 
+		/* 9: GEO_POINT, GEO_SHAPE */
+		case sizeof(TYPE_GEOSHAPE) - 1:
+			switch (tolower(type_name->str[/*'GEO_x'*/4])) {
+				case (SQLWCHAR)'s':
+					if (! wmemncasecmp(type_name->str, MK_WPTR(TYPE_GEOSHAPE),
+							type_name->cnt)) {
+						*c_sql = ES_GEO_TO_CSQL;
+						*sql = ES_GEO_TO_SQL;
+						return TRUE;
+					}
+					break;
+				case (SQLWCHAR)'p':
+					if (! wmemncasecmp(type_name->str, MK_WPTR(TYPE_GEOPOINT),
+							type_name->cnt)) {
+						*c_sql = ES_GEO_TO_CSQL;
+						*sql = ES_GEO_TO_SQL;
+						return TRUE;
+					}
+					break;
+			}
+			break;
+
 		/* 10: HALF_FLOAT */
 		case sizeof(TYPE_HALF_FLOAT) - 1:
 			if (! wmemncasecmp(type_name->str, MK_WPTR(TYPE_HALF_FLOAT),
@@ -2195,7 +2220,8 @@ static void *copy_types_rows(esodbc_dbc_st *dbc, estype_row_st *type_row,
 		 * apply any needed fixes
 		 */
 
-		/* notify if scales extremes are different */
+		/* notify if scales extremes are different, since ES/SQL makes use of
+		 * fixed types only. */
 		if (types[i].maximum_scale != types[i].minimum_scale) {
 			INFOH(dbc, "type `" LWPDL "` returned with non-equal max/min "
 				"scale: %d/%d -- using the max.", LWSTR(&types[i].type_name),
@@ -2219,6 +2245,10 @@ static void *copy_types_rows(esodbc_dbc_st *dbc, estype_row_st *type_row,
 		 * => change it to SQL_BIT */
 		if (types[i].data_type == ESODBC_SQL_BOOLEAN) {
 			types[i].data_type = ES_BOOLEAN_TO_SQL;
+		}
+		/* GEO (SHAPE, POINT) types are WKT encodings */
+		if (types[i].data_type == ESODBC_SQL_GEO) {
+			types[i].data_type = ES_GEO_TO_SQL;
 		}
 
 		/* .data_type is used in data conversions -> make sure the SQL type
@@ -2962,6 +2992,9 @@ SQLRETURN EsSQLSetConnectAttrW(
 			RET_HDIAGS(dbc, SQL_STATE_HYC00);
 
 #ifndef NDEBUG
+		/* MicroStrategy Desktop invoked */
+		case 1041:
+		case 1042:
 		/* MS Access/Jet proprietary info type */
 		case 30002:
 			ERRH(dbc, "unsupported info type.");

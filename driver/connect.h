@@ -71,6 +71,10 @@
 /*
  * ES-non mappable
  */
+/* 114: ??? -> SQL_C_WCHAR */
+#define ES_GEO_TO_CSQL			SQL_C_WCHAR /* XXX: CBOR needs _CHAR */
+#define ES_GEO_TO_SQL			SQL_VARCHAR
+
 /* 1111: ??? -> SQL_C_BINARY */
 #define ES_UNSUPPORTED_TO_CSQL	SQL_C_BINARY
 #define ES_UNSUPPORTED_TO_SQL	ESODBC_SQL_UNSUPPORTED
