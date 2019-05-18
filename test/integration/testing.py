@@ -23,6 +23,7 @@ class Testing(unittest.TestCase):
 
 	_data = None
 	_dsn = None
+	_pyodbc = None
 
 	def __init__(self, test_data, dsn=None):
 		super().__init__()
@@ -32,9 +33,10 @@ class Testing(unittest.TestCase):
 
 		# only import pyODBC if running tests (vs. for instance only loading test data in ES)
 		import pyodbc
+		self._pyodbc = pyodbc
 
 	def _reconstitute_csv(self, index_name):
-		with pyodbc.connect(self._dsn) as cnxn:
+		with self._pyodbc.connect(self._dsn) as cnxn:
 			cnxn.autocommit = True
 			csv = u""
 			cols = self._data.csv_attributes(index_name)[1]
@@ -69,7 +71,7 @@ class Testing(unittest.TestCase):
 	def _count_all(self, index_name):
 		print("Counting records in index '%s.'" % index_name)
 		cnt = 0
-		with pyodbc.connect(self._dsn) as cnxn:
+		with self._pyodbc.connect(self._dsn) as cnxn:
 			cnxn.autocommit = True
 			with cnxn.execute("select 1 from %s" % index_name) as curs:
 				while curs.fetchone():
@@ -81,7 +83,7 @@ class Testing(unittest.TestCase):
 
 	def _clear_cursor(self, index_name):
 		conn_str = self._dsn + ";MaxFetchSize=5"
-		with pyodbc.connect(conn_str) as cnxn:
+		with self._pyodbc.connect(conn_str) as cnxn:
 			cnxn.autocommit = True
 			with cnxn.execute("select 1 from %s limit 10" % index_name) as curs:
 				for i in range(3): # must be lower than MaxFetchSize, so no next page be requested
@@ -93,7 +95,7 @@ class Testing(unittest.TestCase):
 
 	def _select_columns(self, index_name, columns):
 		print("Selecting columns '%s' from index '%s'." % (columns, index_name))
-		with pyodbc.connect(self._dsn) as cnxn:
+		with self._pyodbc.connect(self._dsn) as cnxn:
 			cnxn.autocommit = True
 			stmt = "select %s from %s" % (columns, index_name)
 			with cnxn.execute(stmt) as curs:
@@ -103,14 +105,14 @@ class Testing(unittest.TestCase):
 				print("Selected %s rows from %s." % (cnt, index_name))
 
 	def _check_info(self, attr, expected):
-		with pyodbc.connect(self._dsn) as cnxn:
+		with self._pyodbc.connect(self._dsn) as cnxn:
 			cnxn.autocommit = True
 			value = cnxn.getinfo(attr)
 			self.assertEqual(value, expected)
 
 	# tables(table=None, catalog=None, schema=None, tableType=None)
 	def _catalog_tables(self, no_table_type_as=""):
-		with pyodbc.connect(self._dsn) as cnxn:
+		with self._pyodbc.connect(self._dsn) as cnxn:
 			cnxn.autocommit = True
 			curs = cnxn.cursor()
 
@@ -140,7 +142,7 @@ class Testing(unittest.TestCase):
 	# use_surrogate: pyodbc seems to not reliably null-terminate the catalog and/or table name string,
 	# despite indicating so.
 	def _catalog_columns(self, use_catalog=False, use_surrogate=True):
-		with pyodbc.connect(self._dsn) as cnxn:
+		with self._pyodbc.connect(self._dsn) as cnxn:
 			cnxn.autocommit = True
 			curs = cnxn.cursor()
 			if not use_surrogate:
@@ -248,7 +250,7 @@ class Testing(unittest.TestCase):
 
 	def _proto_tests(self):
 		tests = self._data.proto_tests()
-		with pyodbc.connect(self._dsn) as cnxn:
+		with self._pyodbc.connect(self._dsn) as cnxn:
 			cnxn.autocommit = True
 			self._install_output_converters(cnxn)
 			try:
@@ -279,8 +281,8 @@ class Testing(unittest.TestCase):
 				cnxn.clear_output_converters()
 
 	def perform(self):
-		self._check_info(pyodbc.SQL_USER_NAME, UID)
-		self._check_info(pyodbc.SQL_DATABASE_NAME, CATALOG)
+		self._check_info(self._pyodbc.SQL_USER_NAME, UID)
+		self._check_info(self._pyodbc.SQL_DATABASE_NAME, CATALOG)
 
 		# simulate catalog querying as apps do in ES/GH#40775 do
 		self._catalog_tables(no_table_type_as = "")
