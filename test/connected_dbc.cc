@@ -169,7 +169,6 @@ void ConnectedDBC::assertRequest(const char *params, const char *tz)
 		JSON_KEY_QUERY "\"%s\""
 		JSON_KEY_PARAMS "%s"
 		JSON_KEY_MULTIVAL ESODBC_DEF_MFIELD_LENIENT
-		JSON_KEY_IDX_FROZEN ESODBC_DEF_IDX_INC_FROZEN
 		JSON_KEY_TIMEZONE "%s%s%s"
 		JSON_KEY_VAL_MODE
 		JSON_KEY_CLT_ID
@@ -186,7 +185,7 @@ void ConnectedDBC::assertRequest(const char *params, const char *tz)
 				"\"", tz, "\"");
 	} else {
 		n = snprintf(expect, sizeof(expect), answ_templ, test_name, params,
-				"", JSON_VAL_TIMEZONE_Z, "");
+				"", "\"Z\"", "");
 	}
 	ASSERT_LT(actual.cnt, sizeof(expect));
 	ASSERT_EQ(n, actual.cnt);

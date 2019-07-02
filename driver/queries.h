@@ -140,10 +140,7 @@ SQLRETURN EsSQLRowCount(_In_ SQLHSTMT StatementHandle, _Out_ SQLLEN *RowCount);
 #	define JSON_KEY_CLT_ID		", \"client_id\": \"odbc32\"" /* n-th k. */
 #endif /* _WIN64 */
 #define JSON_KEY_MULTIVAL		", \"field_multi_value_leniency\": " /* n-th */
-#define JSON_KEY_IDX_FROZEN		", \"index_include_frozen\": " /* n-th */
 #define JSON_KEY_TIMEZONE		", \"time_zone\": " /* n-th key */
-
-#define JSON_VAL_TIMEZONE_Z		"\"Z\""
 
 
 #endif /* __QUERIES_H__ */
