@@ -2048,17 +2048,6 @@ static SQLRETURN serialize_params(esodbc_stmt_st *stmt, char *dest,
 #	undef JSON_KEY_VALUE
 }
 
-static inline size_t copy_bool_val(char *dest, BOOL val)
-{
-	if (val) {
-		memcpy(dest, "true", sizeof("true") - 1);
-		return sizeof("true") - 1;
-	} else {
-		memcpy(dest, "false", sizeof("false") - 1);
-		return sizeof("false") - 1;
-	}
-}
-
 /*
  * Build a serialized JSON object out of the statement.
  * If resulting string fits into the given buff, the result is copied in it;
@@ -2119,9 +2108,6 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 		}
 		/* "field_multi_value_leniency": true/false */
 		bodylen += sizeof(JSON_KEY_MULTIVAL) - 1;
-		bodylen += /*false*/5;
-		/* "index_include_frozen": true/false */
-		bodylen += sizeof(JSON_KEY_IDX_FROZEN) - 1;
 		bodylen += /*false*/5;
 		/* "time_zone": "-05:45" */
 		bodylen += sizeof(JSON_KEY_TIMEZONE) - 1;
@@ -2200,12 +2186,13 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 		/* "field_multi_value_leniency": true/false */
 		memcpy(body + pos, JSON_KEY_MULTIVAL, sizeof(JSON_KEY_MULTIVAL) - 1);
 		pos += sizeof(JSON_KEY_MULTIVAL) - 1;
-		pos += copy_bool_val(body + pos, dbc->mfield_lenient);
-		/* "index_include_frozen": true/false */
-		memcpy(body + pos, JSON_KEY_IDX_FROZEN,
-				sizeof(JSON_KEY_IDX_FROZEN) - 1);
-		pos += sizeof(JSON_KEY_IDX_FROZEN) - 1;
-		pos += copy_bool_val(body + pos, dbc->idx_inc_frozen);
+		if (dbc->mfield_lenient) {
+			memcpy(body + pos, "true", sizeof("true") - 1);
+			pos += sizeof("true") - 1;
+		} else {
+			memcpy(body + pos, "false", sizeof("false") - 1);
+			pos += sizeof("false") - 1;
+		}
 		/* "time_zone": "-05:45" */
 		memcpy(body + pos, JSON_KEY_TIMEZONE, sizeof(JSON_KEY_TIMEZONE) - 1);
 		pos += sizeof(JSON_KEY_TIMEZONE) - 1;
@@ -2213,9 +2200,8 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 			memcpy(body + pos, tz_param.str, tz_param.cnt);
 			pos += tz_param.cnt;
 		} else {
-			memcpy(body + pos, JSON_VAL_TIMEZONE_Z,
-				sizeof(JSON_VAL_TIMEZONE_Z) - 1);
-			pos += sizeof(JSON_VAL_TIMEZONE_Z) - 1;
+			memcpy(body + pos, "\"Z\"", sizeof("\"Z\"") - 1);
+			pos += sizeof("\"Z\"") - 1;
 		}
 
 		/* reset the page counter when the params change */
