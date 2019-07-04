@@ -136,8 +136,8 @@ BOOL queries_init()
 
 void clear_resultset(esodbc_stmt_st *stmt, BOOL on_close)
 {
-	DBGH(stmt, "clearing result set; vrows=%zu, nrows=%zu.",
-		stmt->rset.vrows, stmt->rset.nrows);
+	INFOH(stmt, "clearing result set; vrows=%zu, nrows=%zu, nset=%zu.",
+		stmt->rset.vrows, stmt->rset.nrows, stmt->nset);
 	if (stmt->rset.buff) {
 		free(stmt->rset.buff);
 	}
@@ -219,7 +219,7 @@ static SQLRETURN attach_columns(esodbc_stmt_st *stmt, UJObject columns)
 	dbc = stmt->hdr.dbc;
 
 	ncols = UJLengthArray(columns);
-	DBGH(stmt, "columns received: %zd.", ncols);
+	INFOH(stmt, "columns received: %zd.", ncols);
 	ret = update_rec_count(ird, (SQLSMALLINT)ncols);
 	if (! SQL_SUCCEEDED(ret)) {
 		ERRH(stmt, "failed to set IRD's record count to %d.", ncols);
@@ -604,7 +604,7 @@ SQLRETURN TEST_API attach_sql(esodbc_stmt_st *stmt,
 		(SQLWCHAR *)sql, sqlcnt
 	};
 
-	DBGH(stmt, "attaching SQL [%zd] `" LWPDL "`.", sqlcnt, LWSTR(&sqlw));
+	INFOH(stmt, "attaching SQL [%zd] `" LWPDL "`.", sqlcnt, LWSTR(&sqlw));
 
 	assert(! stmt->u8sql.str);
 	if (! wstr_to_utf8(&sqlw, &stmt->u8sql)) {
@@ -1106,7 +1106,7 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 	/* no data has been copied out */
 	if (i <= 0) {
 		/* ard->array_size is in interval [1, ESODBC_MAX_ROW_ARRAY_SIZE] */
-		DBGH(stmt, "no data %sto return.", stmt->rset.vrows ? "left ": "");
+		INFOH(stmt, "no data %sto return.", stmt->rset.vrows ? "left ": "");
 		return SQL_NO_DATA;
 	}
 
@@ -1114,6 +1114,9 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 		ERRH(stmt, "processing failed for all rows [%llu].", errors);
 		return SQL_ERROR;
 	}
+
+	DBGH(stmt, "cursor left @ row %zu / %zu in page #%zu.", stmt->rset.vrows,
+		stmt->rset.nrows, stmt->nset);
 
 	/* only failures need stmt.diag defer'ing */
 	return SQL_SUCCESS;
@@ -2230,7 +2233,8 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff)
 
 	buff->cnt = pos;
 
-	DBGH(stmt, "JSON serialized to: [%zd] `" LCPDL "`.", pos, LCSTR(buff));
+	INFOH(stmt, "JSON request serialized to: [%zd] `" LCPDL "`.", pos,
+		LCSTR(buff));
 	return ret;
 
 #	undef JSON_KEY_QUERY

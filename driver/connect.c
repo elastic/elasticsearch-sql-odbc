@@ -574,6 +574,8 @@ err:
 
 static BOOL dbc_curl_perform(esodbc_dbc_st *dbc, long *code, cstr_st *resp)
 {
+	curl_off_t xfer_tm_start, xfer_tm_total;
+
 	assert(dbc->abuff == NULL);
 
 	/* execute the request */
@@ -597,9 +599,22 @@ static BOOL dbc_curl_perform(esodbc_dbc_st *dbc, long *code, cstr_st *resp)
 		ERRH(dbc, "libcurl: failed to retrieve response code.");
 		goto err;
 	}
+	if (curl_easy_getinfo(dbc->curl, CURLINFO_STARTTRANSFER_TIME_T,
+			&xfer_tm_start) != CURLE_OK) {
+		ERRH(dbc, "libcurl: failed to retrieve transfer start time.");
+		xfer_tm_start = 0;
+	}
+	if (curl_easy_getinfo(dbc->curl, CURLINFO_TOTAL_TIME_T, &xfer_tm_total) !=
+		CURLE_OK) {
+		ERRH(dbc, "libcurl: failed to retrieve transfer total time.");
+		xfer_tm_total = 0;
+	}
 
-	DBGH(dbc, "libcurl: request answered, received code %ld and %zu bytes"
-		" back.", *code, resp->cnt);
+	INFOH(dbc, "libcurl: request answered, received code %ld and %zu bytes"
+		" back; times(ms): start: %" CURL_FORMAT_CURL_OFF_T  ".%03d, "
+		"total: %" CURL_FORMAT_CURL_OFF_T ".%03d).", *code, resp->cnt,
+		xfer_tm_start / 1000, (long)(xfer_tm_start % 1000),
+		xfer_tm_total / 1000, (long)(xfer_tm_total % 1000));
 
 	return TRUE;
 
@@ -2892,7 +2907,7 @@ SQLRETURN EsSQLSetConnectAttrW(
 			break;
 
 		case SQL_ATTR_METADATA_ID:
-			DBGH(dbc, "setting metadata_id to %u.", (SQLULEN)Value);
+			INFOH(dbc, "setting metadata_id to %u.", (SQLULEN)Value);
 			dbc->metadata_id = (SQLULEN)Value;
 			break;
 
@@ -2917,12 +2932,12 @@ SQLRETURN EsSQLSetConnectAttrW(
 			RET_HDIAGS(dbc, SQL_STATE_S1118);
 
 		case SQL_ATTR_QUIET_MODE:
-			DBGH(dbc, "setting window handler to 0x%p.", Value);
+			INFOH(dbc, "setting window handler to 0x%p.", Value);
 			dbc->hwin = (HWND)Value;
 			break;
 
 		case SQL_ATTR_TXN_ISOLATION:
-			DBGH(dbc, "attempt to set transaction isolation to: %u.",
+			INFOH(dbc, "attempt to set transaction isolation to: %u.",
 				(SQLUINTEGER)(uintptr_t)Value);
 			WARNH(dbc, "no support for transactions available.");
 			/* the driver advertises the data source as read-only, so no
@@ -2933,7 +2948,7 @@ SQLRETURN EsSQLSetConnectAttrW(
 			break;
 
 		case SQL_ATTR_ACCESS_MODE:
-			DBGH(dbc, "setting access mode to: %lu.",
+			INFOH(dbc, "setting access mode to: %lu.",
 				(SQLUINTEGER)(uintptr_t)Value);
 			if ((SQLUINTEGER)(uintptr_t)Value != SQL_MODE_READ_ONLY) {
 				WARNH(dbc, "no support for requested access mode.");
@@ -2941,7 +2956,7 @@ SQLRETURN EsSQLSetConnectAttrW(
 			break;
 
 		case SQL_ATTR_AUTOCOMMIT:
-			DBGH(dbc, "setting autocommit mode: %lu",
+			INFOH(dbc, "setting autocommit mode: %lu",
 				(SQLUINTEGER)(uintptr_t)Value);
 			if ((SQLUINTEGER)(uintptr_t)Value != SQL_AUTOCOMMIT_ON) {
 				WARNH(dbc, "no support for manual-commit mode.");
@@ -2956,7 +2971,7 @@ SQLRETURN EsSQLSetConnectAttrW(
 		/* coalesce login and connection timeouts for a REST req. */
 		case SQL_ATTR_CONNECTION_TIMEOUT:
 		case SQL_ATTR_LOGIN_TIMEOUT:
-			DBGH(dbc, "setting login/connection timeout: %lu",
+			INFOH(dbc, "setting login/connection timeout: %lu",
 				(SQLUINTEGER)(uintptr_t)Value);
 			if (dbc->timeout && (! Value)) {
 				/* if one of the values had been set to non-0 (=no timeout),
@@ -2969,13 +2984,13 @@ SQLRETURN EsSQLSetConnectAttrW(
 			break;
 
 		case SQL_ATTR_TRANSLATE_LIB:
-			DBGH(dbc, "setting translation to lib: `" LWPD "`.",
+			INFOH(dbc, "setting translation to lib: `" LWPD "`.",
 				(SQLWCHAR *)Value);
 			ERRH(dbc, "no traslation support available.");
 			RET_HDIAGS(dbc, SQL_STATE_IM009);
 
 		case SQL_ATTR_CURRENT_CATALOG:
-			DBGH(dbc, "setting current catalog to: `" LWPDL "`.",
+			INFOH(dbc, "setting current catalog to: `" LWPDL "`.",
 				/* string should be 0-term'd */
 				0 <= StringLength ? StringLength : SHRT_MAX,
 				(SQLWCHAR *)Value);
