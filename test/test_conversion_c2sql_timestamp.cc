@@ -30,13 +30,13 @@ TEST_F(ConvertC2SQL_Timestamp, CStr_Time2Timestamp)
 
 	time_t utc = time(NULL);
 	ASSERT_TRUE(utc != (size_t)-1);
-	struct tm *gm = gmtime(&utc);
-	ASSERT_TRUE(gm != NULL);
+	struct tm *local = localtime(&utc);
+	ASSERT_TRUE(local != NULL);
 	char params[1024];
 	const char params_templ[] = "[{\"type\": \"DATETIME\", "
 		"\"value\": \"%04d-%02d-%02dT%sZ\"}]";
 	int n = snprintf(params, sizeof(params), params_templ,
-		gm->tm_year + 1900, gm->tm_mon + 1, gm->tm_mday, val);
+		local->tm_year + 1900, local->tm_mon + 1, local->tm_mday, val);
 	ASSERT_TRUE(0 < n && n <= sizeof(params_templ) + sizeof(val));
 
 	assertRequest(params);
@@ -194,13 +194,13 @@ TEST_F(ConvertC2SQL_Timestamp, Time2Timestamp)
 
 	time_t utc = time(NULL);
 	ASSERT_TRUE(utc != (size_t)-1);
-	struct tm *gm = gmtime(&utc);
-	ASSERT_TRUE(gm != NULL);
+	struct tm *local = localtime(&utc);
+	ASSERT_TRUE(local != NULL);
 	char params[1024];
 	const char params_templ[] = "[{\"type\": \"DATETIME\", "
 		"\"value\": \"%04d-%02d-%02dT%02hd:%02hd:%02hdZ\"}]";
 	int n = snprintf(params, sizeof(params), params_templ,
-		gm->tm_year + 1900, gm->tm_mon + 1, gm->tm_mday,
+		local->tm_year + 1900, local->tm_mon + 1, local->tm_mday,
 		val.hour, val.minute, val.second);
 	ASSERT_TRUE(0 < n && n < sizeof(params_templ));
 
