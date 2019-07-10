@@ -594,7 +594,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 	/*INDENT-OFF*/
 	switch(Attribute) {
 		case SQL_ATTR_USE_BOOKMARKS:
-			INFOH(stmt, "setting use-bookmarks to: %u.", (SQLULEN)ValuePtr);
+			DBGH(stmt, "setting use-bookmarks to: %u.", (SQLULEN)ValuePtr);
 			if ((SQLULEN)ValuePtr != SQL_UB_OFF) {
 				ERRH(stmt, "bookmarks are not supported by driver.");
 				RET_HDIAG(stmt, SQL_STATE_HYC00,
@@ -612,12 +612,11 @@ SQLRETURN EsSQLSetStmtAttrW(
 			/* offset in bytes */
 			/* "Setting this statement attribute sets the
 			 * SQL_DESC_BIND_OFFSET_PTR field in the ARD header." */
-			INFOH(stmt, "setting row-bind-offset pointer to: 0x%p.", ValuePtr);
+			DBGH(stmt, "setting row-bind-offset pointer to: 0x%p.", ValuePtr);
 			desc = stmt->ard;
 			break;
 		case SQL_ATTR_PARAM_BIND_OFFSET_PTR:
-			INFOH(stmt, "setting param-bind-offset pointer to: 0x%p.",
-				ValuePtr);
+			DBGH(stmt, "setting param-bind-offset pointer to: 0x%p.", ValuePtr);
 			desc = stmt->apd;
 			break;
 		} while (0);
@@ -639,7 +638,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 		/* "Setting this statement attribute sets the SQL_DESC_ARRAY_SIZE
 		 * field in the APD header." */
 		case SQL_ATTR_PARAMSET_SIZE:
-			INFOH(stmt, "setting param set size to: %d.", (SQLULEN)ValuePtr);
+			DBGH(stmt, "setting param set size to: %d.", (SQLULEN)ValuePtr);
 			desc = stmt->apd;
 			break;
 		} while (0);
@@ -657,7 +656,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 		/* "Setting this statement attribute sets the SQL_DESC_BIND_TYPE field
 		 * in the ARD header." */
 		case SQL_ATTR_ROW_BIND_TYPE:
-			INFOH(stmt, "setting row bind type to: %d.", (SQLULEN)ValuePtr);
+			DBGH(stmt, "setting row bind type to: %d.", (SQLULEN)ValuePtr);
 			/* value is SQL_BIND_BY_COLUMN (0UL) or struct len  */
 			/* "the driver can calculate the address of the data for a
 			 * particular row and column as:
@@ -668,7 +667,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 			desc = stmt->ard;
 			break;
 		case SQL_ATTR_PARAM_BIND_TYPE:
-			INFOH(stmt, "setting param bind type to: %d.", (SQLULEN)ValuePtr);
+			DBGH(stmt, "setting param bind type to: %d.", (SQLULEN)ValuePtr);
 			desc = stmt->apd;
 			break;
 		} while (0);
@@ -690,20 +689,20 @@ SQLRETURN EsSQLSetStmtAttrW(
 		 * SQL_DESC_ARRAY_STATUS_PTR field in the IRD header." */
 		case SQL_ATTR_ROW_STATUS_PTR:
 			// TODO: call SQLSetDescField(IRD) here?
-			INFOH(stmt, "setting row status pointer to: 0x%p.", ValuePtr);
+			DBGH(stmt, "setting row status pointer to: 0x%p.", ValuePtr);
 			desc = stmt->ird;
 			break;
 		case SQL_ATTR_PARAM_STATUS_PTR:
-			INFOH(stmt, "setting param status pointer to: 0x%p.", ValuePtr);
+			DBGH(stmt, "setting param status pointer to: 0x%p.", ValuePtr);
 			desc = stmt->ipd;
 			break;
 		case SQL_ATTR_ROW_OPERATION_PTR:
-			INFOH(stmt, "setting row operation array pointer to: 0x%p.",
+			DBGH(stmt, "setting row operation array pointer to: 0x%p.",
 					ValuePtr);
 			desc = stmt->ard;
 			break;
 		case SQL_ATTR_PARAM_OPERATION_PTR:
-			INFOH(stmt, "setting param operation array pointer to: 0x%p.",
+			DBGH(stmt, "setting param operation array pointer to: 0x%p.",
 					ValuePtr);
 			desc = stmt->apd;
 			break;
@@ -720,14 +719,13 @@ SQLRETURN EsSQLSetStmtAttrW(
 		/* "Setting this statement attribute sets the
 		 * SQL_DESC_ROWS_PROCESSED_PTR field in the IRD header." */
 		case SQL_ATTR_ROWS_FETCHED_PTR:
-			INFOH(stmt, "setting rows fetched pointer to: 0x%p.", ValuePtr);
+			DBGH(stmt, "setting rows fetched pointer to: 0x%p.", ValuePtr);
 			/* NOTE: documentation writes about "ARD", while also stating that
 			 * this field is unused in the ARD. I assume the former as wrong */
 			desc = stmt->ird;
 			break;
 		case SQL_ATTR_PARAMS_PROCESSED_PTR:
-			INFOH(stmt, "setting params processed pointer to: 0x%p.",
-				ValuePtr);
+			DBGH(stmt, "setting params processed pointer to: 0x%p.", ValuePtr);
 			desc = stmt->ipd;
 			break;
 		} while (0);
@@ -747,7 +745,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 				break; /* nop */
 			}
 			if (desc == &stmt->i_ard || desc == SQL_NULL_HDESC) {
-				INFOH(stmt, "unbinding current ARD (@0x%p), rebinding with "
+				DBGH(stmt, "unbinding current ARD (@0x%p), rebinding with "
 						"implicit value (@0x%p).", stmt->ard, &stmt->i_ard);
 				/* re-anonymize the descriptor, makingit re-usable */
 				stmt->ard = &stmt->i_ard;
@@ -776,7 +774,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 									" to ARD.", desc->type);
 							RET_HDIAGS(stmt, SQL_STATE_HY024);
 					}
-					INFOH(stmt, "overwritting current ARD (@0x%p) with new "
+					DBGH(stmt, "overwritting current ARD (@0x%p) with new "
 							"value (@0x%p).", stmt->ard, desc);
 					stmt->ard = desc;
 				}
@@ -798,7 +796,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 			RET_HDIAGS(stmt, SQL_STATE_HY024);
 
 		case SQL_ATTR_METADATA_ID:
-			INFOH(stmt, "setting metadata_id to: %u", (SQLULEN)ValuePtr);
+			DBGH(stmt, "setting metadata_id to: %u", (SQLULEN)ValuePtr);
 			stmt->metadata_id = (SQLULEN)ValuePtr;
 			break;
 
@@ -817,7 +815,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 
 		case SQL_ATTR_MAX_LENGTH:
 			ulen = (SQLULEN)ValuePtr;
-			INFOH(stmt, "setting max_length to: %u.", ulen);
+			DBGH(stmt, "setting max_length to: %u.", ulen);
 			if (ulen < ESODBC_LO_MAX_LENGTH) {
 				WARNH(stmt, "MAX_LENGTH lower than min allowed (%d) -- "
 						"correcting value.", ESODBC_LO_MAX_LENGTH);
@@ -833,12 +831,12 @@ SQLRETURN EsSQLSetStmtAttrW(
 			break;
 
 		case SQL_ATTR_QUERY_TIMEOUT:
-			INFOH(stmt, "setting query timeout to: %u.", (SQLULEN)ValuePtr);
+			DBGH(stmt, "setting query timeout to: %u.", (SQLULEN)ValuePtr);
 			stmt->query_timeout = (SQLULEN)ValuePtr;
 			break;
 
 		case SQL_ATTR_CURSOR_TYPE:
-			INFOH(stmt, "setting cursor type: %llu.", (SQLULEN)ValuePtr);
+			DBGH(stmt, "setting cursor type: %llu.", (SQLULEN)ValuePtr);
 			if ((SQLULEN)ValuePtr != SQL_CURSOR_FORWARD_ONLY) {
 				WARNH(stmt, "requested cursor_type substituted with "
 						"forward-only (%llu).", SQL_CURSOR_FORWARD_ONLY);
@@ -847,14 +845,14 @@ SQLRETURN EsSQLSetStmtAttrW(
 			break;
 
 		case SQL_ATTR_NOSCAN:
-			INFOH(stmt, "setting escape seq scanning: %llu -- NOOP.",
+			DBGH(stmt, "setting escape seq scanning: %llu -- NOOP.",
 					(SQLULEN)ValuePtr);
 			/* nothing to do: the driver never scans the input, ESSQL processes
 			 * the escape sequences */
 			break;
 
 		case SQL_ATTR_CONCURRENCY:
-			INFOH(stmt, "setting concurrency: %llu.", (SQLULEN)ValuePtr);
+			DBGH(stmt, "setting concurrency: %llu.", (SQLULEN)ValuePtr);
 			if ((SQLULEN)ValuePtr != SQL_CONCUR_READ_ONLY) {
 				WARNH(stmt, "requested concurrency substituted with "
 						"read-only (%llu).", SQL_CONCUR_READ_ONLY);
@@ -863,7 +861,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 			break;
 
 		case SQL_ATTR_MAX_ROWS:
-			INFOH(stmt, "setting max rows: %llu.", (SQLULEN)ValuePtr);
+			DBGH(stmt, "setting max rows: %llu.", (SQLULEN)ValuePtr);
 			if ((SQLULEN)ValuePtr != 0) {
 				WARNH(stmt, "requested max_rows substituted with 0.");
 				RET_HDIAGS(stmt, SQL_STATE_01S02);
@@ -871,8 +869,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 			break;
 
 		case SQL_ATTR_CURSOR_SENSITIVITY:
-			INFOH(stmt, "setting cursor sensitivity: %llu.",
-				(SQLULEN)ValuePtr);
+			DBGH(stmt, "setting cursor sensitivity: %llu.", (SQLULEN)ValuePtr);
 			if ((SQLULEN)ValuePtr != SQL_UNSPECIFIED) {
 				ERRH(stmt, "driver supports forward-only cursors.");
 				RET_HDIAGS(stmt, SQL_STATE_HYC00);
@@ -880,7 +877,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 			break;
 
 		case SQL_ATTR_CURSOR_SCROLLABLE:
-			INFOH(stmt, "setting scrollable cursor: %llu.", (SQLULEN)ValuePtr);
+			DBGH(stmt, "setting scrollable cursor: %llu.", (SQLULEN)ValuePtr);
 			if ((SQLULEN)ValuePtr != SQL_NONSCROLLABLE) {
 				ERRH(stmt, "driver supports only non-scrollable cursors.");
 				RET_HDIAGS(stmt, SQL_STATE_HYC00);
@@ -888,7 +885,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 			break;
 
 		case SQL_ATTR_RETRIEVE_DATA:
-			INFOH(stmt, "setting data retrieving: %llu.", (SQLULEN)ValuePtr);
+			DBGH(stmt, "setting data retrieving: %llu.", (SQLULEN)ValuePtr);
 			if ((SQLULEN)ValuePtr != SQL_RD_ON) {
 				WARNH(stmt, "no fetching without data retrieval possible.");
 				RET_HDIAGS(stmt, SQL_STATE_01S02);
@@ -1441,7 +1438,7 @@ SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count)
 	}
 
 	if (new_count == 0) {
-		INFOH(desc, "freeing the array of %d elems.", desc->count);
+		DBGH(desc, "freeing the array of %d elems.", desc->count);
 		free_desc_recs(desc);
 		recs = NULL;
 	} else {
@@ -1452,13 +1449,13 @@ SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count)
 			RET_HDIAGS(desc, SQL_STATE_HY001);
 		}
 		if (new_count < desc->count) { /* shrinking array */
-			INFOH(desc, "recs array is shrinking %d -> %d.", desc->count,
+			DBGH(desc, "recs array is shrinking %d -> %d.", desc->count,
 				new_count);
 			for (i = new_count - 1; i < desc->count; i ++) {
 				free_rec_fields(&desc->recs[i]);
 			}
 		} else { /* growing array */
-			INFOH(desc, "recs array is growing %d -> %d.", desc->count,
+			DBGH(desc, "recs array is growing %d -> %d.", desc->count,
 				new_count);
 			/* init all new records */
 			for (i = desc->count; i < new_count; i ++) {
@@ -2457,7 +2454,7 @@ SQLRETURN EsSQLSetDescFieldW(
 	switch (FieldIdentifier) {
 		case SQL_DESC_ARRAY_SIZE:
 			ulen = (SQLULEN)(uintptr_t)ValuePtr;
-			INFOH(desc, "setting desc array size to: %llu.", ulen);
+			DBGH(desc, "setting desc array size to: %llu.", ulen);
 			if (DESC_TYPE_IS_RECORD(desc->type)) {
 				if (ESODBC_MAX_ROW_ARRAY_SIZE < ulen) {
 					WARNH(desc, "provided desc array size (%u) larger than "
@@ -2481,19 +2478,19 @@ SQLRETURN EsSQLSetDescFieldW(
 			return SQL_SUCCESS;
 
 		case SQL_DESC_ARRAY_STATUS_PTR:
-			INFOH(desc, "setting desc array status ptr to: 0x%p.", ValuePtr);
+			DBGH(desc, "setting desc array status ptr to: 0x%p.", ValuePtr);
 			/* deferred */
 			desc->array_status_ptr = (SQLUSMALLINT *)ValuePtr;
 			return SQL_SUCCESS;
 
 		case SQL_DESC_BIND_OFFSET_PTR:
-			INFOH(desc, "setting binding offset ptr to: 0x%p.", ValuePtr);
+			DBGH(desc, "setting binding offset ptr to: 0x%p.", ValuePtr);
 			/* deferred */
 			desc->bind_offset_ptr = (SQLLEN *)ValuePtr;
 			return SQL_SUCCESS;
 
 		case SQL_DESC_BIND_TYPE:
-			INFOH(desc, "setting bind type to: %u.",
+			DBGH(desc, "setting bind type to: %u.",
 				(SQLUINTEGER)(uintptr_t)ValuePtr);
 			desc->bind_type = (SQLUINTEGER)(uintptr_t)ValuePtr;
 			return SQL_SUCCESS;
@@ -2523,7 +2520,7 @@ SQLRETURN EsSQLSetDescFieldW(
 			return update_rec_count(desc, (SQLSMALLINT)(intptr_t)ValuePtr);
 
 		case SQL_DESC_ROWS_PROCESSED_PTR:
-			INFOH(desc, "setting desc rows processed ptr to: 0x%p.", ValuePtr);
+			DBGH(desc, "setting desc rows processed ptr to: 0x%p.", ValuePtr);
 			desc->rows_processed_ptr = (SQLULEN *)ValuePtr;
 			return SQL_SUCCESS;
 	}
@@ -2546,7 +2543,7 @@ SQLRETURN EsSQLSetDescFieldW(
 			ERRH(desc, "can't get record with number %d.", RecNumber);
 			RET_STATE(desc->hdr.diag.state);
 		}
-		INFOH(desc, "setting field %d of record #%d @ 0x%p.", FieldIdentifier,
+		DBGH(desc, "setting field %d of record #%d @ 0x%p.", FieldIdentifier,
 			RecNumber, rec);
 	}
 
@@ -2559,7 +2556,7 @@ SQLRETURN EsSQLSetDescFieldW(
 	 * buffer(s), so the above "binding" definition is incomplete.
 	 */
 	if (FieldIdentifier != SQL_DESC_DATA_PTR) {
-		INFOH(desc, "attribute to set is different than %d => unbinding data "
+		DBGH(desc, "attribute to set is different than %d => unbinding data "
 			"buffer (was 0x%p).", rec->data_ptr);
 		rec->data_ptr = NULL;
 	}
@@ -2573,7 +2570,7 @@ SQLRETURN EsSQLSetDescFieldW(
 		 * each concise type is stored in SQL_DESC_DATETIME_INTERVAL_CODE." */
 		case SQL_DESC_TYPE:
 			type = (SQLSMALLINT)(intptr_t)ValuePtr;
-			INFOH(desc, "setting type of rec@0x%p to %d.", rec, type);
+			DBGH(desc, "setting type of rec@0x%p to %d.", rec, type);
 			/* Note: SQL_[C_]DATE == SQL_DATETIME (== 9) =>
 			 * 1. one needs to always use SQL_DESC_CONCISE_TYPE for setting
 			 * the types from within the driver (binding cols, params):
@@ -2604,7 +2601,7 @@ SQLRETURN EsSQLSetDescFieldW(
 			}
 			/* no break! */
 		case SQL_DESC_CONCISE_TYPE:
-			INFOH(desc, "setting concise type of rec 0x%p to %d.", rec,
+			DBGH(desc, "setting concise type of rec 0x%p to %d.", rec,
 					(SQLSMALLINT)(intptr_t)ValuePtr);
 			rec->concise_type = (SQLSMALLINT)(intptr_t)ValuePtr;
 
@@ -2622,13 +2619,13 @@ SQLRETURN EsSQLSetDescFieldW(
 			 * SQL_DESC_LENGTH, SQL_DESC_PRECISION, and SQL_DESC_SCALE fields
 			 * are automatically set to default values". */
 			set_defaults_from_meta_type(rec);
-			INFOH(desc, "REC@0x%p types: concise: %d, verbose: %d, code: %d.",
+			DBGH(desc, "REC@0x%p types: concise: %d, verbose: %d, code: %d.",
 					rec, rec->concise_type, rec->type,
 					rec->datetime_interval_code);
 			break;
 
 		case SQL_DESC_DATA_PTR:
-			INFOH(desc, "setting data ptr to 0x%p of type %d.", ValuePtr,
+			DBGH(desc, "setting data ptr to 0x%p of type %d.", ValuePtr,
 					BufferLength);
 			/* deferred */
 			rec->data_ptr = ValuePtr;
@@ -2645,7 +2642,7 @@ SQLRETURN EsSQLSetDescFieldW(
 					ERRH(desc, "consistency check failed on rec@0x%p.", rec);
 					RET_HDIAGS(desc, SQL_STATE_HY021);
 				} else {
-					INFOH(desc, "rec@0x%p: bound data ptr@0x%p.", rec,
+					DBGH(desc, "rec@0x%p: bound data ptr@0x%p.", rec,
 							rec->data_ptr);
 				}
 			} else {
@@ -2655,13 +2652,13 @@ SQLRETURN EsSQLSetDescFieldW(
 				if (DESC_TYPE_IS_APPLICATION(desc->type) &&
 						/* see function-top comments on when to unbind */
 						(! REC_IS_BOUND(rec))) {
-					INFOH(desc, "rec 0x%p of desc type %d unbound.", rec,
+					DBGH(desc, "rec 0x%p of desc type %d unbound.", rec,
 							desc->type);
 					if (RecNumber == desc->count) {
 						count = recount_bound(desc);
 						/* worst case: trying to unbound a not-yet-bound rec */
 						if (count != desc->count) {
-							INFOH(desc, "adjusting rec count from %d to %d.",
+							DBGH(desc, "adjusting rec count from %d to %d.",
 									desc->count, count);
 							return update_rec_count(desc, count);
 						}
@@ -2691,7 +2688,7 @@ SQLRETURN EsSQLSetDescFieldW(
 			} else {
 				wlen = BufferLength;
 			}
-			INFOH(desc, "setting SQLWCHAR field %d to `" LWPDL "`(@0x%p).",
+			DBGH(desc, "setting SQLWCHAR field %d to `" LWPDL "`(@0x%p).",
 				FieldIdentifier, wlen, ValuePtr, wlen, ValuePtr);
 			if (wstrp->str) {
 				DBGH(desc, "freeing previously allocated value for field %d "
@@ -2717,11 +2714,11 @@ SQLRETURN EsSQLSetDescFieldW(
 
 		/* <SQLLEN *>, deferred */
 		case SQL_DESC_INDICATOR_PTR:
-			INFOH(desc, "setting indicator pointer to 0x%p.", ValuePtr);
+			DBGH(desc, "setting indicator pointer to 0x%p.", ValuePtr);
 			rec->indicator_ptr = (SQLLEN *)ValuePtr;
 			break;
 		case SQL_DESC_OCTET_LENGTH_PTR:
-			INFOH(desc, "setting octet length pointer to 0x%p.", ValuePtr);
+			DBGH(desc, "setting octet length pointer to 0x%p.", ValuePtr);
 			rec->octet_length_ptr = (SQLLEN *)ValuePtr;
 			break;
 
@@ -2729,7 +2726,7 @@ SQLRETURN EsSQLSetDescFieldW(
 		/* R/O fields: display_size */
 		case SQL_DESC_OCTET_LENGTH:
 			slen = (SQLLEN)(intptr_t)ValuePtr;
-			INFOH(desc, "setting octet length: %ld.", slen);
+			DBGH(desc, "setting octet length: %ld.", slen);
 			/* rec field's type is signed; a negative can be dangerous */
 			if (slen < 0) {
 				WARNH(desc, "negative octet length provided (%lld)", slen);
@@ -2740,7 +2737,7 @@ SQLRETURN EsSQLSetDescFieldW(
 
 		/* <SQLULEN> */
 		case SQL_DESC_LENGTH:
-			INFOH(desc, "setting length: %u.", (SQLULEN)(uintptr_t)ValuePtr);
+			DBGH(desc, "setting length: %u.", (SQLULEN)(uintptr_t)ValuePtr);
 			rec->length = (SQLULEN)(uintptr_t)ValuePtr;
 			break;
 
@@ -2764,7 +2761,7 @@ SQLRETURN EsSQLSetDescFieldW(
 		/* R/O field: fixed_prec_scale, nullable, searchable, unsigned  */
 		case SQL_DESC_UPDATABLE: wordp = &rec->updatable; break;
 		} while (0);
-			INFOH(desc, "setting record field %d to %d.", FieldIdentifier,
+			DBGH(desc, "setting record field %d to %d.", FieldIdentifier,
 					(SQLSMALLINT)(intptr_t)ValuePtr);
 			*wordp = (SQLSMALLINT)(intptr_t)ValuePtr;
 			break;
@@ -2779,7 +2776,7 @@ SQLRETURN EsSQLSetDescFieldW(
 			intp = &rec->num_prec_radix;
 			break;
 		} while (0);
-			INFOH(desc, "returning record field %d as %d.", FieldIdentifier,
+			DBGH(desc, "returning record field %d as %d.", FieldIdentifier,
 					(SQLINTEGER)(intptr_t)ValuePtr);
 			*intp = (SQLINTEGER)(intptr_t)ValuePtr;
 			break;
