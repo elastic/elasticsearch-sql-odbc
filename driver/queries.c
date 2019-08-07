@@ -23,7 +23,7 @@
 #define PACK_PARAM_ERR_RCAUSE	"root_cause"
 #define PACK_PARAM_COL_NAME		"name"
 #define PACK_PARAM_COL_TYPE		"type"
-#define PACK_PARAM_COL_DSIZE	"type"
+#define PACK_PARAM_COL_DSIZE	"display_size"
 #define PACK_PARAM_CURS_CLOSE	"succeeded"
 
 
