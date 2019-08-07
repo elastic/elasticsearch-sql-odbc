@@ -27,8 +27,8 @@ extern "C" {
 #endif /* _WIN32/WIN32 */
 
 /* convenience casting macros */
-#define ATTACH_ANSWER(_h, _s, _l)   attach_answer((esodbc_stmt_st *)_h, _s, _l)
-#define ATTACH_SQL(_h, _s, _l)      attach_sql((esodbc_stmt_st *)_h, _s, _l)
+#define ATTACH_ANSWER(_h, _s)	attach_answer((esodbc_stmt_st *)_h, _s, TRUE)
+#define ATTACH_SQL(_h, _s, _l)	attach_sql((esodbc_stmt_st *)_h, _s, _l)
 
 #define ASSERT_CSTREQ(_c1, _c2) \
 	do { \

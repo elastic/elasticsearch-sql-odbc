@@ -126,7 +126,7 @@ static void clear_desc(esodbc_desc_st *desc, BOOL reinit)
 			break;
 
 		case DESC_TYPE_IRD:
-			if (HDRH(desc)->stmt->rset.ecurs.cnt) {
+			if (STMT_HAS_CURSOR(HDRH(desc)->stmt)) {
 				close_es_cursor(HDRH(desc)->stmt);
 			}
 			if (STMT_HAS_RESULTSET(desc->hdr.stmt)) {
