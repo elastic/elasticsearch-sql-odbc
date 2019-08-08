@@ -74,6 +74,20 @@ namespace EsOdbcDsnEditor
             this.logDirectoryPathButton = new System.Windows.Forms.Button();
             this.textLogDirectoryPath = new System.Windows.Forms.TextBox();
             this.labelLogDirectory = new System.Windows.Forms.Label();
+            this.pageMisc = new System.Windows.Forms.TabPage();
+            this.checkBoxAutoEscapePVA = new System.Windows.Forms.CheckBox();
+            this.comboBoxFloatsFormat = new System.Windows.Forms.ComboBox();
+            this.labelFloatsFormat = new System.Windows.Forms.Label();
+            this.checkBoxIndexIncludeFrozen = new System.Windows.Forms.CheckBox();
+            this.checkBoxMultiFieldLenient = new System.Windows.Forms.CheckBox();
+            this.checkBoxApplyTZ = new System.Windows.Forms.CheckBox();
+            this.checkBoxFollowRedirects = new System.Windows.Forms.CheckBox();
+            this.labelBodySize = new System.Windows.Forms.Label();
+            this.numericUpDownBodySize = new System.Windows.Forms.NumericUpDown();
+            this.labelFetchSize = new System.Windows.Forms.Label();
+            this.numericUpDownFetchSize = new System.Windows.Forms.NumericUpDown();
+            this.labelTimeout = new System.Windows.Forms.Label();
+            this.numericUpDownTimeout = new System.Windows.Forms.NumericUpDown();
             this.folderLogDirectoryDialog = new System.Windows.Forms.FolderBrowserDialog();
             this.toolTipName = new System.Windows.Forms.ToolTip(this.components);
             this.toolTipDescription = new System.Windows.Forms.ToolTip(this.components);
@@ -91,6 +105,15 @@ namespace EsOdbcDsnEditor
             this.toolTipLogDirectoryPath = new System.Windows.Forms.ToolTip(this.components);
             this.toolTipLoggingEnabled = new System.Windows.Forms.ToolTip(this.components);
             this.toolTipLogLevel = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipTimeout = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipFetchSize = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipBodySize = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipFloatsFormat = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipFollowRedirects = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipApplyTZ = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipAutoEscapePVA = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipMultiFieldLenient = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipIndexIncludeFrozen = new System.Windows.Forms.ToolTip(this.components);
             ((System.ComponentModel.ISupportInitialize)(this.header)).BeginInit();
             this.groupSSL.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDownPort)).BeginInit();
@@ -98,6 +121,10 @@ namespace EsOdbcDsnEditor
             this.pageBasic.SuspendLayout();
             this.pageSecurity.SuspendLayout();
             this.pageLogging.SuspendLayout();
+            this.pageMisc.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.numericUpDownBodySize)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.numericUpDownFetchSize)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.numericUpDownTimeout)).BeginInit();
             this.SuspendLayout();
             // 
             // saveButton
@@ -335,7 +362,8 @@ namespace EsOdbcDsnEditor
             this.tabConfiguration.Controls.Add(this.pageBasic);
             this.tabConfiguration.Controls.Add(this.pageSecurity);
             this.tabConfiguration.Controls.Add(this.pageLogging);
-            this.tabConfiguration.Location = new System.Drawing.Point(16, 74);
+            this.tabConfiguration.Controls.Add(this.pageMisc);
+            this.tabConfiguration.Location = new System.Drawing.Point(17, 74);
             this.tabConfiguration.Name = "tabConfiguration";
             this.tabConfiguration.SelectedIndex = 0;
             this.tabConfiguration.Size = new System.Drawing.Size(648, 460);
@@ -520,6 +548,191 @@ namespace EsOdbcDsnEditor
             this.labelLogDirectory.TabIndex = 16;
             this.labelLogDirectory.Text = "Log Directory:";
             // 
+            // pageMisc
+            // 
+            this.pageMisc.Controls.Add(this.checkBoxAutoEscapePVA);
+            this.pageMisc.Controls.Add(this.comboBoxFloatsFormat);
+            this.pageMisc.Controls.Add(this.labelFloatsFormat);
+            this.pageMisc.Controls.Add(this.checkBoxIndexIncludeFrozen);
+            this.pageMisc.Controls.Add(this.checkBoxMultiFieldLenient);
+            this.pageMisc.Controls.Add(this.checkBoxApplyTZ);
+            this.pageMisc.Controls.Add(this.checkBoxFollowRedirects);
+            this.pageMisc.Controls.Add(this.labelBodySize);
+            this.pageMisc.Controls.Add(this.numericUpDownBodySize);
+            this.pageMisc.Controls.Add(this.labelFetchSize);
+            this.pageMisc.Controls.Add(this.numericUpDownFetchSize);
+            this.pageMisc.Controls.Add(this.labelTimeout);
+            this.pageMisc.Controls.Add(this.numericUpDownTimeout);
+            this.pageMisc.Location = new System.Drawing.Point(4, 25);
+            this.pageMisc.Name = "pageMisc";
+            this.pageMisc.Padding = new System.Windows.Forms.Padding(3);
+            this.pageMisc.Size = new System.Drawing.Size(640, 431);
+            this.pageMisc.TabIndex = 3;
+            this.pageMisc.Text = "Misc";
+            this.pageMisc.UseVisualStyleBackColor = true;
+            // 
+            // checkBoxAutoEscapePVA
+            // 
+            this.checkBoxAutoEscapePVA.AutoSize = true;
+            this.checkBoxAutoEscapePVA.Checked = true;
+            this.checkBoxAutoEscapePVA.CheckState = System.Windows.Forms.CheckState.Checked;
+            this.checkBoxAutoEscapePVA.Location = new System.Drawing.Point(339, 86);
+            this.checkBoxAutoEscapePVA.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.checkBoxAutoEscapePVA.Name = "checkBoxAutoEscapePVA";
+            this.checkBoxAutoEscapePVA.Size = new System.Drawing.Size(156, 21);
+            this.checkBoxAutoEscapePVA.TabIndex = 29;
+            this.checkBoxAutoEscapePVA.Text = "Auto-escape PVAs?";
+            this.checkBoxAutoEscapePVA.UseVisualStyleBackColor = true;
+            // 
+            // comboBoxFloatsFormat
+            // 
+            this.comboBoxFloatsFormat.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this.comboBoxFloatsFormat.FormattingEnabled = true;
+            this.comboBoxFloatsFormat.Items.AddRange(new object[] {
+            "default",
+            "scientific",
+            "auto"});
+            this.comboBoxFloatsFormat.Location = new System.Drawing.Point(182, 119);
+            this.comboBoxFloatsFormat.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.comboBoxFloatsFormat.Name = "comboBoxFloatsFormat";
+            this.comboBoxFloatsFormat.Size = new System.Drawing.Size(108, 24);
+            this.comboBoxFloatsFormat.TabIndex = 28;
+            // 
+            // labelFloatsFormat
+            // 
+            this.labelFloatsFormat.AutoSize = true;
+            this.labelFloatsFormat.Location = new System.Drawing.Point(66, 122);
+            this.labelFloatsFormat.Name = "labelFloatsFormat";
+            this.labelFloatsFormat.Size = new System.Drawing.Size(94, 17);
+            this.labelFloatsFormat.TabIndex = 27;
+            this.labelFloatsFormat.Text = "Floats format:";
+            // 
+            // checkBoxIndexIncludeFrozen
+            // 
+            this.checkBoxIndexIncludeFrozen.AutoSize = true;
+            this.checkBoxIndexIncludeFrozen.Location = new System.Drawing.Point(339, 154);
+            this.checkBoxIndexIncludeFrozen.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.checkBoxIndexIncludeFrozen.Name = "checkBoxIndexIncludeFrozen";
+            this.checkBoxIndexIncludeFrozen.Size = new System.Drawing.Size(175, 21);
+            this.checkBoxIndexIncludeFrozen.TabIndex = 26;
+            this.checkBoxIndexIncludeFrozen.Text = "Include frozen indices?";
+            this.checkBoxIndexIncludeFrozen.UseVisualStyleBackColor = true;
+            // 
+            // checkBoxMultiFieldLenient
+            // 
+            this.checkBoxMultiFieldLenient.AutoSize = true;
+            this.checkBoxMultiFieldLenient.Checked = true;
+            this.checkBoxMultiFieldLenient.CheckState = System.Windows.Forms.CheckState.Checked;
+            this.checkBoxMultiFieldLenient.Location = new System.Drawing.Point(339, 119);
+            this.checkBoxMultiFieldLenient.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.checkBoxMultiFieldLenient.Name = "checkBoxMultiFieldLenient";
+            this.checkBoxMultiFieldLenient.Size = new System.Drawing.Size(181, 21);
+            this.checkBoxMultiFieldLenient.TabIndex = 25;
+            this.checkBoxMultiFieldLenient.Text = "Multi value field lenient?";
+            this.checkBoxMultiFieldLenient.UseVisualStyleBackColor = true;
+            // 
+            // checkBoxApplyTZ
+            // 
+            this.checkBoxApplyTZ.AutoSize = true;
+            this.checkBoxApplyTZ.Location = new System.Drawing.Point(339, 53);
+            this.checkBoxApplyTZ.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.checkBoxApplyTZ.Name = "checkBoxApplyTZ";
+            this.checkBoxApplyTZ.Size = new System.Drawing.Size(157, 21);
+            this.checkBoxApplyTZ.TabIndex = 24;
+            this.checkBoxApplyTZ.Text = "Use local timezone?";
+            this.checkBoxApplyTZ.UseVisualStyleBackColor = true;
+            // 
+            // checkBoxFollowRedirects
+            // 
+            this.checkBoxFollowRedirects.AutoSize = true;
+            this.checkBoxFollowRedirects.Checked = true;
+            this.checkBoxFollowRedirects.CheckState = System.Windows.Forms.CheckState.Checked;
+            this.checkBoxFollowRedirects.Location = new System.Drawing.Point(339, 20);
+            this.checkBoxFollowRedirects.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.checkBoxFollowRedirects.Name = "checkBoxFollowRedirects";
+            this.checkBoxFollowRedirects.Size = new System.Drawing.Size(177, 21);
+            this.checkBoxFollowRedirects.TabIndex = 23;
+            this.checkBoxFollowRedirects.Text = "Follow HTTP redirects?";
+            this.checkBoxFollowRedirects.UseVisualStyleBackColor = true;
+            // 
+            // labelBodySize
+            // 
+            this.labelBodySize.AutoSize = true;
+            this.labelBodySize.Location = new System.Drawing.Point(24, 88);
+            this.labelBodySize.Name = "labelBodySize";
+            this.labelBodySize.Size = new System.Drawing.Size(150, 17);
+            this.labelBodySize.TabIndex = 10;
+            this.labelBodySize.Text = "Max page lenght (MB):";
+            // 
+            // numericUpDownBodySize
+            // 
+            this.numericUpDownBodySize.Location = new System.Drawing.Point(182, 86);
+            this.numericUpDownBodySize.Maximum = new decimal(new int[] {
+            -1,
+            0,
+            0,
+            0});
+            this.numericUpDownBodySize.Name = "numericUpDownBodySize";
+            this.numericUpDownBodySize.Size = new System.Drawing.Size(104, 22);
+            this.numericUpDownBodySize.TabIndex = 11;
+            this.numericUpDownBodySize.Value = new decimal(new int[] {
+            100,
+            0,
+            0,
+            0});
+            // 
+            // labelFetchSize
+            // 
+            this.labelFetchSize.AutoSize = true;
+            this.labelFetchSize.Location = new System.Drawing.Point(24, 53);
+            this.labelFetchSize.Name = "labelFetchSize";
+            this.labelFetchSize.Size = new System.Drawing.Size(145, 17);
+            this.labelFetchSize.TabIndex = 8;
+            this.labelFetchSize.Text = "Max page size (rows):";
+            // 
+            // numericUpDownFetchSize
+            // 
+            this.numericUpDownFetchSize.Increment = new decimal(new int[] {
+            1000,
+            0,
+            0,
+            0});
+            this.numericUpDownFetchSize.Location = new System.Drawing.Point(182, 51);
+            this.numericUpDownFetchSize.Maximum = new decimal(new int[] {
+            -1,
+            0,
+            0,
+            0});
+            this.numericUpDownFetchSize.Name = "numericUpDownFetchSize";
+            this.numericUpDownFetchSize.Size = new System.Drawing.Size(104, 22);
+            this.numericUpDownFetchSize.TabIndex = 9;
+            this.numericUpDownFetchSize.Value = new decimal(new int[] {
+            1000,
+            0,
+            0,
+            0});
+            // 
+            // labelTimeout
+            // 
+            this.labelTimeout.AutoSize = true;
+            this.labelTimeout.Location = new System.Drawing.Point(24, 20);
+            this.labelTimeout.Name = "labelTimeout";
+            this.labelTimeout.Size = new System.Drawing.Size(136, 17);
+            this.labelTimeout.TabIndex = 6;
+            this.labelTimeout.Text = "Request timeout (s):";
+            // 
+            // numericUpDownTimeout
+            // 
+            this.numericUpDownTimeout.Location = new System.Drawing.Point(182, 18);
+            this.numericUpDownTimeout.Maximum = new decimal(new int[] {
+            -1,
+            0,
+            0,
+            0});
+            this.numericUpDownTimeout.Name = "numericUpDownTimeout";
+            this.numericUpDownTimeout.Size = new System.Drawing.Size(104, 22);
+            this.numericUpDownTimeout.TabIndex = 7;
+            // 
             // DsnEditorForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
@@ -549,6 +762,11 @@ namespace EsOdbcDsnEditor
             this.pageSecurity.PerformLayout();
             this.pageLogging.ResumeLayout(false);
             this.pageLogging.PerformLayout();
+            this.pageMisc.ResumeLayout(false);
+            this.pageMisc.PerformLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.numericUpDownBodySize)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.numericUpDownFetchSize)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.numericUpDownTimeout)).EndInit();
             this.ResumeLayout(false);
 
         }
@@ -609,6 +827,29 @@ namespace EsOdbcDsnEditor
 		private System.Windows.Forms.ToolTip toolTipLoggingEnabled;
 		private System.Windows.Forms.ToolTip toolTipLogLevel;
 		private System.Windows.Forms.TextBox textDescription;
+		private System.Windows.Forms.TabPage pageMisc;
+		private System.Windows.Forms.Label labelTimeout;
+		private System.Windows.Forms.NumericUpDown numericUpDownTimeout;
+		private System.Windows.Forms.Label labelFetchSize;
+		private System.Windows.Forms.NumericUpDown numericUpDownFetchSize;
+		private System.Windows.Forms.Label labelBodySize;
+		private System.Windows.Forms.NumericUpDown numericUpDownBodySize;
+		private System.Windows.Forms.CheckBox checkBoxIndexIncludeFrozen;
+		private System.Windows.Forms.CheckBox checkBoxMultiFieldLenient;
+		private System.Windows.Forms.CheckBox checkBoxApplyTZ;
+		private System.Windows.Forms.CheckBox checkBoxFollowRedirects;
+		private System.Windows.Forms.ComboBox comboBoxFloatsFormat;
+		private System.Windows.Forms.Label labelFloatsFormat;
+		private System.Windows.Forms.CheckBox checkBoxAutoEscapePVA;
+		private System.Windows.Forms.ToolTip toolTipTimeout;
+		private System.Windows.Forms.ToolTip toolTipFetchSize;
+		private System.Windows.Forms.ToolTip toolTipBodySize;
+		private System.Windows.Forms.ToolTip toolTipFloatsFormat;
+		private System.Windows.Forms.ToolTip toolTipFollowRedirects;
+		private System.Windows.Forms.ToolTip toolTipApplyTZ;
+		private System.Windows.Forms.ToolTip toolTipAutoEscapePVA;
+		private System.Windows.Forms.ToolTip toolTipMultiFieldLenient;
+		private System.Windows.Forms.ToolTip toolTipIndexIncludeFrozen;
 	}
 }
 
