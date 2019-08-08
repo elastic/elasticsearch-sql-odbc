@@ -8,6 +8,7 @@ using System;
 using System.Data.Odbc;
 using System.Windows.Forms;
 using System.IO;
+using System.Linq;
 
 // uncomment to have the assembly loading to ask for (various) resources; various solutions: 
 // https://stackoverflow.com/questions/4368201/appdomain-currentdomain-assemblyresolve-asking-for-a-appname-resources-assembl
@@ -151,6 +152,29 @@ namespace EsOdbcDsnEditor
 			toolTipLogDirectoryPath.SetToolTip(textLogDirectoryPath, "Specify which directory to write the log files in.");
 			toolTipLogLevel.SetToolTip(comboLogLevel, "Configure the verbosity of the logs.");
 
+			// Logging Panel
+			numericUpDownTimeout.Text = Builder.ContainsKey("Timeout") ? Builder["Timeout"].ToString().StripBraces() : "0";
+			numericUpDownFetchSize.Text = Builder.ContainsKey("MaxFetchSize") ? Builder["MaxFetchSize"].ToString().StripBraces() : "1000";
+			numericUpDownBodySize.Text = Builder.ContainsKey("MaxBodySizeMB") ? Builder["MaxBodySizeMB"].ToString().StripBraces() : "100";
+			comboBoxFloatsFormat.Text = Builder.ContainsKey("ScientificFloats") ? Builder["ScientificFloats"].ToString().StripBraces() : "default";
+
+			string[] noes = {"no", "false", "0"};
+			checkBoxFollowRedirects.Checked = !noes.Contains(Builder.ContainsKey("Follow") ? Builder["Follow"].ToString().StripBraces() : "yes");
+			checkBoxApplyTZ.Checked = !noes.Contains(Builder.ContainsKey("ApplyTZ") ? Builder["ApplyTZ"].ToString().StripBraces() : "no");
+			checkBoxAutoEscapePVA.Checked = !noes.Contains(Builder.ContainsKey("AutoEscapePVA") ? Builder["AutoEscapePVA"].ToString().StripBraces() : "yes");
+			checkBoxMultiFieldLenient.Checked = !noes.Contains(Builder.ContainsKey("MultiFieldLenient") ? Builder["MultiFieldLenient"].ToString().StripBraces() : "yes");
+			checkBoxIndexIncludeFrozen.Checked = !noes.Contains(Builder.ContainsKey("IndexIncludeFrozen") ? Builder["IndexIncludeFrozen"].ToString().StripBraces() : "no");
+
+			toolTipTimeout.SetToolTip(numericUpDownTimeout, "The maximum number of seconds a request to the server can take. The value 0 disables disables the timeout.");
+			toolTipFetchSize.SetToolTip(numericUpDownFetchSize, "The maximum number of rows that Elasticsearch SQL server should send the driver for one page.");
+			toolTipBodySize.SetToolTip(numericUpDownBodySize, "The maximum number of megabytes that the driver will accept for one page.");
+			toolTipFloatsFormat.SetToolTip(comboBoxFloatsFormat, "How should the floating point numbers be printed, when these are converted to string by the driver.");
+			toolTipFollowRedirects.SetToolTip(checkBoxFollowRedirects, "Should the driver follow HTTP redirects of the requests to the server?");
+			toolTipApplyTZ.SetToolTip(checkBoxApplyTZ, "Should the driver use machine's local timezone? The default is UTC.");
+			toolTipAutoEscapePVA.SetToolTip(checkBoxAutoEscapePVA, "Should the driver auto-escape the pattern-value arguments?");
+			toolTipMultiFieldLenient.SetToolTip(checkBoxMultiFieldLenient, "Should the server return one value out of a multi-value field (instead of rejecting the request)?");
+			toolTipIndexIncludeFrozen.SetToolTip(checkBoxIndexIncludeFrozen, "Should the server consider the frozen indices when servicing a request?");
+
 			// Set initial state of action buttons.
 			EnableDisableActionButtons();
 		}
@@ -250,6 +274,17 @@ namespace EsOdbcDsnEditor
 			Builder["tracefile"] = textLogDirectoryPath.Text;
 			Builder["tracelevel"] = comboLogLevel.Text;
 			Builder["traceenabled"] = checkLoggingEnabled.Checked ? "1" : "0";
+
+			// Misc Panel
+			Builder["Timeout"] = numericUpDownTimeout.Text;
+			Builder["MaxFetchSize"] = numericUpDownFetchSize.Text;
+			Builder["MaxBodySizeMB"] = numericUpDownBodySize.Text;
+			Builder["ScientificFloats"] = comboBoxFloatsFormat.Text;
+			Builder["Follow"] = checkBoxFollowRedirects.Checked ? "true" : "false";
+			Builder["ApplyTZ"] = checkBoxApplyTZ.Checked ? "true" : "false";
+			Builder["AutoEscapePVA"] = checkBoxAutoEscapePVA.Checked ? "true" : "false";
+			Builder["MultiFieldLenient"] = checkBoxMultiFieldLenient.Checked ? "true" : "false";
+			Builder["IndexIncludeFrozen"] = checkBoxIndexIncludeFrozen.Checked ? "true" : "false";
 
 			// Validations
 			var keynameOK = true;
