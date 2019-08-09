@@ -30,7 +30,7 @@ CborError cbor_map_advance_to_key(CborValue *it, const char *key,
 		if ((res = cbor_value_skip_tag(it)) != CborNoError) {
 			return res;
 		}
-		/* is current key is a string, get its name */
+		/* if current key is a string, get its name */
 		if (cbor_value_is_text_string(it)) {
 			res = cbor_value_get_string_chunk(it, &buffptr, &bufflen);
 			if (res != CborNoError) {

@@ -1653,18 +1653,12 @@ static SQLRETURN check_server_version(esodbc_dbc_st *dbc)
 	}
 	/* 200 with body received: decode (JSON/CBOR) answer */
 
-	if (is_json) {
-		if (! parse_es_version_json(dbc, &rsp_body, &es_ver, &state)) {
-			ERRH(dbc, "failed to extract Elasticsearch'es version.");
-			goto err;
-		}
-		n = (int)es_ver.cnt;
+	if (is_json ? parse_es_version_json(dbc, &rsp_body, &es_ver, &state) :
+		parse_es_version_cbor(dbc, &rsp_body, &es_ver_c)) {
+		n = is_json ? (int)es_ver.cnt : (int)es_ver_c.cnt;
 	} else {
-		if (! parse_es_version_cbor(dbc, &rsp_body, &es_ver_c)) {
-			ERRH(dbc, "failed to extract Elasticsearch'es version.");
-			goto err;
-		}
-		n = (int)es_ver_c.cnt;
+		ERRH(dbc, "failed to extract Elasticsearch'es version.");
+		goto err;
 	}
 
 	ver_checking = dbc->srv_ver.checking;

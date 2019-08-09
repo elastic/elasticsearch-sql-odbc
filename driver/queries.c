@@ -225,7 +225,7 @@ static BOOL attach_one_column(esodbc_rec_st *rec, wstr_st *col_name,
 	rec->name = col_name->cnt ? *col_name : EMPTY_WSTR;
 
 	assert(! rec->es_type);
-	/* lookup the DBC-cashed ES type */
+	/* lookup the DBC-cached ES type */
 	for (i = 0; i < dbc->no_types; i ++) {
 		if (EQ_CASE_WSTR(&dbc->es_types[i].type_name, col_type)) {
 			rec->es_type = &dbc->es_types[i];
@@ -233,7 +233,7 @@ static BOOL attach_one_column(esodbc_rec_st *rec, wstr_st *col_name,
 		}
 	}
 	if (rec->es_type) {
-		/* copy fileds pre-calculated at DB connect time */
+		/* copy fields pre-calculated at DB connect time */
 		rec->concise_type = rec->es_type->data_type;
 		rec->type = rec->es_type->sql_data_type;
 		rec->datetime_interval_code = rec->es_type->sql_datetime_sub;
@@ -742,6 +742,7 @@ static BOOL attach_error_cbor(SQLHANDLE hnd, cstr_st *body)
 	CborValue *err_vals[] = {&rcause_obj, &type_obj, &reason_obj};
 	wstr_st type_wstr, reason_wstr;
 
+	static const wstr_st msg_sep = WSTR_INIT(": ");
 	wstr_st msg;
 	int code;
 	SQLINTEGER status;
@@ -800,9 +801,9 @@ static BOOL attach_error_cbor(SQLHANDLE hnd, cstr_st *body)
 		n = type_wstr.cnt < wbuff_cnt ? type_wstr.cnt : wbuff_cnt;
 		wmemcpy(wbuff, type_wstr.str, n);
 		pos = n;
-		if (sizeof(": ") - 1 + pos < wbuff_cnt) {
-			wmemcpy(wbuff + pos, L": ", sizeof(": ") - 1);
-			pos += sizeof(": ") - 1;
+		if (msg_sep.cnt + pos < wbuff_cnt) {
+			wmemcpy(wbuff + pos, msg_sep.str, msg_sep.cnt);
+			pos += msg_sep.cnt;
 		}
 		res = cbor_value_get_utf16_wstr(&reason_obj, &reason_wstr);
 		CHK_RES(hnd, "failed to fetch UTF16 '" PACK_PARAM_ERR_REASON "'");
