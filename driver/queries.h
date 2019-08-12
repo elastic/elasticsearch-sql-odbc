@@ -11,9 +11,10 @@
 
 BOOL queries_init();
 void clear_resultset(esodbc_stmt_st *stmt, BOOL on_close);
-SQLRETURN TEST_API attach_answer(esodbc_stmt_st *stmt, char *buff,
-	size_t blen);
-SQLRETURN TEST_API attach_error(SQLHANDLE hnd, cstr_st *body, int code);
+SQLRETURN TEST_API attach_answer(esodbc_stmt_st *stmt, cstr_st *answer,
+	BOOL is_json);
+SQLRETURN TEST_API attach_error(SQLHANDLE hnd, cstr_st *body, BOOL is_json,
+	long code);
 SQLRETURN TEST_API attach_sql(esodbc_stmt_st *stmt, const SQLWCHAR *sql,
 	size_t tlen);
 void detach_sql(esodbc_stmt_st *stmt);
@@ -21,7 +22,8 @@ esodbc_estype_st *lookup_es_type(esodbc_dbc_st *dbc,
 	SQLSMALLINT es_type, SQLULEN col_size);
 SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *buff);
 SQLRETURN close_es_cursor(esodbc_stmt_st *stmt);
-SQLRETURN close_es_answ_handler(esodbc_stmt_st *stmt, char *buff, size_t blen);
+SQLRETURN close_es_answ_handler(esodbc_stmt_st *stmt, cstr_st *body,
+	BOOL is_json);
 
 
 SQLRETURN EsSQLBindCol(
@@ -125,25 +127,49 @@ SQLRETURN EsSQLNumParams(
 	SQLSMALLINT       *ParameterCountPtr);
 SQLRETURN EsSQLRowCount(_In_ SQLHSTMT StatementHandle, _Out_ SQLLEN *RowCount);
 
-/* JSON body build elements */
-#define JSON_KEY_QUERY			"\"query\": " /* will always be the 1st key */
-#define JSON_KEY_CURSOR			"\"cursor\": " /* 1st key */
-#define JSON_KEY_PARAMS			", \"params\": " /* n-th key */
-#define JSON_KEY_FETCH			", \"fetch_size\": " /* n-th key */
-#define JSON_KEY_REQ_TOUT		", \"request_timeout\": " /* n-th key */
-#define JSON_KEY_PAGE_TOUT		", \"page_timeout\": " /* n-th key */
-#define JSON_KEY_TIME_ZONE		", \"time_zone\": " /* n-th key */
-#define JSON_KEY_VAL_MODE		", \"mode\": \"ODBC\"" /* n-th key */
-#ifdef _WIN64
-#	define JSON_KEY_CLT_ID		", \"client_id\": \"odbc64\"" /* n-th k. */
-#else /* _WIN64 */
-#	define JSON_KEY_CLT_ID		", \"client_id\": \"odbc32\"" /* n-th k. */
-#endif /* _WIN64 */
-#define JSON_KEY_MULTIVAL		", \"field_multi_value_leniency\": " /* n-th */
-#define JSON_KEY_IDX_FROZEN		", \"index_include_frozen\": " /* n-th */
-#define JSON_KEY_TIMEZONE		", \"time_zone\": " /* n-th key */
+/*
+ * REST request parameters
+ */
+#define REQ_KEY_QUERY			"query"
+#define REQ_KEY_CURSOR			"cursor"
+#define REQ_KEY_PARAMS			"params"
+#define REQ_KEY_FETCH			"fetch_size"
+#define REQ_KEY_REQ_TOUT		"request_timeout"
+#define REQ_KEY_PAGE_TOUT		"page_timeout"
+#define REQ_KEY_TIME_ZONE		"time_zone"
+#define REQ_KEY_MODE			"mode"
+#define REQ_KEY_CLT_ID			"client_id"
+#define REQ_KEY_MULTIVAL		"field_multi_value_leniency"
+#define REQ_KEY_IDX_FROZEN		"index_include_frozen"
+#define REQ_KEY_TIMEZONE		"time_zone"
 
-#define JSON_VAL_TIMEZONE_Z		"\"Z\""
+#define REST_REQ_KEY_COUNT		11 /* "query" or "cursor" */
+
+#ifdef _WIN64
+#	define REQ_VAL_CLT_ID		"odbc64"
+#else
+#	define REQ_VAL_CLT_ID		"odbc32"
+#endif
+#define REQ_VAL_MODE			"ODBC"
+#define REQ_VAL_TIMEZONE_Z		"Z"
+
+/* JSON body building blocks */
+#define JSON_KEY_QUERY			"\"" REQ_KEY_QUERY "\": " /* 1st key */
+#define JSON_KEY_CURSOR			"\"" REQ_KEY_CURSOR "\": " /* 1st key */
+#define JSON_KEY_PARAMS			", \"" REQ_KEY_PARAMS "\": " /* n-th key */
+#define JSON_KEY_FETCH			", \"" REQ_KEY_FETCH "\": " /* n-th key */
+#define JSON_KEY_REQ_TOUT		", \"" REQ_KEY_REQ_TOUT "\": " /* n-th key */
+#define JSON_KEY_PAGE_TOUT		", \"" REQ_KEY_PAGE_TOUT "\": " /* n-th key */
+#define JSON_KEY_TIME_ZONE		", \"" REQ_KEY_TIME_ZONE "\": " /* n-th key */
+#define JSON_KEY_VAL_MODE		", \"" REQ_KEY_MODE "\": \"" \
+	REQ_VAL_MODE "\"" /* n-th key */
+#define JSON_KEY_CLT_ID			", \"" REQ_KEY_CLT_ID "\": \"" \
+	REQ_VAL_CLT_ID "\"" /* n-th k. */
+#define JSON_KEY_MULTIVAL		", \"" REQ_KEY_MULTIVAL "\": " /* n-th */
+#define JSON_KEY_IDX_FROZEN		", \"" REQ_KEY_IDX_FROZEN "\": " /* n-th */
+#define JSON_KEY_TIMEZONE		", \"" REQ_KEY_TIMEZONE "\": " /* n-th key */
+
+#define JSON_VAL_TIMEZONE_Z		"\"" REQ_VAL_TIMEZONE_Z "\""
 
 
 #endif /* __QUERIES_H__ */

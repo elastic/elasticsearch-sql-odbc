@@ -170,6 +170,13 @@ size_t ui64tot(uint64_t ui64, void *buff, BOOL wide);
 
 #ifdef _WIN32
 /*
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/unicode :
+ * "the only Unicode encoding that ODBC supports is UCS-2" (at Driver-DM
+ * interface level) => the driver will convert between ES's UTF-8 multi-byte
+ * and DM's UTF-16 wide char.
+ */
+/*
+ * WideCharToMultiByte():
  * "[D]oes not null-terminate an output string if the input string length is
  * explicitly specified without a terminating null character. To
  * null-terminate an output string for this function, the application should
@@ -178,13 +185,18 @@ size_t ui64tot(uint64_t ui64, void *buff, BOOL wide);
  * "If successful, returns the number of bytes written" or required (if
  * _ubytes == 0), OR "0 if it does not succeed".
  */
-#define WCS2U8(_wstr, _wchars, _u8, _ubytes) \
+#define U16WC_TO_MBU8(_wstr, _wcnt, _u8str, _u8len) \
 	WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, \
-		_wstr, _wchars, _u8, _ubytes, \
+		_wstr, (int)(_wcnt), _u8str, (int)(_u8len), \
 		NULL, NULL)
-#define WCS2U8_BUFF_INSUFFICIENT \
-	(GetLastError() == ERROR_INSUFFICIENT_BUFFER)
-#define WCS2U8_ERRNO() GetLastError()
+#define U8MB_TO_U16WC(_u8str, _u8len, _wstr, _wcnt) \
+	MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, \
+		_u8str, (int)(_u8len), _wstr, (int)(_wcnt))
+
+#define WAPI_ERRNO()		GetLastError()
+#define WAPI_CLR_ERRNO()	SetLastError(ERROR_SUCCESS)
+#define WAPI_ERR_EBUFF()	(GetLastError() == ERROR_INSUFFICIENT_BUFFER)
+
 
 
 /*
@@ -204,7 +216,8 @@ typedef SRWLOCK esodbc_mutex_lt;
 #define thread_local __declspec(thread)
 #endif /* DRIVER_BUILD && !thread_local */
 
-#define timegm _mkgmtime
+#define timegm		_mkgmtime
+#define strncasecmp	_strnicmp
 
 #else /* _WIN32 */
 
@@ -218,6 +231,7 @@ typedef SRWLOCK esodbc_mutex_lt;
  * during conversion." */
 // wcstombs(charp, wstr, octet_length);
 #endif /* _WIN32 */
+
 
 #ifdef UNICODE
 typedef wstr_st tstr_st;
@@ -278,6 +292,10 @@ cstr_st TEST_API *wstr_to_utf8(wstr_st *src, cstr_st *dst);
  * Returns: TRUE, if escaping has been applied  */
 BOOL TEST_API metadata_id_escape(wstr_st *src, wstr_st *dst, BOOL force);
 
+/* Simple hex printing of a cstr_st object.
+ * Returns (thread local static) printed buffer, always 0-term'd. */
+char *cstr_hex_dump(const cstr_st *buff);
+
 /*
  * Printing aids.
  */
@@ -332,6 +350,7 @@ BOOL TEST_API metadata_id_escape(wstr_st *src, wstr_st *dst, BOOL force);
 	(sizeof("hh:mm:ss") - /*\0*/1 + /*'.'*/!!prec + prec)
 #define TIMESTAMP_TEMPLATE_LEN(prec)	\
 	(DATE_TEMPLATE_LEN + /*' '*/1 + TIME_TEMPLATE_LEN(prec))
+
 
 #endif /* __UTIL_H__ */
 

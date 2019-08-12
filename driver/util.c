@@ -586,7 +586,7 @@ cstr_st TEST_API *wstr_to_utf8(wstr_st *src, cstr_st *dst)
 		nts = !src->str[src->cnt - 1];
 
 		/* eval the needed space for conversion */
-		len = WCS2U8(src->str, (int)src->cnt, NULL, 0);
+		len = U16WC_TO_MBU8(src->str, src->cnt, NULL, 0);
 		if (! len) {
 			ERRN("failed to evaluate UTF-8 conversion space necessary for [%zu] "
 				"`" LWPDL "`.", src->cnt, LWSTR(src));
@@ -617,7 +617,7 @@ cstr_st TEST_API *wstr_to_utf8(wstr_st *src, cstr_st *dst)
 
 	if (0 < src->cnt) {
 		/* convert the string */
-		len = WCS2U8(src->str, (int)src->cnt, dst->str, len);
+		len = U16WC_TO_MBU8(src->str, src->cnt, dst->str, len);
 		if (! len) {
 			/* should not happen, since a first scan already happened */
 			ERRN("failed to UTF-8 convert `" LWPDL "`.", LWSTR(src));
@@ -675,5 +675,34 @@ BOOL TEST_API metadata_id_escape(wstr_st *src, wstr_st *dst, BOOL force)
 	return ret;
 }
 
+/* Simple hex printing of a cstr_st object.
+ * Returns (thread local static) printed buffer, always 0-term'd. */
+char *cstr_hex_dump(const cstr_st *buff)
+{
+	static thread_local char dest[ESODBC_LOG_BUF_SIZE];
+	char *to, *from;
+	char *to_end, *from_end;
+	int n;
+
+	to = dest;
+	to_end = dest + sizeof(dest);
+	from = buff->str;
+	from_end = buff->str + buff->cnt;
+	while (to < to_end && from < from_end) {
+		n = sprintf(to, "%X", *from ++);
+		if (n < 0) {
+			ERRN("failed to print serialized CBOR object");
+			return NULL;
+		}
+		to += (size_t)n;
+	}
+	/* add the 0-terminator */
+	if (to < to_end) { /* still space for it? */
+		*to ++ = 0;
+	} else { /* == */
+		dest[sizeof(dest) - 1] = 0; /* overwrite last position */
+	}
+	return dest;
+}
 
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */
