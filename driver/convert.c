@@ -1448,7 +1448,7 @@ static SQLRETURN wstr_to_cstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 	assert(xstr.w.str[xstr.w.cnt] == L'\0');
 	/* how much space would the converted string take? */
-	in_bytes = WCS2U8(xstr.w.str, (int)xstr.w.cnt + 1, NULL, 0);
+	in_bytes = U16WC_TO_MBU8(xstr.w.str, xstr.w.cnt + 1, NULL, 0);
 	if (in_bytes <= 0) {
 		ERRNH(stmt, "failed to convert wchar* to char* for string `"
 			LWPDL "`.", LWSTR(&xstr.w));
@@ -1456,8 +1456,8 @@ static SQLRETURN wstr_to_cstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	}
 	/* out length needs to be provided with no (potential) truncation. */
 	if (octet_len_ptr) {
-		/* chars_0 accounts for 0-terminator, so WCS2U8 will count that in
-		 * the output as well => trim it, since we must not count it when
+		/* chars_0 accounts for 0-terminator, so U16WC_TO_MBU8 will count that
+		 * in the output as well => trim it, since we must not count it when
 		 * indicating the length to the application */
 		out_bytes = in_bytes - 1;
 		write_out_octets(octet_len_ptr, out_bytes, irec);
@@ -1476,10 +1476,10 @@ static SQLRETURN wstr_to_cstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		/* trim the original string until it fits in output buffer, with given
 		 * length limitation */
 		for (c = (int)xstr.w.cnt + 1; 0 < c; c --) {
-			out_bytes = WCS2U8(xstr.w.str, c, charp, in_bytes);
+			out_bytes = U16WC_TO_MBU8(xstr.w.str, c, charp, in_bytes);
 			/* if user gives 0 as buffer size, out_bytes will also be 0 */
 			if (out_bytes <= 0) {
-				if (WCS2U8_BUFF_INSUFFICIENT) {
+				if (WAPI_ERR_EBUFF()) {
 					continue;
 				}
 				ERRNH(stmt, "failed to convert wchar_t* to char* for string `"
@@ -4674,18 +4674,18 @@ static SQLRETURN c2sql_wstr2qstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 	DBGH(stmt, "converting w-string [%lld] `" LWPDL "`; target@0x%p.",
 		cnt, cnt, (wchar_t *)data_ptr, dest);
-	if (cnt) { /* WCS2U8 will fail with empty string */
-		SetLastError(0);
-		octets = WCS2U8((wchar_t *)data_ptr, (int)cnt, dest + !!dest,
+	if (cnt) { /* U16WC_TO_MBU8 will fail with empty string, but set no err */
+		WAPI_CLR_ERRNO();
+		octets = U16WC_TO_MBU8((wchar_t *)data_ptr, cnt, dest + !!dest,
 				dest ? INT_MAX : 0);
-		if ((err = GetLastError())) {
+		if ((err = WAPI_ERRNO()) != ERROR_SUCCESS) {
 			ERRH(stmt, "converting to multibyte string failed: %d", err);
 			RET_HDIAGS(stmt, SQL_STATE_HY000);
 		}
+		assert(0 < octets); /* shouldn't not fail and return negative */
 	} else {
 		octets = 0;
 	}
-	assert(0 <= octets); /* buffer might be empty, so 0 is valid */
 	*len = (size_t)octets;
 
 	if (dest) {

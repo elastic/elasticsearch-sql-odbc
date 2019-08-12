@@ -9,6 +9,8 @@
 #include <limits.h>
 #include <inttypes.h>
 
+#include "tinycbor.h"
+
 #include "connect.h"
 #include "queries.h"
 #include "catalogue.h"
@@ -25,8 +27,13 @@
 #endif /*! CURL_STATICLIB*/
 
 /* HTTP headers default for every request */
-#define HTTP_ACCEPT_JSON		"Accept: application/json"
-#define HTTP_CONTENT_TYPE_JSON	"Content-Type: application/json; charset=utf-8"
+#define HTTP_APP_CBOR			"application/cbor"
+#define HTTP_APP_JSON			"application/json"
+#define HTTP_ACCEPT_CBOR		"Accept: " HTTP_APP_CBOR
+#define HTTP_ACCEPT_JSON		"Accept: " HTTP_APP_JSON
+#define HTTP_CONTENT_TYPE_CBOR	"Content-Type: " HTTP_APP_CBOR
+#define HTTP_CONTENT_TYPE_JSON	"Content-Type: " HTTP_APP_JSON \
+	"; charset=utf-8"
 
 /* Elasticsearch/SQL data types */
 /* 2 */
@@ -86,6 +93,8 @@
 #define TYPE_IVL_MINUTE_TO_SECOND	"INTERVAL_MINUTE_TO_SECOND"
 
 
+#define ESINFO_KEY_VERSION	"version"
+#define ESINFO_KEY_NUMBER	"number"
 
 /* structure for one row returned by the ES.
  * This is a mirror of elasticsearch_type, with length-or-indicator fields
@@ -131,9 +140,11 @@ typedef struct {
 	SQLLEN			interval_precision_loi;
 } estype_row_st;
 /*
- * HTTP headers used for all requests (Content-Type, Accept).
+ * HTTP headers used for all requests (Content-Type, Accept), split by
+ * encodying type.
  */
-static struct curl_slist *http_headers = NULL;
+static struct curl_slist *json_headers = NULL;
+static struct curl_slist *cbor_headers = NULL;
 /* counter used to number DBC log files:
  * the files are stamped with time (@ second resolution) and PID, which is not
  * enough to avoid name clashes. */
@@ -165,11 +176,15 @@ BOOL connect_init()
 			curl_info->ssl_version ? curl_info->ssl_version : "NONE");
 	}
 
-	http_headers = curl_slist_append(http_headers, HTTP_ACCEPT_JSON);
-	if (http_headers) {
-		http_headers = curl_slist_append(http_headers, HTTP_CONTENT_TYPE_JSON);
+	json_headers = curl_slist_append(json_headers, HTTP_ACCEPT_JSON);
+	if (json_headers) {
+		json_headers = curl_slist_append(json_headers, HTTP_CONTENT_TYPE_JSON);
 	}
-	if (! http_headers) {
+	cbor_headers = curl_slist_append(cbor_headers, HTTP_ACCEPT_CBOR);
+	if (cbor_headers) {
+		cbor_headers = curl_slist_append(cbor_headers, HTTP_CONTENT_TYPE_CBOR);
+	}
+	if ((! json_headers) || (! cbor_headers)) {
 		ERR("libcurl: failed to init headers.");
 		return FALSE;
 	}
@@ -181,7 +196,8 @@ BOOL connect_init()
 void connect_cleanup()
 {
 	DBG("cleaning up connection/transport.");
-	curl_slist_free_all(http_headers);
+	curl_slist_free_all(json_headers);
+	curl_slist_free_all(cbor_headers);
 	curl_global_cleanup();
 }
 
@@ -426,8 +442,9 @@ static SQLRETURN dbc_curl_init(esodbc_dbc_st *dbc)
 		goto err;
 	}
 
-	/* set the Content-Type, Accept HTTP headers */
-	dbc->curl_err = curl_easy_setopt(curl, CURLOPT_HTTPHEADER, http_headers);
+	/* set the HTTP headers: Content-Type, Accept */
+	dbc->curl_err = curl_easy_setopt(curl, CURLOPT_HTTPHEADER,
+			dbc->pack_json ? json_headers : cbor_headers);
 	if (dbc->curl_err != CURLE_OK) {
 		ERRH(dbc, "libcurl: failed to set HTTP headers list.");
 		goto err;
@@ -572,7 +589,10 @@ err:
 	return ret;
 }
 
-static BOOL dbc_curl_perform(esodbc_dbc_st *dbc, long *code, cstr_st *resp)
+/* Perform a HTTP request, on the (pre)prepared connection.
+ * Returns the HTTP code, response body (if any) and its type (if present). */
+static BOOL dbc_curl_perform(esodbc_dbc_st *dbc, long *code, cstr_st *rsp_body,
+	char **cont_type)
 {
 	curl_off_t xfer_tm_start, xfer_tm_total;
 
@@ -582,8 +602,8 @@ static BOOL dbc_curl_perform(esodbc_dbc_st *dbc, long *code, cstr_st *resp)
 	dbc->curl_err = curl_easy_perform(dbc->curl);
 
 	/* copy answer references */
-	resp->str = dbc->abuff;
-	resp->cnt = dbc->apos;
+	rsp_body->str = dbc->abuff;
+	rsp_body->cnt = dbc->apos;
 
 	/* clear call-back members for next call */
 	dbc->abuff = NULL;
@@ -599,6 +619,16 @@ static BOOL dbc_curl_perform(esodbc_dbc_st *dbc, long *code, cstr_st *resp)
 		ERRH(dbc, "libcurl: failed to retrieve response code.");
 		goto err;
 	}
+
+	if (rsp_body->cnt) {
+		dbc->curl_err = curl_easy_getinfo(dbc->curl, CURLINFO_CONTENT_TYPE,
+				cont_type);
+		if (dbc->curl_err != CURLE_OK) {
+			ERRH(dbc, "libcurl: failed to get Content-Type header.");
+			goto err;
+		}
+	}
+
 	if (curl_easy_getinfo(dbc->curl, CURLINFO_STARTTRANSFER_TIME_T,
 			&xfer_tm_start) != CURLE_OK) {
 		ERRH(dbc, "libcurl: failed to retrieve transfer start time.");
@@ -610,9 +640,10 @@ static BOOL dbc_curl_perform(esodbc_dbc_st *dbc, long *code, cstr_st *resp)
 		xfer_tm_total = 0;
 	}
 
-	INFOH(dbc, "libcurl: request answered, received code %ld and %zu bytes"
-		" back; times(ms): start: %" CURL_FORMAT_CURL_OFF_T  ".%03d, "
-		"total: %" CURL_FORMAT_CURL_OFF_T ".%03d).", *code, resp->cnt,
+	INFOH(dbc, "libcurl: request answered, received code %ld and %zu bytes of "
+		"type '%s' back; times(ms): start: %" CURL_FORMAT_CURL_OFF_T  ".%03d, "
+		"total: %" CURL_FORMAT_CURL_OFF_T ".%03d).",
+		*code, rsp_body->cnt, *cont_type ? *cont_type : "<none>",
 		xfer_tm_start / 1000, (long)(xfer_tm_start % 1000),
 		xfer_tm_total / 1000, (long)(xfer_tm_total % 1000));
 
@@ -622,6 +653,32 @@ err:
 	ERRH(dbc, "libcurl: failure code %d, message: %s.", dbc->curl_err,
 		curl_easy_strerror(dbc->curl_err));
 	return FALSE;
+}
+
+static SQLRETURN content_type_supported(esodbc_dbc_st *dbc,
+	const char *cont_type_val, BOOL *is_json)
+{
+	if (! cont_type_val) {
+		WARNH(dbc, "no content type provided; assuming '%s'.",
+			dbc->pack_json ? "JSON" : "CBOR");
+		*is_json = dbc->pack_json;
+		return SQL_SUCCESS;
+	}
+	DBGH(dbc, "content type HTTP header: `%s`.", cont_type_val);
+	if (! strncasecmp(cont_type_val, HTTP_APP_JSON,
+			sizeof(HTTP_APP_JSON) - /*\0*/1)) {
+		*is_json = TRUE;
+	} else if (! strncasecmp(cont_type_val, HTTP_APP_CBOR,
+			sizeof(HTTP_APP_CBOR) - /*\0*/1)) {
+		*is_json = FALSE;
+	} else {
+		ERRH(dbc, "unsupported content type received: `%s` "
+			"(must be JSON or CBOR).", cont_type_val);
+		return post_c_diagnostic(dbc, SQL_STATE_08S01,
+				"Unsupported content type received", 0);
+	}
+	DBGH(dbc, "content of type: %s.", *is_json ? "JSON" : "CBOR");
+	return SQL_SUCCESS;
 }
 
 static BOOL dbc_curl_add_post_body(esodbc_dbc_st *dbc, SQLULEN tout,
@@ -666,21 +723,29 @@ err:
 }
 
 /*
- * Sends a POST request with the given JSON object body.
+ * Sends a HTTP POST request with the given request body.
  */
-SQLRETURN post_json(esodbc_stmt_st *stmt, int url_type, const cstr_st *u8body)
+SQLRETURN curl_post(esodbc_stmt_st *stmt, int url_type,
+	const cstr_st *req_body)
 {
 	SQLRETURN ret;
 	CURLcode res = CURLE_OK;
 	esodbc_dbc_st *dbc = HDRH(stmt)->dbc;
 	SQLULEN tout;
 	long code = -1; /* = no answer available */
-	cstr_st resp = (cstr_st) {
+	cstr_st rsp_body = (cstr_st) {
 		NULL, 0
 	};
+	char *cont_type;
+	BOOL is_json;
 
-	DBGH(stmt, "POSTing JSON type %d: [%zd] `" LCPDL "`.", url_type,
-		u8body->cnt, LCSTR(u8body));
+	if (dbc->pack_json) {
+		DBGH(stmt, "POSTing JSON type %d: [%zu] `" LCPDL "`.", url_type,
+			req_body->cnt, LCSTR(req_body));
+	} else {
+		DBGH(stmt, "POSTing CBOR type %d: [%zu] `%s`.", url_type,
+			req_body->cnt, cstr_hex_dump(req_body));
+	}
 
 	ESODBC_MUX_LOCK(&dbc->curl_mux);
 
@@ -704,14 +769,17 @@ SQLRETURN post_json(esodbc_stmt_st *stmt, int url_type, const cstr_st *u8body)
 	tout = dbc->timeout < stmt->query_timeout ? stmt->query_timeout :
 		dbc->timeout;
 
-	if (dbc_curl_add_post_body(dbc, tout, u8body) &&
-		dbc_curl_perform(dbc, &code, &resp)) {
-		if (code == 200) {
-			if (resp.cnt) {
+	if (dbc_curl_add_post_body(dbc, tout, req_body) &&
+		dbc_curl_perform(dbc, &code, &rsp_body, &cont_type)) {
+		ret = content_type_supported(dbc, cont_type, &is_json);
+		if (! SQL_SUCCEEDED(ret)) {
+			code = -1; /* make answer unavailable */
+		} else if (code == 200) {
+			if (rsp_body.cnt) {
 				ESODBC_MUX_UNLOCK(&dbc->curl_mux);
 				return (url_type == ESODBC_CURL_QUERY) ?
-					attach_answer(stmt, resp.str, resp.cnt) :
-					close_es_answ_handler(stmt, resp.str, resp.cnt);
+					attach_answer(stmt, &rsp_body, is_json) :
+					close_es_answ_handler(stmt, &rsp_body, is_json);
 			} else {
 				ERRH(stmt, "received 200 response code with empty body.");
 				ret = post_c_diagnostic(dbc, SQL_STATE_08S01,
@@ -722,12 +790,12 @@ SQLRETURN post_json(esodbc_stmt_st *stmt, int url_type, const cstr_st *u8body)
 		ret = dbc_curl_post_diag(dbc, SQL_STATE_08S01);
 	}
 
-	/* something went wrong */
+	/* something went wrong, reset cURL handle/connection */
 	cleanup_curl(dbc);
 err:
 	/* was there an error answer received correctly? */
 	if (0 < code) {
-		ret = attach_error(stmt, &resp, code);
+		ret = attach_error(stmt, &rsp_body, is_json, code);
 	} else {
 		/* copy any error occured at DBC level back down to the statement,
 		 * where it's going to be read from. */
@@ -740,9 +808,9 @@ err:
 
 	/* an answer might have been received, but a late curl error (like
 	 * fetching the result code) could have occurred. */
-	if (resp.str) {
-		free(resp.str);
-		resp.str = NULL;
+	if (rsp_body.str) {
+		free(rsp_body.str);
+		rsp_body.str = NULL;
 	}
 
 	return ret;
@@ -1427,21 +1495,132 @@ void cleanup_dbc(esodbc_dbc_st *dbc)
 	}
 }
 
+static BOOL parse_es_version_cbor(esodbc_dbc_st *dbc, cstr_st *rsp_body,
+	cstr_st *version)
+{
+	CborParser parser;
+	CborValue top_obj, iter_top, iter_ver, val;
+	CborError res;
+	CborType obj_type;
+
+#	define CHK_RES(_fmt, ...) \
+	JUMP_ON_CBOR_ERR(res, err, dbc, _fmt, __VA_ARGS__)
+
+	res = cbor_parser_init(rsp_body->str, rsp_body->cnt, ES_CBOR_PARSE_FLAGS,
+			&parser, &top_obj);
+	CHK_RES("failed to parse CBOR object: [%zu] `%s`",
+		rsp_body->cnt, cstr_hex_dump(rsp_body));
+#	ifndef NDEBUG
+#	if 0 // ES uses indefinite-length containers (TODO) which trips this check
+	/* the _init() doesn't actually validate the object */
+	res = cbor_value_validate(&top_obj, ES_CBOR_PARSE_FLAGS);
+	CHK_RES(stmt, "failed to validate CBOR object: [%zu] `%s`",
+		stmt->rset.body.cnt, cstr_hex_dump(&stmt->rset.body));
+#	endif /*0*/
+#	endif /* !NDEBUG */
+
+	if ((obj_type = cbor_value_get_type(&top_obj)) != CborMapType) {
+		ERRH(dbc, "top object (of type 0x%x) is not a map.", obj_type);
+		return FALSE;
+	}
+	res = cbor_value_enter_container(&top_obj, &iter_top);
+	CHK_RES("failed to enter top map");
+
+	/* search for the `version` parameter in top map */
+	res = cbor_map_advance_to_key(&iter_top, ESINFO_KEY_VERSION,
+			sizeof(ESINFO_KEY_VERSION) - 1, &val);
+	CHK_RES("failed to lookup '" ESINFO_KEY_VERSION "' key in map");
+	if (! cbor_value_is_valid(&val)) {
+		ERRH(dbc, "parameter '" ESINFO_KEY_VERSION "' not found in top map.");
+		return FALSE;
+	}
+	if ((obj_type = cbor_value_get_type(&iter_top)) != CborMapType) {
+		ERRH(dbc, "'" ESINFO_KEY_VERSION "' param's value type (0x%x) is not a"
+			" map.", obj_type);
+		return FALSE;
+	}
+	res = cbor_value_enter_container(&iter_top, &iter_ver);
+	CHK_RES("failed to enter " ESINFO_KEY_VERSION " map");
+
+	/* search for the `number` parameter in `version` map */
+	res = cbor_map_advance_to_key(&iter_ver, ESINFO_KEY_NUMBER,
+			sizeof(ESINFO_KEY_NUMBER) - 1, &val);
+	CHK_RES("failed to lookup '" ESINFO_KEY_NUMBER "' key in map");
+	if (! cbor_value_is_valid(&val)) {
+		ERRH(dbc, "parameter '" ESINFO_KEY_NUMBER "' not found in map.");
+		return FALSE;
+	}
+	if ((obj_type = cbor_value_get_type(&iter_ver)) != CborTextStringType) {
+		ERRH(dbc, "value for key '" ESINFO_KEY_NUMBER "' is not string "
+			"(but %d).", obj_type);
+		return FALSE;
+	}
+
+	/* fetch `version` value */
+	res = cbor_value_get_string_chunk(&iter_ver, &version->str, &version->cnt);
+	CHK_RES("failed to fetch " ESINFO_KEY_NUMBER " value");
+
+	/* Note: containers must be "left" (cbor_value_leave_container()) if ever
+	 * using anything else in the info object! */
+
+	DBGH(dbc, "Elasticsearch'es version number: [%zu] `" LCPDL "`.",
+		version->cnt, LCSTR(version));
+	return TRUE;
+
+err:
+	return FALSE;
+
+#	undef CHK_RES
+}
+
+static BOOL parse_es_version_json(esodbc_dbc_st *dbc, cstr_st *rsp_body,
+	wstr_st *version, void **state)
+{
+	UJObject obj, o_version, o_number;
+	/* top-level key of interest */
+	const wchar_t *tl_key[] = {MK_WPTR(ESINFO_KEY_VERSION)};
+	const wchar_t *version_key[] = {MK_WPTR(ESINFO_KEY_NUMBER)};
+	int unpacked;
+
+	obj = UJDecode(rsp_body->str, rsp_body->cnt, /*heap f()s*/NULL, state);
+	if (! obj) {
+		ERRH(dbc, "failed to parse JSON: %s ([%zu] `" LCPDL "`).",
+			*state ? UJGetError(*state) : "<none>",
+			rsp_body->cnt, LCSTR(rsp_body));
+		return FALSE;
+	}
+	memset(&o_version, 0, sizeof(o_version));
+	unpacked = UJObjectUnpack(obj, 1, "O", tl_key, &o_version);
+	if ((unpacked < 1) || (! o_version)) {
+		ERRH(dbc, "no 'version' object in answer.");
+		return FALSE;
+	}
+	memset(&o_number, 0, sizeof(o_number));
+	unpacked = UJObjectUnpack(o_version, 1, "S", version_key, &o_number);
+	if ((unpacked < 1) || (! o_number)) {
+		ERRH(dbc, "no 'number' element in version.");
+		return FALSE;
+	}
+	version->str = (SQLWCHAR *)UJReadString(o_number, &version->cnt);
+	DBGH(dbc, "Elasticsearch'es version number: [%zu] `" LWPDL "`.",
+		version->cnt, LWSTR(version));
+	return TRUE;
+}
 /*
  * Note: not thread safe: only usable on connection setup.
  */
 static SQLRETURN check_server_version(esodbc_dbc_st *dbc)
 {
 	long code;
-	cstr_st resp = {0};
+	cstr_st rsp_body = {0};
+	char *cont_type;
+	BOOL is_json;
 	SQLRETURN ret;
-	UJObject obj, o_version, o_number;
 	void *state = NULL;
-	int unpacked;
-	const wchar_t *tl_key[] = {L"version"}; /* top-level key of interest */
-	const wchar_t *version_key[] = {L"number"};
-	wstr_st ver_no;
+	unsigned char ver_checking;
 	wstr_st own_ver = WSTR_INIT(STR(DRV_VERSION)); /*build-time define*/
+	wstr_st es_ver, ver_no;
+	cstr_st es_ver_c;
 	static const wchar_t err_msg_fmt[] = L"Version mismatch between server ("
 		WPFWP_LDESC ") and driver (" WPFWP_LDESC "). Please use a driver whose"
 		" version matches that of your server.";
@@ -1456,43 +1635,49 @@ static SQLRETURN check_server_version(esodbc_dbc_st *dbc)
 	}
 
 	RESET_HDIAG(dbc);
-	if (! dbc_curl_perform(dbc, &code, &resp)) {
+	if (! dbc_curl_perform(dbc, &code, &rsp_body, &cont_type)) {
 		dbc_curl_post_diag(dbc, SQL_STATE_HY000);
 		cleanup_curl(dbc);
 		return SQL_ERROR;
 	}
-	if (! resp.cnt) {
+	if (! SQL_SUCCEEDED(content_type_supported(dbc, cont_type, &is_json))) {
+		goto err;
+	}
+	if (! rsp_body.cnt) {
 		ERRH(dbc, "failed to get a response with body: code=%ld, "
-			"body len: %zu.", code, resp.cnt);
+			"body len: %zu.", code, rsp_body.cnt);
 		goto err;
 	} else if (code != 200) {
-		ret = attach_error(dbc, &resp, code);
+		ret = attach_error(dbc, &rsp_body, is_json, code);
 		goto err;
 	}
-	/* 200 with body received: decode (hopefully JSON) answer */
+	/* 200 with body received: decode (JSON/CBOR) answer */
 
-	obj = UJDecode(resp.str, resp.cnt, /*heap f()s*/NULL, &state);
-	if (! obj) {
-		ERRH(dbc, "failed to parse JSON: %s ([%zd] `" LCPDL "`).",
-			state ? UJGetError(state) : "<none>",
-			resp.cnt, LCSTR(&resp));
+	if (is_json ? parse_es_version_json(dbc, &rsp_body, &es_ver, &state) :
+		parse_es_version_cbor(dbc, &rsp_body, &es_ver_c)) {
+		n = is_json ? (int)es_ver.cnt : (int)es_ver_c.cnt;
+	} else {
+		ERRH(dbc, "failed to extract Elasticsearch'es version.");
 		goto err;
 	}
-	memset(&o_version, 0, sizeof(o_version));
-	unpacked = UJObjectUnpack(obj, 1, "O", tl_key, &o_version);
-	if ((unpacked < 1) || (! o_version)) {
-		ERRH(dbc, "no 'version' object in answer.");
+
+	ver_checking = dbc->srv_ver.checking;
+	/* version is returned to application, which requires a NTS => +1 for \0 */
+	dbc->srv_ver.string.str = malloc((n + 1) * sizeof(SQLWCHAR));
+	if (! dbc->srv_ver.string.str) {
+		ERRNH(dbc, "OOM for %zu.", (n + 1) * sizeof(SQLWCHAR));
+		post_diagnostic(dbc, SQL_STATE_HY001, NULL, 0);
+		goto err;
+	} else if (is_json) {
+		memcpy(dbc->srv_ver.string.str, es_ver.str, n * sizeof(SQLWCHAR));
+	} else if (ascii_c2w(es_ver_c.str, dbc->srv_ver.string.str, n) < 0) {
+		/* non-ASCII or empty */
+		ERRH(dbc, "Elasticsearch version string is invalid.");
 		goto err;
 	}
-	memset(&o_number, 0, sizeof(o_number));
-	unpacked = UJObjectUnpack(o_version, 1, "S", version_key, &o_number);
-	if ((unpacked < 1) || (! o_number)) {
-		ERRH(dbc, "no 'number' element in version.");
-		goto err;
-	}
-	ver_no.str = (SQLWCHAR *)UJReadString(o_number, &ver_no.cnt);
-	DBGH(dbc, "read version number: [%zu] `" LWPDL "`.", ver_no.cnt,
-		LWSTR(&ver_no));
+	dbc->srv_ver.string.cnt = n;
+	dbc->srv_ver.string.str[n] = 0;
+	ver_no = dbc->srv_ver.string;
 
 #	ifndef NDEBUG
 	/* strip any qualifiers (=anything following a first `-`) in debug mode */
@@ -1500,13 +1685,13 @@ static SQLRETURN check_server_version(esodbc_dbc_st *dbc)
 	wtrim_at(&own_ver, L'-');
 #	endif /* !NDEBUG */
 
-	if (tolower(dbc->srv_ver.checking) == tolower(ESODBC_DSN_VC_MAJOR[0])) {
+	if (tolower(ver_checking) == tolower(ESODBC_DSN_VC_MAJOR[0])) {
 		/* trim versions to the first dot, i.e. major version */
 		wtrim_at(&ver_no, L'.');
 		wtrim_at(&own_ver, L'.');
 	}
 
-	if (tolower(dbc->srv_ver.checking) != tolower(ESODBC_DSN_VC_NONE[0])) {
+	if (tolower(ver_checking) != tolower(ESODBC_DSN_VC_NONE[0])) {
 		if (! EQ_WSTR(&ver_no, &own_ver)) {
 			ERRH(dbc, "version mismatch: server: " LWPDL ", "
 				"own: " LWPDL ".", LWSTR(&ver_no), LWSTR(&own_ver));
@@ -1526,31 +1711,24 @@ static SQLRETURN check_server_version(esodbc_dbc_st *dbc)
 #	endif /* !NDEBUG */
 	}
 
-	/* re-read the original version (before trimming) and dup it */
-	ver_no.str = (SQLWCHAR *)UJReadString(o_number, &ver_no.cnt);
-	/* version is returned to application, which requires a NTS => +1 for \0 */
-	dbc->srv_ver.string.str = malloc((ver_no.cnt + 1) * sizeof(SQLWCHAR));
-	if (! dbc->srv_ver.string.str) {
-		ERRNH(dbc, "OOM for %zd.", ver_no.cnt * sizeof(SQLWCHAR));
-		post_diagnostic(dbc, SQL_STATE_HY001, NULL, 0);
-		goto err;
-	} else {
-		memcpy(dbc->srv_ver.string.str, ver_no.str,
-			ver_no.cnt * sizeof(SQLWCHAR));
-		dbc->srv_ver.string.cnt = ver_no.cnt;
-		dbc->srv_ver.string.str[ver_no.cnt] = 0;
+	free(rsp_body.str);
+	if (is_json) {
+		/* UJSON4C will ref strings in its 'state' */
+		assert(state);
+		UJFree(state);
 	}
-
-	free(resp.str);
-	assert(state);
-	UJFree(state);
 	return ret;
 
 err:
-	if (resp.cnt) {
-		ERRH(dbc, "failed to process server's answer: [%zu] `" LWPDL "`.",
-			resp.cnt, LCSTR(&resp));
-		free(resp.str);
+	if (rsp_body.cnt) {
+		if (is_json) {
+			ERRH(dbc, "failed to process server's answer: [%zu] `" LCPDL "`.",
+				rsp_body.cnt, LCSTR(&rsp_body));
+		} else {
+			ERRH(dbc, "failed to process server's answer: [%zu] `%s`.",
+				rsp_body.cnt, cstr_hex_dump(&rsp_body));
+		}
+		free(rsp_body.str);
 	}
 	if (state) {
 		UJFree(state);
@@ -2383,8 +2561,7 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 	if (dbc->hwin) {
 		cstr_st *types_answer = (cstr_st *)dbc->hwin;
 		dbc->hwin = NULL;
-		if (! SQL_SUCCEEDED(attach_answer(stmt, types_answer->str,
-					types_answer->cnt))) {
+		if (! SQL_SUCCEEDED(attach_answer(stmt, types_answer, /*JSON*/TRUE))) {
 			ERRH(stmt, "failed to attach dummmy ES types answer");
 			goto end;
 		}

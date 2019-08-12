@@ -219,9 +219,12 @@ void ConnectedDBC::prepareStatement(const SQLWCHAR *sql,
 	ret = ATTACH_SQL(stmt, sql, wcslen(sql));
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	char *answer = STRDUP(jsonAnswer);
-	ASSERT_TRUE(answer != NULL);
-	ret =  ATTACH_ANSWER(stmt, answer, strlen(answer));
+	cstr_st answer = {
+		(SQLCHAR *)STRDUP(jsonAnswer),
+		strlen(jsonAnswer)
+	};
+	ASSERT_TRUE(answer.str != NULL);
+	ret =  ATTACH_ANSWER(stmt, &answer);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 }
 
@@ -229,9 +232,12 @@ void ConnectedDBC::prepareStatement(const char *jsonAnswer)
 {
 	prepareStatement();
 
-	char *answer = STRDUP(jsonAnswer);
-	ASSERT_TRUE(answer != NULL);
-	ret =  ATTACH_ANSWER(stmt, answer, strlen(answer));
+	cstr_st answer = {
+		(SQLCHAR *)STRDUP(jsonAnswer),
+		strlen(jsonAnswer)
+	};
+	ASSERT_TRUE(answer.str != NULL);
+	ret =  ATTACH_ANSWER(stmt, &answer);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 }
 

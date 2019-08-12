@@ -42,15 +42,15 @@
 	" CATALOG " ESODBC_STRING_DELIM WPFWP_LDESC ESODBC_STRING_DELIM
 
 
-static SQLRETURN fake_answer(SQLHSTMT hstmt, const char *src, size_t cnt)
+static SQLRETURN fake_answer(SQLHSTMT hstmt, cstr_st *answer)
 {
-	char *dup;
+	cstr_st fake = *answer;
 
-	if (! (dup = strdup(src))) {
-		ERRNH(hstmt, "OOM with %zu.", cnt);
+	if (! (fake.str = strdup(answer->str))) {
+		ERRNH(hstmt, "OOM with %zu.", fake.cnt);
 		RET_HDIAGS(hstmt, SQL_STATE_HY001);
 	}
-	return attach_answer(STMH(hstmt), dup, cnt);
+	return attach_answer(STMH(hstmt), &fake, /*is JSON*/TRUE);
 
 }
 
@@ -86,10 +86,10 @@ SQLRETURN EsSQLStatisticsW(
 		"\"rows\":[]" \
 	"}"
 	/*INDENT-ON*/
+	cstr_st statistics = CSTR_INIT(STATISTICS_EMPTY);
 
 	INFOH(hstmt, "no statistics available.");
-	return fake_answer(hstmt, STATISTICS_EMPTY,
-			sizeof(STATISTICS_EMPTY) - /*\0*/1);
+	return fake_answer(hstmt, &statistics);
 
 #	undef STATISTICS_EMPTY
 }
@@ -614,11 +614,11 @@ SQLRETURN EsSQLSpecialColumnsW
 		"\"rows\":[]" \
 	"}"
 	/*INDENT-ON*/
+	cstr_st special_cols = CSTR_INIT(SPECIAL_COLUMNS_EMPTY);
 
 
 	INFOH(hstmt, "no special columns available.");
-	return fake_answer(hstmt, SPECIAL_COLUMNS_EMPTY,
-			sizeof(SPECIAL_COLUMNS_EMPTY) - /*\0*/1);
+	return fake_answer(hstmt, &special_cols);
 
 #	undef SPECIAL_COLUMNS_EMPTY
 }
@@ -661,10 +661,10 @@ SQLRETURN EsSQLForeignKeysW(
 		"\"rows\":[]" \
 	"}"
 	/*INDENT-ON*/
+	cstr_st foreign_keys = CSTR_INIT(FOREIGN_KEYS_EMPTY);
 
 	INFOH(hstmt, "no foreign keys supported.");
-	return fake_answer(hstmt, FOREIGN_KEYS_EMPTY,
-			sizeof(FOREIGN_KEYS_EMPTY) - /*\0*/1);
+	return fake_answer(hstmt, &foreign_keys);
 
 #	undef FOREIGN_KEYS_EMPTY
 }
@@ -692,10 +692,10 @@ SQLRETURN EsSQLPrimaryKeysW(
 		"\"rows\":[]" \
 	"}"
 	/*INDENT-ON*/
+	cstr_st prim_keys = CSTR_INIT(PRIMARY_KEYS_EMPTY);
 
 	INFOH(hstmt, "no primary keys supported.");
-	return fake_answer(hstmt, PRIMARY_KEYS_EMPTY,
-			sizeof(PRIMARY_KEYS_EMPTY) - /*\0*/1);
+	return fake_answer(hstmt, &prim_keys);
 
 #	undef PRIMARY_KEYS_EMPTY
 }

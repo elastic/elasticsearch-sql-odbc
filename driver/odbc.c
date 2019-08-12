@@ -12,6 +12,7 @@
 #include "queries.h"
 #include "convert.h"
 #include "catalogue.h"
+#include "tinycbor.h"
 
 //#include "elasticodbc_export.h"
 //#define SQL_API	ELASTICODBC_EXPORT SQL_API
@@ -30,11 +31,11 @@ static BOOL driver_init()
 		return FALSE;
 	}
 	INFO("initializing driver.");
-	convert_init();
-	if (! connect_init()) {
+	if (! queries_init()) {
 		return FALSE;
 	}
-	if (! queries_init()) {
+	convert_init();
+	if (! connect_init()) {
 		return FALSE;
 	}
 #ifndef NDEBUG
@@ -54,7 +55,7 @@ static BOOL driver_init()
 static void driver_cleanup()
 {
 	connect_cleanup();
-	log_cleanup();
+	tinycbor_cleanup();
 }
 
 BOOL WINAPI DllMain(
@@ -85,17 +86,18 @@ BOOL WINAPI DllMain(
 
 		// Perform any necessary cleanup.
 		case DLL_PROCESS_DETACH:
+			driver_cleanup();
 #ifndef NDEBUG
 			if (_gf_log) {
-				ERR("dumping tracked leaks:");
+				ERR("dumping tracked leaks (log.c leak is safe to ignore):");
 				/* _CrtDumpMemoryLeaks() will always report at least one leak,
 				 * that of the allocated logger itself that the function uses
-				 * to log into. This is freed below, in driver_cleanup(). */
+				 * to log into. This is freed below, in log_cleanup(). */
 				ERR("leaks dumped: %d.", _CrtDumpMemoryLeaks());
 			}
 #endif /* !NDEBUG */
 			INFO("process %u detaching.", GetCurrentProcessId());
-			driver_cleanup();
+			log_cleanup();
 			break;
 	}
 
@@ -546,9 +548,6 @@ SQLRETURN SQL_API SQLPrepareW
 
 /*
  * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/sending-long-data
- * Note: must use EsSQLSetDescFieldW() for param data-type setting, to call
- * set_defaults_from_type(), to meet the "Other fields implicitly set"
- * requirements from the page linked in set_defaults_from_type() comments.
  */
 SQLRETURN SQL_API SQLBindParameter(
 	SQLHSTMT           hstmt,

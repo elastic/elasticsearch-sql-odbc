@@ -42,7 +42,7 @@ TEST_F(Queries, attach_error_sql) {
 	cstr_st body = CSTR_INIT(SRC_STR);
 	SQLWCHAR *pos, *prev;
 
-	ret = attach_error(stmt, &body, 400);
+	ret = attach_error(stmt, &body, /*is JSON*/TRUE, 400);
 	ASSERT_EQ(ret, SQL_ERROR);
 
 	ASSERT_EQ(HDRH(stmt)->diag.state, SQL_STATE_HY000);
@@ -76,7 +76,7 @@ TEST_F(Queries, attach_error_non_sql) {
 	cstr_st body = CSTR_INIT(SRC_STR);
 	SQLWCHAR *pos, *prev;
 
-	ret = attach_error(stmt, &body, 400);
+	ret = attach_error(stmt, &body, /*is JSON*/TRUE, 400);
 	ASSERT_EQ(ret, SQL_ERROR);
 
 	ASSERT_EQ(HDRH(stmt)->diag.state, SQL_STATE_08S01);

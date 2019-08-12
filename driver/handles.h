@@ -13,6 +13,7 @@
 #include "error.h"
 #include "defs.h"
 #include "log.h"
+#include "tinycbor.h"
 
 /* forward declarations */
 struct struct_env;
@@ -299,20 +300,36 @@ typedef struct struct_desc {
 #define ASSERT_IXD_HAS_ES_TYPE(_rec) \
 	assert(DESC_TYPE_IS_IMPLEMENTATION(_rec->desc->type) && _rec->es_type)
 
+struct resultset_cbor {
+	cstr_st curs; /* ES'es cursor; refs req's body */
+	CborValue rows_iter; /* iterator over received rows; refs req's body */
+	wstr_st cols_buff /* columns descriptions; refs allocated chunk */;
+};
 
-typedef struct struct_resultset {
-	long code; /* code of last response */
-	char *buff; /* buffer containing the answer to the last request in a STM */
-	size_t blen; /* length of the answer */
-
-	wstr_st ecurs; /* Elastic's cursor object */
+struct resultset_json {
+	wstr_st curs; /* ES'es cursor; refs UJSON4C 'state' */
 	void *state; /* top UJSON decoder state */
 	void *rows_iter; /* UJSON iterator with the rows in result set */
 	UJObject row_array; /* UJSON object for current row */
+};
+
+typedef struct struct_resultset {
+	long code; /* HTTP code of last response */
+	cstr_st body; /* HTTP body of last answer to a statement */
+
+	union {
+		struct resultset_cbor cbor;
+		struct resultset_json json;
+	} pack;
 
 	size_t nrows; /* (count of) rows in current result set */
 	size_t vrows; /* (count of) visited rows in current result set  */
 } resultset_st;
+
+#define STMT_HAS_CURSOR(_stmt)	\
+	(HDRH(_stmt)->dbc->pack_json ? \
+		(_stmt)->rset.pack.json.curs.cnt : \
+		(_stmt)->rset.pack.cbor.curs.cnt)
 
 /*
  * "The fields of an IRD have a default value only after the statement has
@@ -526,9 +543,9 @@ SQLRETURN EsSQLSetDescRec(
 		return esodbc_errors[_s].retcode; \
 	} while (0)
 
-#define STMT_HAS_RESULTSET(stmt)	((stmt)->rset.buff != NULL)
-#define STMT_FORCE_NODATA(stmt)		(stmt)->rset.blen = (size_t)-1
-#define STMT_NODATA_FORCED(stmt)	((stmt)->rset.blen == (size_t)-1)
+#define STMT_HAS_RESULTSET(stmt)	((stmt)->rset.body.str != NULL)
+#define STMT_FORCE_NODATA(stmt)		(stmt)->rset.body.cnt = (size_t)-1
+#define STMT_NODATA_FORCED(stmt)	((stmt)->rset.body.cnt == (size_t)-1)
 /* "An application can unbind the data buffer for a column but still have a
  * length/indicator buffer bound for the column" */
 #define REC_IS_BOUND(rec)			( \
