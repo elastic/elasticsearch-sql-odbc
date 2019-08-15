@@ -288,10 +288,8 @@ add_custom_target(curlclean
 #
 set(TINYCBOR_PATH_SRC ${CMAKE_SOURCE_DIR}/libs/tinycbor CACHE PATH
 	"Lib tinycbor source path")
-aux_source_directory(${TINYCBOR_PATH_SRC}/src DRV_SRC)
-list(FILTER DRV_SRC EXCLUDE REGEX .*open_memstream.c$) # Win-unsupported
-list(FILTER DRV_SRC EXCLUDE REGEX .*cborparser.c$) # to be patched
-file(COPY ${TINYCBOR_PATH_SRC}/src/cborparser.c DESTINATION ${CMAKE_BINARY_DIR})
+file(COPY ${TINYCBOR_PATH_SRC}/src/cborparser.c DESTINATION
+	${CMAKE_BINARY_DIR})
 # tinycbor doesn't expose (yet? #125) the text/binary string pointer, since the
 # string can span multiple stream chunks. However, in our case the CBOR object
 # is available entirely, so access to it can safely be had; this saves a
@@ -304,9 +302,13 @@ CborError cbor_value_get_string_chunk(CborValue *it,
 	CborError err = get_string_chunk(it, bufferptr, len);
 	return err != CborNoError ? err : preparse_next_value(it);
 }")
-aux_source_directory(${CMAKE_BINARY_DIR} DRV_SRC)
+list(APPEND DRV_SRC ${CMAKE_BINARY_DIR}/cborparser.c)
+list(APPEND DRV_SRC ${TINYCBOR_PATH_SRC}/src/cborvalidation.c)
+list(APPEND DRV_SRC ${TINYCBOR_PATH_SRC}/src/cborerrorstrings.c)
+list(APPEND DRV_SRC ${TINYCBOR_PATH_SRC}/src/cborencoder.c)
+list(APPEND DRV_SRC
+	${TINYCBOR_PATH_SRC}/src/cborencoder_close_container_checked.c)
 set(TINYCBOR_INC ${TINYCBOR_PATH_SRC}/src)
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DWITHOUT_OPEN_MEMSTREAM")
 # limit how deep the parser will recurse (current need: 3)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DCBOR_PARSER_MAX_RECURSIONS=16")
 
