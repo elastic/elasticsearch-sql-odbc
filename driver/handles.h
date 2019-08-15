@@ -206,6 +206,12 @@ typedef struct desc_rec {
 	 * need to be set for records in IxD descriptors */
 	esodbc_estype_st	*es_type;
 
+	/* IRD reference copy of respective protocol value */
+	union {
+		UJObject json;
+		CborValue cbor;
+	} i_val;
+
 	/*
 	 * record fields
 	 */
@@ -302,6 +308,7 @@ typedef struct struct_desc {
 
 struct resultset_cbor {
 	cstr_st curs; /* ES'es cursor; refs req's body */
+	CborValue rows_obj; /* top object rows container (EsSQLRowCount()) */
 	CborValue rows_iter; /* iterator over received rows; refs req's body */
 	wstr_st cols_buff /* columns descriptions; refs allocated chunk */;
 };
@@ -309,6 +316,7 @@ struct resultset_cbor {
 struct resultset_json {
 	wstr_st curs; /* ES'es cursor; refs UJSON4C 'state' */
 	void *state; /* top UJSON decoder state */
+	UJObject rows_obj; /* top object rows container (EsSQLRowCount()) */
 	void *rows_iter; /* UJSON iterator with the rows in result set */
 	UJObject row_array; /* UJSON object for current row */
 };
@@ -317,17 +325,17 @@ typedef struct struct_resultset {
 	long code; /* HTTP code of last response */
 	cstr_st body; /* HTTP body of last answer to a statement */
 
+	BOOL pack_json; /* the server could send a JSON answer for a CBOR req. */
 	union {
 		struct resultset_cbor cbor;
 		struct resultset_json json;
 	} pack;
 
-	size_t nrows; /* (count of) rows in current result set */
 	size_t vrows; /* (count of) visited rows in current result set  */
 } resultset_st;
 
 #define STMT_HAS_CURSOR(_stmt)	\
-	(HDRH(_stmt)->dbc->pack_json ? \
+	((_stmt)->rset.pack_json ? \
 		(_stmt)->rset.pack.json.curs.cnt : \
 		(_stmt)->rset.pack.cbor.curs.cnt)
 
@@ -370,8 +378,8 @@ typedef struct struct_stmt {
 	resultset_st rset;
 	/* count of result sets fetched */
 	size_t nset;
-	/* total count of fetched rows for one statement (sum(resultset.nrows)) */
-	size_t tf_rows;
+	/* total visited rows (SUM(resultset.vrows)) <=> SQL_ATTR_ROW_NUMBER */
+	size_t tv_rows;
 	/* SQL data types conversion to SQL C compatibility (IRD.SQL -> ARD.C) */
 	enum {
 		CONVERSION_VIOLATION = -2, /* specs disallowed */
@@ -388,16 +396,12 @@ typedef struct struct_stmt {
 
 } esodbc_stmt_st;
 
-/* reset total number of fetched rows for a statement */
-#define STMT_TFROWS_RESET(_stmt)	\
+/* reset statment's result set count and number of visited rows */
+#define STMT_ROW_CNT_RESET(_stmt)	\
 	do {  \
-		(_stmt)->tf_rows = 0; \
+		(_stmt)->nset = 0; \
+		(_stmt)->tv_rows = 0; \
 	} while (0)
-
-/* 1-based current row number */
-#define STMT_CRR_ROW_NUMBER(_stmt)	\
-	((_stmt)->tf_rows - (_stmt)->rset.nrows + \
-		(_stmt)->rset.vrows + /*1-based*/1)
 
 /* SQLGetData() state reset */
 #define STMT_GD_RESET(_stmt)		\

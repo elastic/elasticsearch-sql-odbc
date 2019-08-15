@@ -6,6 +6,8 @@
 
 #include <float.h>
 
+#include <cborinternal_p.h> /* for decode_half() */
+
 #include "queries.h"
 #include "log.h"
 #include "connect.h"
@@ -26,8 +28,13 @@
 #define PACK_PARAM_COL_DSIZE	"display_size"
 #define PACK_PARAM_CURS_CLOSE	"succeeded"
 
-
 #define MSG_INV_SRV_ANS		"Invalid server answer"
+
+/* Macro valid for *_cbor() functions only.
+ * Assumes presence of a variable 'res' of type CborError in used scope and a
+ * label named 'err'. */
+#define CHK_RES(_hnd, _fmt, ...) \
+	JUMP_ON_CBOR_ERR(res, err, _hnd, _fmt, __VA_ARGS__)
 
 static thread_local cstr_st tz_param;
 
@@ -141,12 +148,13 @@ BOOL queries_init()
 
 void clear_resultset(esodbc_stmt_st *stmt, BOOL on_close)
 {
-	INFOH(stmt, "clearing result set; vrows=%zu, nrows=%zu, nset=%zu.",
-		stmt->rset.vrows, stmt->rset.nrows, stmt->nset);
+	INFOH(stmt, "clearing result set #%zu, visited rows in set: %zu.",
+		stmt->nset, stmt->rset.vrows);
 	if (stmt->rset.body.str) {
+		assert(stmt->rset.body.cnt);
 		free(stmt->rset.body.str);
 	}
-	if (HDRH(stmt)->dbc->pack_json) {
+	if (stmt->rset.pack_json) {
 		if (stmt->rset.pack.json.state) {
 			UJFree(stmt->rset.pack.json.state);
 		}
@@ -154,13 +162,15 @@ void clear_resultset(esodbc_stmt_st *stmt, BOOL on_close)
 		if (stmt->rset.pack.cbor.cols_buff.cnt) {
 			assert(stmt->rset.pack.cbor.cols_buff.str);
 			free(stmt->rset.pack.cbor.cols_buff.str);
+		} else {
+			assert(! stmt->rset.pack.cbor.cols_buff.str);
 		}
 	}
 	memset(&stmt->rset, 0, sizeof(stmt->rset));
 
 	if (on_close) {
-		DBGH(stmt, "on close, total fetched rows=%zu.", stmt->tf_rows);
-		STMT_TFROWS_RESET(stmt);
+		INFOH(stmt, "on close, total visited rows: %zu.", stmt->tv_rows);
+		STMT_ROW_CNT_RESET(stmt);
 	}
 
 	/* reset SQLGetData state to detect sequence "SQLExec*(); SQLGetData();" */
@@ -218,6 +228,10 @@ static BOOL attach_one_column(esodbc_rec_st *rec, wstr_st *col_name,
 	static const wstr_st EMPTY_WSTR = WSTR_INIT("");
 	esodbc_stmt_st *stmt;
 	esodbc_dbc_st *dbc;
+
+	/* uncounted 0-term is present */
+	assert(col_name->str[col_name->cnt] == '\0');
+	assert(col_type->str[col_type->cnt] == '\0');
 
 	stmt = HDRH(rec->desc)->stmt;
 	dbc = HDRH(stmt)->dbc;
@@ -386,18 +400,17 @@ static SQLRETURN attach_answer_json(esodbc_stmt_st *stmt)
 		goto err;
 	}
 	stmt->rset.pack.json.rows_iter = UJBeginArray(rows);
+	/* UJSON4C will return NULL above, for empty array (meh!) */
 	if (! stmt->rset.pack.json.rows_iter) {
-		/* UJSON4C will return NULL above, for empty array (meh!) */
-		DBGH(stmt, "received empty resultset array: forcing nodata.");
 		STMT_FORCE_NODATA(stmt);
-		stmt->rset.nrows = 0;
-	} else {
-		stmt->nset ++;
-		/* the cast is made safe by the decoding format indicator for array  */
-		stmt->rset.nrows = (size_t)UJLengthArray(rows);
-		stmt->tf_rows += stmt->rset.nrows;
 	}
-	DBGH(stmt, "rows received in result set: %zd.", stmt->rset.nrows);
+	/* save the object, as it might be required by EsSQLRowCount() */
+	stmt->rset.pack.json.rows_obj = rows;
+	/* unlike with tinycbor, the count is readily available with ujson4c
+	 * (since the lib parses the entire JSON object upfront) => keep it in
+	 * Release builds. */
+	INFOH(stmt, "rows received in current (#%zu) result set: %d.",
+		stmt->nset + 1, UJLengthArray(rows));
 
 	/*
 	 * copy ref to ES'es cursor (if there's one)
@@ -428,9 +441,6 @@ err:
 	RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
 }
 
-/* macro valid for attach_*_cbor() functions only */
-#define CHK_RES(_hnd, _fmt, ...) \
-	JUMP_ON_CBOR_ERR(res, err, _hnd, _fmt, __VA_ARGS__)
 
 /* Function iterates over the recived "columns" array (of map elements).
  * The recived column names (and their types) are UTF-8 multi-bytes, which
@@ -486,8 +496,7 @@ static BOOL iterate_on_columns(esodbc_stmt_st *stmt, CborValue columns)
 				"' array.");
 			return FALSE;
 		}
-		res = cbor_map_lookup_keys(&it, keys_cnt, keys, lens, objs,
-				/*drain*/TRUE);
+		res = cbor_map_lookup_keys(&it, keys_cnt, keys, lens, objs);
 		CHK_RES(stmt, "failed to lookup keys in '" PACK_PARAM_COLUMNS
 			"' element #%hd", recno);
 
@@ -512,13 +521,15 @@ static BOOL iterate_on_columns(esodbc_stmt_st *stmt, CborValue columns)
 			return FALSE;
 		}
 		if (! wrptr) { /* 1st iter */
-			need += n;
+			need += n + /*\0*/1;
 		} else { /* 2nd iter */
 			name_wstr.str = wrptr;
-			name_wstr.cnt = (size_t)n;
+			name_wstr.cnt = (size_t)n; /* no 0-counting */
 
 			wrptr += (size_t)n;
 			left -= n;
+			*wrptr ++ = '\0';
+			left --;
 		}
 
 		/*
@@ -531,6 +542,8 @@ static BOOL iterate_on_columns(esodbc_stmt_st *stmt, CborValue columns)
 		res = cbor_value_get_string_chunk(&type_obj, &type_cstr.str,
 				&type_cstr.cnt);
 		CHK_RES(stmt, "can't fetch value of '" PACK_PARAM_COL_TYPE "' elem");
+		/* U8MB_TO_U16WC fails with 0-len source */
+		assert(type_cstr.cnt);
 
 		n = U8MB_TO_U16WC(type_cstr.str, type_cstr.cnt, wrptr, left);
 		if (n <= 0) {
@@ -539,13 +552,16 @@ static BOOL iterate_on_columns(esodbc_stmt_st *stmt, CborValue columns)
 			return FALSE;
 		}
 		if (! wrptr) { /* 1st iter */
-			need += n;
+			need += n + /*\0*/1;
 		} else { /* 2nd iter */
 			type_wstr.str = wrptr;
-			type_wstr.cnt = (size_t)n;
+			type_wstr.cnt = (size_t)n; /* no 0-counting */
 
 			wrptr += (size_t)n;
 			left -= n;
+			/* add \0 */
+			*wrptr ++ = '\0';
+			left --;
 		}
 
 		if (! wrptr) { /* 1st iter: collect lengths only */
@@ -558,6 +574,8 @@ static BOOL iterate_on_columns(esodbc_stmt_st *stmt, CborValue columns)
 			return FALSE;
 		}
 	}
+	/* no overflow */
+	assert((! wrptr) || left == 0);
 
 	if ((! wrptr) /* 1st iter: alloc cols slab/buffer */ && (0 < need)) {
 		if (! (wrptr = malloc(need * sizeof(wchar_t)))) {
@@ -623,6 +641,9 @@ static SQLRETURN attach_answer_cbor(esodbc_stmt_st *stmt)
 	};
 	CborValue *vals[] = {&cols_obj, &curs_obj, &rows_obj};
 	BOOL empty;
+#	ifndef NDEBUG
+	size_t nrows;
+#	endif /* !NDEBUG */
 
 	DBGH(stmt, "attaching CBOR answer: [%zu] `%s`.", stmt->rset.body.cnt,
 		cstr_hex_dump(&stmt->rset.body));
@@ -644,8 +665,7 @@ static SQLRETURN attach_answer_cbor(esodbc_stmt_st *stmt)
 		ERRH(stmt, "top object (of type 0x%x) is not a map.", obj_type);
 		goto err;
 	}
-	res = cbor_map_lookup_keys(&top_obj, keys_no, keys, lens, vals,
-			/*drain*/FALSE);
+	res = cbor_map_lookup_keys(&top_obj, keys_no, keys, lens, vals);
 	CHK_RES(stmt, "failed to lookup answer keys in map");
 
 	/*
@@ -662,17 +682,23 @@ static SQLRETURN attach_answer_cbor(esodbc_stmt_st *stmt)
 	CHK_RES(stmt, "failed to check if '" PACK_PARAM_ROWS "' array is empty");
 	if (empty) {
 		STMT_FORCE_NODATA(stmt);
-		DBGH(stmt, "received empty result set.");
 	} else {
-		stmt->rset.pack.cbor.rows_iter = rows_obj;
-		stmt->nset ++;
-		// TODO: get rid of rows-counting / tf_rows
-		res = cbor_value_is_length_known(&rows_obj) ?
-			cbor_value_get_array_length(&rows_obj, &stmt->rset.nrows) :
-			cbor_container_count(rows_obj, &stmt->rset.nrows);
+		/* Note: "expensive", as it requires ad-hoc parsing; so only keep for
+		 * debugging (switching to JSON should be easy if troubleshooting) */
+#		ifndef NDEBUG
+		res = cbor_get_array_count(rows_obj, &nrows);
 		CHK_RES(stmt, "failed to fetch '" PACK_PARAM_ROWS "' array length");
-		stmt->tf_rows += stmt->rset.nrows;
-		DBGH(stmt, "rows received in result set: %zd.", stmt->rset.nrows);
+		INFOH(stmt, "rows received in current (#%zu) result set: %zu.",
+			stmt->nset + 1, nrows);
+#		endif /* NDEBUG */
+		/* save the object, as it might be required by EsSQLRowCount() */
+		stmt->rset.pack.cbor.rows_obj = rows_obj;
+
+		/* prepare iterator for EsSQLFetch(); recursing object and iterator
+		 * can be the same, since there's no need to "leave" the container. */
+		res = cbor_value_enter_container(&rows_obj, &rows_obj);
+		CHK_RES(stmt, "failed to access '" PACK_PARAM_ROWS "' container");
+		stmt->rset.pack.cbor.rows_iter = rows_obj;
 	}
 
 	/*
@@ -680,7 +706,7 @@ static SQLRETURN attach_answer_cbor(esodbc_stmt_st *stmt)
 	 */
 	if (cbor_value_is_valid(&curs_obj)) {
 		obj_type = cbor_value_get_type(&curs_obj);
-		if (obj_type != CborByteStringType) {
+		if (obj_type != CborTextStringType) {
 			ERRH(stmt, "invalid '" PACK_PARAM_CURSOR "' parameter type "
 				"(0x%x)", obj_type);
 			goto err;
@@ -759,7 +785,7 @@ static BOOL attach_error_cbor(SQLHANDLE hnd, cstr_st *body)
 	/* the _init() doesn't actually validate the object */
 	res = cbor_value_validate(&top_obj, ES_CBOR_PARSE_FLAGS);
 	CHK_RES(stmt, "failed to validate CBOR object: [%zu] `%s`",
-		stmt->rset.body.cnt, cstr_hex_dump(&stmt->rset.body));
+		body->cnt, cstr_hex_dump(body));
 #	endif /*0*/
 #	endif /* !NDEBUG */
 
@@ -767,8 +793,7 @@ static BOOL attach_error_cbor(SQLHANDLE hnd, cstr_st *body)
 		ERRH(hnd, "top object (of type 0x%x) is not a map.", obj_type);
 		goto err;
 	}
-	res = cbor_map_lookup_keys(&top_obj, keys_cnt, keys, lens, vals,
-			/*drain*/FALSE);
+	res = cbor_map_lookup_keys(&top_obj, keys_cnt, keys, lens, vals);
 	CHK_RES(hnd, "failed to lookup answer keys in map");
 
 	if ((obj_type = cbor_value_get_type(&status_obj)) == CborIntegerType) {
@@ -788,7 +813,7 @@ static BOOL attach_error_cbor(SQLHANDLE hnd, cstr_st *body)
 		CborIntegerType) { /* error with root cause */
 		/* unpack "error" object */
 		res = cbor_map_lookup_keys(&err_obj, err_keys_cnt, err_keys, err_lens,
-				err_vals, /*drain*/FALSE);
+				err_vals);
 		CHK_RES(hnd, "failed to lookup error object keys in map");
 		/* "type" and "reason" objects must be text strings */
 		if ((! cbor_value_is_text_string(&type_obj)) ||
@@ -829,8 +854,6 @@ err:
 	return FALSE;
 }
 
-#undef CHK_RES
-
 /*
  * Processes a received answer:
  * - takes a dynamic buffer, answ->str, of length answ->cnt. Will handle the
@@ -850,6 +873,7 @@ SQLRETURN TEST_API attach_answer(esodbc_stmt_st *stmt, cstr_st *answer,
 
 	/* the statement takes ownership of mem obj */
 	stmt->rset.body = *answer;
+	stmt->rset.pack_json = is_json;
 	old_ird_cnt = stmt->ird->count;
 	ret = is_json ? attach_answer_json(stmt) : attach_answer_cbor(stmt);
 
@@ -863,7 +887,13 @@ SQLRETURN TEST_API attach_answer(esodbc_stmt_st *stmt, cstr_st *answer,
 			/* new columns have just been attached => force compat. check */
 			stmt->sql2c_conversion = CONVERSION_UNCHECKED;
 		}
+		if (STMT_NODATA_FORCED(stmt)) {
+			DBGH(stmt, "empty result set received.");
+		} else {
+			stmt->nset ++;
+		}
 	}
+
 	return ret;
 }
 
@@ -1058,8 +1088,8 @@ SQLRETURN TEST_API attach_sql(esodbc_stmt_st *stmt,
 	}
 
 	/* if the app correctly SQL_CLOSE'es the statement, this would not be
-	 * needed. but just in case: re-init counter of total # of rows */
-	STMT_TFROWS_RESET(stmt);
+	 * needed. but just in case: re-init counter of total # of rows and sets */
+	STMT_ROW_CNT_RESET(stmt);
 
 	return SQL_SUCCESS;
 }
@@ -1070,6 +1100,7 @@ SQLRETURN TEST_API attach_sql(esodbc_stmt_st *stmt,
 void detach_sql(esodbc_stmt_st *stmt)
 {
 	if (! stmt->u8sql.str) {
+		assert(! stmt->u8sql.cnt);
 		return;
 	}
 	free(stmt->u8sql.str);
@@ -1217,18 +1248,38 @@ copy_ret:
 	RET_STATE(stmt->hdr.diag.state);
 }
 
+static SQLRETURN set_row_diag(esodbc_desc_st *ird,
+	esodbc_state_et state, const char *msg,
+	SQLULEN pos, SQLINTEGER colno)
+{
+	esodbc_stmt_st *stmt = HDRH(ird)->stmt;
+	SQLWCHAR wbuff[SQL_MAX_MESSAGE_LENGTH], *wmsg;
+	int res;
+
+	if (ird->array_status_ptr) {
+		ird->array_status_ptr[pos] = SQL_ROW_ERROR;
+	}
+	if (msg) {
+		res = ascii_c2w((SQLCHAR *)msg, wbuff, SQL_MAX_MESSAGE_LENGTH - 1);
+		wmsg = 0 < res ? wbuff : NULL;
+	} else {
+		wmsg = NULL;
+	}
+	return post_row_diagnostic(stmt, state, wmsg, /*code*/0,
+			stmt->tv_rows + /*current*/1, colno);
+
+}
+
 /*
  * Copy one row from IRD to ARD.
  * pos: row number in the rowset
- * Returns: ...
  */
-SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos)
+SQLRETURN copy_one_row_json(esodbc_stmt_st *stmt, SQLULEN pos)
 {
-	SQLSMALLINT i;
-	SQLLEN rowno;
-	SQLRETURN ret;
+	SQLINTEGER i;
+	size_t rowno;
 	UJObject obj;
-	void *iter_row;
+	SQLRETURN ret;
 	SQLLEN *ind_len;
 	long long ll;
 	double dbl;
@@ -1239,88 +1290,60 @@ SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos)
 	esodbc_desc_st *ard, *ird;
 	esodbc_rec_st *arec, *irec;
 
-	rowno = (SQLLEN)STMT_CRR_ROW_NUMBER(stmt);
 	ard = stmt->ard;
 	ird = stmt->ird;
-
-#define RET_ROW_DIAG(_state, _message, _colno) \
-	do { \
-		if (ird->array_status_ptr) { \
-			ird->array_status_ptr[pos] = SQL_ROW_ERROR; \
-		} \
-		return post_row_diagnostic(stmt, _state, MK_WPTR(_message), \
-				0, rowno, _colno); \
-	} while (0)
-#define SET_ROW_DIAG(_rowno, _colno) \
-	do { \
-		stmt->hdr.diag.row_number = _rowno; \
-		stmt->hdr.diag.column_number = _colno; \
-	} while (0)
-
-	/* is current object an array? */
-	if (! UJIsArray(stmt->rset.pack.json.row_array)) {
-		ERRH(stmt, "one '%s' element (#%zd) in result set not an array; type:"
-			" %d.", PACK_PARAM_ROWS, stmt->rset.vrows,
-			UJGetType(stmt->rset.pack.json.row_array));
-		RET_ROW_DIAG(SQL_STATE_HY000, MSG_INV_SRV_ANS, SQL_NO_COLUMN_NUMBER);
-	}
-	/* are there elements in this row array to at least match the number of
-	 * columns? */
-	if (UJLengthArray(stmt->rset.pack.json.row_array) < ird->count) {
-		ERRH(stmt, "current row counts less elements (%d) than columns (%hd)",
-			UJLengthArray(stmt->rset.pack.json.row_array), ird->count);
-		RET_ROW_DIAG(SQL_STATE_HY000, MSG_INV_SRV_ANS, SQL_NO_COLUMN_NUMBER);
-	} else if (ird->count < UJLengthArray(stmt->rset.pack.json.row_array)) {
-		WARNH(stmt, "current row counts more elements (%d) than columns (%hd)",
-			UJLengthArray(stmt->rset.pack.json.row_array), ird->count);
-	}
-	/* get an iterator over the row array */
-	if (! (iter_row = UJBeginArray(stmt->rset.pack.json.row_array))) {
-		ERRH(stmt, "Failed to obtain iterator on row (#%zd): %s.", rowno,
-			UJGetError(stmt->rset.pack.json.state));
-		RET_ROW_DIAG(SQL_STATE_HY000, MSG_INV_SRV_ANS, SQL_NO_COLUMN_NUMBER);
-	}
+	rowno = stmt->tv_rows + /* current not yet counted */1;
 
 	with_info = FALSE;
-	/* iterate over the bound cols and contents of one (table) row */
-	for (i = 0; i < ard->count && UJIterArray(&iter_row, &obj); i ++) {
+	/* iterate over the bound cols of one (table) row */
+	assert((! STMT_GD_CALLING(stmt)) || 0 < stmt->gd_col);
+	for (i = STMT_GD_CALLING(stmt) ? stmt->gd_col -1 : 0; i < ard->count;
+		i ++) {
 		arec = &ard->recs[i]; /* access safe if 'i < ard->count' */
 		/* if record not bound skip it */
 		if (! REC_IS_BOUND(arec)) {
 			DBGH(stmt, "column #%d not bound, skipping it.", i + 1);
 			continue;
 		}
+		DBGH(stmt, "column #%d is bound, copying data.", i + 1);
+		if (ird->count <= i) {
+			ERRH(stmt, "only %hd columns in result set, no data to return in "
+				"column #%hd.", ird->count, i + 1);
+			return set_row_diag(ird, SQL_STATE_HY000, MSG_INV_SRV_ANS, pos,
+					i + 1);
+		} else {
+			irec = &ird->recs[i];
+		}
 
-		/* access made safe by ird->count match against array len above  */
-		irec = &ird->recs[i];
-
+		obj = irec->i_val.json;
 		switch (UJGetType(obj)) {
 			default:
 				ERRH(stmt, "unexpected object of type %d in row L#%zu/T#%zd.",
 					UJGetType(obj), stmt->rset.vrows, rowno);
-				RET_ROW_DIAG(SQL_STATE_HY000, MSG_INV_SRV_ANS, i + 1);
-			/* RET_.. returns */
+				return set_row_diag(ird, SQL_STATE_HY000, MSG_INV_SRV_ANS, pos,
+						i + 1);
 
 			case UJT_Null:
 				DBGH(stmt, "value [%zd, %d] is NULL.", rowno, i + 1);
-				/* Note: if ever causing an issue, check
-				 * arec->es_type->nullable before returning NULL to app */
 				ind_len = deferred_address(SQL_DESC_INDICATOR_PTR, pos, arec);
 				if (! ind_len) {
 					ERRH(stmt, "no buffer to signal NULL value.");
-					RET_ROW_DIAG(SQL_STATE_22002, "Indicator variable required"
-						" but not supplied", i + 1);
+					return set_row_diag(ird, SQL_STATE_22002, NULL, pos,
+							i + 1);
+				}
+				if (arec->es_type && (! arec->es_type->nullable)) {
+					WARNH(stmt, "returning NULL for non-nullable type.");
 				}
 				*ind_len = SQL_NULL_DATA;
 				continue; /* instead of break! no 'ret' processing to do. */
 
 			case UJT_String:
 				wstr = UJReadString(obj, &len);
-				DBGH(stmt, "value [%zd, %d] is string [%d]:`" LWPDL "`.",
+				DBGH(stmt, "value [%zd, %d] is string: [%d] `" LWPDL "`.",
 					rowno, i + 1, len, len, wstr);
 				/* UJSON4C returns chars count, but 0-terminates w/o counting
 				 * the terminator */
-				assert(wstr[len] == 0);
+				assert(wstr[len] == '\0');
 				/* "When character data is returned from the driver to the
 				 * application, the driver must always null-terminate it." */
 				ret = sql2c_string(arec, irec, pos, wstr, len + /*\0*/1);
@@ -1352,15 +1375,22 @@ SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos)
 				break;
 		}
 
+		/* set the (row, column) details in the diagnostic, in case the
+		 * value copying isn't a clean success (i.e. success with info or an
+		 * error) */
 		switch (ret) {
 			case SQL_SUCCESS_WITH_INFO:
 				with_info = TRUE;
-				SET_ROW_DIAG(rowno, i + 1);
+				stmt->hdr.diag.row_number = rowno;
+				stmt->hdr.diag.column_number = i + 1;
+			/* no break */
 			case SQL_SUCCESS:
-				break;
+				break; /* continue iteration over row's values */
+
 			default: /* error */
-				SET_ROW_DIAG(rowno, i + 1);
-				return ret;
+				stmt->hdr.diag.row_number = rowno;
+				stmt->hdr.diag.column_number = i + 1;
+				return ret; /* row fetching failed */
 		}
 	}
 
@@ -1372,10 +1402,304 @@ SQLRETURN copy_one_row(esodbc_stmt_st *stmt, SQLULEN pos)
 	}
 
 	return with_info ? SQL_SUCCESS_WITH_INFO : SQL_SUCCESS;
-
-#undef RET_ROW_DIAG
-#undef SET_ROW_DIAG
 }
+
+static SQLRETURN unpack_one_row_json(esodbc_stmt_st *stmt, SQLULEN pos)
+{
+	SQLSMALLINT i;
+	size_t rowno;
+	UJObject obj;
+	void *iter_row;
+	esodbc_desc_st *ird;
+	esodbc_rec_st *irec;
+
+	ird = stmt->ird;
+	rowno = stmt->tv_rows + /* current not yet counted */1;
+
+	/* is current object an array? */
+	if (! UJIsArray(stmt->rset.pack.json.row_array)) {
+		ERRH(stmt, "one '%s' element (#%zu) in result set not an array; type:"
+			" %d.", PACK_PARAM_ROWS, stmt->rset.vrows,
+			UJGetType(stmt->rset.pack.json.row_array));
+		return set_row_diag(ird, SQL_STATE_HY000, MSG_INV_SRV_ANS, pos,
+				SQL_NO_COLUMN_NUMBER);
+	}
+	/* get an iterator over the row array */
+	if (! (iter_row = UJBeginArray(stmt->rset.pack.json.row_array))) {
+		ERRH(stmt, "Failed to obtain iterator on row (#%zd): %s.", rowno,
+			UJGetError(stmt->rset.pack.json.state));
+		return set_row_diag(ird, SQL_STATE_HY000, MSG_INV_SRV_ANS, pos,
+				SQL_NO_COLUMN_NUMBER);
+	}
+
+	/* iterate over the elements in current (table) row and reference-copy
+	 * their value */
+	for (i = 0; i < ird->count; i ++) {
+		/* access made safe by ird->count match against array len above  */
+		irec = &ird->recs[i];
+		if (! UJIterArray(&iter_row, &irec->i_val.json)) {
+			ERRH(stmt, "current row %zd counts fewer elements: %hd than "
+				"columns: %hd.", rowno, i + 1, ird->count);
+			return set_row_diag(ird, SQL_STATE_HY000, MSG_INV_SRV_ANS, pos,
+					i + 1);
+		}
+	}
+
+	/* Are there further elements in row? This could indicate that the data
+	 * returned is not the data asked for => safer to fail. */
+	if (UJIterArray(&iter_row, &obj)) {
+		ERRH(stmt, "current row %zd counts more elems than columns.", rowno);
+		return set_row_diag(ird, SQL_STATE_HY000, MSG_INV_SRV_ANS, pos,
+				SQL_NO_COLUMN_NUMBER);
+	}
+
+	/* copy values, if there's already any bound column */
+	return 0 < stmt->ard->count ? copy_one_row_json(stmt, pos) : SQL_SUCCESS;
+}
+
+
+/*
+ * Copy one row from IRD to ARD.
+ * pos: row number in the rowset
+ */
+static SQLRETURN copy_one_row_cbor(esodbc_stmt_st *stmt, SQLULEN pos)
+{
+	SQLRETURN ret;
+	CborError res;
+	CborValue obj;
+	CborType elem_type;
+	SQLINTEGER i;
+	esodbc_desc_st *ard, *ird;
+	esodbc_rec_st *arec, *irec;
+	size_t rowno;
+	BOOL with_info;
+	SQLLEN *ind_len;
+	int64_t i64;
+	wstr_st wstr;
+	bool boolval;
+	double dbl;
+	uint16_t ui16;
+	float flt;
+
+	ard = stmt->ard;
+	ird = stmt->ird;
+	rowno = stmt->tv_rows + /* current row not yet counted */1;
+
+	with_info = FALSE;
+	/* iterate over the bound cols and contents of one (table) row */
+	assert((! STMT_GD_CALLING(stmt)) || 0 < stmt->gd_col);
+	for (i = STMT_GD_CALLING(stmt) ? stmt->gd_col -1 : 0; i < ard->count;
+		i ++) {
+		arec = &ard->recs[i]; /* access safe if 'i < ard->count' */
+		/* if record not bound skip it */
+		if (! REC_IS_BOUND(arec)) {
+			DBGH(stmt, "column #%d not bound, skipping it.", i + 1);
+			continue;
+		}
+		DBGH(stmt, "column #%d is bound, copying data.", i + 1);
+		if (ird->count <= i) {
+			ERRH(stmt, "only %hd columns in result set, no data to return in "
+				"column #%hd.", ird->count, i + 1);
+			return set_row_diag(ird, SQL_STATE_HY000, MSG_INV_SRV_ANS, pos,
+					i + 1);
+		} else {
+			irec = &ird->recs[i];
+		}
+
+		obj = irec->i_val.cbor;
+		elem_type = cbor_value_get_type(&obj);
+		DBGH(stmt, "current element of type: 0x%x", elem_type);
+		switch (elem_type) {
+			case CborByteStringType:
+			case CborArrayType:
+			case CborMapType:
+			case CborSimpleType:
+			case CborUndefinedType:
+			case CborTagType:
+			default: /* + CborInvalidType */
+				ERRH(stmt, "unexpected elem. of type 0x%x in row", elem_type);
+				goto err;
+
+			case CborNullType:
+				DBGH(stmt, "value [%zd, %d] is NULL.", rowno, i + 1);
+				ind_len = deferred_address(SQL_DESC_INDICATOR_PTR, pos, arec);
+				if (! ind_len) {
+					ERRH(stmt, "no buffer to signal NULL value.");
+					return set_row_diag(ird, SQL_STATE_22002, NULL, pos,
+							i + 1);
+				}
+				if (arec->es_type && (! arec->es_type->nullable)) {
+					WARNH(stmt, "returning NULL for non-nullable type.");
+				}
+				*ind_len = SQL_NULL_DATA;
+				ret = SQL_SUCCESS;
+				break;
+
+			case CborTextStringType:
+				res = cbor_value_get_utf16_wstr(&obj, &wstr);
+				CHK_RES(stmt, "failed to extract text string");
+				DBGH(stmt, "value [%zd, %d] is string: [%zu] `" LWPDL "`.",
+					rowno, i + 1, wstr.cnt, LWSTR(&wstr));
+				/* UTF8/16 conversion terminates the string */
+				assert(wstr.str[wstr.cnt] == '\0');
+				/* "When character data is returned from the driver to the
+				 * application, the driver must always null-terminate it." */
+				ret = sql2c_string(arec, irec, pos, wstr.str, wstr.cnt + 1);
+				break;
+
+			case CborIntegerType:
+				res = cbor_value_get_int64_checked(&obj, &i64);
+				CHK_RES(stmt, "failed to extract int64 value");
+				DBGH(stmt, "value [%zd, %d] is integer: %I64d.", rowno,
+					i + 1, i64);
+				assert(sizeof(int64_t) == sizeof(long long));
+				ret = sql2c_longlong(arec, irec, pos, (long long)i64);
+				break;
+
+			/*INDENT-OFF*/
+			do {
+			case CborHalfFloatType:
+				res = cbor_value_get_half_float(&obj, &ui16);
+				/* res not yet checked, but likely(OK) */
+				dbl = decode_half(ui16);
+				break;
+			case CborFloatType:
+				res = cbor_value_get_float(&obj, &flt);
+				dbl = (double)flt;
+				break;
+			case CborDoubleType:
+				res = cbor_value_get_double(&obj, &dbl);
+				break;
+			} while (0);
+				CHK_RES(stmt, "failed to extract flt. point type 0x%x",
+						elem_type);
+				DBGH(stmt, "value [%zd, %d] is double: %f.", rowno,
+					i + 1, dbl);
+				ret = sql2c_double(arec, irec, pos, dbl);
+				break;
+			/*INDENT-ON*/
+
+			case CborBooleanType:
+				res = cbor_value_get_boolean(&obj, &boolval);
+				CHK_RES(stmt, "failed to extract boolean value");
+				DBGH(stmt, "value [%zd, %d] is boolean: %d.", rowno,
+					i + 1, boolval);
+				/* 'When bit SQL data is converted to character C data, the
+				 * possible values are "0" and "1".' */
+				ret = sql2c_longlong(arec, irec, pos, (long long)!!boolval);
+				break;
+		}
+
+		/* set the (row, column) details in the diagnostic, in case the
+		 * value copying isn't a clean success (i.e. success with info or an
+		 * error) */
+		switch (ret) {
+			case SQL_SUCCESS_WITH_INFO:
+				with_info = TRUE;
+				stmt->hdr.diag.row_number = rowno;
+				stmt->hdr.diag.column_number = i + 1;
+			/* no break */
+			case SQL_SUCCESS:
+				break; /* continue iteration over row's values */
+
+			default: /* error */
+				stmt->hdr.diag.row_number = rowno;
+				stmt->hdr.diag.column_number = i + 1;
+				return ret; /* row fetching failed */
+		}
+	}
+
+	if (ird->array_status_ptr) {
+		ird->array_status_ptr[pos] = with_info ? SQL_ROW_SUCCESS_WITH_INFO :
+			SQL_ROW_SUCCESS;
+		DBGH(stmt, "status array @0x%p#%d set to %hu.", ird->array_status_ptr,
+			pos, ird->array_status_ptr[pos]);
+	}
+	return with_info ? SQL_SUCCESS_WITH_INFO : SQL_SUCCESS;
+
+err:
+	return set_row_diag(ird, SQL_STATE_HY000, MSG_INV_SRV_ANS, pos, i + 1);
+}
+
+static SQLRETURN unpack_one_row_cbor(esodbc_stmt_st *stmt, SQLULEN pos)
+{
+	CborError res;
+	CborValue *rows_iter, it;
+	CborType elem_type;
+	SQLSMALLINT i;
+	esodbc_desc_st *ird;
+	esodbc_rec_st *irec;
+	size_t rowno;
+
+	ird = stmt->ird;
+	rowno = stmt->tv_rows + /* current row not yet counted */1;
+
+	i = -1;
+	rows_iter = &stmt->rset.pack.cbor.rows_iter;
+	/* is current object an array? */
+	if ((elem_type = cbor_value_get_type(rows_iter)) != CborArrayType) {
+		ERRH(stmt, "current (#%zu) element of type 0x%x is not an array -- "
+			"skipping it.", stmt->rset.vrows, elem_type);
+		goto err;
+	}
+	/* enter the row array */
+	if ((res = cbor_value_enter_container(rows_iter, &it)) != CborNoError) {
+		ERRH(stmt, "failed to enter row array: %s.", cbor_error_string(res));
+		goto err;
+	}
+
+	/* iterate over the elements in current (table) row and reference-copy
+	 * their value */
+	for (i = 0; i < ird->count; i ++) {
+		if (cbor_value_at_end(&it)) {
+			ERRH(stmt, "current row %zd counts fewer elements: %hd than "
+				"columns: %hd.", rowno, i + 1, ird->count);
+		}
+		irec = &ird->recs[i];
+		irec->i_val.cbor = it;
+		assert(! cbor_value_is_tag(&it));
+
+		res = cbor_value_advance(&it);
+		if (res != CborNoError) {
+			ERRH(stmt, "failed to advance past current value in row array: "
+				"%s.", cbor_error_string(res));
+			goto err;
+		}
+	}
+
+	/* Are there further elements in row? This could indicate that the data
+	 * returned is not the data asked for => safer to fail. */
+	if (! cbor_value_at_end(&it)) {
+		ERRH(stmt, "current row %zd counts more elems than columns.", rowno);
+#		ifdef NDEBUG
+		return set_row_diag(ird, SQL_STATE_HY000, MSG_INV_SRV_ANS, pos,
+				SQL_NO_COLUMN_NUMBER);
+#		else /* NDEBUG */
+		assert(0);
+		res = cbor_value_exit_container(rows_iter, &it);
+#		endif /* NDEBUG */
+	} else {
+		res = cbor_value_leave_container(rows_iter, &it);
+	}
+	if (res != CborNoError) {
+		ERRH(stmt, "failed to exit row array: %s.", cbor_error_string(res));
+		return set_row_diag(ird, SQL_STATE_HY000, MSG_INV_SRV_ANS, pos,
+				SQL_NO_COLUMN_NUMBER);
+	}
+
+	return 0 < stmt->ard->count ? copy_one_row_cbor(stmt, pos) : SQL_SUCCESS;
+
+err:
+	res = (i < 0) ? cbor_value_advance(rows_iter) :
+		cbor_value_exit_container(rows_iter, &it);
+	if (res != CborNoError) {
+		ERRH(stmt, "failed to %s current row: %s.", (i < 0) ? "skip" : "exit",
+			cbor_error_string(res));
+	}
+	return set_row_diag(ird, SQL_STATE_HY000, MSG_INV_SRV_ANS, pos,
+			SQL_NO_COLUMN_NUMBER);
+}
+
 
 /*
  * "SQLFetch and SQLFetchScroll use the rowset size at the time of the call to
@@ -1439,10 +1763,9 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 	esodbc_desc_st *ard, *ird;
 	SQLULEN i, j, errors;
 	SQLRETURN ret;
+	BOOL empty, pack_json;
 
 	stmt = STMH(StatementHandle);
-	ard = stmt->ard;
-	ird = stmt->ird;
 
 	if (! STMT_HAS_RESULTSET(stmt)) {
 		if (STMT_NODATA_FORCED(stmt)) {
@@ -1451,12 +1774,6 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 		}
 		ERRH(stmt, "no resultset available on statement.");
 		RET_HDIAGS(stmt, SQL_STATE_HY010);
-	}
-
-	/* TODO: remove guard on CBOR complete implementation. */
-	if (! HDRH(stmt)->dbc->pack_json) {
-		FIXME;
-		return SQL_NO_DATA;
 	}
 
 	/* Check if the data [type] stored in DB is compatiblie with the buffer
@@ -1483,7 +1800,7 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 			break;
 
 		case CONVERSION_UNCHECKED:
-			ret = convertability_check(stmt, /*col bind check*/-1,
+			ret = convertability_check(stmt, CONV_CHECK_ALL_COLS,
 					(int *)&stmt->sql2c_conversion);
 			if (! SQL_SUCCEEDED(ret)) {
 				return ret;
@@ -1494,38 +1811,45 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 			DBGH(stmt, "ES/app data/buffer types found compatible.");
 	}
 
-	DBGH(stmt, "cursor @ row %zu / %zu in page #%zu. (SQL: `" LCPDL "`).",
-		stmt->rset.vrows, stmt->rset.nrows, stmt->nset, LCSTR(&stmt->u8sql));
+	DBGH(stmt, "cursor found @ row # %zu in set # %zu.", stmt->rset.vrows,
+		stmt->nset);
 
 	/* reset SQLGetData state, to reset fetch position */
 	STMT_GD_RESET(stmt);
 
-	DBGH(stmt, "rowset max size: %zu.", ard->array_size);
+	ard = stmt->ard;
+	ird = stmt->ird;
+	pack_json = stmt->rset.pack_json;
+
+	DBGH(stmt, "rowset size: %zu.", ard->array_size);
 	errors = 0;
 	i = 0;
-	/* for all rows in rowset/array, iterate over rows in current resultset */
+	/* for all rows in rowset/array (of application), iterate over rows in
+	 * current resultset (of data source) */
 	while (i < ard->array_size) {
-		if (! UJIterArray(&stmt->rset.pack.json.rows_iter,
-				&stmt->rset.pack.json.row_array)) {
-			DBGH(stmt, "ran out of rows in current result set: nrows=%zd, "
-				"vrows=%zd.", stmt->rset.nrows, stmt->rset.vrows);
-			if (stmt->rset.pack.json.curs.cnt) { /* is there an ES cursor? */
+		/* is there any array left in resultset? */
+		empty = pack_json ? (! UJIterArray(&stmt->rset.pack.json.rows_iter,
+					&stmt->rset.pack.json.row_array)) :
+			cbor_value_at_end(&stmt->rset.pack.cbor.rows_iter);
+
+		if (empty) {
+			DBGH(stmt, "ran out of rows in current result set.");
+			if (STMT_HAS_CURSOR(stmt)) { /* is there an ES cursor? */
 				ret = EsSQLExecute(stmt);
 				if (! SQL_SUCCEEDED(ret)) {
-					ERRH(stmt, "failed to fetch next results.");
+					ERRH(stmt, "failed to fetch next resultset.");
 					return ret;
-				} else {
-					assert(STMT_HAS_RESULTSET(stmt));
 				}
+				assert(STMT_HAS_RESULTSET(stmt));
 				if (! STMT_NODATA_FORCED(stmt)) {
 					/* resume copying from the new resultset, staying on the
 					 * same position in rowset. */
 					continue;
 				}
 			}
-
-			DBGH(stmt, "reached end of entire result set. fetched=%zd.",
-				stmt->tf_rows);
+			/* no cursor and no row left in resultset array: the End. */
+			DBGH(stmt, "reached end of entire result set; fetched=%zd.",
+				stmt->tv_rows);
 			/* indicate the non-processed rows in rowset */
 			if (ird->array_status_ptr) {
 				DBGH(stmt, "setting rest of %zu rows in status array to "
@@ -1534,18 +1858,28 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 					ird->array_status_ptr[j] = SQL_ROW_NOROW;
 				}
 			}
-
 			/* stop the copying loop */
 			break;
 		}
-		ret = copy_one_row(stmt, i);
+
+		/* Unpack one row, then, if any columns are bound, transfer it to the
+		 * application.
+		 * Unpacking involves (a: JSON) iterating or (b: CBOR) parsing and
+		 * iterating over the row-array and copying the respective format's
+		 * object reference into the IRD records.
+		 * These two are now separate steps since SQLGetData() binds/unbinds
+		 * one column at a time (after SQLFetch()), which for CBOR would
+		 * involve re-parsing the row for each column otherwise. */
+		ret = pack_json ? unpack_one_row_json(stmt, i) :
+			unpack_one_row_cbor(stmt, i);
 		if (! SQL_SUCCEEDED(ret)) {
-			ERRH(stmt, "copying row %zu failed.", stmt->rset.vrows + 1);
+			ERRH(stmt, "fetching row %zu failed.", stmt->rset.vrows + 1);
 			errors ++;
 		}
 		i ++;
 		/* account for processed rows */
 		stmt->rset.vrows ++;
+		stmt->tv_rows ++;
 	}
 
 	/* return number of processed rows (even if 0) */
@@ -1566,8 +1900,8 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 		return SQL_ERROR;
 	}
 
-	DBGH(stmt, "cursor left @ row %zu / %zu in page #%zu.", stmt->rset.vrows,
-		stmt->rset.nrows, stmt->nset);
+	DBGH(stmt, "cursor left @ row # %zu in set # %zu.", stmt->rset.vrows,
+		stmt->nset);
 
 	/* only failures need stmt.diag defer'ing */
 	return SQL_SUCCESS;
@@ -1605,12 +1939,15 @@ static SQLRETURN gd_checks(esodbc_stmt_st *stmt, SQLUSMALLINT colno)
 			"(array_size=%llu).", stmt->ard->array_size);
 		RET_HDIAGS(stmt, SQL_STATE_HYC00);
 	}
-	/* has SQLFetch() been called? rset is reset with every new result */
-	if (! stmt->rset.pack.json.row_array) {
-		/* DM should have detected this case */
-		ERRH(stmt, "SQLFetch() hasn't yet been called on result set.");
-		RET_HDIAGS(stmt, SQL_STATE_24000);
+#	ifndef NDEBUG
+	/* has SQLFetch() been called? DM should have detected this case */
+	assert(stmt->ird->count);
+	if (stmt->rset.pack_json) {
+		assert(stmt->ird->recs[0].i_val.json);
+	} else {
+		assert(cbor_value_is_valid(&stmt->ird->recs[0].i_val.cbor));
 	}
+#	endif /* !NDEBUG */
 	/* colno will be used as 1-based index, if not using bookmarks */
 	if (colno < 1) { // TODO: add bookmark check (when implementing it)
 		ERRH(stmt, "column number (%hu) can be less than 1.", colno);
@@ -1728,13 +2065,14 @@ SQLRETURN EsSQLGetData(
 	}
 
 	/* check if data types are compatible/convertible */
-	ret = convertability_check(stmt, /*col bind check*/-1, NULL);
+	ret = convertability_check(stmt, -ColumnNumber, NULL);
 	if (! SQL_SUCCEEDED(ret)) {
 		goto end;
 	}
 
 	/* copy the data */
-	ret = copy_one_row(stmt, 0);
+	ret = stmt->rset.pack_json ? copy_one_row_json(stmt, 0) :
+		copy_one_row_cbor(stmt, 0);
 	if (! SQL_SUCCEEDED(ret)) {
 		goto end;
 	}
@@ -1836,8 +2174,8 @@ SQLRETURN EsSQLMoreResults(SQLHSTMT hstmt)
 	return SQL_NO_DATA;
 }
 
-SQLRETURN close_es_answ_handler(esodbc_stmt_st *stmt, cstr_st *body,
-	BOOL is_json)
+static SQLRETURN close_es_handler_json(esodbc_stmt_st *stmt, cstr_st *body,
+	BOOL *closed)
 {
 	UJObject obj, succeeded;
 	void *state = NULL;
@@ -1847,11 +2185,6 @@ SQLRETURN close_es_answ_handler(esodbc_stmt_st *stmt, cstr_st *body,
 		MK_WPTR(PACK_PARAM_CURS_CLOSE)
 	};
 
-	/* TODO: remove guard on CBOR complete implementation. */
-	if (! is_json) {
-		FIXME;
-		goto err;
-	}
 	obj = UJDecode(body->str, body->cnt, NULL, &state);
 	if (! obj) {
 		ERRH(stmt, "failed to decode JSON answer: %s ([%zu] `" LTPDL "`).",
@@ -1866,21 +2199,88 @@ SQLRETURN close_es_answ_handler(esodbc_stmt_st *stmt, cstr_st *body,
 	}
 	switch (UJGetType(succeeded)) {
 		case UJT_False:
-			ERRH(stmt, "failed to close cursor on server side.");
-			assert(0);
-		/* no break: not a driver/client error -- server would answer with
-		 * an error answer */
+			*closed = FALSE;
+			break;
 		case UJT_True:
-			free(body->str);
-			return SQL_SUCCESS;
-
+			*closed = TRUE;
+			break;
 		default:
 			ERRH(stmt, "invalid obj type in answer: %d ([%zu] `" LTPDL "`).",
 				UJGetType(succeeded), body->cnt, LCSTR(body));
+			goto err;
 	}
+
+	return SQL_SUCCESS;
 err:
-	free(body->str);
 	RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
+}
+
+static SQLRETURN close_es_handler_cbor(esodbc_stmt_st *stmt, cstr_st *body,
+	BOOL *closed)
+{
+	CborError res;
+	CborParser parser;
+	CborType obj_type;
+	CborValue top_obj, succ_obj;
+	bool boolval;
+
+	res = cbor_parser_init(body->str, body->cnt, ES_CBOR_PARSE_FLAGS,
+			&parser, &top_obj);
+	CHK_RES(stmt, "failed to init CBOR parser for object: [%zu] `%s`",
+		body->cnt, cstr_hex_dump(body));
+#	ifndef NDEBUG
+#	if 0 // ES uses indefinite-length containers (TODO) which trips this check
+	/* the _init() doesn't actually validate the object */
+	res = cbor_value_validate(&top_obj, ES_CBOR_PARSE_FLAGS);
+	CHK_RES(stmt, "failed to validate CBOR object: [%zu] `%s`",
+		body->cnt, cstr_hex_dump(body));
+#	endif /*0*/
+#	endif /* !NDEBUG */
+
+	if ((obj_type = cbor_value_get_type(&top_obj)) != CborMapType) {
+		ERRH(stmt, "top object (of type 0x%x) is not a map.", obj_type);
+		goto err;
+	}
+	res = cbor_value_map_find_value(&top_obj, PACK_PARAM_CURS_CLOSE,
+			&succ_obj);
+	CHK_RES(stmt, "failed to get '" PACK_PARAM_CURS_CLOSE "' object in answ.");
+	if ((obj_type = cbor_value_get_type(&succ_obj)) != CborBooleanType) {
+		ERRH(stmt, "object '" PACK_PARAM_CURS_CLOSE "' (of type 0x%x) is not a"
+			" boolean.", obj_type);
+		goto err;
+	}
+	res = cbor_value_get_boolean(&succ_obj, &boolval);
+	CHK_RES(stmt, "failed to extract boolean value");
+	*closed = boolval;
+	return SQL_SUCCESS;
+err:
+	RET_HDIAG(stmt, SQL_STATE_HY000, MSG_INV_SRV_ANS, 0);
+}
+
+SQLRETURN close_es_answ_handler(esodbc_stmt_st *stmt, cstr_st *body,
+	BOOL is_json)
+{
+	SQLRETURN ret;
+	BOOL closed;
+
+	ret = is_json ? close_es_handler_json(stmt, body, &closed) :
+		close_es_handler_cbor(stmt, body, &closed);
+
+	free(body->str);
+
+	if (! SQL_SUCCEEDED(ret)) {
+		return ret;
+	}
+
+	if (! closed) {
+		ERRH(stmt, "failed to close cursor on server side.");
+		assert(0);
+		/* indicate success: not a driver/client error -- server would answer
+		 * with an error answer if that'd be the case */
+	}
+	DBGH(stmt, "cursor closed on server side.");
+
+	return SQL_SUCCESS;
 }
 
 SQLRETURN close_es_cursor(esodbc_stmt_st *stmt)
@@ -1902,17 +2302,22 @@ SQLRETURN close_es_cursor(esodbc_stmt_st *stmt)
 		free(body.str);
 	}
 
-	/* the actual cursor freeing occurs in clear_resultset() */
-	if (HDRH(stmt)->dbc->pack_json) {
+#	ifndef NDEBUG
+	/* the actual cursor freeing occurs in clear_resultset() (part of
+	 * UJSON4C's state or the actual response body, in case of CBOR) */
+	if (stmt->rset.pack_json) {
 		DBGH(stmt, "clearing JSON cursor: [%zd] `" LWPDL "`.",
 			stmt->rset.pack.json.curs.cnt, LWSTR(&stmt->rset.pack.json.curs));
-		stmt->rset.pack.json.curs.cnt = 0;
 	} else {
 		DBGH(stmt, "clearing CBOR cursor: [%zd] `%s`.",
 			stmt->rset.pack.cbor.curs.cnt,
 			cstr_hex_dump(&stmt->rset.pack.cbor.curs));
-		stmt->rset.pack.cbor.curs.cnt = 0;
 	}
+	/* clear both possible cursors in union: next cursor could be received
+	 * over different encapsulation than the one in current result set */
+	stmt->rset.pack.json.curs.cnt = 0;
+	stmt->rset.pack.cbor.curs.cnt = 0;
+#	endif /* NDEBUG */
 
 	return ret;
 }
@@ -2442,8 +2847,8 @@ static SQLRETURN convert_param_val(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 /* Forms the JSON array with params:
  * [{"type": "<ES/SQL type name>", "value": <param value>}(,etc)*] */
-static SQLRETURN serialize_params(esodbc_stmt_st *stmt, char *dest,
-	size_t *len, BOOL as_json)
+static SQLRETURN serialize_params_json(esodbc_stmt_st *stmt, char *dest,
+	size_t *len)
 {
 	/* JSON keys for building one parameter object */
 #	define JSON_KEY_TYPE	"{\"type\": \""
@@ -2453,10 +2858,6 @@ static SQLRETURN serialize_params(esodbc_stmt_st *stmt, char *dest,
 	SQLRETURN ret;
 	SQLSMALLINT i;
 	size_t l, pos;
-
-	if (! as_json) {
-		FIXME;    // FIXME; add CBOR support
-	}
 
 	pos = 0;
 	if (dest) {
@@ -2518,20 +2919,31 @@ static SQLRETURN serialize_params(esodbc_stmt_st *stmt, char *dest,
 #	undef JSON_KEY_VALUE
 }
 
-static SQLRETURN statement_cbor_len(esodbc_stmt_st *stmt, size_t *outlen,
+
+static SQLRETURN statement_len_cbor(esodbc_stmt_st *stmt, size_t *outlen,
 	size_t *keys)
 {
 	SQLRETURN ret;
-	size_t bodylen, len;
+	size_t bodylen, len, curslen;
 	esodbc_dbc_st *dbc = HDRH(stmt)->dbc;
 
 	/* Initial all-encompassing map preamble. */
 	bodylen = cbor_nn_hdr_len(REST_REQ_KEY_COUNT); /* max count */
 
 	*keys = 1; /* cursor or query */
-	if (stmt->rset.pack.cbor.curs.cnt) { /* eval CURSOR object length */
+	curslen = STMT_HAS_CURSOR(stmt);
+	if (curslen) { /* eval CURSOR object length */
 		bodylen += cbor_str_obj_len(sizeof(REQ_KEY_CURSOR) - 1);
-		bodylen += cbor_str_obj_len(stmt->rset.pack.cbor.curs.cnt);
+		bodylen += cbor_str_obj_len(curslen);
+		if (stmt->rset.pack_json) {
+			/* if current result set was delivered as JSON, we'll need to
+			 * convert the UTF16-stored cursor to ASCII (see note in
+			 * statement_len_json()); for that, we'll use the serialization
+			 * buffer, writing in it ahead of where the cursor will be
+			 * CBOR-packed.  The offset must be at least equal to the CBOR
+			 * string object header's length. */
+			bodylen += cbor_nn_hdr_len(curslen);
+		}
 	} else { /* eval QUERY object length */
 		bodylen += cbor_str_obj_len(sizeof(REQ_KEY_QUERY) - 1);
 		bodylen += cbor_str_obj_len(stmt->u8sql.cnt);
@@ -2539,8 +2951,12 @@ static SQLRETURN statement_cbor_len(esodbc_stmt_st *stmt, size_t *outlen,
 		/* does the statement have any parameters? */
 		if (stmt->apd->count) {
 			bodylen += cbor_str_obj_len(sizeof(REQ_KEY_PARAMS) - 1);
-			ret = serialize_params(stmt, /* no copy, just eval */NULL, &len,
-					/*as JSON*/FALSE);
+			// TODO:
+			// ret = serialize_params_cbor(stmt, /* no copy, just eval */NULL,
+			//		&len);
+			ret = SQL_ERROR;
+			len = 0;
+			FIXME; // TODO
 			if (! SQL_SUCCEEDED(ret)) {
 				ERRH(stmt, "failed to eval parameters length");
 				return ret;
@@ -2577,20 +2993,21 @@ static SQLRETURN statement_cbor_len(esodbc_stmt_st *stmt, size_t *outlen,
 	return SQL_SUCCESS;
 }
 
-static SQLRETURN statement_json_len(esodbc_stmt_st *stmt, size_t *outlen)
+static SQLRETURN statement_len_json(esodbc_stmt_st *stmt, size_t *outlen)
 {
 	SQLRETURN ret;
-	size_t bodylen, len;
+	size_t bodylen, len, curslen;
 	esodbc_dbc_st *dbc = HDRH(stmt)->dbc;
 
 	bodylen = 1; /* { */
+	curslen = STMT_HAS_CURSOR(stmt);
 	/* evaluate how long the stringified REST object will be */
-	if (stmt->rset.pack.json.curs.cnt) { /* eval CURSOR object length */
+	if (curslen) { /* eval CURSOR object length */
 		/* assumptions: (1) the cursor is a Base64 encoded string and thus
 		 * (2) no JSON escaping needed.
-		 * (both assumptions checked on copy, below). */
+		 * (both assumptions checked on copy, in serialize_to_json()). */
 		bodylen += sizeof(JSON_KEY_CURSOR) - 1; /* "cursor":  */
-		bodylen += stmt->rset.pack.json.curs.cnt;
+		bodylen += curslen;
 		bodylen += 2; /* 2x `"` for cursor value */
 	} else { /* eval QUERY object length */
 		bodylen += sizeof(JSON_KEY_QUERY) - 1;
@@ -2600,9 +3017,9 @@ static SQLRETURN statement_json_len(esodbc_stmt_st *stmt, size_t *outlen)
 		/* does the statement have any parameters? */
 		if (stmt->apd->count) {
 			bodylen += sizeof(JSON_KEY_PARAMS) - 1;
-			/* serialize_params will count/copy array delimiters (`[`, `]`) */
-			ret = serialize_params(stmt, /* no copy, just eval */NULL, &len,
-					/*as JSON*/TRUE);
+			/* serialize_params_json will count/copy array delims (`[`, `]`) */
+			ret = serialize_params_json(stmt, /* no copy, just eval */NULL,
+					&len);
 			if (! SQL_SUCCEEDED(ret)) {
 				ERRH(stmt, "failed to eval parameters length");
 				return ret;
@@ -2647,19 +3064,33 @@ static SQLRETURN serialize_to_cbor(esodbc_stmt_st *stmt, cstr_st *dest,
 {
 	CborEncoder encoder, map;
 	CborError err;
-	cstr_st tz;
+	cstr_st tz, curs;
 	esodbc_dbc_st *dbc = HDRH(stmt)->dbc;
+	size_t dest_cnt;
 
 	cbor_encoder_init(&encoder, dest->str, dest->cnt, /*flags*/0);
 	err = cbor_encoder_create_map(&encoder, &map, keys);
 	FAIL_ON_CBOR_ERR(stmt, err);
 
-	if (stmt->rset.pack.cbor.curs.cnt) { /* copy CURSOR object */
+	if (STMT_HAS_CURSOR(stmt)) { /* copy CURSOR object */
 		err = cbor_encode_text_string(&map, REQ_KEY_CURSOR,
 				sizeof(REQ_KEY_CURSOR) - 1);
 		FAIL_ON_CBOR_ERR(stmt, err);
-		err = cbor_encode_text_string(&map, stmt->rset.pack.cbor.curs.str,
-				stmt->rset.pack.cbor.curs.cnt);
+		if (stmt->rset.pack_json) {
+			/* calculate the location where to convert the UTF16 cursor to its
+			 * UTF8 (even ASCII in this case) representation */
+			curs.cnt = stmt->rset.pack.json.curs.cnt;
+			curs.str = dest->str + (dest->cnt - curs.cnt);
+			if (ascii_w2c(stmt->rset.pack.json.curs.str, curs.str,
+					curs.cnt) <= 0) {
+				ERRH(stmt, "failed to convert cursor `" LWPDL "` to ASCII.",
+					LWSTR(&stmt->rset.pack.json.curs));
+				RET_HDIAGS(stmt, SQL_STATE_24000);
+			}
+		} else {
+			curs = stmt->rset.pack.cbor.curs;
+		}
+		err = cbor_encode_text_string(&map, curs.str, curs.cnt);
 		FAIL_ON_CBOR_ERR(stmt, err);
 	} else { /* copy QUERY object */
 		err = cbor_encode_text_string(&map, REQ_KEY_QUERY,
@@ -2670,14 +3101,15 @@ static SQLRETURN serialize_to_cbor(esodbc_stmt_st *stmt, cstr_st *dest,
 
 		/* does the statement have any parameters? */
 		if (stmt->apd->count) {
-			FIXME;
+			FIXME; // TODO
+			return SQL_ERROR;
 		}
 		/* does the statement have any fetch_size? */
 		if (dbc->fetch.slen) {
 			err = cbor_encode_text_string(&map, REQ_KEY_FETCH,
 					sizeof(REQ_KEY_FETCH) - 1);
 			FAIL_ON_CBOR_ERR(stmt, err);
-			err = cbor_encode_uint(&map, dbc->fetch.slen);
+			err = cbor_encode_uint(&map, dbc->fetch.max);
 			FAIL_ON_CBOR_ERR(stmt, err);
 		}
 		/* "field_multi_value_leniency": true/false */
@@ -2722,7 +3154,9 @@ static SQLRETURN serialize_to_cbor(esodbc_stmt_st *stmt, cstr_st *dest,
 	err = cbor_encoder_close_container(&encoder, &map);
 	FAIL_ON_CBOR_ERR(stmt, err);
 
-	dest->cnt = cbor_encoder_get_buffer_size(&encoder, dest->str);
+	dest_cnt = cbor_encoder_get_buffer_size(&encoder, dest->str);
+	assert(dest_cnt <= dest->cnt); /* tinycbor should check this, but still */
+	dest->cnt = dest_cnt;
 	DBGH(stmt, "request serialized to CBOR: [%zd] `0x%s`.", dest->cnt,
 		cstr_hex_dump(dest));
 
@@ -2750,20 +3184,25 @@ static SQLRETURN serialize_to_json(esodbc_stmt_st *stmt, cstr_st *dest)
 	pos = 0;
 	body[pos ++] = '{';
 	/* build the actual stringified JSON object */
-	if (stmt->rset.pack.json.curs.cnt) { /* copy CURSOR object */
+	if (STMT_HAS_CURSOR(stmt)) { /* copy CURSOR object */
 		memcpy(body + pos, JSON_KEY_CURSOR, sizeof(JSON_KEY_CURSOR) - 1);
 		pos += sizeof(JSON_KEY_CURSOR) - 1;
 		body[pos ++] = '"';
-		if (ascii_w2c(stmt->rset.pack.json.curs.str, body + pos,
-				stmt->rset.pack.json.curs.cnt) <= 0) {
-			ERRH(stmt, "failed to convert cursor `" LWPDL "` to ASCII.",
-				LWSTR(&stmt->rset.pack.json.curs));
-			RET_HDIAGS(stmt, SQL_STATE_24000);
-		} else {
+		if (stmt->rset.pack_json) {
+			if (ascii_w2c(stmt->rset.pack.json.curs.str, body + pos,
+					stmt->rset.pack.json.curs.cnt) <= 0) {
+				ERRH(stmt, "failed to convert cursor `" LWPDL "` to ASCII.",
+					LWSTR(&stmt->rset.pack.json.curs));
+				RET_HDIAGS(stmt, SQL_STATE_24000);
+			}
 			/* no character needs JSON escaping */
 			assert(stmt->rset.pack.json.curs.cnt == json_escape(body + pos,
 					stmt->rset.pack.json.curs.cnt, NULL, 0));
 			pos += stmt->rset.pack.json.curs.cnt;
+		} else {
+			memcpy(body + pos, stmt->rset.pack.cbor.curs.str,
+				stmt->rset.pack.cbor.curs.cnt);
+			pos += stmt->rset.pack.cbor.curs.cnt;
 		}
 		body[pos ++] = '"';
 	} else { /* copy QUERY object */
@@ -2778,8 +3217,8 @@ static SQLRETURN serialize_to_json(esodbc_stmt_st *stmt, cstr_st *dest)
 		if (stmt->apd->count) {
 			memcpy(body + pos, JSON_KEY_PARAMS, sizeof(JSON_KEY_PARAMS) - 1);
 			pos += sizeof(JSON_KEY_PARAMS) - 1;
-			/* serialize_params will count/copy array delimiters (`[`, `]`) */
-			ret = serialize_params(stmt, body + pos, &len, /*as JSON*/TRUE);
+			/* serialize_params_json will count/copy array delims (`[`, `]`) */
+			ret = serialize_params_json(stmt, body + pos, &len);
 			if (! SQL_SUCCEEDED(ret)) {
 				ERRH(stmt, "failed to serialize parameters");
 				return ret;
@@ -2813,9 +3252,6 @@ static SQLRETURN serialize_to_json(esodbc_stmt_st *stmt, cstr_st *dest)
 				sizeof(JSON_VAL_TIMEZONE_Z) - 1);
 			pos += sizeof(JSON_VAL_TIMEZONE_Z) - 1;
 		}
-
-		/* reset the page counter when the params change */
-		stmt->nset = 0;
 	}
 	/* "mode": */
 	memcpy(body + pos, JSON_KEY_VAL_MODE, sizeof(JSON_KEY_VAL_MODE) - 1);
@@ -2824,9 +3260,12 @@ static SQLRETURN serialize_to_json(esodbc_stmt_st *stmt, cstr_st *dest)
 	pos += sizeof(JSON_KEY_CLT_ID) - 1;
 	body[pos ++] = '}';
 
+	/* check that the buffer hasn't been overrun. it can be used less than
+	 * initially calculated, since the calculation is an upper-bound one. */
+	assert(pos <= dest->cnt);
 	dest->cnt = pos;
 
-	INFOH(stmt, "request serialized to JSON: [%zd] `" LCPDL "`.", pos,
+	DBGH(stmt, "request serialized to JSON: [%zd] `" LCPDL "`.", pos,
 		LCSTR(dest));
 	return SQL_SUCCESS;
 }
@@ -2850,8 +3289,8 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *dest)
 			"Failed to update the timezone parameter", 0);
 	}
 
-	ret = dbc->pack_json ? statement_json_len(stmt, &len) :
-		statement_cbor_len(stmt, &len, &keys);
+	ret = dbc->pack_json ? statement_len_json(stmt, &len) :
+		statement_len_cbor(stmt, &len, &keys);
 	if (! SQL_SUCCEEDED(ret)) {
 		return ret;
 	}
@@ -3330,23 +3769,38 @@ SQLRETURN EsSQLNumParams(
 SQLRETURN EsSQLRowCount(_In_ SQLHSTMT StatementHandle, _Out_ SQLLEN *RowCount)
 {
 	esodbc_stmt_st *stmt = STMH(StatementHandle);
+	size_t nrows;
+	CborError res;
 
 	if (! STMT_HAS_RESULTSET(stmt)) {
 		ERRH(stmt, "no resultset available on statement.");
 		RET_HDIAGS(stmt, SQL_STATE_HY010);
 	}
 
-	DBGH(stmt, "current resultset rows count: %zd.", stmt->rset.nrows);
-	*RowCount = (SQLLEN)stmt->rset.nrows;
-
 	if (STMT_HAS_CURSOR(stmt)) {
 		/* fetch_size or scroller size chunks the result */
-		WARNH(stmt, "this function will only return the row count of the "
-			"partial result set available.");
-		/* returning a _WITH_INFO here will fail the query for MSQRY32.. */
-		//RET_HDIAG(stmt, SQL_STATE_01000, "row count is for partial result "
-		//		"only", 0);
+		ERRH(stmt, "can't evaluate the total size of paged result set.");
+		/* returning a _WITH_INFO here will fail the query for MSQRY32. */
+#		if 0
+		RET_HDIAG(stmt, SQL_STATE_01000, "row count is for partial result "
+			"only", 0);
+#		endif /* 0 */
+		*RowCount = 0;
+	} else {
+		if (stmt->rset.pack_json) {
+			*RowCount = UJLengthArray(stmt->rset.pack.json.rows_obj);
+		} else {
+			res = cbor_get_array_count(stmt->rset.pack.cbor.rows_obj, &nrows);
+			if (res != CborNoError) {
+				ERRH(stmt, "failed to read row array count: %s.",
+					cbor_error_string(res));
+				RET_HDIAGS(stmt, SQL_STATE_HY000);
+			}
+			*RowCount = (SQLLEN)nrows;
+		}
+		DBGH(stmt, "result set rows count: %zd.", *RowCount);
 	}
+
 	return SQL_SUCCESS;
 }
 

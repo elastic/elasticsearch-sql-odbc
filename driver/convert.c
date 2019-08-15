@@ -3494,12 +3494,12 @@ static inline BOOL conv_implemented(SQLSMALLINT sqltype, SQLSMALLINT ctype)
 }
 
 
-/* Check if data types in returned columns are compabile with buffer types
- * bound for those columns OR if parameter data conversion is allowed.
+/* Check (1) if data types in returned columns are compabile with buffer types
+ * bound for those columns OR (2) if parameter data conversion is allowed.
  * idx:
  *     if > 0: parameter number for parameter binding;
- *     if < 0: indicator for bound columns check.
- *     */
+ *     if < 0: negated column number to check OR indicator to check all bound
+ *             columns (CONV_CHECK_ALL_COLS). */
 SQLRETURN convertability_check(esodbc_stmt_st *stmt, SQLINTEGER idx,
 	int *conv_code)
 {
@@ -3519,7 +3519,9 @@ SQLRETURN convertability_check(esodbc_stmt_st *stmt, SQLINTEGER idx,
 		axd = stmt->ard;
 		ixd = stmt->ird;
 
-		start = 0;
+		/* if this is a SQLGetData() call, only check the one bound column */
+		assert(idx == CONV_CHECK_ALL_COLS || STMT_GD_CALLING(stmt));
+		start = (idx == CONV_CHECK_ALL_COLS) ? 0 : -idx - 1;
 		stop = axd->count < ixd->count ? axd->count : ixd->count;
 	} else {
 		/*
