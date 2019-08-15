@@ -24,18 +24,14 @@
 		RET_HDIAGS(hnd, SQL_STATE_HYC00); \
 	} while (0)
 
+#ifdef WITH_OAPI_TIMING
+volatile LONG64 api_ticks = 0;
+clock_t thread_local in_ticks;
+#endif /* WITH_API_TIMING */
 
 static BOOL driver_init()
 {
 	if (! log_init()) {
-		return FALSE;
-	}
-	INFO("initializing driver.");
-	if (! queries_init()) {
-		return FALSE;
-	}
-	convert_init();
-	if (! connect_init()) {
 		return FALSE;
 	}
 #ifndef NDEBUG
@@ -49,6 +45,14 @@ static BOOL driver_init()
 		_CrtSetReportFile(_CRT_ASSERT, _gf_log->handle);
 	}
 #endif /* !NDEBUG */
+	INFO("initializing driver.");
+	if (! queries_init()) {
+		return FALSE;
+	}
+	convert_init();
+	if (! connect_init()) {
+		return FALSE;
+	}
 	return TRUE;
 }
 
@@ -96,6 +100,10 @@ BOOL WINAPI DllMain(
 				ERR("leaks dumped: %d.", _CrtDumpMemoryLeaks());
 			}
 #endif /* !NDEBUG */
+#ifdef WITH_OAPI_TIMING
+			INFO("total in-driver time (secs): %.3f.",
+				(float)api_ticks / CLOCKS_PER_SEC);
+#endif /* WITH_OAPI_TIMING */
 			INFO("process %u detaching.", GetCurrentProcessId());
 			log_cleanup();
 			break;

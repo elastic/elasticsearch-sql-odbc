@@ -31,6 +31,13 @@
 /* global file log */
 esodbc_filelog_st *_gf_log = NULL;
 
+#ifdef WITH_EXTENDED_BUFF_LOG
+#define ESODBC_EXT_LOG_BUF_SIZE (ESODBC_LOG_BUF_SIZE * 1024)
+static char **log_buffs = NULL;
+static size_t log_buffs_cnt = 0;
+static esodbc_mutex_lt log_buffs_mux = ESODBC_MUX_SINIT;
+#endif /* WITH_EXTENDED_BUFF_LOG */
+
 BOOL log_init()
 {
 	int cnt;
@@ -94,6 +101,19 @@ BOOL log_init()
 
 void log_cleanup()
 {
+#	ifdef WITH_EXTENDED_BUFF_LOG
+	size_t i;
+
+	if (log_buffs) {
+		for (i = 0; i < log_buffs_cnt; i ++) {
+			free(log_buffs[i]);
+		}
+		free(log_buffs);
+		log_buffs = NULL;
+		log_buffs_cnt = 0;
+	}
+#	endif /* WITH_EXTENDED_BUFF_LOG */
+
 	if (_gf_log) {
 		filelog_del(_gf_log);
 		_gf_log = NULL;
@@ -305,18 +325,45 @@ static inline void filelog_log(esodbc_filelog_st *log,
 	time_t now = time(NULL);
 	int ret;
 	size_t pos;
+#	ifndef WITH_EXTENDED_BUFF_LOG
 	char buff[ESODBC_LOG_BUF_SIZE];
+	const size_t buff_sz = ESODBC_LOG_BUF_SIZE;
+#	else /* !WITH_EXTENDED_BUFF_LOG */
+	static thread_local char *buff = NULL;
+	const size_t buff_sz = ESODBC_EXT_LOG_BUF_SIZE;
+	char **r;
+#	endif /* !WITH_EXTENDED_BUFF_LOG */
 	char ebuff[LOG_ERRNO_BUF_SIZE];
 	const char *sfile, *next;
 	/* keep in sync with esodbc_log_levels */
 	static const char *level2str[] = { "ERROR", "WARN", "INFO", "DEBUG", };
 	assert(level < sizeof(level2str)/sizeof(level2str[0]));
 
-	if (ctime_s(buff, sizeof(buff), &now)) {
+	/* if extended logging is needed (such as when needing an entire server
+	 * answer), the (too large for the stack) log printing buffer needs to be
+	 * allocate on heap and tracked to be freed on lib process detach */
+#	ifdef WITH_EXTENDED_BUFF_LOG
+	if (! buff) {
+		if (! (buff = malloc(buff_sz))) {
+			return;
+		}
+		ESODBC_MUX_LOCK(&log_buffs_mux);
+		if (! (r = realloc(log_buffs, (log_buffs_cnt + 1) * sizeof(char *)))) {
+			free(buff);
+			buff = NULL;
+			return;
+		}
+		log_buffs = r;
+		log_buffs[log_buffs_cnt ++] = buff;
+		ESODBC_MUX_UNLOCK(&log_buffs_mux);
+	}
+#	endif /* WITH_EXTENDED_BUFF_LOG */
+
+	if (ctime_s(buff, buff_sz, &now)) {
 		/* writing failed */
 		pos = 0;
 	} else {
-		pos = strnlen(buff, sizeof(buff)) - /*\n*/1;
+		pos = strnlen(buff, buff_sz) - /*\n*/1;
 		/*
 		 * https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/ctime-s-ctime32-s-ctime64-s-wctime-s-wctime32-s-wctime64-s :
 		 * """
@@ -334,7 +381,7 @@ static inline void filelog_log(esodbc_filelog_st *log,
 	}
 
 	/* write the debugging prefix */
-	if ((ret = snprintf(buff + pos, sizeof(buff) - pos, " - [%s] %s()@%s:%d ",
+	if ((ret = snprintf(buff + pos, buff_sz - pos, " - [%s] %s()@%s:%d ",
 					level2str[level], func, sfile, lineno)) < 0) {
 		return;
 	} else {
@@ -343,7 +390,7 @@ static inline void filelog_log(esodbc_filelog_st *log,
 
 	/* write the error number details */
 	if (werrno) {
-		ret = snprintf(buff + pos, sizeof(buff) - pos, "(%d:", errno);
+		ret = snprintf(buff + pos, buff_sz - pos, "(%d:", errno);
 		if (ret < 0) {
 			return;
 		} else {
@@ -353,7 +400,7 @@ static inline void filelog_log(esodbc_filelog_st *log,
 		if (strerror_s(ebuff, sizeof(ebuff), errno)) {
 			return;
 		}
-		ret = snprintf(buff + pos, sizeof(buff) - pos, "%s) ", ebuff);
+		ret = snprintf(buff + pos, buff_sz - pos, "%s) ", ebuff);
 		if (ret < 0) {
 			return;
 		} else {
@@ -362,7 +409,7 @@ static inline void filelog_log(esodbc_filelog_st *log,
 	}
 
 	/* write user's message */
-	ret = vsnprintf(buff + pos, sizeof(buff) - pos, fmt, args);
+	ret = vsnprintf(buff + pos, buff_sz - pos, fmt, args);
 	if (ret < 0) {
 		return;
 	} else {
@@ -370,14 +417,14 @@ static inline void filelog_log(esodbc_filelog_st *log,
 	}
 
 	/* if overrunning, correct the pos, to be able to add a \n\0 */
-	if (sizeof(buff) < pos + /*\n\0*/2) {
-		pos = sizeof(buff) - 2;
+	if (buff_sz < pos + /*\n\0*/2) {
+		pos = buff_sz - 2;
 	}
-	ret = snprintf(buff + pos, sizeof(buff) - pos, "\n");
+	ret = snprintf(buff + pos, buff_sz - pos, "\n");
 	if (0 <= ret) {
 		pos += ret;
 	}
-	assert(pos <= sizeof(buff));
+	assert(pos <= buff_sz);
 
 	ESODBC_MUX_LOCK(&log->mux);
 	filelog_write(log, buff, pos);

@@ -8,6 +8,7 @@
 
 #include <inttypes.h>
 #include <stdio.h>
+#include <time.h>
 #include "log.h"
 
 #define TRACE_LOG_LEVEL	LOG_LEVEL_DBG
@@ -20,7 +21,7 @@
 #define _AVAIL(_ps)		((int)(sizeof(_BUFF)/sizeof(_BUFF[0])) - _ps)
 
 /* check if buffer limit has been reached */
-#define _CHECK_WRITE(/*written*/_n, /*position*/_ps) \
+#define _CHECK_WRITE_(/*written*/_n, /*position*/_ps) \
 	if (_n < 0) { /* printing failed */ \
 		assert(_ps < _AVAIL(0)); \
 		_BUFF[_ps] = '\0'; /* if previously usable, make sure it's NTS'd */\
@@ -154,7 +155,7 @@
 						type); \
 				break; \
 		} \
-		_CHECK_WRITE(_n, _ps); \
+		_CHECK_WRITE_(_n, _ps) \
 	} while (0)
 /*INDENT-ON*/
 
@@ -191,83 +192,107 @@
 #define _OUT		1
 #define _TRACE_OUT	"EXIT: "
 
-#define _TRACE_HEADER(inout, hnd) \
+/* account for the total time (across all threads!) spent within the driver:
+ * the time the ODBC API calls take to be serviced. */
+#ifdef WITH_OAPI_TIMING
+extern volatile LONG64 api_ticks;
+extern thread_local clock_t in_ticks;
+#	define OAPI_TIMING(inout) \
+	do { \
+		if (inout == _IN) { \
+			in_ticks = clock(); \
+		} else { /* _OUT */ \
+			clock_t out_ticks = clock(); \
+			if (out_ticks != (clock_t)-1 && in_ticks < out_ticks) { \
+				InterlockedExchangeAdd64(&api_ticks, out_ticks - in_ticks); \
+			} \
+		} \
+	} while (0)
+#else /* WITH_API_TIMING */
+#	define OAPI_TIMING
+#endif /* WITH_API_TIMING */
+
+#define _TRACE_HEADER_(inout, hnd) \
 	char _BUFF[TBUFF_SIZE]; \
 	int _ps = 0, _n; \
 	esodbc_filelog_st *_log; \
+	/* no accounting of the "out" tracing, but that should be OK, this being
+	 * most useful with release builds on non-dbg logging (when the rest of
+	 * the tracing code is skipped anyways) */\
+	OAPI_TIMING(inout); \
 	_log = (hnd && HDRH(hnd)->log) ? HDRH(hnd)->log : _gf_log; \
 	if ((! _log) || (_log->level < TRACE_LOG_LEVEL)) { \
 		/* skip all the printing as early as possible */ \
 		break; \
 	} \
 	_n = snprintf(_BUFF + _ps, _AVAIL(_ps), inout ? _TRACE_OUT : _TRACE_IN); \
-	_CHECK_WRITE(_n, _ps);
+	_CHECK_WRITE_(_n, _ps)
 
-#define _TRACE_FOOTER \
+#define _TRACE_FOOTER_ \
 	_esodbc_log(_log, TRACE_LOG_LEVEL, /*werr*/0, \
 		__func__, __FILE__, __LINE__, "%s.", _BUFF);
 
 
 #define TRACE1(inout, hnd, fmt, p0) \
 	do { \
-		_TRACE_HEADER(inout, hnd); \
+		_TRACE_HEADER_(inout, hnd) \
 		_PRINT_PARAM(fmt[0], p0, SQL_NTS, 0); \
-		_TRACE_FOOTER; \
+		_TRACE_FOOTER_ \
 	} while(0)
 
 #define TRACE2(inout, hnd, fmt, p0, p1) \
 	do { \
-		_TRACE_HEADER(inout, hnd); \
+		_TRACE_HEADER_(inout, hnd) \
 		_PRINT_PARAM(fmt[0], p0, p1, 0); \
 		_PRINT_PARAM(fmt[1], p1, SQL_NTS, 1); \
-		_TRACE_FOOTER; \
+		_TRACE_FOOTER_ \
 	} while(0)
 
 #define TRACE3(inout, hnd, fmt, p0, p1, p2) \
 	do { \
-		_TRACE_HEADER(inout, hnd); \
+		_TRACE_HEADER_(inout, hnd) \
 		_PRINT_PARAM(fmt[0], p0, p1, 0); \
 		_PRINT_PARAM(fmt[1], p1, p2, 1); \
 		_PRINT_PARAM(fmt[2], p2, SQL_NTS, 1); \
-		_TRACE_FOOTER; \
+		_TRACE_FOOTER_ \
 	} while(0)
 
 #define TRACE4(inout, hnd, fmt, p0, p1, p2, p3) \
 	do { \
-		_TRACE_HEADER(inout, hnd); \
+		_TRACE_HEADER_(inout, hnd) \
 		_PRINT_PARAM(fmt[0], p0, p1, 0); \
 		_PRINT_PARAM(fmt[1], p1, p2, 1); \
 		_PRINT_PARAM(fmt[2], p2, p3, 1); \
 		_PRINT_PARAM(fmt[3], p3, SQL_NTS, 1); \
-		_TRACE_FOOTER; \
+		_TRACE_FOOTER_ \
 	} while(0)
 
 #define TRACE5(inout, hnd, fmt, p0, p1, p2, p3, p4) \
 	do { \
-		_TRACE_HEADER(inout, hnd); \
+		_TRACE_HEADER_(inout, hnd) \
 		_PRINT_PARAM(fmt[0], p0, p1, 0); \
 		_PRINT_PARAM(fmt[1], p1, p2, 1); \
 		_PRINT_PARAM(fmt[2], p2, p3, 1); \
 		_PRINT_PARAM(fmt[3], p3, p4, 1); \
 		_PRINT_PARAM(fmt[4], p4, SQL_NTS, 1); \
-		_TRACE_FOOTER; \
+		_TRACE_FOOTER_ \
 	} while(0)
 
 #define TRACE6(inout, hnd, fmt, p0, p1, p2, p3, p4, p5) \
 	do { \
-		_TRACE_HEADER(inout, hnd); \
+		_TRACE_HEADER_(inout, hnd) \
 		_PRINT_PARAM(fmt[0], p0, p1, 0); \
 		_PRINT_PARAM(fmt[1], p1, p2, 1); \
 		_PRINT_PARAM(fmt[2], p2, p3, 1); \
 		_PRINT_PARAM(fmt[3], p3, p4, 1); \
 		_PRINT_PARAM(fmt[4], p4, p5, 1); \
 		_PRINT_PARAM(fmt[5], p5, SQL_NTS, 1); \
-		_TRACE_FOOTER; \
+		_TRACE_FOOTER_ \
 	} while(0)
 
 #define TRACE7(inout, hnd, fmt, p0, p1, p2, p3, p4, p5, p6) \
 	do { \
-		_TRACE_HEADER(inout, hnd); \
+		_TRACE_HEADER_(inout, hnd) \
 		_PRINT_PARAM(fmt[0], p0, p1, 0); \
 		_PRINT_PARAM(fmt[1], p1, p2, 1); \
 		_PRINT_PARAM(fmt[2], p2, p3, 1); \
@@ -275,12 +300,12 @@
 		_PRINT_PARAM(fmt[4], p4, p5, 1); \
 		_PRINT_PARAM(fmt[5], p5, p6, 1); \
 		_PRINT_PARAM(fmt[6], p6, SQL_NTS, 1); \
-		_TRACE_FOOTER; \
+		_TRACE_FOOTER_ \
 	} while(0)
 
 #define TRACE8(inout, hnd, fmt, p0, p1, p2, p3, p4, p5, p6, p7) \
 	do { \
-		_TRACE_HEADER(inout, hnd); \
+		_TRACE_HEADER_(inout, hnd) \
 		_PRINT_PARAM(fmt[0], p0, p1, 0); \
 		_PRINT_PARAM(fmt[1], p1, p2, 1); \
 		_PRINT_PARAM(fmt[2], p2, p3, 1); \
@@ -289,12 +314,12 @@
 		_PRINT_PARAM(fmt[5], p5, p6, 1); \
 		_PRINT_PARAM(fmt[6], p6, p7, 1); \
 		_PRINT_PARAM(fmt[7], p7, SQL_NTS, 1); \
-		_TRACE_FOOTER; \
+		_TRACE_FOOTER_ \
 	} while(0)
 
 #define TRACE9(inout, hnd, fmt, p0, p1, p2, p3, p4, p5, p6, p7, p8) \
 	do { \
-		_TRACE_HEADER(inout, hnd); \
+		_TRACE_HEADER_(inout, hnd) \
 		_PRINT_PARAM(fmt[0], p0, p1, 0); \
 		_PRINT_PARAM(fmt[1], p1, p2, 1); \
 		_PRINT_PARAM(fmt[2], p2, p3, 1); \
@@ -304,12 +329,12 @@
 		_PRINT_PARAM(fmt[6], p6, p7, 1); \
 		_PRINT_PARAM(fmt[7], p7, p8, 1); \
 		_PRINT_PARAM(fmt[8], p8, SQL_NTS, 1); \
-		_TRACE_FOOTER; \
+		_TRACE_FOOTER_ \
 	} while(0)
 
 #define TRACE10(inout, hnd, fmt, p0, p1, p2, p3, p4, p5, p6, p7, p8, p9) \
 	do { \
-		_TRACE_HEADER(inout, hnd); \
+		_TRACE_HEADER_(inout, hnd) \
 		_PRINT_PARAM(fmt[0], p0, p1, 0); \
 		_PRINT_PARAM(fmt[1], p1, p2, 1); \
 		_PRINT_PARAM(fmt[2], p2, p3, 1); \
@@ -320,12 +345,12 @@
 		_PRINT_PARAM(fmt[7], p7, p8, 1); \
 		_PRINT_PARAM(fmt[8], p8, p9, 1); \
 		_PRINT_PARAM(fmt[9], p9, SQL_NTS, 1); \
-		_TRACE_FOOTER; \
+		_TRACE_FOOTER_ \
 	} while(0)
 
 #define TRACE11(inout, hnd, fmt, p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10) \
 	do { \
-		_TRACE_HEADER(inout, hnd); \
+		_TRACE_HEADER_(inout, hnd) \
 		_PRINT_PARAM(fmt[0], p0, p1, 0); \
 		_PRINT_PARAM(fmt[1], p1, p2, 1); \
 		_PRINT_PARAM(fmt[2], p2, p3, 1); \
@@ -337,13 +362,13 @@
 		_PRINT_PARAM(fmt[8], p8, p9, 1); \
 		_PRINT_PARAM(fmt[9], p9, p10, 1); \
 		_PRINT_PARAM(fmt[10], p10, SQL_NTS, 1); \
-		_TRACE_FOOTER; \
+		_TRACE_FOOTER_ \
 	} while(0)
 
 #define TRACE12(inout, hnd, fmt, p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, \
 	p11) \
 do { \
-	_TRACE_HEADER(inout, hnd); \
+	_TRACE_HEADER_(inout, hnd) \
 	_PRINT_PARAM(fmt[0], p0, p1, 0); \
 	_PRINT_PARAM(fmt[1], p1, p2, 1); \
 	_PRINT_PARAM(fmt[2], p2, p3, 1); \
@@ -356,14 +381,14 @@ do { \
 	_PRINT_PARAM(fmt[9], p9, p10, 1); \
 	_PRINT_PARAM(fmt[10], p10, p11, 1); \
 	_PRINT_PARAM(fmt[11], p11, SQL_NTS, 1); \
-	_TRACE_FOOTER; \
+	_TRACE_FOOTER_ \
 } while(0)
 
 /*INDENT-OFF*/ //astyle trips on these following two defs
 #define TRACE13(inout, hnd, fmt, p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, \
 		p11, p12) \
 	do { \
-		_TRACE_HEADER(inout, hnd); \
+		_TRACE_HEADER_(inout, hnd) \
 		_PRINT_PARAM(fmt[0], p0, p1, 0); \
 		_PRINT_PARAM(fmt[1], p1, p2, 1); \
 		_PRINT_PARAM(fmt[2], p2, p3, 1); \
@@ -377,13 +402,13 @@ do { \
 		_PRINT_PARAM(fmt[10], p10, p11, 1); \
 		_PRINT_PARAM(fmt[11], p11, p12, 1); \
 		_PRINT_PARAM(fmt[12], p12, SQL_NTS, 1); \
-		_TRACE_FOOTER; \
+		_TRACE_FOOTER_ \
 	} while(0)
 
 #define TRACE14(inout, hnd, fmt, p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, \
 		p11, p12, p13) \
 	do { \
-		_TRACE_HEADER(inout, hnd); \
+		_TRACE_HEADER_(inout, hnd) \
 		_PRINT_PARAM(fmt[0], p0, p1, 0); \
 		_PRINT_PARAM(fmt[1], p1, p2, 1); \
 		_PRINT_PARAM(fmt[2], p2, p3, 1); \
@@ -398,7 +423,7 @@ do { \
 		_PRINT_PARAM(fmt[11], p11, p12, 1); \
 		_PRINT_PARAM(fmt[12], p12, p13, 1); \
 		_PRINT_PARAM(fmt[13], p13, SQL_NTS, 1); \
-		_TRACE_FOOTER; \
+		_TRACE_FOOTER_ \
 	} while(0)
 /*INDENT-ON*/
 
