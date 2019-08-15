@@ -3300,7 +3300,8 @@ static SQLRETURN wstr_to_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		wstr_to_wstr(arec, irec, data_ptr, octet_len_ptr, wstr, chars_0);
 
 	/* if truncation occured, only succeed if fractional seconds are cut out */
-	if (min_xfer && HDRH(stmt)->diag.state == SQL_STATE_01004) {
+	if (ret == SQL_SUCCESS_WITH_INFO && min_xfer &&
+		HDRH(stmt)->diag.state == SQL_STATE_01004) {
 		assert(SQL_SUCCEEDED(ret));
 
 		usize = (arec_type == SQL_C_CHAR) ? sizeof(SQLCHAR) : sizeof(SQLWCHAR);
