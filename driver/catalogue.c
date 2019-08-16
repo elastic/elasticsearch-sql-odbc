@@ -417,12 +417,7 @@ SQLRETURN EsSQLTablesW(
 
 	DBGH(stmt, "tables catalog SQL [%zu]:`" LWPDL "`.", pos, (int)pos, pbuf);
 
-	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
-	assert(SQL_SUCCEEDED(ret)); /* can't return error */
-	ret = attach_sql(stmt, pbuf, pos);
-	if (SQL_SUCCEEDED(ret)) {
-		ret = EsSQLExecute(stmt);
-	}
+	ret = EsSQLExecDirectW(stmt, pbuf, (SQLINTEGER)pos);
 end:
 	free(pbuf);
 	return ret;
@@ -573,12 +568,7 @@ SQLRETURN EsSQLColumnsW
 		goto end;
 	}
 
-	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
-	assert(SQL_SUCCEEDED(ret)); /* can't return error */
-	ret = attach_sql(stmt, pbuf, cnt);
-	if (SQL_SUCCEEDED(ret)) {
-		ret = EsSQLExecute(stmt);
-	}
+	ret = EsSQLExecDirectW(stmt, pbuf, (SQLINTEGER)cnt);
 end:
 	free(pbuf);
 	return ret;
