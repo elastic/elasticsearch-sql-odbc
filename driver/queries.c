@@ -1253,7 +1253,7 @@ static SQLRETURN set_row_diag(esodbc_desc_st *ird,
 	SQLULEN pos, SQLINTEGER colno)
 {
 	esodbc_stmt_st *stmt = HDRH(ird)->stmt;
-	SQLWCHAR wbuff[SQL_MAX_MESSAGE_LENGTH], *wmsg;
+	SQLWCHAR wbuff[SQL_MAX_MESSAGE_LENGTH], *wmsg = NULL;
 	int res;
 
 	if (ird->array_status_ptr) {
@@ -1261,9 +1261,9 @@ static SQLRETURN set_row_diag(esodbc_desc_st *ird,
 	}
 	if (msg) {
 		res = ascii_c2w((SQLCHAR *)msg, wbuff, SQL_MAX_MESSAGE_LENGTH - 1);
-		wmsg = 0 < res ? wbuff : NULL;
-	} else {
-		wmsg = NULL;
+		if (0 < res) {
+			wmsg = wbuff;
+		}
 	}
 	return post_row_diagnostic(stmt, state, wmsg, /*code*/0,
 			stmt->tv_rows + /*current*/1, colno);
