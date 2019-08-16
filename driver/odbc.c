@@ -26,7 +26,7 @@
 
 #ifdef WITH_OAPI_TIMING
 volatile LONG64 api_ticks = 0;
-clock_t thread_local in_ticks;
+clock_t thread_local in_ticks = 0;
 #endif /* WITH_API_TIMING */
 
 static BOOL driver_init()
