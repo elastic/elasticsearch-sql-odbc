@@ -1209,10 +1209,9 @@ SQLRETURN EsSQLGetTypeInfoW(SQLHSTMT StatementHandle, SQLSMALLINT DataType)
 {
 #define SQL_TYPES_STMT		"SYS TYPES"
 
-	SQLRETURN ret;
 	esodbc_stmt_st *stmt = STMH(StatementHandle);
 	SQLWCHAR wbuff[sizeof(SQL_TYPES_STMT " 32767")];
-	size_t cnt;
+	int cnt;
 
 	DBGH(stmt, "requested type description for type %hd.", DataType);
 	cnt = swprintf(wbuff, sizeof(wbuff)/sizeof(*wbuff),
@@ -1222,13 +1221,7 @@ SQLRETURN EsSQLGetTypeInfoW(SQLHSTMT StatementHandle, SQLSMALLINT DataType)
 		RET_HDIAGS(stmt, SQL_STATE_HY000);
 	}
 
-	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
-	assert(SQL_SUCCEEDED(ret)); /* can't return error */
-	ret = attach_sql(stmt, wbuff, cnt);
-	if (SQL_SUCCEEDED(ret)) {
-		ret = EsSQLExecute(stmt);
-	}
-	return ret;
+	return EsSQLExecDirectW(stmt, wbuff, cnt);
 
 #	undef SQL_TYPES_STMT
 }
