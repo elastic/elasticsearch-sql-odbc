@@ -953,7 +953,7 @@ SQLRETURN EsSQLGetStmtAttrW(
 
 		/* "determine the number of the current row in the result set" */
 		case SQL_ATTR_ROW_NUMBER:
-			*(SQLULEN *)ValuePtr = (SQLULEN)STMT_CRR_ROW_NUMBER(stmt);
+			*(SQLULEN *)ValuePtr = (SQLULEN)stmt->tv_rows;
 			DBGH(stmt, "getting row number: %llu", *(SQLULEN *)ValuePtr);
 			break;
 
@@ -1499,7 +1499,6 @@ esodbc_desc_st *getdata_set_ard(esodbc_stmt_st *stmt, esodbc_desc_st *gd_ard,
 	SQLUSMALLINT colno, esodbc_rec_st *recs, SQLUSMALLINT count)
 {
 	SQLRETURN ret;
-	SQLUSMALLINT i;
 	esodbc_desc_st *ard = stmt->ard;
 
 	init_desc(gd_ard, stmt, DESC_TYPE_ARD, SQL_DESC_ALLOC_USER);
@@ -1511,13 +1510,10 @@ esodbc_desc_st *getdata_set_ard(esodbc_stmt_st *stmt, esodbc_desc_st *gd_ard,
 	}
 
 	if (colno < count) { /* can the static recs be used? */
-		/* need to init all records, not only the single one that will be
-		 * bound, since data covert. check will run against all bound recs. */
-		for (i = 0; i < count; i ++) {
-			init_rec(&recs[i], gd_ard);
-		}
+		assert(0 < colno);
+		init_rec(&recs[colno - 1], gd_ard);
 
-		gd_ard->count = count;
+		gd_ard->count = colno;
 		gd_ard->recs = recs;
 	}
 	/* else: recs will be alloc'd later when binding the column */
@@ -1996,7 +1992,8 @@ static void set_defaults_from_meta_type(esodbc_rec_st *rec)
 					rec->concise_type == SQL_C_DEFAULT) ||
 				(DESC_TYPE_IS_IMPLEMENTATION(rec->desc->type) &&
 					rec->concise_type == ESODBC_SQL_NULL));
-			WARNH(rec->desc, "max meta type: can't set defaults");
+			DBGH(rec->desc, "max meta type (C default / SQL NULL): "
+				"can't set defaults");
 			break;
 	}
 }

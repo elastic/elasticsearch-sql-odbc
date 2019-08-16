@@ -235,6 +235,20 @@ static int debug_callback(CURL *handle, curl_infotype type, char *data,
 /*
  * "ptr points to the delivered data, and the size of that data is size
  * multiplied with nmemb."
+ *
+ * Note: Elasticsearch supports (atm.) no streaming API and ES/SQL doesn't
+ * either. This function will keep realloc'ing (if needed) until the entire
+ * page sent by ES/SQL is received. The alternative is to stream-parse.
+ * However, with text & binary data, the stream parsing libraries will ask the
+ * client to provide a buffer to copy the data into, out of potentially
+ * multiple received data chunks in the stream. Which could require an extra
+ * allocation and will always involve an extra copy (or more, for UTF-8
+ * decoding). With current design (= reply object in contiguous chunk) at
+ * least the copy is skipped, since the text/binary data is contiguous and
+ * ready to be read from the receive buffer directly.
+ *
+ * TODO: initial chunk size and incremental sizes for the reallocation should
+ * be better "calibrated" (/ follow some max/hysteretic curve).
  */
 static size_t write_callback(char *ptr, size_t size, size_t nmemb,
 	void *userdata)
@@ -740,10 +754,10 @@ SQLRETURN curl_post(esodbc_stmt_st *stmt, int url_type,
 	BOOL is_json;
 
 	if (dbc->pack_json) {
-		DBGH(stmt, "POSTing JSON type %d: [%zu] `" LCPDL "`.", url_type,
+		DBGH(stmt, "POSTing JSON to URL type %d: [%zu] `" LCPDL "`.", url_type,
 			req_body->cnt, LCSTR(req_body));
 	} else {
-		DBGH(stmt, "POSTing CBOR type %d: [%zu] `%s`.", url_type,
+		DBGH(stmt, "POSTing CBOR to URL type %d: [%zu] `%s`.", url_type,
 			req_body->cnt, cstr_hex_dump(req_body));
 	}
 
@@ -1514,7 +1528,7 @@ static BOOL parse_es_version_cbor(esodbc_dbc_st *dbc, cstr_st *rsp_body,
 	/* the _init() doesn't actually validate the object */
 	res = cbor_value_validate(&top_obj, ES_CBOR_PARSE_FLAGS);
 	CHK_RES(stmt, "failed to validate CBOR object: [%zu] `%s`",
-		stmt->rset.body.cnt, cstr_hex_dump(&stmt->rset.body));
+		rsp_body->cnt, cstr_hex_dump(rsp_body));
 #	endif /*0*/
 #	endif /* !NDEBUG */
 
