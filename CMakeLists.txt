@@ -135,7 +135,11 @@ if (${WIN32})
 	set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /DTEST_API=")
 	set(CMAKE_C_FLAGS_MINSIZEREL "${CMAKE_C_FLAGS_RELEASE} /DTEST_API=")
 
-	# set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DNDEBUG")
+	# Only used when a long logging message is required for troubleshooting
+	# (like one entire server answer).
+	#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DWITH_EXTENDED_BUFF_LOG")
+	# Account for the time the process spends within the driver.
+	#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DWITH_OAPI_TIMING")
 else (${WIN32})
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
 endif (${WIN32})

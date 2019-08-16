@@ -155,6 +155,7 @@ class Elasticsearch(object):
 		if self.is_listening():
 			raise Exception("an Elasticsearch instance is already running")
 
+		print("Starting Elasticsearch with: %s" % start_script)
 		# don't daemonize to get the start logs inlined with those that this app generates
 		es_proc = psutil.Popen(start_script, close_fds=True, creationflags=creationflags)
 		atexit.register(Elasticsearch._stop_es, es_proc)
