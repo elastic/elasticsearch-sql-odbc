@@ -75,8 +75,14 @@ static inline size_t cbor_str_obj_len(size_t item_len)
  * given key, if that exists */
 CborError cbor_map_advance_to_key(CborValue *it, const char *key,
 	size_t key_len, CborValue *val);
+/* similar to cbor_value_leave_container(), but the iterator may find itself
+ * anywhere within the container (and not necessarily at the end of it). */
+CborError cbor_value_exit_container(CborValue *cont, CborValue *it);
+/* Looks up a number of 'cnt' objects mapped to the 'keys' of given
+ * 'len[gth]s'. If a key is not found, the corresponding objects are marked
+ * with an invalid type. */
 CborError cbor_map_lookup_keys(CborValue *map, size_t cnt,
-	const char **keys, const size_t *lens, CborValue **objs, BOOL drain);
+	const char **keys, const size_t *lens, CborValue **objs);
 CborError cbor_container_count(CborValue cont, size_t *count);
 CborError cbor_get_array_count(CborValue arr, size_t *count);
 CborError cbor_container_is_empty(CborValue cont, BOOL *empty);

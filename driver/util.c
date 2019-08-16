@@ -529,12 +529,12 @@ SQLRETURN write_wstr(SQLHANDLE hnd, SQLWCHAR *dest, wstr_st *src,
 {
 	size_t wide_avail;
 
+	DBGH(hnd, "copying %zd wchars (`" LWPDL "`) into buffer @0x%p, of %dB "
+		"len; out-len @0x%p.", src->cnt, LWSTR(src), dest, avail, usedp);
+
 	/* cnt must not count the 0-term (XXX: ever need to copy 0s?) */
 	assert(src->cnt <= 0 || src->str[src->cnt - 1]);
 	assert(src->cnt <= 0 || src->str[src->cnt] == 0);
-
-	DBGH(hnd, "copying %zd wchars (`" LWPDL "`) into buffer @0x%p, of %dB "
-		"len; out-len @0x%p.", src->cnt, LWSTR(src), dest, avail, usedp);
 
 	if (usedp) {
 		/* how many bytes are available to return (not how many would be

@@ -21,6 +21,15 @@ SQLULEN get_param_size(esodbc_rec_st *irec);
 inline void *deferred_address(SQLSMALLINT field_id, size_t pos,
 	esodbc_rec_st *rec);
 
+
+/* column and parameters are all SQLUSMALLINT (unsigned short) */
+#define CONV_CHECK_ALL_COLS		(- ((SQLINTEGER)USHRT_MAX + 1))
+/* Check (1) if data types in returned columns are compabile with buffer types
+ * bound for those columns OR (2) if parameter data conversion is allowed.
+ * idx:
+ *     if > 0: parameter number for parameter binding;
+ *     if < 0: negated column number to check OR indicator to check all bound
+ *             columns (CONV_CHECK_ALL_COLS). */
 SQLRETURN convertability_check(esodbc_stmt_st *stmt, SQLINTEGER idx,
 	int *conv_code);
 BOOL update_crr_date(struct tm *now);

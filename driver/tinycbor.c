@@ -63,8 +63,25 @@ CborError cbor_map_advance_to_key(CborValue *it, const char *key,
 	return CborNoError;
 }
 
+/* similar to cbor_value_leave_container(), but the iterator may find itself
+ * anywhere within the container (and not necessarily at the end of it). */
+CborError cbor_value_exit_container(CborValue *cont, CborValue *it)
+{
+	CborError res;
+	assert(cbor_value_is_container(cont));
+	while (! cbor_value_at_end(it)) {
+		if ((res = cbor_value_advance(it)) != CborNoError) {
+			return res;
+		}
+	}
+	return cbor_value_leave_container(cont, it);
+}
+
+/* Looks up a number of 'cnt' objects mapped to the 'keys' of given
+ * 'len[gth]s'. If a key is not found, the corresponding objects are marked
+ * with an invalid type. */
 CborError cbor_map_lookup_keys(CborValue *map, size_t cnt,
-	const char **keys, const size_t *lens, CborValue **objs, BOOL drain)
+	const char **keys, const size_t *lens, CborValue **objs)
 {
 	CborError res;
 	CborValue it;
@@ -118,17 +135,7 @@ CborError cbor_map_lookup_keys(CborValue *map, size_t cnt,
 		}
 	}
 
-	if (drain) {
-		while (! cbor_value_at_end(&it)) {
-			if ((res = cbor_value_advance(&it)) != CborNoError) {
-				return res;
-			}
-		}
-
-		return cbor_value_leave_container(map, &it);
-	} else {
-		return CborNoError;
-	}
+	return cbor_value_exit_container(map, &it);
 }
 
 CborError cbor_container_count(CborValue cont, size_t *count)
@@ -224,7 +231,8 @@ void tinycbor_cleanup()
 }
 
 /* Fetches and converts a(n always UTF8) text string to UTF16 wide char.
- * Uses a dynamically allocated thread-local buffer. */
+ * Uses a dynamically allocated thread-local buffer.
+ * 0-terminates the string */
 CborError cbor_value_get_utf16_wstr(CborValue *it, wstr_st *utf16)
 {
 	static thread_local wstr_st wbuff = {.str = NULL, .cnt = (size_t)-1};
@@ -244,18 +252,26 @@ CborError cbor_value_get_utf16_wstr(CborValue *it, wstr_st *utf16)
 					wbuff.cnt)) <= 0) {
 		/* U8MB_TO_U16WC will return error (though not set it with
 		 * SetLastError()) for empty source strings */
-		if (! mb_str.cnt) {
-			utf16->cnt = 0;
-			utf16->str = NULL;
-			return CborNoError;
-		}
-		/* is this a non-buffer related error? (like decoding) */
-		if ((! WAPI_ERR_EBUFF()) && wbuff.str) {
-			return CborErrorInvalidUtf8TextString;
-		} /* else: buffer hasn't yet been allocated or is too small */
-		/* what's the minimum space needed? */
-		if ((n = U8MB_TO_U16WC(mb_str.str, mb_str.cnt, NULL, 0)) < 0) {
-			return CborErrorInvalidUtf8TextString;
+		if (mb_str.cnt) {
+			/* is this a non-buffer related error? (like decoding) */
+			if ((! WAPI_ERR_EBUFF()) && wbuff.str) {
+				ERR("mb_str.str @ 0x%p, mb_str.cnt = %zu, wbuff.str @ 0x%p, "
+					"wbuff.cnt = %zu", mb_str.str, mb_str.cnt, wbuff.str,
+					wbuff.cnt);
+				ERR("WAPI_ERRNO=0x%x.", WAPI_ERRNO());
+				ERR("MB: [%zu] `" LCPDL "`.", mb_str.cnt, LCSTR(&mb_str));
+				return CborErrorInvalidUtf8TextString;
+			} /* else: buffer hasn't yet been allocated or is too small */
+			/* what's the minimum space needed? */
+			if ((n = U8MB_TO_U16WC(mb_str.str, mb_str.cnt, NULL, 0)) < 0) {
+				TRACE;
+				return CborErrorInvalidUtf8TextString;
+			}
+		} else {
+			n = 0; /* \0 */
+			if (wbuff.str) { /* has it been already allocated? */
+				break;
+			}
 		}
 		/* double scratchpad size until exceeding min needed space.
 		 * condition on equality, to allow for a 0-term */
