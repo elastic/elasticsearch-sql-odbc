@@ -249,8 +249,8 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb,
 	avail = dbc->alen - dbc->apos;
 	have = size * nmemb;
 
-	DBGH(dbc, "libcurl: new data chunk of size [%zd] x %zd arrived; "
-		"available buffer: %zd/%zd.", nmemb, size, avail, dbc->alen);
+	DBGH(dbc, "libcurl: new data chunk of size [%zu] x %zu arrived; "
+		"available buffer: %zu/%zu.", nmemb, size, avail, dbc->alen);
 
 	/* do I need to grow the existing buffer? */
 	if (avail < have) {
@@ -260,14 +260,14 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb,
 		while (need < dbc->apos + have) {
 			need *= 2;
 		}
-		DBGH(dbc, "libcurl: need to grow buffer for new chunk of %zd "
-			"from %zd to %zd bytes.", have, dbc->alen, need);
+		DBGH(dbc, "libcurl: need to grow buffer for new chunk of %zu "
+			"from %zu to %zu bytes.", have, dbc->alen, need);
 		if (dbc->amax && (dbc->amax < need)) { /* do I need more than max? */
 			if (dbc->amax <= (size_t)dbc->alen) { /* am I at max already? */
 				goto too_large;
 			} else { /* am not: alloc max possible (if that's enough) */
 				need = dbc->amax;
-				WARNH(dbc, "libcurl: capped buffer to max: %zd", need);
+				WARNH(dbc, "libcurl: capped buffer to max: %zu", need);
 				/* re'eval what I have available... */
 				avail = dbc->amax - dbc->apos;
 				if (avail < have) {
@@ -283,7 +283,7 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb,
 		 * the chunk right past the indicated JSON length.) */
 		wbuf = realloc(dbc->abuff, need + /*\0*/1);
 		if (! wbuf) {
-			ERRNH(dbc, "libcurl: failed to realloc to %zdB.", need);
+			ERRNH(dbc, "libcurl: failed to realloc to %zuB.", need);
 			return 0;
 		}
 		dbc->abuff = wbuf;
@@ -294,7 +294,7 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb,
 	dbc->apos += have;
 	/* Add the 0-term for UJSON4C (but don't count it - see above) */
 	dbc->abuff[dbc->apos] = '\0';
-	DBGH(dbc, "libcurl: copied %zdB: `%.*s`.", have, have, ptr);
+	DBGH(dbc, "libcurl: copied %zuB: `%.*s`.", have, have, ptr);
 
 	/*
 	 * "Your callback should return the number of bytes actually taken care
@@ -309,8 +309,8 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb,
 	return have;
 
 too_large:
-	ERRH(dbc, "libcurl: at %zd and can't grow past max %zd for new chunk of "
-		"%zd bytes.", dbc->apos, dbc->amax, have);
+	ERRH(dbc, "libcurl: at %zu and can't grow past max %zu for new chunk of "
+		"%zu bytes.", dbc->apos, dbc->amax, have);
 	return 0;
 }
 
@@ -779,6 +779,7 @@ SQLRETURN curl_post(esodbc_stmt_st *stmt, int url_type,
 				ESODBC_MUX_UNLOCK(&dbc->curl_mux);
 				return (url_type == ESODBC_CURL_QUERY) ?
 					attach_answer(stmt, &rsp_body, is_json) :
+					/* ESODBC_CURL_CLOSE */
 					close_es_answ_handler(stmt, &rsp_body, is_json);
 			} else {
 				ERRH(stmt, "received 200 response code with empty body.");
@@ -1176,9 +1177,8 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 			ipv6 ? "[" : "", LWSTR(&attrs->server), ipv6 ? "]" : "",
 			LWSTR(&attrs->port));
 	if (cnt <= 0) {
-		ERRNH(dbc, "failed to print SQL URL out of server: `" LWPDL "` [%zd], "
-			"port: `" LWPDL "` [%zd].", LWSTR(&attrs->server),
-			LWSTR(&attrs->port));
+		ERRNH(dbc, "failed to print SQL URL out of server: `" LWPDL "`, "
+			"port: `" LWPDL "`.", LWSTR(&attrs->server), LWSTR(&attrs->port));
 		SET_HDIAG(dbc, SQL_STATE_HY000, "printing server's SQL URL failed", 0);
 		goto err;
 	} else {
@@ -1213,9 +1213,8 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 			ipv6 ? "[" : "", LWSTR(&attrs->server), ipv6 ? "]" : "",
 			LWSTR(&attrs->port));
 	if (cnt <= 0) {
-		ERRNH(dbc, "failed to print root URL out of server: `" LWPDL "` [%zd],"
-			" port: `" LWPDL "` [%zd].", LWSTR(&attrs->server),
-			LWSTR(&attrs->port));
+		ERRNH(dbc, "failed to print root URL out of server: `" LWPDL "`,"
+			" port: `" LWPDL "`.", LWSTR(&attrs->server), LWSTR(&attrs->port));
 		SET_HDIAG(dbc, SQL_STATE_HY000, "printing server's URL failed", 0);
 		goto err;
 	} else {
@@ -1234,7 +1233,7 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	 */
 	if (attrs->uid.cnt) {
 		if (! wstr_to_utf8(&attrs->uid, &dbc->uid)) {
-			ERRH(dbc, "failed to convert username [%zd] `" LWPDL "` to UTF8.",
+			ERRH(dbc, "failed to convert username [%zu] `" LWPDL "` to UTF8.",
 				attrs->uid.cnt, LWSTR(&attrs->uid));
 			SET_HDIAG(dbc, SQL_STATE_HY000, "username UTF8 conversion "
 				"failed", 0);
@@ -1242,8 +1241,8 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 		}
 		if (attrs->pwd.cnt) {
 			if (! wstr_to_utf8(&attrs->pwd, &dbc->pwd)) {
-				ERRH(dbc, "failed to convert password [%zd] (-not shown-) to "
-					"UTF8.", attrs->pwd.cnt);
+				ERRH(dbc, "failed to convert password [%zu] `%s` to "
+					"UTF8.", attrs->pwd.cnt, ESODBC_PWD_VAL_SUBST);
 				SET_HDIAG(dbc, SQL_STATE_HY000, "password UTF8 "
 					"conversion failed", 0);
 				goto err;
@@ -1296,7 +1295,7 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 			WARNH(dbc, "no reply body limit set.");
 		}
 	}
-	INFOH(dbc, "max body size: %zd.", dbc->amax);
+	INFOH(dbc, "max body size: %zu.", dbc->amax);
 
 	/*
 	 * set max fetch size
@@ -1323,7 +1322,7 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 		dbc->fetch.slen = (char)attrs->max_fetch_size.cnt;
 		dbc->fetch.str = malloc(dbc->fetch.slen + /*\0*/1);
 		if (! dbc->fetch.str) {
-			ERRNH(dbc, "failed to alloc %zdB.", dbc->fetch.slen);
+			ERRNH(dbc, "failed to alloc %cB.", dbc->fetch.slen);
 			RET_HDIAGS(dbc, SQL_STATE_HY001);
 		}
 		dbc->fetch.str[dbc->fetch.slen] = 0;
@@ -1922,8 +1921,8 @@ static BOOL elastic_intervals_name2types(wstr_st *type_name,
 			break;
 	}
 
-	ERR("unrecognized Elastic type `" LWPDL "` (%zd).", LWSTR(type_name),
-		type_name->cnt);
+	ERR("unrecognized Elastic type: [%zu] `" LWPDL "`.", type_name->cnt,
+		LWSTR(type_name));
 	return FALSE;
 }
 
@@ -2601,7 +2600,7 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 		ERRH(stmt, "Elasticsearch returned no type as supported.");
 		goto end;
 	} else if (ESODBC_MAX_NO_TYPES < row_cnt) {
-		ERRH(stmt, "Elasticsearch returned too many types (%d vs limit %zd).",
+		ERRH(stmt, "Elasticsearch returned too many types (%ld vs limit %d).",
 			row_cnt, ESODBC_MAX_NO_TYPES);
 		goto end;
 	} else {
@@ -2617,7 +2616,7 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 	/* indicate rowset size */
 	if (! SQL_SUCCEEDED(EsSQLSetStmtAttrW(stmt, SQL_ATTR_ROW_ARRAY_SIZE,
 				(SQLPOINTER)ESODBC_MAX_NO_TYPES, 0))) {
-		ERRH(stmt, "failed to set rowset size (%zd).",
+		ERRH(stmt, "failed to set rowset size (%d).",
 			ESODBC_MAX_NO_TYPES);
 		goto end;
 	}
@@ -2916,7 +2915,7 @@ SQLRETURN EsSQLDriverConnectW
 	cnt += attrs.server.cnt + /*\0*/1;
 	dbc->dsn.str = malloc(cnt * sizeof(SQLWCHAR)); /* alloc for both */
 	if (! dbc->dsn.str) {
-		ERRNH(dbc, "OOM for %zdB.", (orig_dsn.cnt + 1) * sizeof(SQLWCHAR));
+		ERRNH(dbc, "OOM for %zuB.", (orig_dsn.cnt + 1) * sizeof(SQLWCHAR));
 		RET_HDIAGS(dbc, SQL_STATE_HY001);
 	}
 	/* copy DSN */
