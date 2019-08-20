@@ -85,6 +85,21 @@ TEST_F(ConvertC2SQL_Varchar, WStr2Varchar_ansi_jsonescape)
 		"\"value\": \"START_{xxx}=\\\"yyy\\\"\\r__END\"}]");
 }
 
+TEST_F(ConvertC2SQL_Varchar, CStr2Varchar_jsonescape_oct_len_ptr)
+{
+	prepareStatement();
+
+	SQLCHAR val[] = "START_{xxx}=\"yyy\"\r__END";
+	SQLLEN octet_len = strlen((char *)val);
+	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR,
+			SQL_VARCHAR, /*size*/35, /*decdigits*/0, val, sizeof(val),
+			&octet_len);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	assertRequest("[{\"type\": \"KEYWORD\", "
+		"\"value\": \"START_{xxx}=\\\"yyy\\\"\\r__END\"}]");
+}
+
 /* note: test name used in test */
 TEST_F(ConvertC2SQL_Varchar, CStr2Varchar_jsonescape)
 {
@@ -113,6 +128,21 @@ TEST_F(ConvertC2SQL_Varchar, WStr2Varchar_u8_jsonescape)
 
 	assertRequest("[{\"type\": \"KEYWORD\", "
 		"\"value\": \"START_\\\"A\u00C4o\u00F6U\u00FC\\\"__END\"}]");
+}
+
+TEST_F(ConvertC2SQL_Varchar, WStr2Varchar_u8_fullescape_oct_len_ptr)
+{
+	prepareStatement();
+
+	SQLWCHAR val[] = L"äöüÄÖÜ";
+	SQLLEN octet_len = SQL_NTSL;
+	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR,
+			SQL_VARCHAR, /*size*/35, /*decdigits*/0, val, sizeof(val),
+			&octet_len);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	assertRequest("[{\"type\": \"KEYWORD\", "
+		"\"value\": \"\u00E4\u00F6\u00FC\u00C4\u00D6\u00DC\"}]");
 }
 
 /* note: test name used in test */
