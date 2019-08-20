@@ -3745,6 +3745,85 @@ SQLRETURN EsSQLColAttributeW(
 #undef PNUMATTR_ASSIGN
 }
 
+/* very simple counter of non-quoted, not-escaped single question marks.
+ * no statement validation done */
+static SQLRETURN count_param_markers(esodbc_stmt_st *stmt, SQLSMALLINT *p_cnt)
+{
+	SQLSMALLINT cnt;
+	wstr_st u16sql;
+	SQLWCHAR *pos, *end, *sav;
+	BOOL quoting, escaping;
+	SQLWCHAR crr, qchar; /* char that starting the quote (`'` or `"`) */
+
+	/* The SQL query is received originally as UTF-16 SQLWCHAR, but converted
+	 * to UTF-8 MB right away and stored like that, for conveience. Easiest to
+	 * parse it is in its original SQLWCHAR format, though and since that's
+	 * only needed (assumably) rarely, we'll convert it back here, instead of
+	 * storing also the original. */
+	if (&u16sql != utf8_to_wstr(&stmt->u8sql, &u16sql)) {
+		ERRH(stmt, "failed to convert stmt `" LCPDL "` back to UTF-16 WC",
+			LCSTR(&stmt->u8sql));
+		RET_HDIAGS(stmt, SQL_STATE_HY000);
+	}
+	pos = u16sql.str;
+	end = pos + u16sql.cnt;
+	cnt = 0;
+	quoting = FALSE;
+	escaping = FALSE;
+	crr = 0;
+	while (pos < end) {
+		switch((crr = *pos ++)) {
+			case MK_WPTR(ESODBC_PARAM_MARKER): /* ~ L'?' */
+				if (escaping || quoting) {
+					break;
+				}
+				/* skip groups `???` */
+				sav = pos - 1; /* position of first `?` */
+				while (pos < end && *pos == crr) {
+					pos ++;
+				}
+				/* only count if single */
+				if (sav + 1 == pos) {
+					cnt ++;
+				}
+				break;
+			case L'"':
+			case L'\'':
+				if (escaping) {
+					break;
+				}
+				if (! quoting) {
+					quoting = TRUE;
+					qchar = crr;
+				} else if (qchar == crr) {
+					quoting = FALSE;
+				} /* else: sequence is: `"..'` or `'.."` -> ignore */
+				break;
+			case MK_WPTR(ESODBC_CHAR_ESCAPE): /* ~ L'\\' */
+				if (escaping) {
+					break;
+				}
+				escaping = TRUE;
+				continue;
+		}
+		escaping = FALSE;
+	}
+
+	if (escaping || quoting) {
+		ERRH(stmt, "invalid SQL statement: [%zu] `" LWPDL "`.", u16sql.cnt,
+			LWSTR(&u16sql));
+		free(u16sql.str);
+		RET_HDIAG(stmt, SQL_STATE_HY000, "failed to parse statement", 0);
+	}
+
+	DBGH(stmt, "counted %hd param marker(s) in SQL `" LWPDL "`.", cnt,
+		LWSTR(&u16sql));
+	free(u16sql.str);
+
+	*p_cnt = cnt;
+	return SQL_SUCCESS;
+}
+
 /* function implementation is correct, but it can't really be used as
  * intended, since the driver's "preparation" doesn't really involve sending
  * it to ES or even parameter marker counting; the later would be doable now,
@@ -3762,8 +3841,16 @@ SQLRETURN EsSQLNumParams(
 		RET_HDIAGS(stmt, SQL_STATE_HY010);
 	}
 
+#	if 0
+	/* The correct implementation, once a statement trully is prepared. */
 	return EsSQLGetDescFieldW(stmt->ipd, NO_REC_NR,
 			SQL_DESC_COUNT, ParameterCountPtr, SQL_IS_SMALLINT, NULL);
+#	else /* 0 */
+	/* Only count params on-demand */
+	/* some apps (like pyodbc) will verify the user-provided parameters number
+	 * against the result of this function -> implement a crude parser. */
+	return count_param_markers(stmt, ParameterCountPtr);
+#	endif /* 0 */
 }
 
 SQLRETURN EsSQLRowCount(_In_ SQLHSTMT StatementHandle, _Out_ SQLLEN *RowCount)

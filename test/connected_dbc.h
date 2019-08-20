@@ -57,6 +57,8 @@ class ConnectedDBC {
 	// use the test name as SQL (for faster logs lookup)
 	void prepareStatement();
 	// use an actual SQL statement (if it might be processed)
+	void prepareStatement(const SQLWCHAR *sql);
+	// use an actual SQL statement (if it might be processed)
 	void prepareStatement(const SQLWCHAR *sql, const char *jsonAnswer);
 	// use test name as SQL and attach given answer
 	void prepareStatement(const char *jsonAnswer);

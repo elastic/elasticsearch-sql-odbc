@@ -55,7 +55,7 @@
 #define ESODBC_CATALOG_TERM			"catalog"
 #define ESODBC_TABLE_TERM			"table"
 #define ESODBC_SCHEMA_TERM			"schema"
-#define ESODBC_PARAM_MARKER			"?"
+#define ESODBC_PARAM_MARKER			'?'
 
 /* maximum identifer length: match ES/Lucene byte max */
 #define ESODBC_MAX_IDENTIFIER_LEN		SHRT_MAX

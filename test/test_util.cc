@@ -105,6 +105,24 @@ TEST_F(Util, wstr_to_utf8_no_nts) {
 	free(dst.str);
 }
 
+TEST_F(Util, utf8_to_wstr_unicode) {
+#undef SRC_STR
+#undef SRC_AID
+#define SRC_STR	"XäXüXßX"
+#define SRC_AID	"X\xC3\xA4X\xC3\xBCX\xC3\x9FX"
+	wstr_st src = WSTR_INIT(SRC_STR);
+	cstr_st dst_mb;
+	wstr_st dst_wc;
+
+	ASSERT_EQ(&dst_mb, wstr_to_utf8(&src, &dst_mb));
+	ASSERT_EQ(&dst_wc, utf8_to_wstr(&dst_mb, &dst_wc));
+	ASSERT_STREQ((wchar_t *)src.str, (wchar_t *)dst_wc.str);
+	free(dst_mb.str);
+	free(dst_wc.str);
+}
+
+
+
 TEST_F(Util, ascii_c2w2c)
 {
 #undef SRC_STR

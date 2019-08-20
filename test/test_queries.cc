@@ -117,6 +117,77 @@ TEST_F(Queries, SQLNativeSql_truncate) {
 	ASSERT_TRUE(wcsncmp(buff, src, sizeof(buff)/sizeof(*buff) - 1) == 0);
 }
 
+TEST_F(Queries, SQLNumParams_no_markers) {
+	prepareStatement(MK_WPTR("SELECT 1"));
+	SQLRETURN ret;
+	SQLSMALLINT params = -1;
+	ret = SQLNumParams(stmt, &params);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ASSERT_EQ(params, 0);
+}
+
+TEST_F(Queries, SQLNumParams_markers) {
+	prepareStatement(MK_WPTR("SELECT * FROM foo WHERE bar = ? AND baz = ?"));
+	SQLRETURN ret;
+	SQLSMALLINT params = -1;
+	ret = SQLNumParams(stmt, &params);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ASSERT_EQ(params, 2);
+}
+
+TEST_F(Queries, SQLNumParams_quoted) {
+	prepareStatement(MK_WPTR("foo ' ?' ?"));
+	SQLRETURN ret;
+	SQLSMALLINT params = -1;
+	ret = SQLNumParams(stmt, &params);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ASSERT_EQ(params, 1);
+}
+
+TEST_F(Queries, SQLNumParams_quoted_escaped) {
+	prepareStatement(MK_WPTR("foo ' \\?' ? ?"));
+	SQLRETURN ret;
+	SQLSMALLINT params = -1;
+	ret = SQLNumParams(stmt, &params);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ASSERT_EQ(params, 2);
+}
+
+TEST_F(Queries, SQLNumParams_escaped) {
+	prepareStatement(MK_WPTR("foo  \\? ?"));
+	SQLRETURN ret;
+	SQLSMALLINT params = -1;
+	ret = SQLNumParams(stmt, &params);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ASSERT_EQ(params, 1);
+}
+
+TEST_F(Queries, SQLNumParams_invalid) {
+	prepareStatement(MK_WPTR("foo  '\\? ?"));
+	SQLRETURN ret;
+	SQLSMALLINT params;
+	ret = SQLNumParams(stmt, &params);
+	ASSERT_FALSE(SQL_SUCCEEDED(ret));
+}
+
+TEST_F(Queries, SQLNumParams_duplicates) {
+	prepareStatement(MK_WPTR("foo  ??? ?"));
+	SQLRETURN ret;
+	SQLSMALLINT params = -1;
+	ret = SQLNumParams(stmt, &params);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ASSERT_EQ(params, 1);
+}
+
+TEST_F(Queries, SQLNumParams_duplicates_escape) {
+	prepareStatement(MK_WPTR("foo ? \\??? ??? ? ??"));
+	SQLRETURN ret;
+	SQLSMALLINT params = -1;
+	ret = SQLNumParams(stmt, &params);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ASSERT_EQ(params, 2);
+}
+
 } // test namespace
 
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */

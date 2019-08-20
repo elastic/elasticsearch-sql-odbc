@@ -588,7 +588,7 @@ cstr_st TEST_API *wstr_to_utf8(wstr_st *src, cstr_st *dst)
 		/* eval the needed space for conversion */
 		len = U16WC_TO_MBU8(src->str, src->cnt, NULL, 0);
 		if (! len) {
-			ERRN("failed to evaluate UTF-8 conversion space necessary for [%zu] "
+			ERRN("failed to eval UTF-8 conversion space necessary for [%zu] "
 				"`" LWPDL "`.", src->cnt, LWSTR(src));
 			return NULL;
 		}
@@ -621,6 +621,65 @@ cstr_st TEST_API *wstr_to_utf8(wstr_st *src, cstr_st *dst)
 		if (! len) {
 			/* should not happen, since a first scan already happened */
 			ERRN("failed to UTF-8 convert `" LWPDL "`.", LWSTR(src));
+			free(addr);
+			return NULL;
+		}
+	}
+
+	if (! nts) {
+		dst->str[len] = 0;
+	}
+	dst->cnt = len;
+
+	return dst;
+}
+
+wstr_st TEST_API *utf8_to_wstr(cstr_st *src, wstr_st *dst)
+{
+	int len;
+	size_t cnt;
+	void *addr;
+	BOOL nts; /* is the \0 present and counted in source string? */
+
+	if (0 < src->cnt) {
+		nts = !src->str[src->cnt - 1];
+
+		/* eval the needed space for conversion */
+		len = U8MB_TO_U16WC(src->str, src->cnt, NULL, 0);
+		if (! len) {
+			ERRN("failed to eval UTF-16 conversion space necessary for [%zu] "
+				"`" LCPDL "`.", src->cnt, LCSTR(src));
+			return NULL;
+		}
+	} else {
+		nts = FALSE;
+		len = 0;
+	}
+
+	assert(0 <= len);
+	/* explicitely allocate the \0 if not present&counted  */
+	cnt = len + /*0-term?*/!nts;
+	if (! dst) { /* if null destination, allocate that as well */
+		cnt += sizeof(wstr_st);
+	}
+
+	if (! (addr = malloc(cnt * sizeof(SQLWCHAR)))) {
+		ERRN("OOM for size: %zuB.", cnt);
+		return NULL;
+	}
+	if (! dst) {
+		dst = (wstr_st *)addr;
+		dst->str = (SQLWCHAR *)((uint8_t *)addr + sizeof(wstr_st));
+	} else {
+		dst->str = (SQLWCHAR *)addr;
+	}
+
+	if (0 < src->cnt) {
+		/* convert the string */
+		len = U8MB_TO_U16WC(src->str, src->cnt, dst->str, len);
+		if (! len) {
+			/* should not happen, since a first scan already happened */
+			ERRN("failed to UTF-16 convert `" LCPDL "`.", LCSTR(src));
 			free(addr);
 			return NULL;
 		}
