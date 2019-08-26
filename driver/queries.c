@@ -3056,7 +3056,8 @@ static SQLRETURN statement_len_json(esodbc_stmt_st *stmt, size_t *outlen)
 static SQLRETURN statement_params_len_cbor(esodbc_stmt_st *stmt,
 	size_t *enc_len, size_t *conv_len)
 {
-	size_t i, len, l, max;
+	SQLSMALLINT i;
+	size_t len, l, max;
 	esodbc_rec_st *arec, *irec;
 	SQLRETURN ret;
 
@@ -3104,9 +3105,10 @@ static SQLRETURN statement_params_len_cbor(esodbc_stmt_st *stmt,
 /* Note: this implementation will encode numeric SQL types as strings (as it's
  * reusing the JSON converters). This is somewhat negating CBOR's intentions,
  * but: (1) it's a simplified and tested implementation; (2) the overall
- * performance impact is negligible with this driver's intended usage pattern;
- * (3) the server will convert the received value according to the correctly
- * indicated type. XXX */
+ * performance impact is negligible with this driver's currently intended
+ * usage pattern (SELECTs only, fetching data volume far outweighing
+ * query's); (3) the server will convert the received value according to the
+ * correctly indicated type. XXX */
 static SQLRETURN serialize_param_cbor(esodbc_rec_st *arec,
 	esodbc_rec_st *irec, CborEncoder *pmap, size_t conv_len)
 {
@@ -3114,6 +3116,7 @@ static SQLRETURN serialize_param_cbor(esodbc_rec_st *arec,
 	CborError res;
 	size_t len;
 	SQLLEN *ind_ptr;
+	size_t skip_quote;
 	static SQLULEN param_array_pos = 0; /* parames array not yet supported */
 	esodbc_stmt_st *stmt = HDRH(arec->desc)->stmt;
 
@@ -3134,7 +3137,32 @@ static SQLRETURN serialize_param_cbor(esodbc_rec_st *arec,
 	}
 	assert(len <= conv_len);
 
-	res = cbor_encode_text_string(pmap, pmap->end, len);
+	/* need to skip the leading and trailing `"`? */
+	switch (irec->es_type->meta_type) {
+		case METATYPE_EXACT_NUMERIC:
+		case METATYPE_FLOAT_NUMERIC:
+		case METATYPE_BIT:
+		case METATYPE_BIN:
+			skip_quote = 0;
+			break;
+
+		case METATYPE_STRING:
+		case METATYPE_DATE_TIME:
+		case METATYPE_INTERVAL_WSEC:
+		case METATYPE_INTERVAL_WOSEC:
+		case METATYPE_UID:
+			skip_quote = 1;
+			break;
+
+		case METATYPE_MAX: /*DEFAULT, NULL*/
+		case METATYPE_UNKNOWN:
+		default:
+			BUGH(stmt, "unexpected SQL meta %d / type %d.",
+				irec->es_type->meta_type, irec->es_type->data_type);
+			RET_HDIAGS(stmt, SQL_STATE_HY000);
+	}
+	res = cbor_encode_text_string(pmap, pmap->end + skip_quote,
+			len - 2 * skip_quote);
 	FAIL_ON_CBOR_ERR(stmt, res);
 
 	return SQL_SUCCESS;
@@ -3145,7 +3173,7 @@ static SQLRETURN serialize_params_cbor(esodbc_stmt_st *stmt, CborEncoder *map,
 {
 	const static cstr_st p_type = CSTR_INIT(REQ_KEY_PARAM_TYPE);
 	const static cstr_st p_val = CSTR_INIT(REQ_KEY_PARAM_VAL);
-	size_t i;
+	SQLSMALLINT i;
 	CborError res;
 	SQLRETURN ret;
 	CborEncoder array; /* array for all params */
