@@ -3118,24 +3118,26 @@ static int print_timestamp(TIMESTAMP_STRUCT *tss, BOOL iso8601,
 			tss->hour, tss->minute, tss->second,
 			/* fraction is always provided, but only printed if 'decdigits' */
 			decdigits, nsec);
+	if (n <= 0) {
+		return n;
+	}
+
 	if ((int)lim < n) {
 		n = (int)lim;
 	}
-	if (0 < n) {
-		if (iso8601) {
-			dest[DATE_TEMPLATE_LEN] = L'T';
-			/* The SQL column sizes are considered for ISO format too, to
-			 * allow the case where the client app specifies a timestamp with
-			 * non-zero seconds, but wants to cut those away in the parameter.
-			 * The 'Z' would then be on top of the colsize. */
-			dest[n] = L'Z';
-			n ++;
-			dest[n] = L'\0';
-		}
-		DBG("printed UTC %s timestamp (colsz: %lu, decdig: %hd): "
-			"[%d] `" LWPDL "`.", iso8601 ? "ISO8601" : "SQL",
-			(SQLUINTEGER)colsize, decdigits, n, n, dest);
+	if (iso8601) {
+		dest[DATE_TEMPLATE_LEN] = L'T';
+		/* The SQL column sizes are considered for ISO format too, to
+		 * allow the case where the client app specifies a timestamp with
+		 * non-zero seconds, but wants to cut those away in the parameter.
+		 * The 'Z' would then be on top of the colsize. */
+		dest[n] = L'Z';
+		n ++;
 	}
+	dest[n] = L'\0';
+	DBG("printed UTC %s timestamp (colsz: %lu, decdig: %hd): "
+		"[%d] `" LWPDL "`.", iso8601 ? "ISO8601" : "SQL",
+		(SQLUINTEGER)colsize, decdigits, n, n, dest);
 
 	return n;
 }
@@ -4255,10 +4257,80 @@ static SQLRETURN struct_to_iso8601_timestamp(esodbc_stmt_st *stmt,
 	return SQL_SUCCESS;
 }
 
+/* apply corrections depending on the (column) size and decimal digits
+ * values given at binding time: nullify or trim the resulted string:
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/column-size
+ * */
+static SQLRETURN size_decdigits_for_iso8601(esodbc_rec_st *irec,
+	SQLULEN *_colsize, SQLSMALLINT *_decdigits)
+{
+	SQLULEN colsize;
+	SQLSMALLINT decdigits;
+	esodbc_stmt_st *stmt = HDRH(irec->desc)->stmt;
+
+	colsize = get_param_size(irec);
+	DBGH(stmt, "requested column size: %llu.", colsize);
+
+	decdigits = get_param_decdigits(irec);
+	DBGH(stmt, "requested decimal digits: %llu.", decdigits);
+	if (ESODBC_MAX_SEC_PRECISION < decdigits) {
+		WARNH(stmt, "requested decimal digits adjusted from %hd to %d (max).",
+			decdigits, ESODBC_MAX_SEC_PRECISION);
+		decdigits = ESODBC_MAX_SEC_PRECISION;
+	}
+
+	switch (irec->es_type->data_type) {
+		case SQL_TYPE_TIME:
+			if (colsize) {
+				if (colsize < TIME_TEMPLATE_LEN(0) ||
+					colsize == TIME_TEMPLATE_LEN(1) - 1 /* `:ss.`*/) {
+					ERRH(stmt, "invalid column size value: %llu; allowed: "
+						"8 or greater than 9");
+					RET_HDIAGS(stmt, SQL_STATE_HY104);
+				}
+				colsize += DATE_TEMPLATE_LEN + /* ` `/`T` */1;
+			}
+			break;
+		case SQL_TYPE_DATE:
+			/* if origin is a timestamp (struct or string), the time part
+			 * needs to be zeroed. */
+			if (colsize) {
+				if (colsize != DATE_TEMPLATE_LEN) {
+					ERRH(stmt, "invalid column size value: %llu; allowed: %d.",
+						DATE_TEMPLATE_LEN);
+					RET_HDIAGS(stmt, SQL_STATE_HY104);
+				}
+				colsize += /* ` `/`T` */1 + TIME_TEMPLATE_LEN(0);
+			}
+			if (decdigits) {
+				ERRH(stmt, "invalid decimal digits %hd for TIME type.",
+					decdigits);
+				RET_HDIAGS(stmt, SQL_STATE_HY104);
+			}
+			break;
+		case SQL_TYPE_TIMESTAMP:
+			if (colsize && (colsize < TIMESTAMP_NOSEC_TEMPLATE_LEN ||
+					colsize == 17 || colsize == 18)) {
+				ERRH(stmt, "invalid column size value: %llu; allowed: "
+					"16, 19, 20+f.", colsize);
+				RET_HDIAGS(stmt, SQL_STATE_HY104);
+			}
+			break;
+		default:
+			assert(0);
+	}
+
+	DBGH(stmt, "applying: column size: %llu, decimal digits: %hd.",
+		colsize, decdigits);
+	*_colsize = colsize;
+	*_decdigits = decdigits;
+	return SQL_SUCCESS;
+}
+
 SQLRETURN c2sql_date_time(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	SQLULEN pos, char *dest, size_t *len)
 {
-#	define ZERO_TIME_Z "00:00:00Z"
+	static const wstr_st time_0_z = WSTR_INIT("00:00:00Z");
 	esodbc_stmt_st *stmt;
 	void *data_ptr;
 	SQLLEN *octet_len_ptr;
@@ -4286,24 +4358,9 @@ SQLRETURN c2sql_date_time(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	/* pointer to app's buffer */
 	data_ptr = deferred_address(SQL_DESC_DATA_PTR, pos, arec);
 
-	/* apply corrections depending on the (column) size and decimal digits
-	 * values given at binding time: nullify or trim the resulted string:
-	 * https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/column-size
-	 * */
-	colsize = get_param_size(irec);
-	DBGH(stmt, "requested column size: %llu.", colsize);
-	if (colsize && (colsize < sizeof("yyyy-mm-dd hh:mm") - 1 ||
-			colsize == 17 || colsize == 18)) {
-		ERRH(stmt, "invalid column size value: %llu; allowed: 16, 19, 20+f.",
-			colsize);
-		RET_HDIAGS(stmt, SQL_STATE_HY104);
-	}
-	decdigits = get_param_decdigits(irec);
-	DBGH(stmt, "requested decimal digits: %llu.", decdigits);
-	if (ESODBC_MAX_SEC_PRECISION < decdigits) {
-		WARNH(stmt, "requested decimal digits adjusted from %hd to %d (max).",
-			decdigits, ESODBC_MAX_SEC_PRECISION);
-		decdigits = ESODBC_MAX_SEC_PRECISION;
+	ret = size_decdigits_for_iso8601(irec, &colsize, &decdigits);
+	if (! SQL_SUCCEEDED(ret)) {
+		return ret;
 	}
 
 	/*INDENT-OFF*/
@@ -4318,7 +4375,7 @@ SQLRETURN c2sql_date_time(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			}
 			/* disallow DATE <-> TIME conversions */
 			if ((irec->es_type->data_type == SQL_C_TYPE_TIME &&
-					format == SQL_C_TYPE_DATE) || (format == SQL_C_TYPE_TIME &&
+					format == SQL_TYPE_DATE) || (format == SQL_TYPE_TIME &&
 					irec->es_type->data_type == SQL_C_TYPE_DATE)) {
 				ERRH(stmt, "TIME-DATE conversions are not possible.");
 				RET_HDIAGS(stmt, SQL_STATE_22018);
@@ -4354,7 +4411,7 @@ SQLRETURN c2sql_date_time(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	 * expense. */
 	/* Adapt the resulting ISO8601 value to the target data type */
 	switch (irec->es_type->data_type) {
-		case SQL_C_TYPE_TIME:
+		case SQL_TYPE_TIME:
 			/* shift value + \0 upwards over the DATE component */
 			/* Note: by the book, non-0 fractional seconds in timestamp should
 			 * lead to 22008 a failure. However, ES/SQL's TIME supports
@@ -4362,19 +4419,19 @@ SQLRETURN c2sql_date_time(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			cnt -= DATE_TEMPLATE_LEN + /*'T'*/1;
 			wmemmove(wbuff, wbuff + DATE_TEMPLATE_LEN + /*'T'*/1, cnt + 1);
 			break;
-		case SQL_C_TYPE_DATE:
+		case SQL_TYPE_DATE:
 			/* if origin is a timestamp (struct or string), the time part
 			 * needs to be zeroed. */
 			if (ctype == SQL_C_TYPE_TIMESTAMP ||
-				format == SQL_C_TYPE_TIMESTAMP) {
+				format == SQL_TYPE_TIMESTAMP) {
 				assert(ISO8601_TIMESTAMP_MIN_LEN <= cnt);
 				wmemcpy(wbuff + DATE_TEMPLATE_LEN + /*'T'*/1,
-					MK_WPTR(ZERO_TIME_Z), sizeof(ZERO_TIME_Z) /*+\0*/);
+					(wchar_t *)time_0_z.str, time_0_z.cnt + /*\0*/1);
 				cnt = ISO8601_TIMESTAMP_MIN_LEN;
 			}
 			break;
 		default:
-			assert(irec->es_type->data_type == SQL_C_TYPE_TIMESTAMP);
+			assert(irec->es_type->data_type == SQL_TYPE_TIMESTAMP);
 	}
 	DBGH(stmt, "converted value: [%zu] `" LWPDL "`.", cnt, cnt, wbuff);
 
@@ -4384,7 +4441,6 @@ SQLRETURN c2sql_date_time(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 	dest[(*len) ++] = '"';
 	return SQL_SUCCESS;
-#	undef ZERO_TIME_Z
 }
 
 /* parses an interval literal string from app's char/wchar_t buffer */

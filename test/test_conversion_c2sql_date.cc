@@ -36,6 +36,18 @@ TEST_F(ConvertC2SQL_Date, Date2Date)
 		"\"value\": \"1234-12-23T00:00:00Z\"}]");
 }
 
+TEST_F(ConvertC2SQL_Date, CStr_Date2Date_size10)
+{
+	SQLCHAR val[] = "2000-01-01"; // treated as utc, since apply_tz==FALSE
+	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR,
+			SQL_TYPE_DATE, /*size*/10, /*decdigits*/0, val, sizeof(val),
+			/*IndLen*/NULL);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	assertRequest("[{\"type\": \"DATE\", "
+		"\"value\": \"2000-01-01T00:00:00Z\"}]");
+}
+
 TEST_F(ConvertC2SQL_Date, CStr_Date2Date)
 {
 	SQLCHAR val[] = "2000-01-01"; // treated as utc, since apply_tz==FALSE
@@ -93,6 +105,18 @@ TEST_F(ConvertC2SQL_Date, WStr_Timestamp2Date)
 	SQLWCHAR val[] = L"1234-12-23T12:34:56.7890123Z";
 	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR,
 			SQL_TYPE_DATE, /*size*/0, /*decdigits*/0, val, sizeof(val),
+			/*IndLen*/NULL);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	assertRequest("[{\"type\": \"DATE\", "
+		"\"value\": \"1234-12-23T00:00:00Z\"}]");
+}
+
+TEST_F(ConvertC2SQL_Date, WStr_Timestamp2Date_size10)
+{
+	SQLWCHAR val[] = L"1234-12-23T12:34:56.7890123Z";
+	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR,
+			SQL_TYPE_DATE, /*size*/10, /*decdigits*/0, val, sizeof(val),
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
