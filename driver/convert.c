@@ -4285,7 +4285,7 @@ static SQLRETURN size_decdigits_for_iso8601(esodbc_rec_st *irec,
 				if (colsize < TIME_TEMPLATE_LEN(0) ||
 					colsize == TIME_TEMPLATE_LEN(1) - 1 /* `:ss.`*/) {
 					ERRH(stmt, "invalid column size value: %llu; allowed: "
-						"8 or greater than 9");
+						"8 or 9 + fractions count.", colsize);
 					RET_HDIAGS(stmt, SQL_STATE_HY104);
 				}
 				colsize += DATE_TEMPLATE_LEN + /* ` `/`T` */1;
@@ -4297,7 +4297,7 @@ static SQLRETURN size_decdigits_for_iso8601(esodbc_rec_st *irec,
 			if (colsize) {
 				if (colsize != DATE_TEMPLATE_LEN) {
 					ERRH(stmt, "invalid column size value: %llu; allowed: %d.",
-						DATE_TEMPLATE_LEN);
+						colsize, DATE_TEMPLATE_LEN);
 					RET_HDIAGS(stmt, SQL_STATE_HY104);
 				}
 				colsize += /* ` `/`T` */1 + TIME_TEMPLATE_LEN(0);
@@ -4312,7 +4312,7 @@ static SQLRETURN size_decdigits_for_iso8601(esodbc_rec_st *irec,
 			if (colsize && (colsize < TIMESTAMP_NOSEC_TEMPLATE_LEN ||
 					colsize == 17 || colsize == 18)) {
 				ERRH(stmt, "invalid column size value: %llu; allowed: "
-					"16, 19, 20+f.", colsize);
+					"16, 19 or 20 + fractions count.", colsize);
 				RET_HDIAGS(stmt, SQL_STATE_HY104);
 			}
 			break;
