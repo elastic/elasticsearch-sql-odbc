@@ -172,6 +172,7 @@ TEST_F(ConvertC2SQL_Varchar, Bigint2Varchar_fail_22003)
 
 	cstr_st buff = {NULL, 0};
 	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
+	free(buff.str);
 	ASSERT_FALSE(SQL_SUCCEEDED(ret));
 	assertState(L"22003");
 }
@@ -188,8 +189,40 @@ TEST_F(ConvertC2SQL_Varchar, Double2Varchar)
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	assertRequest("[{\"type\": \"KEYWORD\", "
-		"\"value\": \"1.2000e+00\"}]");
+		"\"value\": \"1.20000000\"}]");
 }
+
+TEST_F(ConvertC2SQL_Varchar, Double2Varchar_strip_trailing_dot)
+{
+	prepareStatement();
+
+	SQLDOUBLE val = -9999.999;
+	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_DOUBLE,
+			SQL_VARCHAR, /*size: -9999.*/6, /*decdigits*/0, &val, sizeof(val),
+			/*IndLen*/NULL);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	assertRequest("[{\"type\": \"KEYWORD\", "
+		"\"value\": \"-9999\"}]");
+}
+
+TEST_F(ConvertC2SQL_Varchar, Double2Varchar_fail_22003)
+{
+	prepareStatement();
+
+	SQLDOUBLE val = -9999.999;
+	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_DOUBLE,
+			SQL_VARCHAR, /*size*/4, /*decdigits*/0, &val, sizeof(val),
+			/*IndLen*/NULL);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	cstr_st buff = {NULL, 0};
+	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
+	free(buff.str);
+	ASSERT_FALSE(SQL_SUCCEEDED(ret));
+	assertState(L"22003");
+}
+
 
 
 } // test namespace

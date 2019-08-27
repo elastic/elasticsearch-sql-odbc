@@ -218,14 +218,14 @@ TEST_F(ConvertC2SQL_Numeric, Float2Long)
 {
 	prepareStatement();
 
-	SQLREAL val = 9223372036854775806.12345; /* LLONG_MAX.12345 - 1 */
+	SQLREAL val = (SQLREAL)LLONG_MAX;
 	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_FLOAT,
 			SQL_BIGINT, /*size*/0, /*decdigits*/0, &val, sizeof(val),
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	assertRequest("[{\"type\": \"LONG\", "
-		"\"value\": 9.2233720368548e+18}]");
+		"\"value\": 9223372036854775808}]"); // == (double)LLONG_MAX: XXX
 }
 
 /* note: test name used in test */
@@ -247,29 +247,14 @@ TEST_F(ConvertC2SQL_Numeric, Double2HFloat)
 {
 	prepareStatement();
 
-	SQLDOUBLE val = -12345678901234567890.123456789;
+	SQLDOUBLE val = -1234567890.123456789;
 	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_DOUBLE,
-			SQL_FLOAT, /*size*/15, /*decdigits*/0, &val, sizeof(val),
+			SQL_FLOAT, /*size: ignored*/15, /*decdigits*/0, &val, sizeof(val),
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	assertRequest("[{\"type\": \"HALF_FLOAT\", "
-		"\"value\": -1.23456789e+19}]"); /* def prec is 8 */
-}
-
-/* note: test name used in test */
-TEST_F(ConvertC2SQL_Numeric, Double2SFloat)
-{
-	prepareStatement();
-
-	SQLDOUBLE val = -12345678901234567890.123456789;
-	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_DOUBLE,
-			SQL_FLOAT, /*size*/25, /*decdigits*/0, &val, sizeof(val),
-			/*IndLen*/NULL);
-	ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-	assertRequest("[{\"type\": \"HALF_FLOAT\", "
-		"\"value\": -1.234567890123456717e+19}]");
+		"\"value\": -1234567890.123}]");
 }
 
 TEST_F(ConvertC2SQL_Numeric, Double2Real_fail_22003)
@@ -322,19 +307,19 @@ TEST_F(ConvertC2SQL_Numeric, Bin_Byte2Integer_fail_HY090)
 }
 
 /* note: test name used in test */
-TEST_F(ConvertC2SQL_Numeric, Bin_Double2SFloat)
+TEST_F(ConvertC2SQL_Numeric, Bin_Real2HFloat)
 {
 	prepareStatement();
 
-	SQLDOUBLE val = -12345678901234567890.123456789;
+	SQLREAL val = -123456.7890123f;
 	SQLLEN osize = sizeof(val);
-	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_DOUBLE,
-			SQL_FLOAT, /*size*/25, /*decdigits*/0, &val, sizeof(val),
+	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_BINARY,
+			SQL_FLOAT, /*size: ignored*/25, /*decdigits*/0, &val, sizeof(val),
 			&osize);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	assertRequest("[{\"type\": \"HALF_FLOAT\", "
-		"\"value\": -1.234567890123456717e+19}]");
+		"\"value\": -123456.789}]");
 }
 
 /* note: test name used in test */
@@ -354,7 +339,7 @@ TEST_F(ConvertC2SQL_Numeric, Numeric2HFloat)
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
 	assertRequest("[{\"type\": \"HALF_FLOAT\", "
-		"\"value\": -2.5212e+01}]");
+		"\"value\": -25.212}]");
 }
 
 } // test namespace
