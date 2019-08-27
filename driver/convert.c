@@ -4296,8 +4296,8 @@ static SQLRETURN size_decdigits_for_iso8601(esodbc_rec_st *irec,
 			 * needs to be zeroed. */
 			if (colsize) {
 				if (colsize != DATE_TEMPLATE_LEN) {
-					ERRH(stmt, "invalid column size value: %llu; allowed: %d.",
-						colsize, DATE_TEMPLATE_LEN);
+					ERRH(stmt, "invalid column size value: %llu; allowed: "
+						"%zu.", colsize, DATE_TEMPLATE_LEN);
 					RET_HDIAGS(stmt, SQL_STATE_HY104);
 				}
 				colsize += /* ` `/`T` */1 + TIME_TEMPLATE_LEN(0);
