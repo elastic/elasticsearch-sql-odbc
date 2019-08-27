@@ -3106,9 +3106,9 @@ static SQLRETURN statement_params_len_cbor(esodbc_stmt_st *stmt,
  * reusing the JSON converters). This is somewhat negating CBOR's intentions,
  * but: (1) it's a simplified and tested implementation; (2) the overall
  * performance impact is negligible with this driver's currently intended
- * usage pattern (SELECTs only, fetching data volume far outweighing
- * query's); (3) the server will convert the received value according to the
- * correctly indicated type. XXX */
+ * usage pattern (SELECTs only, fetching data volume far outweighing that of
+ * the queries); (3) the server will convert the received value according to
+ * the correctly indicated type. XXX */
 static SQLRETURN serialize_param_cbor(esodbc_rec_st *arec,
 	esodbc_rec_st *irec, CborEncoder *pmap, size_t conv_len)
 {
