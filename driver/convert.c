@@ -51,6 +51,7 @@ static thread_local struct tm today;
 		RET_HDIAGS(_stmt, SQL_STATE_22003); \
 	} while (0)
 
+#define DBL_BASE10_MAX_LEN /*-0.*/3 + DBL_DIG - DBL_MIN_10_EXP
 /* maximum lenght of an interval literal (with terminator; both ISO and SQL),
  * with no field sanity checks: five longs with separators and sign */
 #define INTERVAL_VAL_MAX_LEN (5 * sizeof("4294967295"))
@@ -347,12 +348,12 @@ SQLRETURN set_param_size(esodbc_rec_st *irec,
 			}
 		/* no break */
 		case METATYPE_FLOAT_NUMERIC:
-			// TODO: https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/column-size :
-			// "The ColumnSize argument of SQLBindParameter is ignored for
-			// this data type." (floats included): ????
-			return EsSQLSetDescFieldW(irec->desc, param_no, SQL_DESC_PRECISION,
-					/* cast: ULEN -> SMALLINT; XXX: range check? */
-					(SQLPOINTER)(uintptr_t)size, SQL_IS_SMALLINT);
+		/* https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/column-size :
+		 * "The ColumnSize argument of SQLBindParameter is ignored for
+		 * this data type."
+		return EsSQLSetDescFieldW(irec->desc, param_no, SQL_DESC_PRECISION,
+				(SQLPOINTER)(uintptr_t)size, SQL_IS_SMALLINT);
+		 */
 
 		default:
 			;/* "For other data types, the [s]ize argument is ignored." */
@@ -577,7 +578,7 @@ static inline SQLSMALLINT get_rec_c_type(esodbc_rec_st *arec,
 	} else {
 		ctype = irec->es_type->c_concise_type;
 	}
-	DBGH(arec->desc, "target data C type: %hd.", ctype);
+	DBGH(arec->desc, "AxD data C type: %hd.", ctype);
 	return ctype;
 }
 
@@ -1251,7 +1252,6 @@ static inline const void *floats_rep(esodbc_stmt_st *stmt, double dbl,
 static SQLRETURN double_to_str(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	double dbl, void *data_ptr, SQLLEN *octet_len_ptr, BOOL wide)
 {
-#	define DBL_BASE10_MAX_LEN /*-0.*/3 + DBL_DIG - DBL_MIN_10_EXP
 	esodbc_stmt_st *stmt = HDRH(arec->desc)->stmt;
 	SQLCHAR buff[DBL_BASE10_MAX_LEN + /*\0*/1];
 	SQLWCHAR wbuff[DBL_BASE10_MAX_LEN + /*\0*/1];
@@ -1308,7 +1308,6 @@ static SQLRETURN double_to_str(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	}
 
 	return transfer_xstr0(arec, irec, &xstr, data_ptr, octet_len_ptr);
-#	undef DBL_BASE10_MAX_LEN
 }
 
 
@@ -3845,14 +3844,14 @@ static SQLRETURN string_to_number(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		}
 		if ((min && dbl < *min) || (max && *max < dbl)) {
 			ERRH(stmt, "converted double %.6e out of bounds "
-				"[%.6e, %.6e]", dbl, min, *max);
+				"[%.6e, %.6e]", dbl, min ? *min : 0, max ? *max : 0);
 			/* spec requires 22001 here, but that is wrong? */
 			RET_HDIAGS(stmt, SQL_STATE_22003);
 		}
 	} else {
 		if ((min && abs_dbl < *min) || (max && *max < abs_dbl)) {
 			ERRH(stmt, "converted abs double %.6e out of bounds "
-				"[%.6e, %.6e]", abs_dbl, min, *max);
+				"[%.6e, %.6e]", abs_dbl, min ? *min : 0, max ? *max : 0);
 			RET_HDIAGS(stmt, SQL_STATE_22003);
 		}
 	}
@@ -3920,22 +3919,21 @@ static SQLRETURN ufixed_to_number(esodbc_stmt_st *stmt, SQLUBIGINT src,
 	return SQL_SUCCESS;
 }
 
+/* convert a floating point source to a "numeric" destination, which can be
+ * any of the allowed SQL target type - numeric (fixed, floating,
+ * decimal/numeric), string, binary - except boolean/bit. */
 static SQLRETURN floating_to_number(esodbc_rec_st *irec, SQLDOUBLE src,
 	double *min, double *max, char *dest, size_t *len)
 {
-	/* format fixed length in scientific notation, -1.23E-45 */
-	//const static size_t ff_len = /*-1.*/3 + /*prec*/0 + /*E-*/ 2 +
-	//	sizeof(STR(ESODBC_PRECISION_DOUBLE)) - 1;
-	size_t maxlen, width;
+	SQLSMALLINT prec;
+	SQLULEN colsize;
 	int cnt;
 	SQLDOUBLE abs_src;
 	esodbc_stmt_st *stmt = irec->desc->hdr.stmt;
 
-	//maxlen = get_param_size(irec) + ff_len;
-	maxlen = get_param_size(irec);
 	if (! dest) {
 		/* largest space it could occupy */
-		*len = maxlen + /*0-term, for printf*/1;
+		*len = DBL_BASE10_MAX_LEN + /*0-term, for printf*/1;
 		return SQL_SUCCESS;
 	}
 
@@ -3946,23 +3944,50 @@ static SQLRETURN floating_to_number(esodbc_rec_st *irec, SQLDOUBLE src,
 		RET_HDIAGS(stmt, SQL_STATE_22003);
 	}
 
-	width = maxlen;
-	width -= /*sign*/(src < 0);
-	width -= /*1.*/2;
-	width -= /*e+00*/4 + /*3rd digit*/(abs_src < 1e-100 || 1e100 < src);
-	if (width < 0) {
-		ERRH(stmt, "parameter size (%zu) to low for floating point.", maxlen);
-		RET_HDIAGS(stmt, SQL_STATE_HY104);
+	switch (irec->es_type->meta_type) {
+		case METATYPE_EXACT_NUMERIC:
+		case METATYPE_FLOAT_NUMERIC:
+			assert(0 <= irec->es_type->maximum_scale);
+			prec = irec->es_type->maximum_scale;
+			break;
+		case METATYPE_STRING:
+			/* print at source's scale and trim at given size afterwards */
+			prec = ESODBC_DEF_FLOAT_PRECISION;
+			break;
+		default:
+			BUGH(stmt, "unexpected IREC type %d.", irec->es_type->data_type);
+			RET_HDIAGS(stmt, SQL_STATE_HY000);
 	}
-	DBGH(stmt, "converting double param %.6e with precision/width: %zu/%d.",
-		src, maxlen, width);
-	cnt = snprintf(dest, maxlen + /*\0*/1, "%.*e", (int)width, src);
+	DBGH(stmt, "converting double param %.*f with precision %hd.",
+		prec, src, prec);
+	cnt = snprintf(dest, DBL_BASE10_MAX_LEN + /*\0*/1, "%.*f",
+			(int)prec, src);
 	if (cnt < 0) {
-		ERRH(stmt, "failed to print double %e.", src);
+		ERRH(stmt, "failed to print double %.*f with precision %hd.",
+			prec, src, prec);
 		RET_HDIAGS(stmt, SQL_STATE_HY000);
 	} else {
-		*len = cnt;
-		DBGH(stmt, "value %.6e printed as `" LCPDL "`.", src, *len, dest);
+		if (irec->es_type->meta_type == METATYPE_STRING) {
+			/* can decimals be cut away? */
+			colsize = get_param_size(irec);
+			if ((unsigned long long)abs_src < pow10((unsigned)colsize
+					/* if source is negative, reserve space for it */
+					- (src < 0))) {
+				*len = (SQLULEN)cnt < colsize ? cnt : colsize;
+				/* trim trailing `.` */
+				if (dest[*len - 1] == '.') { /* TODO: i18 */
+					(*len) --;
+				}
+			} else {
+				ERRH(stmt, "non-fractional truncation for [%d] %.*f on %hd "
+					"column size.", cnt, prec, src, prec);
+				RET_HDIAGS(stmt, SQL_STATE_22003);
+			}
+		} else {
+			*len = cnt;
+		}
+		DBGH(stmt, "floating value printed as [%zu] `" LCPDL "`.", *len,
+			*len, dest);
 	}
 
 	return SQL_SUCCESS;
@@ -4039,7 +4064,7 @@ static SQLRETURN binary_to_number(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		/* JSON double */
 		do {
 			// TODO: check accurate limits for floats in ES/SQL
-		case SQL_FLOAT: /* HALF_FLOAT, SCALED_FLOAT */
+		case SQL_FLOAT: /* HALF_FLOAT */
 		case SQL_REAL: BIN_TO_DBL(SQLREAL); break; /* FLOAT */
 		case SQL_DOUBLE: BIN_TO_DBL(SQLDOUBLE); break; /* DOUBLE */
 		} while (0);
