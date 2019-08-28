@@ -350,6 +350,8 @@ char *cstr_hex_dump(const cstr_st *buff);
 	(sizeof("hh:mm:ss") - /*\0*/1 + /*'.'*/!!prec + prec)
 #define TIMESTAMP_TEMPLATE_LEN(prec)	\
 	(DATE_TEMPLATE_LEN + /*' '*/1 + TIME_TEMPLATE_LEN(prec))
+#define TIMESTAMP_NOSEC_TEMPLATE_LEN	\
+	(DATE_TEMPLATE_LEN + /*' '*/1 + sizeof("hh:mm") - /*\0*/1)
 
 
 #endif /* __UTIL_H__ */

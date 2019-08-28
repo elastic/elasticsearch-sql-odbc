@@ -75,11 +75,11 @@ TEST_F(ConvertC2SQL_Time, WStr_Timestamp2Time_colsize_16)
 {
 	SQLWCHAR val[] = L"1234-12-23T12:34:56.7890123Z";
 	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR,
-			SQL_TYPE_TIME, /*size*/16, /*decdigits*/0, val, sizeof(val),
+			SQL_TYPE_TIME, /*size*/8, /*decdigits*/0, val, sizeof(val),
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	assertRequest("[{\"type\": \"TIME\", \"value\": \"12:34Z\"}]");
+	assertRequest("[{\"type\": \"TIME\", \"value\": \"12:34:56Z\"}]");
 }
 
 /* note: test name used in test */
