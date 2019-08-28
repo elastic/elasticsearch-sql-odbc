@@ -332,6 +332,8 @@ BOOL TEST_API metadata_id_escape(wstr_st *src, wstr_st *dst, BOOL force);
 	(sizeof("hh:mm:ss") - /*\0*/1 + /*'.'*/!!prec + prec)
 #define TIMESTAMP_TEMPLATE_LEN(prec)	\
 	(DATE_TEMPLATE_LEN + /*' '*/1 + TIME_TEMPLATE_LEN(prec))
+#define TIMESTAMP_NOSEC_TEMPLATE_LEN	\
+	(DATE_TEMPLATE_LEN + /*' '*/1 + sizeof("hh:mm") - /*\0*/1)
 
 #endif /* __UTIL_H__ */
 
