@@ -3666,7 +3666,6 @@ static BOOL xstr_to_number(esodbc_stmt_st *stmt, void *data_ptr,
 SQLRETURN c2sql_null(esodbc_rec_st *arec,
 	esodbc_rec_st *irec, char *dest, size_t *len)
 {
-	assert(irec->concise_type == ESODBC_SQL_NULL);
 	if (dest) {
 		memcpy(dest, JSON_VAL_NULL, sizeof(JSON_VAL_NULL) - /*\0*/1);
 	}
@@ -4617,6 +4616,37 @@ SQLRETURN c2sql_interval(esodbc_rec_st *arec, esodbc_rec_st *irec,
 #	undef ASSIGN_SIGNED
 }
 
+static inline SQLLEN get_octet_len(SQLLEN *octet_len_ptr, void *data_ptr,
+	BOOL wide)
+{
+	SQLLEN cnt;
+
+	assert(data_ptr);
+
+	if (! octet_len_ptr) {
+		/* "If [...] is a null pointer, the driver assumes that all input
+		 * parameter values are non-NULL and that character and binary data is
+		 * null-terminated." */
+		cnt = wide ? wcslen((wchar_t *)data_ptr) : strlen((char *)data_ptr);
+	} else {
+		cnt = *octet_len_ptr;
+		switch (cnt) {
+			case SQL_NTSL:
+				cnt = wide ? wcslen((wchar_t *)data_ptr) :
+					strlen((char *)data_ptr);
+				break;
+			case SQL_NULL_DATA:
+				BUG("converting SQL_NULL_DATA");
+				cnt = -1; /* UTF16/8 will fail */
+				break;
+			default: /* get characters count from octets count */
+				cnt /= wide ? sizeof(SQLWCHAR) : sizeof(SQLCHAR);
+		}
+	}
+
+	return cnt;
+}
+
 static SQLRETURN c2sql_cstr2qstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	SQLULEN pos, char *dest, size_t *len)
 {
@@ -4629,7 +4659,7 @@ static SQLRETURN c2sql_cstr2qstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	/* pointer to app's buffer */
 	data_ptr = deferred_address(SQL_DESC_DATA_PTR, pos, arec);
 
-	cnt = octet_len_ptr ? *octet_len_ptr : strlen((char *)data_ptr);
+	cnt = get_octet_len(octet_len_ptr, data_ptr, /*wide*/FALSE);
 
 	if (dest) {
 		*dest = '"';
@@ -4663,7 +4693,7 @@ static SQLRETURN c2sql_wstr2qstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	/* pointer to app's buffer */
 	data_ptr = deferred_address(SQL_DESC_DATA_PTR, pos, arec);
 
-	cnt = octet_len_ptr ? *octet_len_ptr : wcslen((wchar_t *)data_ptr);
+	cnt = get_octet_len(octet_len_ptr, data_ptr, /*wide*/TRUE);
 
 	if (dest) {
 		*dest = '"';
@@ -4682,7 +4712,7 @@ static SQLRETURN c2sql_wstr2qstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		octets = U16WC_TO_MBU8((wchar_t *)data_ptr, cnt, dest + !!dest,
 				dest ? INT_MAX : 0);
 		if ((err = WAPI_ERRNO()) != ERROR_SUCCESS) {
-			ERRH(stmt, "converting to multibyte string failed: %d", err);
+			ERRH(stmt, "converting to multibyte string failed: 0x%x", err);
 			RET_HDIAGS(stmt, SQL_STATE_HY000);
 		}
 		assert(0 < octets); /* shouldn't not fail and return negative */
