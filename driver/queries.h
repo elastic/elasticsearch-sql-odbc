@@ -142,6 +142,9 @@ SQLRETURN EsSQLRowCount(_In_ SQLHSTMT StatementHandle, _Out_ SQLLEN *RowCount);
 #define REQ_KEY_MULTIVAL		"field_multi_value_leniency"
 #define REQ_KEY_IDX_FROZEN		"index_include_frozen"
 #define REQ_KEY_TIMEZONE		"time_zone"
+/* keys for the "params" argument */
+#define REQ_KEY_PARAM_TYPE		"type"
+#define REQ_KEY_PARAM_VAL		"value"
 
 #define REST_REQ_KEY_COUNT		11 /* "query" or "cursor" */
 

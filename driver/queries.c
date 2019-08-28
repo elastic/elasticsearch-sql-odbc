@@ -36,6 +36,10 @@
 #define CHK_RES(_hnd, _fmt, ...) \
 	JUMP_ON_CBOR_ERR(res, err, _hnd, _fmt, __VA_ARGS__)
 
+/* fwd decl */
+static SQLRETURN statement_params_len_cbor(esodbc_stmt_st *stmt,
+	size_t *enc_len, size_t *conv_len);
+
 static thread_local cstr_st tz_param;
 
 static BOOL print_tz_param(long tz_dst_offt)
@@ -677,6 +681,9 @@ static SQLRETURN attach_answer_cbor(esodbc_stmt_st *stmt)
 			"answer: `%s`.", cstr_hex_dump(&stmt->rset.body));
 		goto err;
 	}
+	/* save the object, as it might be required by EsSQLRowCount() */
+	stmt->rset.pack.cbor.rows_obj = rows_obj;
+
 	/* ES uses indefinite-length arrays -- meh. */
 	res = cbor_container_is_empty(rows_obj, &empty);
 	CHK_RES(stmt, "failed to check if '" PACK_PARAM_ROWS "' array is empty");
@@ -691,9 +698,6 @@ static SQLRETURN attach_answer_cbor(esodbc_stmt_st *stmt)
 		INFOH(stmt, "rows received in current (#%zu) result set: %zu.",
 			stmt->nset + 1, nrows);
 #		endif /* NDEBUG */
-		/* save the object, as it might be required by EsSQLRowCount() */
-		stmt->rset.pack.cbor.rows_obj = rows_obj;
-
 		/* prepare iterator for EsSQLFetch(); recursing object and iterator
 		 * can be the same, since there's no need to "leave" the container. */
 		res = cbor_value_enter_container(&rows_obj, &rows_obj);
@@ -2832,7 +2836,6 @@ static SQLRETURN convert_param_val(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			ERRH(stmt, "conversion to SQL BINARY not implemented.");
 			RET_HDIAG(stmt, SQL_STATE_HYC00, "conversion to SQL BINARY "
 				"not yet supported", 0);
-			break;
 
 		default:
 			BUGH(arec->desc->hdr.stmt, "unexpected ES/SQL type %hd.",
@@ -2842,6 +2845,7 @@ static SQLRETURN convert_param_val(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	}
 	/*INDENT-ON*/
 
+	assert(0);
 	return SQL_SUCCESS;
 }
 
@@ -2851,9 +2855,8 @@ static SQLRETURN serialize_params_json(esodbc_stmt_st *stmt, char *dest,
 	size_t *len)
 {
 	/* JSON keys for building one parameter object */
-#	define JSON_KEY_TYPE	"{\"type\": \""
-#	define JSON_KEY_VALUE	"\", \"value\": "
-
+	const static cstr_st j_type = CSTR_INIT("{\"" REQ_KEY_PARAM_TYPE "\": \"");
+	const static cstr_st j_val = CSTR_INIT("\", \"" REQ_KEY_PARAM_VAL "\": ");
 	esodbc_rec_st *arec, *irec;
 	SQLRETURN ret;
 	SQLSMALLINT i;
@@ -2875,10 +2878,9 @@ static SQLRETURN serialize_params_json(esodbc_stmt_st *stmt, char *dest,
 				memcpy(dest + pos, ", ", 2);
 			}
 			/* copy 'type' JSON key name */
-			memcpy(dest + pos + 2 * !!i, JSON_KEY_TYPE,
-				sizeof(JSON_KEY_TYPE) - 1);
+			memcpy(dest + pos + 2 * !!i, j_type.str, j_type.cnt);
 		}
-		pos += 2 * !!i + sizeof(JSON_KEY_TYPE) - 1;
+		pos += 2 * !!i + j_type.cnt;
 
 		/* copy/eval ES/SQL type name */
 		pos += json_escape(irec->es_type->type_name_c.str,
@@ -2887,9 +2889,9 @@ static SQLRETURN serialize_params_json(esodbc_stmt_st *stmt, char *dest,
 
 		if (dest) {
 			/* copy 'value' JSON key name */
-			memcpy(dest + pos, JSON_KEY_VALUE, sizeof(JSON_KEY_VALUE) - 1);
+			memcpy(dest + pos, j_val.str, j_val.cnt);
 		}
-		pos += sizeof(JSON_KEY_VALUE) - 1;
+		pos += j_val.cnt;
 
 		/* copy converted parameter value */
 		ret = convert_param_val(arec, irec, /*params array pos*/0LLU,
@@ -2914,14 +2916,10 @@ static SQLRETURN serialize_params_json(esodbc_stmt_st *stmt, char *dest,
 
 	*len = pos;
 	return SQL_SUCCESS;
-
-#	undef JSON_KEY_TYPE
-#	undef JSON_KEY_VALUE
 }
 
-
-static SQLRETURN statement_len_cbor(esodbc_stmt_st *stmt, size_t *outlen,
-	size_t *keys)
+static SQLRETURN statement_len_cbor(esodbc_stmt_st *stmt, size_t *enc_len,
+	size_t *conv_len, size_t *keys)
 {
 	SQLRETURN ret;
 	size_t bodylen, len, curslen;
@@ -2951,12 +2949,8 @@ static SQLRETURN statement_len_cbor(esodbc_stmt_st *stmt, size_t *outlen,
 		/* does the statement have any parameters? */
 		if (stmt->apd->count) {
 			bodylen += cbor_str_obj_len(sizeof(REQ_KEY_PARAMS) - 1);
-			// TODO:
-			// ret = serialize_params_cbor(stmt, /* no copy, just eval */NULL,
-			//		&len);
-			ret = SQL_ERROR;
-			len = 0;
-			FIXME; // TODO
+
+			ret = statement_params_len_cbor(stmt, &len, conv_len);
 			if (! SQL_SUCCEEDED(ret)) {
 				ERRH(stmt, "failed to eval parameters length");
 				return ret;
@@ -2989,7 +2983,7 @@ static SQLRETURN statement_len_cbor(esodbc_stmt_st *stmt, size_t *outlen,
 	*keys += 2; /* mode, client_id */
 	/* TODO: request_/page_timeout */
 
-	*outlen = bodylen;
+	*enc_len = bodylen;
 	return SQL_SUCCESS;
 }
 
@@ -3052,15 +3046,190 @@ static SQLRETURN statement_len_json(esodbc_stmt_st *stmt, size_t *outlen)
 
 #define FAIL_ON_CBOR_ERR(_hnd, _cbor_err) \
 	do { \
-		if (err != CborNoError) { \
+		if (_cbor_err != CborNoError) { \
 			ERRH(_hnd, "CBOR: %s.", cbor_error_string(_cbor_err)); \
 			RET_HDIAG(_hnd, SQL_STATE_HY000, "CBOR serialization error", \
 				_cbor_err); \
 		} \
 	} while (0)
 
+static SQLRETURN statement_params_len_cbor(esodbc_stmt_st *stmt,
+	size_t *enc_len, size_t *conv_len)
+{
+	SQLSMALLINT i;
+	size_t len, l, max;
+	esodbc_rec_st *arec, *irec;
+	SQLRETURN ret;
+
+	/* Initial all-encompassing array preamble. */
+	/* ~ [] */
+	len = cbor_nn_hdr_len(stmt->apd->count);
+
+	max = 0;
+	for (i = 0; i < stmt->apd->count; i ++) {
+		assert(stmt->ipd->count == stmt->apd->count);
+		arec = &stmt->apd->recs[i];
+		irec = &stmt->ipd->recs[i];
+
+		/* ~ {} */
+		len = cbor_nn_hdr_len(stmt->apd->count);
+
+		/* ~ "type": "..." */
+		len += cbor_str_obj_len(sizeof(REQ_KEY_PARAM_TYPE) - 1);
+		len += cbor_str_obj_len(irec->es_type->type_name.cnt);
+
+		/* ~ "value": "..." */
+		len += cbor_str_obj_len(sizeof(REQ_KEY_PARAM_VAL) - 1);
+		assert(irec->es_type);
+
+		/* assume quick maxes */
+		ret = convert_param_val(arec, irec, /*params array pos*/0,
+				/*dest: calc length*/NULL, &l);
+		if (! SQL_SUCCEEDED(ret)) {
+			return ret;
+		}
+		/* keep maximum space required for storing the converted obj */
+		if (max < l) {
+			max = l;
+		}
+		/* the values are going to be sent as strings
+		 * (see serialize_param_cbor() note) */
+		len += cbor_str_obj_len(l);
+	}
+
+	*conv_len = max;
+	*enc_len = len;
+	return SQL_SUCCESS;
+}
+
+/* Note: this implementation will encode numeric SQL types as strings (as it's
+ * reusing the JSON converters). This is somewhat negating CBOR's intentions,
+ * but: (1) it's a simplified and tested implementation; (2) the overall
+ * performance impact is negligible with this driver's currently intended
+ * usage pattern (SELECTs only, fetching data volume far outweighing that of
+ * the queries); (3) the server will convert the received value according to
+ * the correctly indicated type. XXX */
+static SQLRETURN serialize_param_cbor(esodbc_rec_st *arec,
+	esodbc_rec_st *irec, CborEncoder *pmap, size_t conv_len)
+{
+	SQLRETURN ret;
+	CborError res;
+	size_t len;
+	SQLLEN *ind_ptr;
+	size_t skip_quote;
+	static SQLULEN param_array_pos = 0; /* parames array not yet supported */
+	esodbc_stmt_st *stmt = HDRH(arec->desc)->stmt;
+
+	ind_ptr = deferred_address(SQL_DESC_INDICATOR_PTR, param_array_pos, arec);
+	if (ind_ptr && *ind_ptr == SQL_NULL_DATA) {
+		res = cbor_encode_null(pmap);
+		FAIL_ON_CBOR_ERR(stmt, res);
+		return SQL_SUCCESS;
+	}
+	/* from here on, "input parameter value[ is] non-NULL" */
+	assert(deferred_address(SQL_DESC_DATA_PTR, param_array_pos, arec));
+
+	/* the pmap->end is the start of the conversion buffer */
+	ret = convert_param_val(arec, irec, param_array_pos, (char *)pmap->end,
+			&len);
+	if (! SQL_SUCCEEDED(ret)) {
+		return ret;
+	}
+	assert(len <= conv_len);
+
+	/* need to skip the leading and trailing `"`? */
+	switch (irec->es_type->meta_type) {
+		case METATYPE_EXACT_NUMERIC:
+		case METATYPE_FLOAT_NUMERIC:
+		case METATYPE_BIT:
+		case METATYPE_BIN:
+			skip_quote = 0;
+			break;
+
+		case METATYPE_STRING:
+		case METATYPE_DATE_TIME:
+		case METATYPE_INTERVAL_WSEC:
+		case METATYPE_INTERVAL_WOSEC:
+		case METATYPE_UID:
+			skip_quote = 1;
+			break;
+
+		case METATYPE_MAX: /*DEFAULT, NULL*/
+		case METATYPE_UNKNOWN:
+		default:
+			BUGH(stmt, "unexpected SQL meta %d / type %d.",
+				irec->es_type->meta_type, irec->es_type->data_type);
+			RET_HDIAGS(stmt, SQL_STATE_HY000);
+	}
+	res = cbor_encode_text_string(pmap, pmap->end + skip_quote,
+			len - 2 * skip_quote);
+	FAIL_ON_CBOR_ERR(stmt, res);
+
+	return SQL_SUCCESS;
+}
+
+static SQLRETURN serialize_params_cbor(esodbc_stmt_st *stmt, CborEncoder *map,
+	size_t conv_len)
+{
+	const static cstr_st p_type = CSTR_INIT(REQ_KEY_PARAM_TYPE);
+	const static cstr_st p_val = CSTR_INIT(REQ_KEY_PARAM_VAL);
+	SQLSMALLINT i;
+	CborError res;
+	SQLRETURN ret;
+	CborEncoder array; /* array for all params */
+	CborEncoder pmap; /* map for one param */
+	esodbc_rec_st *arec, *irec;
+
+	/* ~ [ */
+	res = cbor_encoder_create_array(map, &array, stmt->apd->count);
+	FAIL_ON_CBOR_ERR(stmt, res);
+
+	for (i = 0; i < stmt->apd->count; i ++) {
+		assert(stmt->ipd->count == stmt->apd->count);
+		arec = &stmt->apd->recs[i];
+		irec = &stmt->ipd->recs[i];
+
+		/* ~ { */
+		res = cbor_encoder_create_map(&array, &pmap, /* type + value = */2);
+		FAIL_ON_CBOR_ERR(stmt, res);
+
+		/*
+		 * ~ "type": "..."
+		 */
+		res = cbor_encode_text_string(&pmap, p_type.str, p_type.cnt);
+		FAIL_ON_CBOR_ERR(stmt, res);
+
+		assert(irec->es_type);
+		res = cbor_encode_text_string(&pmap, irec->es_type->type_name_c.str,
+				irec->es_type->type_name_c.cnt);
+		FAIL_ON_CBOR_ERR(stmt, res);
+
+		/*
+		 * ~ "value": "..."
+		 */
+		res = cbor_encode_text_string(&pmap, p_val.str, p_val.cnt);
+		FAIL_ON_CBOR_ERR(stmt, res);
+
+		ret = serialize_param_cbor(arec, irec, &pmap, conv_len);
+		if (! SQL_SUCCEEDED(ret)) {
+			ERRH(stmt, "converting parameter #%hd failed.", i + 1);
+			return ret;
+		}
+
+		/* ~ } */
+		res = cbor_encoder_close_container(&array, &pmap);
+		FAIL_ON_CBOR_ERR(stmt, res);
+	}
+
+	/* ~ ] */
+	res = cbor_encoder_close_container(map, &array);
+	FAIL_ON_CBOR_ERR(stmt, res);
+
+	return SQL_SUCCESS;
+}
+
 static SQLRETURN serialize_to_cbor(esodbc_stmt_st *stmt, cstr_st *dest,
-	size_t keys)
+	size_t conv_len, size_t keys)
 {
 	CborEncoder encoder, map;
 	CborError err;
@@ -3068,7 +3237,8 @@ static SQLRETURN serialize_to_cbor(esodbc_stmt_st *stmt, cstr_st *dest,
 	esodbc_dbc_st *dbc = HDRH(stmt)->dbc;
 	size_t dest_cnt;
 
-	cbor_encoder_init(&encoder, dest->str, dest->cnt, /*flags*/0);
+	assert(conv_len < dest->cnt);
+	cbor_encoder_init(&encoder, dest->str, dest->cnt - conv_len, /*flags*/0);
 	err = cbor_encoder_create_map(&encoder, &map, keys);
 	FAIL_ON_CBOR_ERR(stmt, err);
 
@@ -3101,8 +3271,11 @@ static SQLRETURN serialize_to_cbor(esodbc_stmt_st *stmt, cstr_st *dest,
 
 		/* does the statement have any parameters? */
 		if (stmt->apd->count) {
-			FIXME; // TODO
-			return SQL_ERROR;
+			err = cbor_encode_text_string(&map, REQ_KEY_PARAMS,
+					sizeof(REQ_KEY_PARAMS) - 1);
+			FAIL_ON_CBOR_ERR(stmt, err);
+			err = serialize_params_cbor(stmt, &map, conv_len);
+			FAIL_ON_CBOR_ERR(stmt, err);
 		}
 		/* does the statement have any fetch_size? */
 		if (dbc->fetch.slen) {
@@ -3157,7 +3330,7 @@ static SQLRETURN serialize_to_cbor(esodbc_stmt_st *stmt, cstr_st *dest,
 	dest_cnt = cbor_encoder_get_buffer_size(&encoder, dest->str);
 	assert(dest_cnt <= dest->cnt); /* tinycbor should check this, but still */
 	dest->cnt = dest_cnt;
-	DBGH(stmt, "request serialized to CBOR: [%zd] `0x%s`.", dest->cnt,
+	DBGH(stmt, "request serialized to CBOR: [%zd] `%s`.", dest->cnt,
 		cstr_hex_dump(dest));
 
 	return SQL_SUCCESS;
@@ -3278,7 +3451,7 @@ static SQLRETURN serialize_to_json(esodbc_stmt_st *stmt, cstr_st *dest)
 SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *dest)
 {
 	SQLRETURN ret;
-	size_t len, keys;
+	size_t enc_len, conv_len, alloc_len, keys;
 	esodbc_dbc_st *dbc = HDRH(stmt)->dbc;
 
 	/* enforced in EsSQLSetDescFieldW(SQL_DESC_ARRAY_SIZE) */
@@ -3289,27 +3462,30 @@ SQLRETURN TEST_API serialize_statement(esodbc_stmt_st *stmt, cstr_st *dest)
 			"Failed to update the timezone parameter", 0);
 	}
 
-	ret = dbc->pack_json ? statement_len_json(stmt, &len) :
-		statement_len_cbor(stmt, &len, &keys);
+	conv_len = 0;
+	ret = dbc->pack_json ? statement_len_json(stmt, &enc_len) :
+		statement_len_cbor(stmt, &enc_len, &conv_len, &keys);
 	if (! SQL_SUCCEEDED(ret)) {
 		return ret;
+	} else {
+		alloc_len = enc_len + conv_len;
 	}
 
 	/* allocate memory for the stringified statement, if needed */
-	if (dest->cnt < len) {
-		INFOH(dbc, "local buffer too small (%zd), need %zdB; will alloc.",
-			dest->cnt, len);
+	if (dest->cnt < alloc_len) {
+		INFOH(dbc, "local buffer too small (%zu), need %zuB; will alloc.",
+			dest->cnt, alloc_len);
 		DBGH(dbc, "local buffer too small, SQL: `" LCPDL "`.",
 			LCSTR(&stmt->u8sql));
-		if (! (dest->str = malloc(len))) {
-			ERRNH(stmt, "failed to alloc %zdB.", len);
+		if (! (dest->str = malloc(alloc_len))) {
+			ERRNH(stmt, "failed to alloc %zdB.", alloc_len);
 			RET_HDIAGS(stmt, SQL_STATE_HY001);
 		}
-		dest->cnt = len;
+		dest->cnt = alloc_len;
 	}
 
 	return dbc->pack_json ? serialize_to_json(stmt, dest) :
-		serialize_to_cbor(stmt, dest, keys);
+		serialize_to_cbor(stmt, dest, conv_len, keys);
 }
 
 

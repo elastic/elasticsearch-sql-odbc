@@ -688,8 +688,9 @@ char *cstr_hex_dump(const cstr_st *buff)
 	to_end = dest + sizeof(dest);
 	from = buff->str;
 	from_end = buff->str + buff->cnt;
+	int i = 0;
 	while (to < to_end && from < from_end) {
-		n = sprintf(to, "%X", *from ++);
+		n = sprintf(to, "%.2X", (uint8_t)*from ++);
 		if (n < 0) {
 			ERRN("failed to print serialized CBOR object");
 			return NULL;
