@@ -14,9 +14,6 @@
 #include "catalogue.h"
 #include "tinycbor.h"
 
-//#include "elasticodbc_export.h"
-//#define SQL_API	ELASTICODBC_EXPORT SQL_API
-
 
 #define RET_NOT_IMPLEMENTED(hnd) \
 	do { \

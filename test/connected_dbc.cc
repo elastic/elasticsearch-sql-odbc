@@ -213,6 +213,12 @@ void ConnectedDBC::prepareStatement()
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 }
 
+void ConnectedDBC::prepareStatement(const SQLWCHAR *sql)
+{
+	ret = ATTACH_SQL(stmt, sql, wcslen(sql));
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+}
+
 void ConnectedDBC::prepareStatement(const SQLWCHAR *sql,
     const char *jsonAnswer)
 {
