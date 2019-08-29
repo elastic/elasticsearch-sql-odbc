@@ -152,11 +152,12 @@ namespace EsOdbcDsnEditor
 			toolTipLogDirectoryPath.SetToolTip(textLogDirectoryPath, "Specify which directory to write the log files in.");
 			toolTipLogLevel.SetToolTip(comboLogLevel, "Configure the verbosity of the logs.");
 
-			// Logging Panel
+			// Misc Panel
 			numericUpDownTimeout.Text = Builder.ContainsKey("Timeout") ? Builder["Timeout"].ToString().StripBraces() : "0";
 			numericUpDownFetchSize.Text = Builder.ContainsKey("MaxFetchSize") ? Builder["MaxFetchSize"].ToString().StripBraces() : "1000";
 			numericUpDownBodySize.Text = Builder.ContainsKey("MaxBodySizeMB") ? Builder["MaxBodySizeMB"].ToString().StripBraces() : "100";
 			comboBoxFloatsFormat.Text = Builder.ContainsKey("ScientificFloats") ? Builder["ScientificFloats"].ToString().StripBraces() : "default";
+			comboBoxDataEncoding.Text = Builder.ContainsKey("Packing") ? Builder["Packing"].ToString() : "JSON";
 
 			string[] noes = {"no", "false", "0"};
 			checkBoxFollowRedirects.Checked = !noes.Contains(Builder.ContainsKey("Follow") ? Builder["Follow"].ToString().StripBraces() : "yes");
@@ -169,6 +170,7 @@ namespace EsOdbcDsnEditor
 			toolTipFetchSize.SetToolTip(numericUpDownFetchSize, "The maximum number of rows that Elasticsearch SQL server should send the driver for one page.");
 			toolTipBodySize.SetToolTip(numericUpDownBodySize, "The maximum number of megabytes that the driver will accept for one page.");
 			toolTipFloatsFormat.SetToolTip(comboBoxFloatsFormat, "How should the floating point numbers be printed, when these are converted to string by the driver.");
+			toolTipDataEncoding.SetToolTip(comboBoxDataEncoding, "How should the data between the server and the driver be encoded as.");
 			toolTipFollowRedirects.SetToolTip(checkBoxFollowRedirects, "Should the driver follow HTTP redirects of the requests to the server?");
 			toolTipApplyTZ.SetToolTip(checkBoxApplyTZ, "Should the driver use machine's local timezone? The default is UTC.");
 			toolTipAutoEscapePVA.SetToolTip(checkBoxAutoEscapePVA, "Should the driver auto-escape the pattern-value arguments?");
@@ -280,6 +282,7 @@ namespace EsOdbcDsnEditor
 			Builder["MaxFetchSize"] = numericUpDownFetchSize.Text;
 			Builder["MaxBodySizeMB"] = numericUpDownBodySize.Text;
 			Builder["ScientificFloats"] = comboBoxFloatsFormat.Text;
+			Builder["Packing"] = comboBoxDataEncoding.Text;
 			Builder["Follow"] = checkBoxFollowRedirects.Checked ? "true" : "false";
 			Builder["ApplyTZ"] = checkBoxApplyTZ.Checked ? "true" : "false";
 			Builder["AutoEscapePVA"] = checkBoxAutoEscapePVA.Checked ? "true" : "false";
