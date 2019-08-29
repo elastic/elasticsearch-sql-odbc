@@ -274,7 +274,7 @@ SQLRETURN write_wstr(SQLHANDLE hnd, SQLWCHAR *dest, wstr_st *src,
 	SQLSMALLINT /*B*/avail, SQLSMALLINT /*B*/*usedp);
 
 /*
- * Converts a wide string to a UTF-8 MB, allocating the necessary space.
+ * Converts a UTF-16 wide string to a UTF-8 MB, allocating the necessary space.
  * The \0 is allocated and written, even if not present in source string, but
  * only counted in output string if counted in input one.
  * If 'dst' is null, the destination is also going to be allocate (collated
@@ -283,6 +283,9 @@ SQLRETURN write_wstr(SQLHANDLE hnd, SQLWCHAR *dest, wstr_st *src,
  * Returns NULL on error.
  */
 cstr_st TEST_API *wstr_to_utf8(wstr_st *src, cstr_st *dst);
+
+/* the inverse of wstr_to_utf8(). */
+wstr_st TEST_API *utf8_to_wstr(cstr_st *src, wstr_st *dst);
 
 /* Escape `%`, `_`, `\` characters in 'src'.
  * If not 'force'-d, the escaping will stop on detection of pre-existing
