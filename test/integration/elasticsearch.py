@@ -261,20 +261,23 @@ class Elasticsearch(object):
 		self._enable_xpack(es_dir)
 
 	@staticmethod
-	def is_listening(password=None):
+	def cluster_name(password=None):
 		auth = ("elastic", password) if password else None
 		try:
-			req = requests.get("http://localhost:%s" % Elasticsearch.ES_PORT, auth=auth, timeout=.5)
+			resp = requests.get("http://localhost:%s" % Elasticsearch.ES_PORT, auth=auth, timeout=.5)
 		except (requests.Timeout, requests.ConnectionError):
-			return False
-		if req.status_code != 200:
+			return None
+		if resp.status_code != 200:
 			if password:
-				raise Exception("unexpected ES response code received: %s" % req.status_code)
+				raise Exception("unexpected ES response code received: %s" % resp.status_code)
 			else:
-				return True
-		if "You Know, for Search" not in req.text:
-			raise Exception("unexpected ES answer received: %s" % req.text)
-		return True
+				return ""
+		if "cluster_name" not in resp.json():
+			raise Exception("unexpected ES answer received: %s" % resp.text)
+		return resp.json().get("cluster_name")
 
+	@staticmethod
+	def is_listening(password=None):
+		return Elasticsearch.cluster_name(password) is not None
 
 # vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 tw=118 :

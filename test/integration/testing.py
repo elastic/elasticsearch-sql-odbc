@@ -16,19 +16,26 @@ from data import TestData, BATTERS_TEMPLATE
 
 UID = "elastic"
 CONNECT_STRING = 'Driver={Elasticsearch Driver};UID=%s;PWD=%s;Secure=0;' % (UID, Elasticsearch.AUTH_PASSWORD)
-CATALOG = "elasticsearch" # nightly built
-#CATALOG = "distribution_run" # source built
+CATALOG = "distribution_run" # source built, "elasticsearch": nightly builds
 
 class Testing(unittest.TestCase):
 
 	_data = None
 	_dsn = None
 	_pyodbc = None
+	_catalog = None
 
-	def __init__(self, test_data, dsn=None):
+	def __init__(self, test_data, catalog=CATALOG, dsn=None):
 		super().__init__()
 		self._data = test_data
-		self._dsn = dsn if dsn else CONNECT_STRING
+		self._catalog = catalog
+		if dsn:
+			if "Driver=" not in dsn:
+				self._dsn = CONNECT_STRING + dsn
+			else:
+				self._dsn = dsn
+		else:
+			self._dsn = CONNECT_STRING
 		print("Using DSN: '%s'." % self._dsn)
 
 		# only import pyODBC if running tests (vs. for instance only loading test data in ES)
@@ -120,8 +127,8 @@ class Testing(unittest.TestCase):
 			res = curs.tables("", "%", "", no_table_type_as).fetchall()
 			self.assertEqual(len(res), 1)
 			for i in range(0,10):
-				self.assertEqual(res[0][i], None if i else CATALOG)
-			#self.assertEqual(res, [tuple([CATALOG] + [None for i in range(9)])]) # XXX?
+				self.assertEqual(res[0][i], None if i else self._catalog)
+			#self.assertEqual(res, [tuple([self._catalog] + [None for i in range(9)])]) # XXX?
 
 			# enumerate table types
 			res = curs.tables("", "", "", "%").fetchall()
@@ -146,11 +153,12 @@ class Testing(unittest.TestCase):
 			cnxn.autocommit = True
 			curs = cnxn.cursor()
 			if not use_surrogate:
-				res = curs.columns(table=TestData.BATTERS_INDEX, catalog=CATALOG if use_catalog else None).fetchall()
+				res = curs.columns(table=TestData.BATTERS_INDEX, \
+						catalog=self._catalog if use_catalog else None).fetchall()
 			else:
 				if use_catalog:
 					stmt = "SYS COLUMNS CATALOG '%s' TABLE LIKE '%s' ESCAPE '\\' LIKE '%%' ESCAPE '\\'" % \
-						(CATALOG, TestData.BATTERS_INDEX)
+						(self._catalog, TestData.BATTERS_INDEX)
 				else:
 					stmt = "SYS COLUMNS TABLE LIKE '%s' ESCAPE '\\' LIKE '%%' ESCAPE '\\'" % TestData.BATTERS_INDEX
 				res = curs.execute(stmt)
@@ -207,6 +215,8 @@ class Testing(unittest.TestCase):
 			instance = float(data_val)
 		elif data_type == "float":
 			instance = float(data_val.strip("fF"))
+			# reduce precision, py's float is a double
+			instance = ctypes.c_float(instance).value
 		elif data_type in ["datetime", "date", "time"]:
 			fmt = "%H:%M:%S"
 			fmt = "%Y-%m-%dT" + fmt
@@ -257,32 +267,65 @@ class Testing(unittest.TestCase):
 				for t in tests:
 					(query, col_name, data_type, data_val, cli_val, disp_size) = t
 					# print("T: %s, %s, %s, %s, %s, %s" % (query, col_name, data_type, data_val, cli_val, disp_size))
-					with cnxn.execute(query) as curs:
-						self.assertEqual(curs.rowcount, 1)
-						res = curs.fetchone()[0]
 
-						if data_val != cli_val: # INTERVAL tests
-							assert(query.lower().startswith("select interval"))
-							# extract the literal value (`INTERVAL -'1 1' -> `-1 1``)
-							expect = re.match("[^-]*(-?\s*'[^']*').*", query).groups()[0]
-							expect = expect.replace("'", "")
-							# filter out tests with fractional seconds:
-							# https://github.com/elastic/elasticsearch/issues/41635
-							if re.search("\d*\.\d+", expect):
-								continue
-						else: # non-INTERVAL tests
-							assert(data_type.lower() == data_type)
-							# Change the value read in the tests to type and format of the result expected to be
-							# returned by driver.
-							expect = self._type_to_instance(data_type, data_val)
+					if data_val != cli_val: # INTERVAL tests
+						assert(query.lower().startswith("select interval"))
+						# extract the literal value (`INTERVAL -'1 1' -> `-1 1``)
+						expect = re.match("[^-]*(-?\s*'[^']*').*", query).groups()[0]
+						expect = expect.replace("'", "")
+						# filter out tests with fractional seconds:
+						# https://github.com/elastic/elasticsearch/issues/41635
+						if re.search("\d*\.\d+", expect):
+							continue
+						# intervals not supported as params; PyODBC has no interval type support
+						# https://github.com/elastic/elasticsearch/issues/45915
+						params = []
+					else: # non-INTERVAL tests
+						assert(data_type.lower() == data_type)
+						# Change the value read in the tests to type and format of the result expected to be
+						# returned by driver.
+						expect = self._type_to_instance(data_type, data_val)
 
-						self.assertEqual(res, expect)
+						if data_type.lower() == "null":
+							query += " WHERE ? IS NULL"
+							params = [expect]
+						else:
+							if data_type.lower() == "time":
+								if col_name.find("+") <= 0:
+									# ODBC's TIME_STRUCT lacks fractional component -> strip it away
+									col_name = re.sub(r"(\d{2})\.\d+", "\\1", col_name)
+									query += " WHERE %s = ?" % col_name
+									params = [expect]
+								else: # it's a time with offset
+									# TIE_STRUCT lacks offset component -> perform the simple SELECT
+									params = []
+							else:
+								query += " WHERE %s = ?" % col_name
+								params = [expect]
+						# print("Query: %s" % query)
+
+					last_ex = None
+					with cnxn.execute(query, *params) as curs:
+						try:
+							self.assertEqual(curs.rowcount, 1)
+							res = curs.fetchone()[0]
+							if data_type == "float":
+								# PyODBC will fetch a REAL/float as a double =>  reduce precision
+								res = ctypes.c_float(res).value
+							self.assertEqual(res, expect)
+						except Exception as e:
+							print(e)
+							last_ex = e
+
+					if last_ex:
+						raise last_ex
+
 			finally:
 				cnxn.clear_output_converters()
 
 	def perform(self):
 		self._check_info(self._pyodbc.SQL_USER_NAME, UID)
-		self._check_info(self._pyodbc.SQL_DATABASE_NAME, CATALOG)
+		self._check_info(self._pyodbc.SQL_DATABASE_NAME, self._catalog)
 
 		# simulate catalog querying as apps do in ES/GH#40775 do
 		self._catalog_tables(no_table_type_as = "")

@@ -65,8 +65,13 @@ def ites(args):
 	# run the tests
 	if not args.skip_tests:
 		assert(data is not None)
-		tests = Testing(data, args.dsn)
-		tests.perform()
+		cluster_name = es.cluster_name(Elasticsearch.AUTH_PASSWORD)
+		assert(len(cluster_name))
+		if args.dsn:
+			Testing(data, cluster_name, args.dsn).perform()
+		else:
+			Testing(data, cluster_name, "Packing=JSON;").perform()
+			Testing(data, cluster_name, "Packing=CBOR;").perform()
 
 def main():
 	parser = argparse.ArgumentParser(description='Integration Testing with Elasticsearch.')
@@ -78,11 +83,11 @@ def main():
 	stage_grp.add_argument("-p", "--pre-staged", help="Use a pre-staged and running Elasticsearch instance",
 			action="store_true", default=False)
 
-	driver_grp = parser.add_mutually_exclusive_group()
-	driver_grp.add_argument("-d", "--driver", help="The path to the driver file to test; if not provided, the driver "
+	parser.add_argument("-d", "--driver", help="The path to the driver file to test; if not provided, the driver "
 			"is assumed to have been installed.")
-	driver_grp.add_argument("-c", "--dsn", help="The connection string to use with a preinstalled driver; the DSN must"
-			" contain the name under which the driver to test is registered.")
+	parser.add_argument("-c", "--dsn", help="The full or partial connection string to use with a preinstalled "
+			"driver; if the provided string contains the name under which the driver to test is registered, it will "
+			"be used as such; otherwise it will be appended as additional parameters to a pre-configured DSN.")
 	parser.add_argument("-o", "--offline_dir", help="The directory path holding the files to copy the test data from, "
 			"as opposed to downloading them.")
 	parser.add_argument("-e", "--ephemeral", help="Remove the staged Elasticsearch and installed driver after testing"
@@ -103,6 +108,9 @@ def main():
 
 	if not (args.driver or args.version or args.es_reset or args.pre_staged):
 		parser.error("don't know what Elasticsearch version to test against.")
+
+	if args.driver and args.dsn and "Driver=" in args.dsn:
+		parser.error("driver specified both by -d/--driver and -c/--dsn arguments")
 
 	try:
 		started_at = time.time()
