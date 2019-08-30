@@ -2966,13 +2966,13 @@ static SQLRETURN statement_len_cbor(esodbc_stmt_st *stmt, size_t *enc_len,
 			(*keys) ++;
 		}
 		/* "field_multi_value_leniency": true/false */
-		bodylen += cbor_str_obj_len(sizeof(REQ_KEY_MODE) - 1);
+		bodylen += cbor_str_obj_len(sizeof(REQ_KEY_MULTIVAL) - 1);
 		bodylen += CBOR_OBJ_BOOL_LEN;
 		/* "index_include_frozen": true/false */
-		bodylen += cbor_str_obj_len(sizeof(REQ_KEY_MODE) - 1);
+		bodylen += cbor_str_obj_len(sizeof(REQ_KEY_IDX_FROZEN) - 1);
 		bodylen += CBOR_OBJ_BOOL_LEN;
 		/* "time_zone": "-05:45" */
-		bodylen += cbor_str_obj_len(sizeof(REQ_KEY_MODE) - 1);
+		bodylen += cbor_str_obj_len(sizeof(REQ_KEY_TIMEZONE) - 1);
 		bodylen += cbor_str_obj_len(tz_param.cnt); /* lax len */
 		*keys += 3; /* field_m._val., idx._inc._frozen, time_zone */
 	}
