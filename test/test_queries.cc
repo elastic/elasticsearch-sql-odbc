@@ -89,6 +89,26 @@ TEST_F(Queries, attach_error_non_sql) {
 	ASSERT_EQ(HDRH(stmt)->diag.native_code, SRC_AID3);
 }
 
+TEST_F(Queries, cbor_serialize_alloc_body) {
+	const size_t bsz = 64;
+	wchar_t buff[bsz];
+	wstr_st select = WSTR_INIT("SELECT '");
+	cstr_st body = {(SQLCHAR *)buff, /*same size as the Q: force realloc*/bsz};
+
+	/* construct a valid query, though irrelevant for the test a.t.p. */
+	wmemset(buff, L'*', bsz);
+	wmemcpy(buff, select.str, select.cnt);
+	buff[bsz - 2] = L'\'';
+	buff[bsz - 1] = L'\0';
+
+	DBCH(dbc)->pack_json = FALSE;
+	ASSERT_TRUE(SQL_SUCCEEDED(attach_sql(STMH(stmt), (SQLWCHAR *)buff,
+					bsz - 1)));
+	ASSERT_TRUE(SQL_SUCCEEDED(serialize_statement(STMH(stmt), &body)));
+	ASSERT_NE((void *)body.str, (void *)buff);
+	free(body.str);
+}
+
 TEST_F(Queries, SQLNativeSql) {
 #undef SRC_STR
 #define SRC_STR	"SELECT 1"
