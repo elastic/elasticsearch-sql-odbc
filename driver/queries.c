@@ -4040,28 +4040,30 @@ SQLRETURN EsSQLRowCount(_In_ SQLHSTMT StatementHandle, _Out_ SQLLEN *RowCount)
 		RET_HDIAGS(stmt, SQL_STATE_HY010);
 	}
 
-	if (STMT_HAS_CURSOR(stmt)) {
-		/* fetch_size or scroller size chunks the result */
-		ERRH(stmt, "can't evaluate the total size of paged result set.");
-		/* returning a _WITH_INFO here will fail the query for MSQRY32. */
-#		if 0
-		RET_HDIAG(stmt, SQL_STATE_01000, "row count is for partial result "
-			"only", 0);
-#		endif /* 0 */
-		*RowCount = 0;
+	if (stmt->rset.pack_json) {
+		*RowCount = UJLengthArray(stmt->rset.pack.json.rows_obj);
 	} else {
-		if (stmt->rset.pack_json) {
-			*RowCount = UJLengthArray(stmt->rset.pack.json.rows_obj);
-		} else {
-			res = cbor_get_array_count(stmt->rset.pack.cbor.rows_obj, &nrows);
-			if (res != CborNoError) {
-				ERRH(stmt, "failed to read row array count: %s.",
-					cbor_error_string(res));
-				RET_HDIAGS(stmt, SQL_STATE_HY000);
-			}
-			*RowCount = (SQLLEN)nrows;
+		res = cbor_get_array_count(stmt->rset.pack.cbor.rows_obj, &nrows);
+		if (res != CborNoError) {
+			ERRH(stmt, "failed to read row array count: %s.",
+				cbor_error_string(res));
+			RET_HDIAGS(stmt, SQL_STATE_HY000);
 		}
-		DBGH(stmt, "result set rows count: %zd.", *RowCount);
+		*RowCount = (SQLLEN)nrows;
+	}
+	DBGH(stmt, "result set rows count: %zd.", *RowCount);
+
+	/* Log a warning if a cursor is present.
+	 * Note: ES/SQL can apparently attach a cursor even for SYS queries and no
+	 * restrictive max fetch row count. Since this function is now also called
+	 * while attaching types during bootstrapping, it shouldn't fail if a
+	 * cursor is attached. This assumes however that ES will never return just
+	 * a cursor (and no rows) on a first page. */
+	if (STMT_HAS_CURSOR(stmt)) {
+		/* fetch_size or scroller size will chunk the result */
+		WARNH(stmt, "can't evaluate the total size of paged result set.");
+		RET_HDIAG(stmt, SQL_STATE_01000, "row count is for current row set "
+			"only", 0);
 	}
 
 	return SQL_SUCCESS;
