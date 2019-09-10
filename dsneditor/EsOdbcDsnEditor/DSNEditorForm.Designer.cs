@@ -75,6 +75,8 @@ namespace EsOdbcDsnEditor
             this.textLogDirectoryPath = new System.Windows.Forms.TextBox();
             this.labelLogDirectory = new System.Windows.Forms.Label();
             this.pageMisc = new System.Windows.Forms.TabPage();
+            this.comboBoxDataEncoding = new System.Windows.Forms.ComboBox();
+            this.labelDataEncoding = new System.Windows.Forms.Label();
             this.checkBoxAutoEscapePVA = new System.Windows.Forms.CheckBox();
             this.comboBoxFloatsFormat = new System.Windows.Forms.ComboBox();
             this.labelFloatsFormat = new System.Windows.Forms.Label();
@@ -114,6 +116,7 @@ namespace EsOdbcDsnEditor
             this.toolTipAutoEscapePVA = new System.Windows.Forms.ToolTip(this.components);
             this.toolTipMultiFieldLenient = new System.Windows.Forms.ToolTip(this.components);
             this.toolTipIndexIncludeFrozen = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipDataEncoding = new System.Windows.Forms.ToolTip(this.components);
             ((System.ComponentModel.ISupportInitialize)(this.header)).BeginInit();
             this.groupSSL.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDownPort)).BeginInit();
@@ -361,8 +364,8 @@ namespace EsOdbcDsnEditor
             // 
             this.tabConfiguration.Controls.Add(this.pageBasic);
             this.tabConfiguration.Controls.Add(this.pageSecurity);
-            this.tabConfiguration.Controls.Add(this.pageLogging);
             this.tabConfiguration.Controls.Add(this.pageMisc);
+            this.tabConfiguration.Controls.Add(this.pageLogging);
             this.tabConfiguration.Location = new System.Drawing.Point(17, 74);
             this.tabConfiguration.Name = "tabConfiguration";
             this.tabConfiguration.SelectedIndex = 0;
@@ -550,6 +553,8 @@ namespace EsOdbcDsnEditor
             // 
             // pageMisc
             // 
+            this.pageMisc.Controls.Add(this.comboBoxDataEncoding);
+            this.pageMisc.Controls.Add(this.labelDataEncoding);
             this.pageMisc.Controls.Add(this.checkBoxAutoEscapePVA);
             this.pageMisc.Controls.Add(this.comboBoxFloatsFormat);
             this.pageMisc.Controls.Add(this.labelFloatsFormat);
@@ -570,6 +575,28 @@ namespace EsOdbcDsnEditor
             this.pageMisc.TabIndex = 3;
             this.pageMisc.Text = "Misc";
             this.pageMisc.UseVisualStyleBackColor = true;
+            // 
+            // comboBoxDataEncoding
+            // 
+            this.comboBoxDataEncoding.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this.comboBoxDataEncoding.FormattingEnabled = true;
+            this.comboBoxDataEncoding.Items.AddRange(new object[] {
+            "JSON",
+            "CBOR"});
+            this.comboBoxDataEncoding.Location = new System.Drawing.Point(182, 155);
+            this.comboBoxDataEncoding.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.comboBoxDataEncoding.Name = "comboBoxDataEncoding";
+            this.comboBoxDataEncoding.Size = new System.Drawing.Size(108, 24);
+            this.comboBoxDataEncoding.TabIndex = 31;
+            // 
+            // labelDataEncoding
+            // 
+            this.labelDataEncoding.AutoSize = true;
+            this.labelDataEncoding.Location = new System.Drawing.Point(24, 158);
+            this.labelDataEncoding.Name = "labelDataEncoding";
+            this.labelDataEncoding.Size = new System.Drawing.Size(104, 17);
+            this.labelDataEncoding.TabIndex = 30;
+            this.labelDataEncoding.Text = "Data encoding:";
             // 
             // checkBoxAutoEscapePVA
             // 
@@ -601,7 +628,7 @@ namespace EsOdbcDsnEditor
             // labelFloatsFormat
             // 
             this.labelFloatsFormat.AutoSize = true;
-            this.labelFloatsFormat.Location = new System.Drawing.Point(66, 122);
+            this.labelFloatsFormat.Location = new System.Drawing.Point(24, 122);
             this.labelFloatsFormat.Name = "labelFloatsFormat";
             this.labelFloatsFormat.Size = new System.Drawing.Size(94, 17);
             this.labelFloatsFormat.TabIndex = 27;
@@ -850,6 +877,9 @@ namespace EsOdbcDsnEditor
 		private System.Windows.Forms.ToolTip toolTipAutoEscapePVA;
 		private System.Windows.Forms.ToolTip toolTipMultiFieldLenient;
 		private System.Windows.Forms.ToolTip toolTipIndexIncludeFrozen;
+		private System.Windows.Forms.ComboBox comboBoxDataEncoding;
+		private System.Windows.Forms.Label labelDataEncoding;
+		private System.Windows.Forms.ToolTip toolTipDataEncoding;
 	}
 }
 
