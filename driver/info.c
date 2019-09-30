@@ -489,7 +489,7 @@ static SQLRETURN getinfo_sql(
 		case SQL_DROP_VIEW:
 			RET_INFO(SQL_C_ULONG, 0, "[drop statement]");
 		case SQL_EXPRESSIONS_IN_ORDERBY:
-			DBGH(dbc, "requested: expressions in order by (0).");
+			DBGH(dbc, "requested: expressions in order by (Y).");
 			return write_wstr(dbc, InfoValue, &MK_WSTR("Y"),
 					BufferLength, StringLengthPtr);
 		case SQL_GROUP_BY:
