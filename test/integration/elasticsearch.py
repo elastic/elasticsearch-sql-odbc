@@ -54,7 +54,8 @@ class Elasticsearch(object):
 			self._port = u.port if u.port else self.ES_PORT
 			self._base_url = "%s://%s:%s" % (u.scheme, u.hostname, self._port)
 			self._credentials = (u.username, u.password) if u.username else self.ES_CREDENTIALS
-		print("Using Elasticsearch instance at %s, credentials (%s, `%s`)" % (self._base_url, *self._credentials))
+		print("Using Elasticsearch instance at %s, credentials (%s, %s)" % (self._base_url, self._credentials[0],
+			"*" * len(self._credentials[1])))
 
 	@staticmethod
 	def elasticsearch_distro_filename(version):
