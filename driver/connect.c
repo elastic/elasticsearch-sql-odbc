@@ -48,6 +48,7 @@
 /* 5 */
 #define TYPE_SHORT			"SHORT"
 #define TYPE_FLOAT			"FLOAT"
+#define TYPE_SHAPE			"SHAPE"
 /* 6 */
 #define TYPE_DOUBLE			"DOUBLE"
 #define TYPE_BINARY			"BINARY"
@@ -2015,10 +2016,10 @@ static BOOL elastic_name2types(wstr_st *type_name,
 			}
 			break;
 
-		/* 5: SHORT, FLOAT */
+		/* 5: SHORT, FLOAT, SHAPE */
 		case sizeof(TYPE_SHORT) - 1:
-			switch (tolower(type_name->str[0])) {
-				case (SQLWCHAR)'s':
+			switch (tolower(type_name->str[3])) { /* shoRt, floAt, shaPe */
+				case (SQLWCHAR)'r':
 					if (! wmemncasecmp(type_name->str, MK_WPTR(TYPE_SHORT),
 							type_name->cnt)) {
 						*c_sql = ES_SHORT_TO_CSQL;
@@ -2026,11 +2027,19 @@ static BOOL elastic_name2types(wstr_st *type_name,
 						return TRUE;
 					}
 					break;
-				case (SQLWCHAR)'f':
+				case (SQLWCHAR)'a':
 					if (! wmemncasecmp(type_name->str, MK_WPTR(TYPE_FLOAT),
 							type_name->cnt)) {
 						*c_sql = ES_FLOAT_TO_CSQL;
 						*sql = ES_FLOAT_TO_SQL;
+						return TRUE;
+					}
+					break;
+				case (SQLWCHAR)'p':
+					if (! wmemncasecmp(type_name->str, MK_WPTR(TYPE_SHAPE),
+							type_name->cnt)) {
+						*c_sql = ES_GEO_TO_CSQL;
+						*sql = ES_GEO_TO_SQL;
 						return TRUE;
 					}
 					break;
@@ -2452,7 +2461,7 @@ static void *copy_types_rows(esodbc_dbc_st *dbc, estype_row_st *type_row,
 		if (types[i].data_type == ESODBC_SQL_BOOLEAN) {
 			types[i].data_type = ES_BOOLEAN_TO_SQL;
 		}
-		/* GEO (SHAPE, POINT) types are WKT encodings */
+		/* GEO (SHAPE, POINT), SHAPE types are WKT encodings */
 		if (types[i].data_type == ESODBC_SQL_GEO) {
 			types[i].data_type = ES_GEO_TO_SQL;
 		}
