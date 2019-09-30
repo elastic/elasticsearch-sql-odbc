@@ -14,28 +14,32 @@ import ctypes
 from elasticsearch import Elasticsearch
 from data import TestData, BATTERS_TEMPLATE
 
-UID = "elastic"
-CONNECT_STRING = 'Driver={Elasticsearch Driver};UID=%s;PWD=%s;Secure=0;' % (UID, Elasticsearch.AUTH_PASSWORD)
-CATALOG = "distribution_run" # source built, "elasticsearch": nightly builds
+DRIVER_NAME = "Elasticsearch Driver"
 
 class Testing(unittest.TestCase):
 
+	_uid = None
 	_data = None
 	_dsn = None
 	_pyodbc = None
 	_catalog = None
 
-	def __init__(self, test_data, catalog=CATALOG, dsn=None):
+	def __init__(self, es, test_data, catalog, dsn=None):
 		super().__init__()
+		uid, pwd = es.credentials()
+
+		self._uid = uid
 		self._data = test_data
 		self._catalog = catalog
+
+		conn_str = "Driver={%s};UID=%s;PWD=%s;Secure=0;" % (DRIVER_NAME, uid, pwd)
 		if dsn:
 			if "Driver=" not in dsn:
-				self._dsn = CONNECT_STRING + dsn
+				self._dsn = conn_str + dsn
 			else:
 				self._dsn = dsn
 		else:
-			self._dsn = CONNECT_STRING
+			self._dsn = conn_str
 		print("Using DSN: '%s'." % self._dsn)
 
 		# only import pyODBC if running tests (vs. for instance only loading test data in ES)
@@ -324,7 +328,7 @@ class Testing(unittest.TestCase):
 				cnxn.clear_output_converters()
 
 	def perform(self):
-		self._check_info(self._pyodbc.SQL_USER_NAME, UID)
+		self._check_info(self._pyodbc.SQL_USER_NAME, self._uid)
 		self._check_info(self._pyodbc.SQL_DATABASE_NAME, self._catalog)
 
 		# simulate catalog querying as apps do in ES/GH#40775 do
