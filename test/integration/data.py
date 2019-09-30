@@ -16,8 +16,6 @@ import gzip
 
 from elasticsearch import Elasticsearch
 
-REQ_AUTH = ("elastic", Elasticsearch.AUTH_PASSWORD)
-
 TABLEAU_DATASET_BASE_URL = "https://raw.githubusercontent.com/elastic/connector-plugin-sdk/120fe213c4bce30d9424c155fbd9b2ad210239e0/tests/datasets/TestV1/"
 
 CALCS_TEMPLATE =\
@@ -282,14 +280,16 @@ class TestData(object):
 	_csv_header = None
 	_csv_lines = None
 
+	_es = None
 	_offline_dir = None
 	_mode = None
 
-	def __init__(self, mode=MODE_INDEX, offline_dir=None):
+	def __init__(self, es, mode=MODE_INDEX, offline_dir=None):
 		self._csv_md5 = {}
 		self._csv_header = {}
 		self._csv_lines = {}
 
+		self._es = es
 		self._offline_dir = offline_dir
 		self._mode = mode
 
@@ -376,8 +376,8 @@ class TestData(object):
 		ndjson = self._get_csv_as_ndjson(TABLEAU_DATASET_BASE_URL, file_name, index_name)
 
 		if self.MODE_NOINDEX < self._mode:
-			with requests.put("http://localhost:%s/_template/%s_template" % (Elasticsearch.ES_PORT, index_name),
-					json=index_template, auth=REQ_AUTH) as req:
+			with requests.put("%s/_template/%s_template" % (self._es.base_url(), index_name),
+					json=index_template, auth=self._es.credentials()) as req:
 				if req.status_code != 200:
 					raise Exception("PUT %s template failed with code: %s (content: %s)" % (index_name,
 						req.status_code, req.text))
@@ -386,16 +386,17 @@ class TestData(object):
 
 	def _post_ndjson(self, ndjsons, index_name, pipeline_name=None):
 		print("Indexing data for index '%s'." % index_name)
-		url = "http://localhost:%s/%s/_doc/_bulk" % (Elasticsearch.ES_PORT, index_name)
+		url = "%s/%s/_doc/_bulk" % (self._es.base_url(), index_name)
 		if pipeline_name:
 			url += "?pipeline=%s" % pipeline_name
 		if type(ndjsons) is not list:
 			ndjsons = [ndjsons]
 		for n in ndjsons:
-			with requests.post(url, data=n, headers = {"Content-Type": "application/x-ndjson"}, auth=REQ_AUTH) as req:
+			with requests.post(url, data=n, headers = {"Content-Type": "application/x-ndjson"},
+					auth=self._es.credentials()) as req:
 				if req.status_code != 200:
-					raise Exception("bulk POST to %s failed with code: %s (content: %s)" % (index_name, req.status_code,
-						req.text))
+					raise Exception("bulk POST to %s failed with code: %s (content: %s)" % (index_name,
+						req.status_code, req.text))
 				reply = json.loads(req.text)
 				if reply["errors"]:
 					raise Exception("bulk POST to %s failed with content: %s" % (index_name, req.text))
@@ -405,8 +406,8 @@ class TestData(object):
 		hits = 0
 		waiting_since = time.time()
 		while hits < MIN_INDEXED_DOCS:
-			url = "http://localhost:%s/%s/_search" % (Elasticsearch.ES_PORT, index_name)
-			req = requests.get(url, timeout = Elasticsearch.REQ_TIMEOUT, auth=REQ_AUTH)
+			url = "%s/%s/_search" % (self._es.base_url(), index_name)
+			req = requests.get(url, timeout = Elasticsearch.REQ_TIMEOUT, auth=self._es.credentials())
 			if req.status_code != 200:
 				raise Exception("failed to _search %s: code: %s, body: %s" % (index_name, req.status_code, req.text))
 			answer = json.loads(req.text)
@@ -420,8 +421,8 @@ class TestData(object):
 			return
 		print("Deleting any old index '%s'." % index_name);
 
-		url = "http://localhost:%s/%s" % (Elasticsearch.ES_PORT, index_name)
-		with requests.delete(url, timeout = Elasticsearch.REQ_TIMEOUT, auth=REQ_AUTH) as req:
+		url = "%s/%s" % (self._es.base_url(), index_name)
+		with requests.delete(url, timeout = Elasticsearch.REQ_TIMEOUT, auth=self._es.credentials()) as req:
 			if req.status_code != 200 and req.status_code != 404:
 				raise Exception("Deleting index %s failed; code=%s, body: %s." %
 						(index_name, req.status_code, req.text))
@@ -433,8 +434,8 @@ class TestData(object):
 			self._delete_if_needed(index_name)
 
 			if pipeline:
-				with requests.put("http://localhost:%s/_ingest/pipeline/parse_%s" % (Elasticsearch.ES_PORT,
-						index_name), json=pipeline, auth=REQ_AUTH) as req:
+				with requests.put("%s/_ingest/pipeline/parse_%s" % (self._es.base_url(), index_name),
+						json=pipeline, auth=self._es.credentials()) as req:
 					if req.status_code != 200:
 						raise Exception("PUT %s pipeline failed with code: %s (content: %s) " % (index_name,
 							req.status_code, req.text))
@@ -483,8 +484,8 @@ class TestData(object):
 		# turn it to JSON (to deal with trailing commas past last member on a level
 		mapping = eval(mapping)
 		# PUT the built template
-		url = "http://localhost:%s/_template/%s_template" % (Elasticsearch.ES_PORT, index_name)
-		with requests.put(url, json=mapping, auth=REQ_AUTH, timeout=Elasticsearch.REQ_TIMEOUT) as req:
+		url = "%s/_template/%s_template" % (self._es.base_url(), index_name)
+		with requests.put(url, json=mapping, auth=self._es.credentials(), timeout=Elasticsearch.REQ_TIMEOUT) as req:
 			if req.status_code != 200:
 				raise Exception("PUT %s template failed with code: %s (content: %s)" % (index_name,
 						req.status_code, req.text))
