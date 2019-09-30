@@ -10,17 +10,17 @@
 import argparse
 import os, sys, re, time
 
-from elasticsearch import Elasticsearch #spawn_elasticsearch, reset_elasticsearch, es_is_listening, AUTH_PASSWORD
+from elasticsearch import Elasticsearch
 from data import TestData
 from install import Installer
 from testing import Testing
 
 
 def ites(args):
-	es = Elasticsearch(args.offline_dir)
+	es = Elasticsearch(args.offline_dir, args.url)
 
 	# create a running instance of Elasticsearch if needed
-	if not args.pre_staged:
+	if args.url is None:
 		if args.es_reset:
 			es_dir = os.path.abspath(args.es_reset)
 			es.reset(es_dir)
@@ -39,7 +39,7 @@ def ites(args):
 						"version: %s)" % (args.driver, args.version))
 
 			es.spawn(version, root_dir, args.ephemeral)
-	elif not es.is_listening(Elasticsearch.AUTH_PASSWORD):
+	elif not es.is_listening():
 		raise Exception("no running prestaged Elasticsearch instance found.")
 	else:
 		print("Using pre-staged Elasticsearch.")
@@ -53,7 +53,7 @@ def ites(args):
 		else:
 			test_mode = TestData.MODE_INDEX
 
-		data = TestData(test_mode, args.offline_dir)
+		data = TestData(es, test_mode, args.offline_dir)
 		data.load()
 
 	# install the driver
@@ -65,13 +65,13 @@ def ites(args):
 	# run the tests
 	if not args.skip_tests:
 		assert(data is not None)
-		cluster_name = es.cluster_name(Elasticsearch.AUTH_PASSWORD)
+		cluster_name = es.cluster_name()
 		assert(len(cluster_name))
 		if args.dsn:
-			Testing(data, cluster_name, args.dsn).perform()
+			Testing(es, data, cluster_name, args.dsn).perform()
 		else:
-			Testing(data, cluster_name, "Packing=JSON;").perform()
-			Testing(data, cluster_name, "Packing=CBOR;").perform()
+			Testing(es, data, cluster_name, "Packing=JSON;").perform()
+			Testing(es, data, cluster_name, "Packing=CBOR;").perform()
 
 def main():
 	parser = argparse.ArgumentParser(description='Integration Testing with Elasticsearch.')
@@ -80,8 +80,8 @@ def main():
 	stage_grp.add_argument("-r", "--root-dir", help="Root directory to [temporarily] stage Elasticsearch into.")
 	stage_grp.add_argument("-s", "--es-reset", help="Path to an already configured Elasticsearch folder to "
 			"use; data directory content will be removed; 'ephemeral' will be ignored.")
-	stage_grp.add_argument("-p", "--pre-staged", help="Use a pre-staged and running Elasticsearch instance",
-			action="store_true", default=False)
+	stage_grp.add_argument("-p", "--url", help="Use a pre-staged and running Elasticsearch instance. If no URL is "
+			"provided, %s is assumed." % Elasticsearch.ES_BASE_URL, nargs="?", const="")
 
 	parser.add_argument("-d", "--driver", help="The path to the driver file to test; if not provided, the driver "
 			"is assumed to have been installed.")
@@ -103,10 +103,10 @@ def main():
 			"default.")
 
 	args = parser.parse_args()
-	if not (args.root_dir or args.es_reset or args.pre_staged):
+	if not (args.root_dir or args.es_reset or args.url is not None):
 		parser.error("no Elasticsearch instance or root/staged directory provided.")
 
-	if not (args.driver or args.version or args.es_reset or args.pre_staged):
+	if not (args.driver or args.version or args.es_reset or args.url is not None):
 		parser.error("don't know what Elasticsearch version to test against.")
 
 	if args.driver and args.dsn and "Driver=" in args.dsn:
