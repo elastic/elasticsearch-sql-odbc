@@ -67,13 +67,6 @@ namespace EsOdbcDsnEditor
             this.textName = new System.Windows.Forms.TextBox();
             this.labelName = new System.Windows.Forms.Label();
             this.pageSecurity = new System.Windows.Forms.TabPage();
-            this.pageLogging = new System.Windows.Forms.TabPage();
-            this.checkLoggingEnabled = new System.Windows.Forms.CheckBox();
-            this.comboLogLevel = new System.Windows.Forms.ComboBox();
-            this.labelLogLevel = new System.Windows.Forms.Label();
-            this.logDirectoryPathButton = new System.Windows.Forms.Button();
-            this.textLogDirectoryPath = new System.Windows.Forms.TextBox();
-            this.labelLogDirectory = new System.Windows.Forms.Label();
             this.pageMisc = new System.Windows.Forms.TabPage();
             this.comboBoxDataEncoding = new System.Windows.Forms.ComboBox();
             this.labelDataEncoding = new System.Windows.Forms.Label();
@@ -90,6 +83,13 @@ namespace EsOdbcDsnEditor
             this.numericUpDownFetchSize = new System.Windows.Forms.NumericUpDown();
             this.labelTimeout = new System.Windows.Forms.Label();
             this.numericUpDownTimeout = new System.Windows.Forms.NumericUpDown();
+            this.pageLogging = new System.Windows.Forms.TabPage();
+            this.checkLoggingEnabled = new System.Windows.Forms.CheckBox();
+            this.comboLogLevel = new System.Windows.Forms.ComboBox();
+            this.labelLogLevel = new System.Windows.Forms.Label();
+            this.logDirectoryPathButton = new System.Windows.Forms.Button();
+            this.textLogDirectoryPath = new System.Windows.Forms.TextBox();
+            this.labelLogDirectory = new System.Windows.Forms.Label();
             this.folderLogDirectoryDialog = new System.Windows.Forms.FolderBrowserDialog();
             this.toolTipName = new System.Windows.Forms.ToolTip(this.components);
             this.toolTipDescription = new System.Windows.Forms.ToolTip(this.components);
@@ -123,11 +123,11 @@ namespace EsOdbcDsnEditor
             this.tabConfiguration.SuspendLayout();
             this.pageBasic.SuspendLayout();
             this.pageSecurity.SuspendLayout();
-            this.pageLogging.SuspendLayout();
             this.pageMisc.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDownBodySize)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDownFetchSize)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDownTimeout)).BeginInit();
+            this.pageLogging.SuspendLayout();
             this.SuspendLayout();
             // 
             // saveButton
@@ -283,7 +283,7 @@ namespace EsOdbcDsnEditor
             0});
             this.numericUpDownPort.Name = "numericUpDownPort";
             this.numericUpDownPort.Size = new System.Drawing.Size(104, 22);
-            this.numericUpDownPort.TabIndex = 5;
+            this.numericUpDownPort.TabIndex = 6;
             this.numericUpDownPort.Value = new decimal(new int[] {
             9200,
             0,
@@ -299,7 +299,7 @@ namespace EsOdbcDsnEditor
             this.textPassword.Name = "textPassword";
             this.textPassword.PasswordChar = '*';
             this.textPassword.Size = new System.Drawing.Size(229, 22);
-            this.textPassword.TabIndex = 7;
+            this.textPassword.TabIndex = 8;
             // 
             // labelPassword
             // 
@@ -317,7 +317,7 @@ namespace EsOdbcDsnEditor
             this.textUsername.MaxLength = 512;
             this.textUsername.Name = "textUsername";
             this.textUsername.Size = new System.Drawing.Size(229, 22);
-            this.textUsername.TabIndex = 6;
+            this.textUsername.TabIndex = 7;
             // 
             // labelUsername
             // 
@@ -335,7 +335,7 @@ namespace EsOdbcDsnEditor
             this.textHostname.MaxLength = 512;
             this.textHostname.Name = "textHostname";
             this.textHostname.Size = new System.Drawing.Size(506, 22);
-            this.textHostname.TabIndex = 4;
+            this.textHostname.TabIndex = 5;
             this.textHostname.TextChanged += new System.EventHandler(this.TextHostname_TextChanged);
             // 
             // labelPort
@@ -412,7 +412,7 @@ namespace EsOdbcDsnEditor
             this.textDescription.MaxLength = 256;
             this.textDescription.Name = "textDescription";
             this.textDescription.Size = new System.Drawing.Size(506, 22);
-            this.textDescription.TabIndex = 11;
+            this.textDescription.TabIndex = 3;
             // 
             // textCloudID
             // 
@@ -422,7 +422,7 @@ namespace EsOdbcDsnEditor
             this.textCloudID.Multiline = true;
             this.textCloudID.Name = "textCloudID";
             this.textCloudID.Size = new System.Drawing.Size(506, 72);
-            this.textCloudID.TabIndex = 3;
+            this.textCloudID.TabIndex = 4;
             this.textCloudID.TextChanged += new System.EventHandler(this.TextCloudID_TextChanged);
             // 
             // labelDescription
@@ -467,90 +467,6 @@ namespace EsOdbcDsnEditor
             this.pageSecurity.Text = "Security";
             this.pageSecurity.UseVisualStyleBackColor = true;
             // 
-            // pageLogging
-            // 
-            this.pageLogging.Controls.Add(this.checkLoggingEnabled);
-            this.pageLogging.Controls.Add(this.comboLogLevel);
-            this.pageLogging.Controls.Add(this.labelLogLevel);
-            this.pageLogging.Controls.Add(this.logDirectoryPathButton);
-            this.pageLogging.Controls.Add(this.textLogDirectoryPath);
-            this.pageLogging.Controls.Add(this.labelLogDirectory);
-            this.pageLogging.Location = new System.Drawing.Point(4, 25);
-            this.pageLogging.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
-            this.pageLogging.Name = "pageLogging";
-            this.pageLogging.Padding = new System.Windows.Forms.Padding(3, 2, 3, 2);
-            this.pageLogging.Size = new System.Drawing.Size(640, 431);
-            this.pageLogging.TabIndex = 2;
-            this.pageLogging.Text = "Logging";
-            this.pageLogging.UseVisualStyleBackColor = true;
-            // 
-            // checkLoggingEnabled
-            // 
-            this.checkLoggingEnabled.AutoSize = true;
-            this.checkLoggingEnabled.Checked = true;
-            this.checkLoggingEnabled.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.checkLoggingEnabled.Location = new System.Drawing.Point(16, 21);
-            this.checkLoggingEnabled.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
-            this.checkLoggingEnabled.Name = "checkLoggingEnabled";
-            this.checkLoggingEnabled.Size = new System.Drawing.Size(137, 21);
-            this.checkLoggingEnabled.TabIndex = 22;
-            this.checkLoggingEnabled.Text = "Enable Logging?";
-            this.checkLoggingEnabled.UseVisualStyleBackColor = true;
-            this.checkLoggingEnabled.CheckedChanged += new System.EventHandler(this.CheckLoggingEnabled_CheckedChanged);
-            // 
-            // comboLogLevel
-            // 
-            this.comboLogLevel.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
-            this.comboLogLevel.FormattingEnabled = true;
-            this.comboLogLevel.Items.AddRange(new object[] {
-            "DEBUG",
-            "INFO",
-            "WARN",
-            "ERROR"});
-            this.comboLogLevel.Location = new System.Drawing.Point(124, 98);
-            this.comboLogLevel.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
-            this.comboLogLevel.Name = "comboLogLevel";
-            this.comboLogLevel.Size = new System.Drawing.Size(108, 24);
-            this.comboLogLevel.TabIndex = 21;
-            // 
-            // labelLogLevel
-            // 
-            this.labelLogLevel.AutoSize = true;
-            this.labelLogLevel.Location = new System.Drawing.Point(16, 101);
-            this.labelLogLevel.Name = "labelLogLevel";
-            this.labelLogLevel.Size = new System.Drawing.Size(74, 17);
-            this.labelLogLevel.TabIndex = 20;
-            this.labelLogLevel.Text = "Log Level:";
-            // 
-            // logDirectoryPathButton
-            // 
-            this.logDirectoryPathButton.Location = new System.Drawing.Point(526, 55);
-            this.logDirectoryPathButton.Margin = new System.Windows.Forms.Padding(4);
-            this.logDirectoryPathButton.Name = "logDirectoryPathButton";
-            this.logDirectoryPathButton.Size = new System.Drawing.Size(100, 28);
-            this.logDirectoryPathButton.TabIndex = 18;
-            this.logDirectoryPathButton.Text = "Browse...";
-            this.logDirectoryPathButton.UseVisualStyleBackColor = true;
-            this.logDirectoryPathButton.Click += new System.EventHandler(this.LogDirectoryPathButton_Click);
-            // 
-            // textLogDirectoryPath
-            // 
-            this.textLogDirectoryPath.Location = new System.Drawing.Point(124, 57);
-            this.textLogDirectoryPath.Margin = new System.Windows.Forms.Padding(4);
-            this.textLogDirectoryPath.MaxLength = 512;
-            this.textLogDirectoryPath.Name = "textLogDirectoryPath";
-            this.textLogDirectoryPath.Size = new System.Drawing.Size(392, 22);
-            this.textLogDirectoryPath.TabIndex = 17;
-            // 
-            // labelLogDirectory
-            // 
-            this.labelLogDirectory.AutoSize = true;
-            this.labelLogDirectory.Location = new System.Drawing.Point(16, 62);
-            this.labelLogDirectory.Name = "labelLogDirectory";
-            this.labelLogDirectory.Size = new System.Drawing.Size(97, 17);
-            this.labelLogDirectory.TabIndex = 16;
-            this.labelLogDirectory.Text = "Log Directory:";
-            // 
             // pageMisc
             // 
             this.pageMisc.Controls.Add(this.comboBoxDataEncoding);
@@ -587,7 +503,7 @@ namespace EsOdbcDsnEditor
             this.comboBoxDataEncoding.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.comboBoxDataEncoding.Name = "comboBoxDataEncoding";
             this.comboBoxDataEncoding.Size = new System.Drawing.Size(108, 24);
-            this.comboBoxDataEncoding.TabIndex = 31;
+            this.comboBoxDataEncoding.TabIndex = 15;
             // 
             // labelDataEncoding
             // 
@@ -607,7 +523,7 @@ namespace EsOdbcDsnEditor
             this.checkBoxAutoEscapePVA.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.checkBoxAutoEscapePVA.Name = "checkBoxAutoEscapePVA";
             this.checkBoxAutoEscapePVA.Size = new System.Drawing.Size(156, 21);
-            this.checkBoxAutoEscapePVA.TabIndex = 29;
+            this.checkBoxAutoEscapePVA.TabIndex = 12;
             this.checkBoxAutoEscapePVA.Text = "Auto-escape PVAs?";
             this.checkBoxAutoEscapePVA.UseVisualStyleBackColor = true;
             // 
@@ -623,7 +539,7 @@ namespace EsOdbcDsnEditor
             this.comboBoxFloatsFormat.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.comboBoxFloatsFormat.Name = "comboBoxFloatsFormat";
             this.comboBoxFloatsFormat.Size = new System.Drawing.Size(108, 24);
-            this.comboBoxFloatsFormat.TabIndex = 28;
+            this.comboBoxFloatsFormat.TabIndex = 13;
             // 
             // labelFloatsFormat
             // 
@@ -641,7 +557,7 @@ namespace EsOdbcDsnEditor
             this.checkBoxIndexIncludeFrozen.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.checkBoxIndexIncludeFrozen.Name = "checkBoxIndexIncludeFrozen";
             this.checkBoxIndexIncludeFrozen.Size = new System.Drawing.Size(175, 21);
-            this.checkBoxIndexIncludeFrozen.TabIndex = 26;
+            this.checkBoxIndexIncludeFrozen.TabIndex = 16;
             this.checkBoxIndexIncludeFrozen.Text = "Include frozen indices?";
             this.checkBoxIndexIncludeFrozen.UseVisualStyleBackColor = true;
             // 
@@ -654,7 +570,7 @@ namespace EsOdbcDsnEditor
             this.checkBoxMultiFieldLenient.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.checkBoxMultiFieldLenient.Name = "checkBoxMultiFieldLenient";
             this.checkBoxMultiFieldLenient.Size = new System.Drawing.Size(181, 21);
-            this.checkBoxMultiFieldLenient.TabIndex = 25;
+            this.checkBoxMultiFieldLenient.TabIndex = 14;
             this.checkBoxMultiFieldLenient.Text = "Multi value field lenient?";
             this.checkBoxMultiFieldLenient.UseVisualStyleBackColor = true;
             // 
@@ -665,7 +581,7 @@ namespace EsOdbcDsnEditor
             this.checkBoxApplyTZ.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.checkBoxApplyTZ.Name = "checkBoxApplyTZ";
             this.checkBoxApplyTZ.Size = new System.Drawing.Size(157, 21);
-            this.checkBoxApplyTZ.TabIndex = 24;
+            this.checkBoxApplyTZ.TabIndex = 10;
             this.checkBoxApplyTZ.Text = "Use local timezone?";
             this.checkBoxApplyTZ.UseVisualStyleBackColor = true;
             // 
@@ -678,7 +594,7 @@ namespace EsOdbcDsnEditor
             this.checkBoxFollowRedirects.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.checkBoxFollowRedirects.Name = "checkBoxFollowRedirects";
             this.checkBoxFollowRedirects.Size = new System.Drawing.Size(177, 21);
-            this.checkBoxFollowRedirects.TabIndex = 23;
+            this.checkBoxFollowRedirects.TabIndex = 8;
             this.checkBoxFollowRedirects.Text = "Follow HTTP redirects?";
             this.checkBoxFollowRedirects.UseVisualStyleBackColor = true;
             // 
@@ -760,6 +676,90 @@ namespace EsOdbcDsnEditor
             this.numericUpDownTimeout.Size = new System.Drawing.Size(104, 22);
             this.numericUpDownTimeout.TabIndex = 7;
             // 
+            // pageLogging
+            // 
+            this.pageLogging.Controls.Add(this.checkLoggingEnabled);
+            this.pageLogging.Controls.Add(this.comboLogLevel);
+            this.pageLogging.Controls.Add(this.labelLogLevel);
+            this.pageLogging.Controls.Add(this.logDirectoryPathButton);
+            this.pageLogging.Controls.Add(this.textLogDirectoryPath);
+            this.pageLogging.Controls.Add(this.labelLogDirectory);
+            this.pageLogging.Location = new System.Drawing.Point(4, 25);
+            this.pageLogging.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.pageLogging.Name = "pageLogging";
+            this.pageLogging.Padding = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.pageLogging.Size = new System.Drawing.Size(640, 431);
+            this.pageLogging.TabIndex = 2;
+            this.pageLogging.Text = "Logging";
+            this.pageLogging.UseVisualStyleBackColor = true;
+            // 
+            // checkLoggingEnabled
+            // 
+            this.checkLoggingEnabled.AutoSize = true;
+            this.checkLoggingEnabled.Checked = true;
+            this.checkLoggingEnabled.CheckState = System.Windows.Forms.CheckState.Checked;
+            this.checkLoggingEnabled.Location = new System.Drawing.Point(16, 21);
+            this.checkLoggingEnabled.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.checkLoggingEnabled.Name = "checkLoggingEnabled";
+            this.checkLoggingEnabled.Size = new System.Drawing.Size(137, 21);
+            this.checkLoggingEnabled.TabIndex = 22;
+            this.checkLoggingEnabled.Text = "Enable Logging?";
+            this.checkLoggingEnabled.UseVisualStyleBackColor = true;
+            this.checkLoggingEnabled.CheckedChanged += new System.EventHandler(this.CheckLoggingEnabled_CheckedChanged);
+            // 
+            // comboLogLevel
+            // 
+            this.comboLogLevel.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this.comboLogLevel.FormattingEnabled = true;
+            this.comboLogLevel.Items.AddRange(new object[] {
+            "DEBUG",
+            "INFO",
+            "WARN",
+            "ERROR"});
+            this.comboLogLevel.Location = new System.Drawing.Point(124, 98);
+            this.comboLogLevel.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.comboLogLevel.Name = "comboLogLevel";
+            this.comboLogLevel.Size = new System.Drawing.Size(108, 24);
+            this.comboLogLevel.TabIndex = 25;
+            // 
+            // labelLogLevel
+            // 
+            this.labelLogLevel.AutoSize = true;
+            this.labelLogLevel.Location = new System.Drawing.Point(16, 101);
+            this.labelLogLevel.Name = "labelLogLevel";
+            this.labelLogLevel.Size = new System.Drawing.Size(74, 17);
+            this.labelLogLevel.TabIndex = 20;
+            this.labelLogLevel.Text = "Log Level:";
+            // 
+            // logDirectoryPathButton
+            // 
+            this.logDirectoryPathButton.Location = new System.Drawing.Point(526, 55);
+            this.logDirectoryPathButton.Margin = new System.Windows.Forms.Padding(4);
+            this.logDirectoryPathButton.Name = "logDirectoryPathButton";
+            this.logDirectoryPathButton.Size = new System.Drawing.Size(100, 28);
+            this.logDirectoryPathButton.TabIndex = 24;
+            this.logDirectoryPathButton.Text = "Browse...";
+            this.logDirectoryPathButton.UseVisualStyleBackColor = true;
+            this.logDirectoryPathButton.Click += new System.EventHandler(this.LogDirectoryPathButton_Click);
+            // 
+            // textLogDirectoryPath
+            // 
+            this.textLogDirectoryPath.Location = new System.Drawing.Point(124, 57);
+            this.textLogDirectoryPath.Margin = new System.Windows.Forms.Padding(4);
+            this.textLogDirectoryPath.MaxLength = 512;
+            this.textLogDirectoryPath.Name = "textLogDirectoryPath";
+            this.textLogDirectoryPath.Size = new System.Drawing.Size(392, 22);
+            this.textLogDirectoryPath.TabIndex = 23;
+            // 
+            // labelLogDirectory
+            // 
+            this.labelLogDirectory.AutoSize = true;
+            this.labelLogDirectory.Location = new System.Drawing.Point(16, 62);
+            this.labelLogDirectory.Name = "labelLogDirectory";
+            this.labelLogDirectory.Size = new System.Drawing.Size(97, 17);
+            this.labelLogDirectory.TabIndex = 16;
+            this.labelLogDirectory.Text = "Log Directory:";
+            // 
             // DsnEditorForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
@@ -787,13 +787,13 @@ namespace EsOdbcDsnEditor
             this.pageBasic.PerformLayout();
             this.pageSecurity.ResumeLayout(false);
             this.pageSecurity.PerformLayout();
-            this.pageLogging.ResumeLayout(false);
-            this.pageLogging.PerformLayout();
             this.pageMisc.ResumeLayout(false);
             this.pageMisc.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDownBodySize)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDownFetchSize)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDownTimeout)).EndInit();
+            this.pageLogging.ResumeLayout(false);
+            this.pageLogging.PerformLayout();
             this.ResumeLayout(false);
 
         }
