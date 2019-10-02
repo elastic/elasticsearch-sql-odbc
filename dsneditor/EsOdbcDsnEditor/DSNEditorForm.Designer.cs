@@ -250,7 +250,7 @@ namespace EsOdbcDsnEditor
             0});
             this.numericUpDownPort.Name = "numericUpDownPort";
             this.numericUpDownPort.Size = new System.Drawing.Size(104, 22);
-            this.numericUpDownPort.TabIndex = 5;
+            this.numericUpDownPort.TabIndex = 6;
             this.numericUpDownPort.Value = new decimal(new int[] {
             9200,
             0,
@@ -266,7 +266,7 @@ namespace EsOdbcDsnEditor
             this.textPassword.Name = "textPassword";
             this.textPassword.PasswordChar = '*';
             this.textPassword.Size = new System.Drawing.Size(229, 22);
-            this.textPassword.TabIndex = 7;
+            this.textPassword.TabIndex = 8;
             // 
             // labelPassword
             // 
@@ -284,7 +284,7 @@ namespace EsOdbcDsnEditor
             this.textUsername.MaxLength = 512;
             this.textUsername.Name = "textUsername";
             this.textUsername.Size = new System.Drawing.Size(229, 22);
-            this.textUsername.TabIndex = 6;
+            this.textUsername.TabIndex = 7;
             // 
             // labelUsername
             // 
@@ -302,7 +302,7 @@ namespace EsOdbcDsnEditor
             this.textHostname.MaxLength = 512;
             this.textHostname.Name = "textHostname";
             this.textHostname.Size = new System.Drawing.Size(506, 22);
-            this.textHostname.TabIndex = 4;
+            this.textHostname.TabIndex = 5;
             this.textHostname.TextChanged += new System.EventHandler(this.TextHostname_TextChanged);
             // 
             // labelPort

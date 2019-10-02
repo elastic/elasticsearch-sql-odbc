@@ -281,7 +281,7 @@ namespace EsOdbcDsnEditor
 
 		private bool ValidateLogFolderPath(string path)
 		{
-			if (string.IsNullOrEmpty(path) || Directory.Exists(path)) {
+			if (!checkLoggingEnabled.Checked || string.IsNullOrEmpty(path) || Directory.Exists(path)) {
 				return true;
 			}
 
