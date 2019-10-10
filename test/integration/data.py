@@ -234,7 +234,7 @@ def csv_to_ndjson(csv_text, index_name):
 	stream = io.StringIO(csv_text)
 	reader = csv.reader(stream, delimiter=',', quotechar='"')
 
-	index_string = '{"index": {"_index": "%s", "_type": "_doc"}}' % index_name
+	index_string = '{"index": {"_index": "%s"}}' % index_name
 	ndjson = ""
 
 	header_row = next(reader)
@@ -325,7 +325,7 @@ class TestData(object):
 		return ndjson
 
 	def _docs_to_ndjson(self, index_name, docs):
-		index_json = {"index": {"_index": index_name, "_type": "_doc"}}
+		index_json = {"index": {"_index": index_name}}
 		index_string = json.dumps(index_json)
 
 		ndjsons = []
@@ -386,7 +386,7 @@ class TestData(object):
 
 	def _post_ndjson(self, ndjsons, index_name, pipeline_name=None):
 		print("Indexing data for index '%s'." % index_name)
-		url = "%s/%s/_doc/_bulk" % (self._es.base_url(), index_name)
+		url = "%s/%s/_bulk" % (self._es.base_url(), index_name)
 		if pipeline_name:
 			url += "?pipeline=%s" % pipeline_name
 		if type(ndjsons) is not list:
@@ -394,11 +394,11 @@ class TestData(object):
 		for n in ndjsons:
 			with requests.post(url, data=n, headers = {"Content-Type": "application/x-ndjson"},
 					auth=self._es.credentials()) as req:
-				if req.status_code != 200:
+				if req.status_code not in [200, 201]:
 					raise Exception("bulk POST to %s failed with code: %s (content: %s)" % (index_name,
 						req.status_code, req.text))
 				reply = json.loads(req.text)
-				if reply["errors"]:
+				if reply.get("errors"):
 					raise Exception("bulk POST to %s failed with content: %s" % (index_name, req.text))
 
 	def _wait_for_results(self, index_name):
