@@ -12,15 +12,12 @@ subject to the Elastic License are in the [libs](libs) directory.
 
 ## Supported platforms
 
-The desired target platform is Microsoft Windows, past and including version 7.
-Full support will include Linux and OSX, on both x86 and amd64 architectures.
+The currently supported platforms on both x86 and amd64 architectures are:
 
-For `alpha` release the supported platforms are:
+- Microsoft Windows 10
+- Microsoft Windows Server 2016
 
-- Windows 10
-- Windows Server 2016
-
-The installer will check the platform using `winver` and abort installation if not running on a supported platform.
+Support for other platforms might be added at a later time.
 
 ## Running Requirements
 
@@ -43,31 +40,30 @@ make).
 The driver makes use of the following libraries/headers:
 
  * ODBC-Specification 
-   - this is the project that currently contains the ODBC specification,
-   including the headers defining the ODBC C API;
+   - this is the project that contains the ODBC specification, including the
+   headers defining the ODBC C API;
  * libcurl
    - the library is used for the HTTP(S) communication with Elasticsearch REST
-   endpoint;
+   API;
  * c-timestamp
-   - the library is used for parsing the ISO 8601 formated timestamps received
-   from Elasticsearch;
+   - library used for parsing ISO 8601 formated timestamps;
  * ujson4c
-   - fast scanner library for JSON.
+   - fast scanner library for JSON;
+ * tinycbor
+   - a small CBOR encoder and decoder library.
 
 The required libraries are added as subtrees to the project, in the libs directory:
 ```
    somedirectory\
     |_elasticsearch-sql-odbc
-      |_README.md
       |_CMakeLists.txt
-      |_build.bat
-      |_driver
-      |_builds
+      |_...
       |_libs
         |_ODBC-Specification
         |_curl
         |_c-timestamp
         |_ujson4c
+        |_tinycbor
 ```
 
 
@@ -78,7 +74,7 @@ The required libraries are added as subtrees to the project, in the libs directo
 Building the driver requires the installation of Microsoft tools. These can be
 from the Visual Studio pack or with the [standalone tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/).
 
-Version 2017 Enterprize 15.5.2 is used to develop with, older versions
+Version 2017 Enterprise 15 is used to develop with, older versions
 should work fine too, with their corresponding modules. The lists of packages
 for MSVC 2017 are given below.
 
@@ -91,11 +87,11 @@ Required packages:
  * VC++ toolset
    - for the compiler;
  * C++/CLI support
-   - for the DSN editor C to C# CLI binding;
+   - for DSN editor's C-to-C# CLI binding;
  * C# support
-   - for the DSN editor C# form;
+   - for DSN editor's C# form;
  * F# support
-   - for the MSI packaging.
+   - for building the MSI package.
 
 Optional packages:
 
@@ -119,9 +115,8 @@ steps for building the ODBC driver.
 Some environment parameters can be set to customized its behavior (see start
 of script).
 
-The script can also take a set of parameters, run ```build.bat help``` to see
-what they mean. ```build.bat``` will build the driver itself, by invoking
-CMake and MSBuild, as needed. ```build.bat proper``` will clean the project to initial state. ```build.bat all tests``` will run the unit tests.
+The script will take a set of parameters, run ```build.bat help``` to see
+which these are.
 
 ## Testing
 
@@ -131,7 +126,8 @@ Testing the driver is done with unit tests and integration tests.
 
 The unit testing makes use of the Googletest framework. This is being fetched and built at testing time.
 
-The integration testing makes use of a Python application that requires the following packages installed:
+The integration testing makes use of a Python application that requires the
+following packages be installed:
 
  * Python3, both x86 and amd64 distributions
    - both x86 and x64 driver builds are tested;
@@ -149,4 +145,4 @@ For each of the two Python releases, the following packages must be installed:
 
 ## Installation
 
-See: https://www.elastic.co/guide/en/elasticsearch/sql-odbc/current/index.html
+See: https://www.elastic.co/guide/en/elasticsearch/reference/current/sql-odbc.html
