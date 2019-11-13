@@ -521,6 +521,8 @@ SQLRETURN EsSQLSetEnvAttr(SQLHENV EnvironmentHandle,
 				// review of the options.
 				case SQL_OV_ODBC2:
 				case SQL_OV_ODBC3:
+					WARNH(EnvironmentHandle, "application version %d not fully"
+							" supported.", (intptr_t)Value);
 				case SQL_OV_ODBC3_80:
 					break;
 				default:
