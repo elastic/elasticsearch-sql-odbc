@@ -806,13 +806,19 @@ long TEST_API write_connection_string(esodbc_dsn_attrs_st *attrs,
 					} else {
 						format = WPFWP_LDESC "=" WPFWP_LDESC ";";
 					}
+					errno = 0;
 					n = swprintf(szConnStrOut + pos, cchConnStrOutMax - pos,
 							format, LWSTR(iter->kw), LWSTR(iter->val));
+					/* on buffer too small, swprintf() will 0-terminate it,
+					 * return negative, but not set errno. */
 					if (n < 0) {
-						ERRN("failed to outprint connection string (keyword: "
-							LWPDL ", room: %hd, position: %zu).",
-							LWSTR(iter->kw), cchConnStrOutMax, pos);
-						return -1;
+						if (errno != 0) {
+							ERRN("failed to print connection string (keyword: "
+								LWPDL ", room: %hd, position: %zu).",
+								LWSTR(iter->kw), cchConnStrOutMax, pos);
+							return -1;
+						}
+						assert(szConnStrOut[cchConnStrOutMax - 1] == L'\0');
 					}
 				}
 			}
