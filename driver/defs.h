@@ -61,7 +61,7 @@
 #define ESODBC_MAX_IDENTIFIER_LEN		SHRT_MAX
 /* "the relationship between the columns in the GROUP BY clause and the
  * nonaggregated columns in the select list" */
-#define ESODBC_GROUP_BY						SQL_GB_NO_RELATION
+#define ESODBC_GROUP_BY					SQL_GB_NO_RELATION
 
 /* 20 = len("18446744073709551616"), 1 << (sizeof(uint64_t) * 8bits) */
 #define ESODBC_PRECISION_UINT64			20
