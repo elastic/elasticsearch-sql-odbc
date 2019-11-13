@@ -3206,7 +3206,7 @@ SQLRETURN EsSQLSetConnectAttrW(
 			RET_HDIAGS(dbc, SQL_STATE_HYC00);
 
 #ifndef NDEBUG
-		/* MicroStrategy Desktop invoked */
+		/* MicroStrategy Desktop, Oracle BI invoked */
 		case 1041:
 		case 1042:
 		/* MS Access/Jet proprietary info type */
