@@ -949,8 +949,7 @@ static BOOL decode_cloud_id(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	if (Curl_base64_decode(buff, &dec, &len) != CURLE_OK) {
 		ERRH(dbc, "failed to decode B64 part of  Cloud ID: [%zu] `" LWPDL "`.",
 			attrs->cloud_id.cnt, LWSTR(&attrs->cloud_id));
-		SET_HDIAG(dbc, SQL_STATE_HY000, "Invalid Base64 encoding in Cloud ID "
-			"parameter", 0);
+		SET_HDIAG(dbc, SQL_STATE_HY000, "Invalid Cloud ID parameter", 0);
 		return FALSE;
 	}
 	DBGH(dbc, "Cloud ID decoded to: [%zu] `" LCPDL "`.", len, len, dec);
