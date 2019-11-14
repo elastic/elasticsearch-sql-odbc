@@ -258,10 +258,13 @@ namespace EsOdbcDsnEditor
 			// Basic Panel
 			Builder["dsn"] = textName.Text;
 			Builder["description"] = textDescription.Text;
-			Builder["uid"] = textUsername.Text;
+			// https://www.elastic.co/guide/en/elasticsearch/reference/current/security-api-put-user.html#security-api-put-user-path-params :
+			// "Leading or trailing whitespace is not allowed." -> it is more likely that a user will insert a
+			// (trailing) white space by mistake than intentionally trying to set it.
+			Builder["uid"] = textUsername.Text.Trim();
 			Builder["pwd"] = textPassword.Text;
-			Builder["cloudid"] = "{" + textCloudID.Text.StripBraces() + "}";
-			Builder["server"] = textHostname.Text;
+			Builder["cloudid"] = "{" + textCloudID.Text.StripBraces().Trim() + "}";
+			Builder["server"] = textHostname.Text.Trim();
 			Builder["port"] = numericUpDownPort.Text;
 
 			// Security Panel
