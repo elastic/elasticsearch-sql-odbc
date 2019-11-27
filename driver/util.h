@@ -270,7 +270,7 @@ size_t json_escape_overlapping(char *str, size_t inlen, size_t outlen);
  * wstr according to avaialble space and indicates the available bytes to copy
  * back into provided buffer (if not NULL).
  */
-SQLRETURN write_wstr(SQLHANDLE hnd, SQLWCHAR *dest, wstr_st *src,
+SQLRETURN TEST_API write_wstr(SQLHANDLE hnd, SQLWCHAR *dest, wstr_st *src,
 	SQLSMALLINT /*B*/avail, SQLSMALLINT /*B*/*usedp);
 
 /*
