@@ -51,7 +51,7 @@ module Builder =
              Attribute.InformationalVersion informationalVersion
             ]
 
-    let Sign file () =
+    let Sign file =
         let release = getBuildParam "release" = "1"
         if release then
             tracefn "Signing MSI"
