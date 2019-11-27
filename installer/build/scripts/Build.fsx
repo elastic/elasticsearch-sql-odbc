@@ -161,6 +161,15 @@ module Builder =
         unzipFile (zipFile, buildDir)
         tracefn "Unzipped zip file in %s" zipFile
 
+        // sign every DLL to be part of the MSI
+        let unzippedDir = Regex.Replace(zipFile, "(^.*)\.zip$", "$1/")
+        let dllFiles = unzippedDir
+                        |> directoryInfo
+                        |> filesInDirMatching ("*.dll")
+                        |> Seq.map (fun f -> f.FullName)
+        for dllFile in dllFiles do
+            Sign dllFile
+
         let exitCode = ExecProcess (fun info ->
                          info.FileName <- sprintf "%sInstaller" MsiBuildDir
                          info.WorkingDirectory <- MsiDir
