@@ -526,14 +526,14 @@ size_t json_escape_overlapping(char *str, size_t inlen, size_t outlen)
  * wstr according to avaialble space and indicates the available bytes to copy
  * back into provided buffer (if not NULL).
  */
-SQLRETURN write_wstr(SQLHANDLE hnd, SQLWCHAR *dest, wstr_st *src,
+SQLRETURN TEST_API write_wstr(SQLHANDLE hnd, SQLWCHAR *dest, wstr_st *src,
 	SQLSMALLINT /*B*/avail, SQLSMALLINT /*B*/*usedp)
 {
 	size_t wide_avail;
 
 	/* cnt must not count the 0-term (XXX: ever need to copy 0s?) */
-	assert(src->cnt <= 0 || src->str[src->cnt - 1]);
-	assert(src->cnt <= 0 || src->str[src->cnt] == 0);
+	assert(src->cnt <= 0 || src->str[src->cnt - 1] != L'\0');
+	assert(src->cnt <= 0 || src->str[src->cnt] == L'\0');
 
 	DBGH(hnd, "copying %zd wchars (`" LWPDL "`) into buffer @0x%p, of %dB "
 		"len; out-len @0x%p.", src->cnt, LWSTR(src), dest, avail, usedp);
@@ -549,8 +549,8 @@ SQLRETURN write_wstr(SQLHANDLE hnd, SQLWCHAR *dest, wstr_st *src,
 
 	if (dest) {
 		/* needs to be multiple of SQLWCHAR units (2 on Win) */
-		if (avail % sizeof(SQLWCHAR)) {
-			ERRH(hnd, "invalid buffer length provided: %d.", avail);
+		if (avail < 0 || avail % sizeof(SQLWCHAR)) {
+			ERRH(hnd, "invalid buffer length provided: %hd.", avail);
 			RET_HDIAGS(hnd, SQL_STATE_HY090);
 		} else {
 			wide_avail = avail/sizeof(SQLWCHAR);
@@ -558,11 +558,13 @@ SQLRETURN write_wstr(SQLHANDLE hnd, SQLWCHAR *dest, wstr_st *src,
 
 		/* '=' (in <=), since src->cnt doesn't count the \0 */
 		if (wide_avail <= src->cnt) {
-			wcsncpy(dest, src->str, wide_avail - /* 0-term */1);
-			dest[wide_avail - 1] = 0;
+			if (0 < wide_avail) {
+				wcsncpy(dest, src->str, wide_avail - /* 0-term */1);
+				dest[wide_avail - 1] = L'\0';
+			}
 
 			INFOH(hnd, "not enough buffer size to write required string (plus "
-				"terminator): `" LWPD "` [%zu]; available: %zu.",
+				"terminator): `" LWPDL "` [%zu]; available: %zu.",
 				LWSTR(src), src->cnt, wide_avail);
 			RET_HDIAGS(hnd, SQL_STATE_01004);
 		} else {
