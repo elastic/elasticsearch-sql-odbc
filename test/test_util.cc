@@ -6,6 +6,7 @@
 
 extern "C" {
 #include "util.h"
+#include "handles.h"
 } // extern C
 
 #include <gtest/gtest.h>
@@ -105,6 +106,55 @@ TEST_F(Util, wstr_to_utf8_no_nts) {
 	free(dst.str);
 }
 
+TEST_F(Util, write_wstr_invalid_avail) {
+	wstr_st src = WSTR_INIT(SRC_STR);
+	SQLWCHAR dst[sizeof(SRC_STR)];
+	esodbc_env_st env = {0};
+	SQLSMALLINT used;
+
+	SQLRETURN ret = write_wstr(&env, dst, &src, sizeof(*dst) + 1, &used);
+	ASSERT_FALSE(SQL_SUCCEEDED(ret));
+}
+
+TEST_F(Util, write_wstr_0_avail) {
+	wstr_st src = WSTR_INIT(SRC_STR);
+	SQLWCHAR dst[sizeof(SRC_STR)];
+	esodbc_env_st env = {0};
+	SQLSMALLINT used;
+
+	SQLRETURN ret = write_wstr(&env, dst, &src, /*avail*/0, &used);
+	assert(SQL_SUCCEEDED(ret));
+	ASSERT_EQ(used, src.cnt * sizeof(*dst));
+}
+
+TEST_F(Util, write_wstr_trunc) {
+	wstr_st src = WSTR_INIT(SRC_STR);
+	SQLWCHAR dst[sizeof(SRC_STR)];
+	esodbc_env_st env = {0};
+	SQLSMALLINT used;
+
+	SQLRETURN ret = write_wstr(&env, dst, &src,
+			(SQLSMALLINT)((src.cnt - 1) * sizeof(*dst)), &used);
+	assert(SQL_SUCCEEDED(ret));
+	ASSERT_EQ(used, src.cnt * sizeof(*dst));
+	ASSERT_EQ(dst[src.cnt - 2], L'\0');
+	ASSERT_EQ(wcsncmp(src.str, dst, src.cnt - 2), 0);
+}
+
+TEST_F(Util, write_wstr_copy) {
+	wstr_st src = WSTR_INIT(SRC_STR);
+	SQLWCHAR dst[sizeof(SRC_STR)];
+	esodbc_env_st env = {0};
+	SQLSMALLINT used;
+
+	SQLRETURN ret = write_wstr(&env, dst, &src, (SQLSMALLINT)sizeof(dst),
+			&used);
+	assert(SQL_SUCCEEDED(ret));
+	ASSERT_EQ(used, src.cnt * sizeof(*dst));
+	ASSERT_EQ(dst[src.cnt], L'\0');
+	ASSERT_EQ(wcscmp(src.str, dst), 0);
+}
+
 TEST_F(Util, utf8_to_wstr_unicode) {
 #undef SRC_STR
 #undef SRC_AID
@@ -120,8 +170,6 @@ TEST_F(Util, utf8_to_wstr_unicode) {
 	free(dst_mb.str);
 	free(dst_wc.str);
 }
-
-
 
 TEST_F(Util, ascii_c2w2c)
 {
