@@ -18,6 +18,7 @@ import atexit
 import signal
 import subprocess
 from subprocess import PIPE
+from urllib.parse import urlparse
 
 ARTIF_URL = "https://artifacts-api.elastic.co/v1/versions"
 ES_PROJECT = "elasticsearch"
@@ -32,18 +33,39 @@ class Elasticsearch(object):
 	TERM_TIMEOUT = 5 # how long to wait for processes to die (before KILLing)
 	REQ_TIMEOUT = 20 # default GET request timeout
 	ES_PORT = 9200
+	ES_BASE_URL = "http://localhost:%s" % ES_PORT
 	ES_START_TIMEOUT = 60 # how long to wait for Elasticsearch to come online
 	ES_401_RETRIES = 8 # how many "starting" 401 answers to accept before giving up (.5s waiting inbetween)
 	AUTH_PASSWORD = "elastic"
+	ES_CREDENTIALS = ("elastic", AUTH_PASSWORD) # user, pwd
 
 	_offline_dir = None
+	_credentials = None
+	_base_url = None
 
-	def __init__(self, offline_dir=None):
+	def __init__(self, offline_dir=None, url=None):
 		self._offline_dir = offline_dir
+		if not url:
+			self._port = self.ES_PORT
+			self._base_url = self.ES_BASE_URL
+			self._credentials = self.ES_CREDENTIALS
+		else:
+			u = urlparse(url)
+			self._port = u.port if u.port else self.ES_PORT
+			self._base_url = "%s://%s:%s" % (u.scheme, u.hostname, self._port)
+			self._credentials = (u.username, u.password) if u.username else self.ES_CREDENTIALS
+		print("Using Elasticsearch instance at %s, credentials (%s, %s)" % (self._base_url, self._credentials[0],
+			"*" * len(self._credentials[1])))
 
 	@staticmethod
 	def elasticsearch_distro_filename(version):
 		return "%s-%s.%s" % (ES_PROJECT, version, PACKAGING)
+
+	def credentials(self):
+		return self._credentials
+
+	def base_url(self):
+		return self._base_url
 
 	def _latest_build(self, version):
 		req = requests.get(ARTIF_URL, timeout=self.REQ_TIMEOUT)
@@ -123,7 +145,7 @@ class Elasticsearch(object):
 		with open(yaml, mode="a", newline="\n") as f:
 			f.write("#\n# ODBC Integration Test\n#\n")
 			f.write("xpack.security.enabled: True\n")
-			f.write("http.port: %s\n" % self.ES_PORT) # don't bind on next avail port
+			f.write("http.port: %s\n" % self._port) # don't bind on next avail port
 			f.write("cluster.routing.allocation.disk.threshold_enabled: False\n")
 
 	@staticmethod
@@ -185,23 +207,32 @@ class Elasticsearch(object):
 			raise Exception("password generation failed with: %s" % p.stdout.read())
 
 	def _enable_xpack(self, es_dir):
-		# start trial mode
-		req = requests.post("http://localhost:%s/_license/start_trial?acknowledge=true" % self.ES_PORT)
-		if req.status_code != 200:
-			raise Exception("starting of trial failed with status: %s" % req.status_code)
-		# TODO: check content?
-
+		# setup passwords to random generated ones first...
 		pwd = self._gen_passwords(es_dir)
-		# change passwords, easier to restart with failed tests
-		req = requests.post("http://localhost:%s/_security/user/_password" % self.ES_PORT, auth=("elastic", pwd),
-				json={"password": self.AUTH_PASSWORD})
+		# ...then change passwords, easier to restart with failed tests
+		req = requests.post("%s/_security/user/_password" % self._base_url, auth=(self._credentials[0], pwd),
+				json={"password": self._credentials[1]})
 		if req.status_code != 200:
 			raise Exception("attempt to change elastic's password failed with code %s" % req.status_code)
 		# kibana too (debug convenience)
-		req = requests.post("http://localhost:%s/_security/user/kibana/_password" % self.ES_PORT,
-				auth=("elastic", self.AUTH_PASSWORD), json={"password": self.AUTH_PASSWORD})
+		req = requests.post("%s/_security/user/kibana/_password" % self._base_url, auth=self._credentials,
+				json={"password": self._credentials[1]})
 		if req.status_code != 200:
 			print("ERROR: kibana user password change failed with code: %s" % req.status_code)
+
+		# start trial mode
+		url = "%s/_license/start_trial?acknowledge=true" % self._base_url
+		failures = 0
+		while True:
+			req = requests.post(url, auth=self._credentials, timeout=self.REQ_TIMEOUT)
+			if req.status_code == 200:
+				# TODO: check content?
+				break
+			print("starting of trial failed (#%s) with status: %s, text: %s" % (failures, req.status_code, req.text))
+			failures += 1
+			if self.ES_401_RETRIES < failures:
+				raise Exception("starting of trial failed with status: %s, text: %s" % (req.status_code, req.text))
+			time.sleep(.5)
 
 	def spawn(self, version, root_dir=None, ephemeral=False):
 		stage_dir = tempfile.mkdtemp(suffix=".ITES", dir=root_dir)
@@ -227,7 +258,7 @@ class Elasticsearch(object):
 				raise Exception()
 		except:
 			raise Exception("port %s is active; if Elasticsearch is running it needs to be shut down first" %
-					self.ES_PORT)
+					self._port)
 
 		data_path = os.path.join(es_dir, "data")
 		if os.path.isdir(data_path):
@@ -241,18 +272,21 @@ class Elasticsearch(object):
 		self._start_elasticsearch(es_dir)
 		self._enable_xpack(es_dir)
 
-	@staticmethod
-	def is_listening(password=None):
-		auth = ("elastic", password) if password else None
+	def cluster_name(self, fail_on_non200=True):
 		try:
-			req = requests.get("http://localhost:%s" % Elasticsearch.ES_PORT, auth=auth, timeout=.5)
-		except requests.Timeout:
-			return False
-		if req.status_code != 200:
-			raise Exception("unexpected ES response code received: %s" % req.status_code)
-		if "You Know, for Search" not in req.text:
-			raise Exception("unexpected ES answer received: %s" % req.text)
-		return True
+			resp = requests.get(self._base_url, auth=self._credentials, timeout=self.REQ_TIMEOUT)
+		except (requests.Timeout, requests.ConnectionError):
+			return None
+		if resp.status_code != 200:
+			if fail_on_non200:
+				raise Exception("unexpected ES response code received: %s" % resp.status_code)
+			else:
+				return ""
+		if "cluster_name" not in resp.json():
+			raise Exception("unexpected ES answer received: %s" % resp.text)
+		return resp.json().get("cluster_name")
 
+	def is_listening(self):
+		return self.cluster_name(False) is not None
 
 # vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 tw=118 :

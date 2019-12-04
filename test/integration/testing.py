@@ -12,6 +12,7 @@ from elasticsearch import Elasticsearch
 from data import TestData
 
 CONNECT_STRING = 'Driver={Elasticsearch Driver};UID=elastic;PWD=%s;Secure=0;' % Elasticsearch.AUTH_PASSWORD
+CONNECT_STRING += "VersionChecking=major;" # ES 6.8 (.6+?) doesn't advertise itself as SNAPSHOT anymore
 
 class Testing(object):
 
