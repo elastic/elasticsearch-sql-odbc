@@ -72,6 +72,7 @@ int assign_dsn_attr(esodbc_dsn_attrs_st *attrs,
 		{&MK_WSTR(ESODBC_DSN_FOLLOW), &attrs->follow},
 		{&MK_WSTR(ESODBC_DSN_CATALOG), &attrs->catalog},
 		{&MK_WSTR(ESODBC_DSN_PACKING), &attrs->packing},
+		{&MK_WSTR(ESODBC_DSN_COMPRESSION), &attrs->compression},
 		{&MK_WSTR(ESODBC_DSN_MAX_FETCH_SIZE), &attrs->max_fetch_size},
 		{&MK_WSTR(ESODBC_DSN_MAX_BODY_SIZE_MB), &attrs->max_body_size},
 		{&MK_WSTR(ESODBC_DSN_APPLY_TZ), &attrs->apply_tz},
@@ -406,6 +407,7 @@ long TEST_API write_00_list(esodbc_dsn_attrs_st *attrs,
 		{&MK_WSTR(ESODBC_DSN_FOLLOW), &attrs->follow},
 		{&MK_WSTR(ESODBC_DSN_CATALOG), &attrs->catalog},
 		{&MK_WSTR(ESODBC_DSN_PACKING), &attrs->packing},
+		{&MK_WSTR(ESODBC_DSN_COMPRESSION), &attrs->compression},
 		{&MK_WSTR(ESODBC_DSN_MAX_FETCH_SIZE), &attrs->max_fetch_size},
 		{&MK_WSTR(ESODBC_DSN_MAX_BODY_SIZE_MB), &attrs->max_body_size},
 		{&MK_WSTR(ESODBC_DSN_APPLY_TZ), &attrs->apply_tz},
@@ -658,6 +660,10 @@ BOOL write_system_dsn(esodbc_dsn_attrs_st *new_attrs,
 			old_attrs ? &old_attrs->packing : NULL
 		},
 		{
+			&MK_WSTR(ESODBC_DSN_COMPRESSION), &new_attrs->compression,
+			old_attrs ? &old_attrs->packing : NULL
+		},
+		{
 			&MK_WSTR(ESODBC_DSN_MAX_FETCH_SIZE), &new_attrs->max_fetch_size,
 			old_attrs ? &old_attrs->max_fetch_size : NULL
 		},
@@ -776,6 +782,7 @@ long TEST_API write_connection_string(esodbc_dsn_attrs_st *attrs,
 		{&attrs->follow, &MK_WSTR(ESODBC_DSN_FOLLOW)},
 		{&attrs->catalog, &MK_WSTR(ESODBC_DSN_CATALOG)},
 		{&attrs->packing, &MK_WSTR(ESODBC_DSN_PACKING)},
+		{&attrs->compression, &MK_WSTR(ESODBC_DSN_COMPRESSION)},
 		{&attrs->max_fetch_size, &MK_WSTR(ESODBC_DSN_MAX_FETCH_SIZE)},
 		{&attrs->max_body_size, &MK_WSTR(ESODBC_DSN_MAX_BODY_SIZE_MB)},
 		{&attrs->apply_tz, &MK_WSTR(ESODBC_DSN_APPLY_TZ)},
@@ -862,6 +869,9 @@ void assign_dsn_defaults(esodbc_dsn_attrs_st *attrs)
 
 	res |= assign_dsn_attr(attrs,
 			&MK_WSTR(ESODBC_DSN_PACKING), &MK_WSTR(ESODBC_DEF_PACKING),
+			/*overwrite?*/FALSE);
+	res |= assign_dsn_attr(attrs,
+			&MK_WSTR(ESODBC_DSN_COMPRESSION), &MK_WSTR(ESODBC_DEF_COMPRESSION),
 			/*overwrite?*/FALSE);
 	res |= assign_dsn_attr(attrs,
 			&MK_WSTR(ESODBC_DSN_MAX_FETCH_SIZE),

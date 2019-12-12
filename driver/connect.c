@@ -437,6 +437,7 @@ static SQLRETURN dbc_curl_init(esodbc_dbc_st *dbc)
 {
 	CURL *curl;
 	SQLRETURN ret;
+	BOOL compress;
 
 	assert(! dbc->curl);
 
@@ -470,6 +471,16 @@ static SQLRETURN dbc_curl_init(esodbc_dbc_st *dbc)
 			dbc->follow);
 	if (dbc->curl_err != CURLE_OK) {
 		ERRH(dbc, "libcurl: failed to set redirection behavior.");
+		goto err;
+	}
+
+	/* set the accepted encoding (compression) header */
+	compress = dbc->compression == ESODBC_CMPSS_ON ||
+		(dbc->compression == ESODBC_CMPSS_AUTO && !dbc->secure);
+	dbc->curl_err = curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING,
+			compress ? "" : NULL);
+	if (dbc->curl_err != CURLE_OK) {
+		ERRH(dbc, "libcurl: failed to set HTTP headers list.");
 		goto err;
 	}
 
@@ -513,6 +524,13 @@ static SQLRETURN dbc_curl_init(esodbc_dbc_st *dbc)
 		 * (CURLOPT_SSL_FALSESTART), CURLOPT_SSL_VERIFYSTATUS,
 		 * CURLOPT_PROXY_*
 		 */
+
+		/* TLS has its own compression options (RFC3749), so doing it twice
+		 * will likelyl be detrimental, but there's also the security
+		 * implication (CVE-2012-4929). */
+		if (compress) {
+			WARNH(dbc, "compression and encryption are both enabled.");
+		}
 	}
 
 	/* set authentication parameters */
@@ -1360,6 +1378,18 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 		goto err;
 	}
 	INFOH(dbc, "pack JSON: %s.", dbc->pack_json ? "true" : "false");
+
+	/*
+	 * set the REST body format: JSON/CBOR
+	 */
+	if (EQ_CASE_WSTR(&attrs->compression, &MK_WSTR(ESODBC_DSN_CMPSS_AUTO))) {
+		dbc->compression = ESODBC_CMPSS_AUTO;
+	} else {
+		dbc->compression = wstr2bool(&attrs->compression) ?
+			ESODBC_CMPSS_ON : ESODBC_CMPSS_OFF;
+	}
+	INFOH(dbc, "compression: %d (" LWPDL ").", dbc->compression,
+		LWSTR(&attrs->compression));
 
 	/* "apply TZ" param for time conversions */
 	dbc->apply_tz = wstr2bool(&attrs->apply_tz);

@@ -193,37 +193,46 @@ set(CTIMESTAMP_PATH_SRC ${CMAKE_SOURCE_DIR}/libs/c-timestamp CACHE PATH
 aux_source_directory(${CTIMESTAMP_PATH_SRC}/ DRV_SRC)
 
 #
-# add libcurl to the project
+# add libcurl (and zlib) to the project
 #
 set(LIBCURL_PATH_SRC ${CMAKE_SOURCE_DIR}/libs/curl CACHE PATH
 	"Lib curl source path")
-set(LIBCURL_LINK_MODE static CACHE STRING
-	"Lib curl linking mode: static (default) or dll")
 set(LIBCURL_BUILD_TYPE debug CACHE STRING
 	"Lib curl build type: debug (default) or release")
+
+# zlib paths
+set(ZLIB_PATH_SRC ${CMAKE_SOURCE_DIR}/libs/zlib CACHE PATH
+	"Lib zlib source path")
+set(ZLIB_PATH_INST ${CMAKE_BINARY_DIR}/zlib CACHE PATH
+	"Lib zlib install path")
 
 if (${LIBCURL_BUILD_TYPE} MATCHES [Dd][Ee][Bb][Uu][Gg])
 	set(LIBCURL_DEBUG_ENABLED yes)
 	set(LIBCURL_BUILD_TYPE debug)
 	set(LIBCURL_BUILD_SUFFIX _debug)
+	# zlib's nmake-based "win32" build system contains a default,
+	# non-modifiable "-MD". Setting ZLIB_LOC will override it, which will
+	# issue a compiler warning (that can be ignored, can't be supressed).
+	set(ZLIB_LOC -MDd)
 else (${LIBCURL_BUILD_TYPE} MATCHES [Dd][Ee][Bb][Uu][Gg])
 	set(LIBCURL_DEBUG_ENABLED no)
 	set(LIBCURL_BUILD_TYPE release)
 	# empty LIBCURL_BUILD_SUFFIX
+	# empty ZLIB_LOC
 endif (${LIBCURL_BUILD_TYPE} MATCHES [Dd][Ee][Bb][Uu][Gg])
 
 set(LIBCURL_LD_PATH
 	# Curl "installs" the .dll and .lib in different directories -> use the
 	# build dir to find both files in same directory instead of installing.
 	# Curl's win build root directory is not configurable.
-	# The path built below is only constant for the subtree tag (current:
-	# 7.61.0) and default/below nmake options (only with: IPv6, SSPI, WinSSL).
-	${LIBCURL_PATH_SRC}/builds/libcurl-vc-${TARCH}-${LIBCURL_BUILD_TYPE}-${LIBCURL_LINK_MODE}-ipv6-sspi-winssl-obj-lib/
+	# The path built below is only constant for the subtree tag and the nmake
+	# options below: ZLIB, IPv6, SSPI, WinSSL, plus IDN, not echoed in name.
+	${LIBCURL_PATH_SRC}/builds/libcurl-vc-${TARCH}-${LIBCURL_BUILD_TYPE}-static-zlib-static-ipv6-sspi-winssl-obj-lib/
 	CACHE PATH "Lib curl load library path")
 set(LIBCURL_INC_PATH ${LIBCURL_PATH_SRC}/include CACHE PATH
 	"Lib curl include path")
 
-# Build libcurl.
+# Build zlib, then libcurl.
 # Note: this happens at config time as a pre-requisite, for now. This might
 # be changed to a build target later (possibly as a CMake subproject: re-link
 # only if out-of-date, skip building the .exe, allow disabling non-HTTP
@@ -232,14 +241,38 @@ set(LIBCURL_INC_PATH ${LIBCURL_PATH_SRC}/include CACHE PATH
 # entire build "single-config", since the build type (rel/dbg) is decided at
 # CMake-generation, not along the MSBuild invocation.
 if (NOT IS_DIRECTORY ${LIBCURL_LD_PATH})
+	# build zlib first.
+	message("Building zlib library in ${ZLIB_PATH_SRC}")
+	execute_process(COMMAND
+		# zlib's "win32" makefile builds in situ => always clean before
+		# building, potentially removing builds of different architecture than
+		# current's build.
+		nmake /f win32/Makefile.msc clean zlib.lib LOC=${ZLIB_LOC}
+		RESULT_VARIABLE CMD_RETURN
+		WORKING_DIRECTORY "${ZLIB_PATH_SRC}"
+		)
+	if (${CMD_RETURN})
+		message(FATAL_ERROR "Building zlib failed.")
+	endif (${CMD_RETURN})
+	# libcurl expects a /lib and a /include folder under the location provided
+	# as the path to zlib. zlib/win32's makefile has no install target, so
+	# we'll just symlink zlib's root directory under those paths.
+	file(INSTALL ${ZLIB_PATH_SRC}/zlib.lib DESTINATION ${ZLIB_PATH_INST}/lib)
+	file(GLOB ZLIB_H_FILES LIST_DIRECTORIES false ${ZLIB_PATH_SRC}
+		${ZLIB_PATH_SRC}/*.h)
+	file(INSTALL ${ZLIB_H_FILES} DESTINATION ${ZLIB_PATH_INST}/include)
+
+	# build libcurl second: config first, build afterwards..
+	message("Building curl library in ${LIBCURL_PATH_SRC}")
 	execute_process(COMMAND buildconf.bat
 		RESULT_VARIABLE CMD_RETURN
 		WORKING_DIRECTORY "${LIBCURL_PATH_SRC}"
 		)
 	if (NOT ${CMD_RETURN})
 		execute_process(COMMAND
-			nmake /f Makefile.vc mode=${LIBCURL_LINK_MODE} MACHINE=${TARCH}
+			nmake /f Makefile.vc mode=static MACHINE=${TARCH}
 			ENABLE_WINSSL=yes ENABLE_IDN=yes ENABLE_IPV6=yes ENABLE_SSPI=yes
+			WITH_ZLIB=static ZLIB_PATH=${ZLIB_PATH_INST}
 			# build type needs to be synchronized (to link in the same CRT)
 			DEBUG=${LIBCURL_DEBUG_ENABLED}
 			# This "sneaks in" a define to disable all other protocols than
@@ -260,31 +293,30 @@ endif(NOT IS_DIRECTORY ${LIBCURL_LD_PATH})
 
 # add libcurl as dependency
 if (${WIN32})
-	if (${LIBCURL_LINK_MODE} MATCHES [Dd][Ll][Ll])
-		add_library(libcurl SHARED IMPORTED)
-		set_property(TARGET libcurl PROPERTY IMPORTED_LOCATION
-			${LIBCURL_LD_PATH}/libcurl${LIBCURL_BUILD_SUFFIX}${CMAKE_SHARED_LIBRARY_SUFFIX})
-		set_property(TARGET libcurl PROPERTY IMPORTED_IMPLIB
-			${LIBCURL_LD_PATH}/libcurl${LIBCURL_BUILD_SUFFIX}${CMAKE_IMPORT_LIBRARY_SUFFIX})
-		# empty LIBCURL_WIN_LIBS
-	else (${LIBCURL_LINK_MODE} MATCHES [Dd][Ll][Ll])
-		add_library(libcurl STATIC IMPORTED)
-		set_property(TARGET libcurl PROPERTY IMPORTED_LOCATION
-			${LIBCURL_LD_PATH}/libcurl_a${LIBCURL_BUILD_SUFFIX}${CMAKE_STATIC_LIBRARY_SUFFIX})
-		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DCURL_STATICLIB")
-		# Libraries that libcurl/WinSSL links against.
-		# Removed: wldap32 advapi32 gdi32 user32 (unused with current config)
-		set(LIBCURL_WIN_LIBS ws2_32 crypt32 normaliz)
-	endif (${LIBCURL_LINK_MODE} MATCHES [Dd][Ll][Ll])
+	add_library(zlib STATIC IMPORTED)
+	set_property(TARGET zlib PROPERTY IMPORTED_LOCATION
+		${ZLIB_PATH_INST}/lib/zlib.lib)
+
+	add_library(libcurl STATIC IMPORTED)
+	set_property(TARGET libcurl PROPERTY IMPORTED_LOCATION
+		${LIBCURL_LD_PATH}/libcurl_a${LIBCURL_BUILD_SUFFIX}${CMAKE_STATIC_LIBRARY_SUFFIX})
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /DCURL_STATICLIB")
+	# Libraries that libcurl/WinSSL links against.
+	# Removed: wldap32 advapi32 gdi32 user32 (unused with current config)
+	set(LIBCURL_WIN_LIBS ws2_32 crypt32 normaliz)
 else (${WIN32})
 	set_property(TARGET libcurl PROPERTY IMPORTED_LOCATION
 		${LIBCURL_LD_PATH}/libcurl${CMAKE_SHARED_LIBRARY_SUFFIX})
 endif (${WIN32})
 
 add_custom_target(curlclean
-	COMMAND nmake /f Makefile.vc mode=${LIBCURL_LINK_MODE} clean
+	COMMAND nmake /f Makefile.vc mode=static clean
 	COMMAND ../buildconf.bat -clean
 		WORKING_DIRECTORY "${LIBCURL_PATH_SRC}/winbuild"
+	)
+add_custom_target(zlibclean
+	COMMAND nmake /f win32/Makefile.msc clean
+		WORKING_DIRECTORY "${ZLIB_PATH_SRC}"
 	)
 
 #
@@ -376,7 +408,7 @@ include_directories(${ODBC_INC} ${DRV_SRC_DIR} ${LIBCURL_INC_PATH}
 	${DSNEDITOR_INC_PATH})
 target_link_libraries(${DRV_NAME} odbccp32 legacy_stdio_definitions
 	${DSNBND_LIB_BIN_DIR_BASE}-$<CONFIG>/esdsnbnd${BARCH}${CMAKE_IMPORT_LIBRARY_SUFFIX}
-	libcurl ${LIBCURL_WIN_LIBS})
+	zlib libcurl ${LIBCURL_WIN_LIBS})
 
 
 #
@@ -405,12 +437,6 @@ install(FILES
 	LICENSE.rtf LICENSE.txt ${CMAKE_BINARY_DIR}/NOTICE.txt
 	DESTINATION ${INSTALL_DIR})
 # add libcurl if build dynamically
-if (${LIBCURL_LINK_MODE} MATCHES [Dd][Ll][Ll])
-install(FILES
-	# need to use FILE : https://public.kitware.com/Bug/view.php?id=14311
-	${LIBCURL_LD_PATH}/libcurl${LIBCURL_BUILD_SUFFIX}${CMAKE_SHARED_LIBRARY_SUFFIX}
-	DESTINATION ${INSTALL_DIR})
-endif (${LIBCURL_LINK_MODE} MATCHES [Dd][Ll][Ll])
 # add editor DLLs
 install(FILES
 	${DSNBND_LIB_BIN_DIR_BASE}-$<CONFIG>/esdsnedt${CMAKE_SHARED_LIBRARY_SUFFIX}

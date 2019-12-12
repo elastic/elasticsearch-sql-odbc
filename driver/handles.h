@@ -157,6 +157,11 @@ typedef struct struct_dbc {
 		char slen; /* string's length (w/o terminator) */
 	} fetch;
 	BOOL pack_json; /* should JSON be used in REST bodies? (vs. CBOR) */
+	enum {
+		ESODBC_CMPSS_OFF = 0,
+		ESODBC_CMPSS_ON,
+		ESODBC_CMPSS_AUTO,
+	} compression;
 	BOOL apply_tz; /* should the times be converted from UTC to local TZ? */
 	enum {
 		ESODBC_FLTS_DEFAULT = 0,

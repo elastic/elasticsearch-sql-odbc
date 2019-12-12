@@ -70,8 +70,8 @@ def ites(args):
 		if args.dsn:
 			Testing(es, data, cluster_name, args.dsn).perform()
 		else:
-			Testing(es, data, cluster_name, "Packing=JSON;").perform()
-			Testing(es, data, cluster_name, "Packing=CBOR;").perform()
+			Testing(es, data, cluster_name, "Packing=JSON;Compression=on;").perform()
+			Testing(es, data, cluster_name, "Packing=CBOR;Compression=off;").perform()
 
 def main():
 	parser = argparse.ArgumentParser(description='Integration Testing with Elasticsearch.')
