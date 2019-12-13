@@ -1380,7 +1380,7 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	INFOH(dbc, "pack JSON: %s.", dbc->pack_json ? "true" : "false");
 
 	/*
-	 * set the REST body format: JSON/CBOR
+	 * set the compression option: auto/on/off
 	 */
 	if (EQ_CASE_WSTR(&attrs->compression, &MK_WSTR(ESODBC_DSN_CMPSS_AUTO))) {
 		dbc->compression = ESODBC_CMPSS_AUTO;
