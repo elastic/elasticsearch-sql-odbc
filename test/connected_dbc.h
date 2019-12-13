@@ -100,7 +100,7 @@ extern "C" {
 }"
 
 /* minimal, valid connection string */
-#define CONNECT_STRING L"Driver=ElasticODBC"
+#define CONNECT_STRING L"Driver=ElasticODBC;Packing=JSON;"
 
 class ConnectedDBC {
 	protected:
