@@ -256,7 +256,7 @@ if (NOT IS_DIRECTORY ${LIBCURL_LD_PATH})
 	endif (${CMD_RETURN})
 	# libcurl expects a /lib and a /include folder under the location provided
 	# as the path to zlib. zlib/win32's makefile has no install target, so
-	# we'll just symlink zlib's root directory under those paths.
+	# we'll just cmake-install them under the building dir.
 	file(INSTALL ${ZLIB_PATH_SRC}/zlib.lib DESTINATION ${ZLIB_PATH_INST}/lib)
 	file(GLOB ZLIB_H_FILES LIST_DIRECTORIES false ${ZLIB_PATH_SRC}
 		${ZLIB_PATH_SRC}/*.h)
