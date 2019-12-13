@@ -297,7 +297,6 @@ REM USAGE function: output a usage message
 	echo Extra development arguments:
 	echo    nobuild     : skip project building (the default is to build^).
 	echo    genonly     : generate project/make files, but don't build.
-	echo    curldll     : link libcurl dynamically.
 	echo    exports     : dump the exported symbols in the DLL after building.
 	echo    depends     : dump the dependents libs of the build DLL.
 	echo    install[:D] : install the driver files. D, the target directory
@@ -335,6 +334,9 @@ REM CTESTS function: run CI testing
 REM PROPER function: clean up the build and libs dir.
 :PROPER
 	echo %~nx0: cleaning libs.
+	if exist %BUILD_DIR%\zlibclean.vcxproj (
+		MSBuild %BUILD_DIR%\zlibclean.vcxproj
+	)
 	if exist %BUILD_DIR%\curlclean.vcxproj (
 		MSBuild %BUILD_DIR%\curlclean.vcxproj
 	)
@@ -502,9 +504,6 @@ REM BUILD function: build various targets
 		REM no explicit x86 generator and is the default (MSVC2017 only?).
 		set CMAKE_ARGS=!CMAKE_ARGS! -DCMAKE_GENERATOR_PLATFORM=%TARCH:x86=%
 
-		if /i not [%ARG:curldll=%] == [%ARG%] (
-			set CMAKE_ARGS=!CMAKE_ARGS! -DLIBCURL_LINK_MODE=dll
-		)
 		if /i [!BUILD_TYPE!] == [Debug] (
 			set CMAKE_ARGS=!CMAKE_ARGS! -DLIBCURL_BUILD_TYPE=debug
 		) else (
@@ -621,7 +620,7 @@ REM TESTS_SUITE_S function: run the compiled unit tests
 
 	goto:eof
 
-REM INSTALL_DO function: copy DLLs (libcurl, odbc) into the install
+REM INSTALL_DO function: copy DLLs into the install
 :INSTALL_DO
 	echo %~nx0: installing the driver files.
 	MSBuild INSTALL.vcxproj !MSBUILD_ARGS!

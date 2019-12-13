@@ -61,6 +61,7 @@ The required libraries are added as subtrees to the project, in the libs directo
       |_libs
         |_ODBC-Specification
         |_curl
+        |_zlib
         |_c-timestamp
         |_ujson4c
         |_tinycbor

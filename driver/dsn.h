@@ -31,6 +31,7 @@
 #define ESODBC_DSN_FOLLOW			"Follow"
 #define ESODBC_DSN_CATALOG			"Catalog"
 #define ESODBC_DSN_PACKING			"Packing"
+#define ESODBC_DSN_COMPRESSION		"Compression"
 #define ESODBC_DSN_MAX_FETCH_SIZE	"MaxFetchSize"
 #define ESODBC_DSN_MAX_BODY_SIZE_MB	"MaxBodySizeMB"
 #define ESODBC_DSN_APPLY_TZ			"ApplyTZ"
@@ -46,6 +47,10 @@
 /* Packing values */
 #define ESODBC_DSN_PACK_JSON		"JSON"
 #define ESODBC_DSN_PACK_CBOR		"CBOR"
+/* Compression values */
+#define ESODBC_DSN_CMPSS_AUTO		"auto"
+#define ESODBC_DSN_CMPSS_ON			"on"
+#define ESODBC_DSN_CMPSS_OFF		"off"
 /* VersionChecking values */
 #define ESODBC_DSN_VC_STRICT		"strict"
 #define ESODBC_DSN_VC_MAJOR			"major"
@@ -73,6 +78,7 @@ typedef struct {
 	wstr_st follow;
 	wstr_st catalog;
 	wstr_st packing;
+	wstr_st compression;
 	wstr_st max_fetch_size;
 	wstr_st max_body_size;
 	wstr_st apply_tz;
@@ -84,7 +90,7 @@ typedef struct {
 	wstr_st trace_enabled;
 	wstr_st trace_file;
 	wstr_st trace_level;
-#define ESODBC_DSN_ATTRS_COUNT	27
+#define ESODBC_DSN_ATTRS_COUNT	28
 	SQLWCHAR buff[ESODBC_DSN_ATTRS_COUNT * ESODBC_DSN_MAX_ATTR_LEN];
 	/* DSN reading/writing functions are passed a SQLSMALLINT lenght param */
 #if SHRT_MAX < ESODBC_DSN_ATTRS_COUNT * ESODBC_DSN_MAX_ATTR_LEN
