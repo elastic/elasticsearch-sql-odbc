@@ -164,7 +164,9 @@
 /* don't follow redirection from the server  */
 #define ESODBC_DEF_FOLLOW			"yes"
 /* packing of REST bodies (JSON or CBOR) */
-#define ESODBC_DEF_PACKING			ESODBC_DSN_PACK_JSON
+#define ESODBC_DEF_PACKING			ESODBC_DSN_PACK_CBOR
+/* zlib compression of REST bodies (auto/true/false) */
+#define ESODBC_DEF_COMPRESSION		ESODBC_DSN_CMPSS_AUTO
 /* default tracing activation */
 #define ESODBC_DEF_TRACE_ENABLED	"0"
 /* default tracing level */
