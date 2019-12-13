@@ -117,6 +117,9 @@ namespace EsOdbcDsnEditor
             this.toolTipMultiFieldLenient = new System.Windows.Forms.ToolTip(this.components);
             this.toolTipIndexIncludeFrozen = new System.Windows.Forms.ToolTip(this.components);
             this.toolTipDataEncoding = new System.Windows.Forms.ToolTip(this.components);
+            this.labelDataCompression = new System.Windows.Forms.Label();
+            this.comboBoxDataCompression = new System.Windows.Forms.ComboBox();
+            this.toolTipDataCompression = new System.Windows.Forms.ToolTip(this.components);
             ((System.ComponentModel.ISupportInitialize)(this.header)).BeginInit();
             this.groupSSL.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDownPort)).BeginInit();
@@ -469,6 +472,8 @@ namespace EsOdbcDsnEditor
             // 
             // pageMisc
             // 
+            this.pageMisc.Controls.Add(this.comboBoxDataCompression);
+            this.pageMisc.Controls.Add(this.labelDataCompression);
             this.pageMisc.Controls.Add(this.comboBoxDataEncoding);
             this.pageMisc.Controls.Add(this.labelDataEncoding);
             this.pageMisc.Controls.Add(this.checkBoxAutoEscapePVA);
@@ -760,6 +765,29 @@ namespace EsOdbcDsnEditor
             this.labelLogDirectory.TabIndex = 16;
             this.labelLogDirectory.Text = "Log Directory:";
             // 
+            // labelDataCompression
+            // 
+            this.labelDataCompression.AutoSize = true;
+            this.labelDataCompression.Location = new System.Drawing.Point(24, 198);
+            this.labelDataCompression.Name = "labelDataCompression";
+            this.labelDataCompression.Size = new System.Drawing.Size(126, 17);
+            this.labelDataCompression.TabIndex = 31;
+            this.labelDataCompression.Text = "Data compression:";
+            // 
+            // comboBoxDataCompression
+            // 
+            this.comboBoxDataCompression.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this.comboBoxDataCompression.FormattingEnabled = true;
+            this.comboBoxDataCompression.Items.AddRange(new object[] {
+            "auto",
+            "on",
+            "off"});
+            this.comboBoxDataCompression.Location = new System.Drawing.Point(182, 191);
+            this.comboBoxDataCompression.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.comboBoxDataCompression.Name = "comboBoxDataCompression";
+            this.comboBoxDataCompression.Size = new System.Drawing.Size(108, 24);
+            this.comboBoxDataCompression.TabIndex = 32;
+            // 
             // DsnEditorForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
@@ -880,6 +908,9 @@ namespace EsOdbcDsnEditor
 		private System.Windows.Forms.ComboBox comboBoxDataEncoding;
 		private System.Windows.Forms.Label labelDataEncoding;
 		private System.Windows.Forms.ToolTip toolTipDataEncoding;
+		private System.Windows.Forms.ComboBox comboBoxDataCompression;
+		private System.Windows.Forms.Label labelDataCompression;
+		private System.Windows.Forms.ToolTip toolTipDataCompression;
 	}
 }
 

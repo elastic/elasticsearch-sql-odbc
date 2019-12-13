@@ -158,6 +158,7 @@ namespace EsOdbcDsnEditor
 			numericUpDownBodySize.Text = Builder.ContainsKey("MaxBodySizeMB") ? Builder["MaxBodySizeMB"].ToString().StripBraces() : "100";
 			comboBoxFloatsFormat.Text = Builder.ContainsKey("ScientificFloats") ? Builder["ScientificFloats"].ToString().StripBraces() : "default";
 			comboBoxDataEncoding.Text = Builder.ContainsKey("Packing") ? Builder["Packing"].ToString() : "JSON";
+			comboBoxDataCompression.Text = Builder.ContainsKey("Compression") ? Builder["Compression"].ToString() : "auto";
 
 			string[] noes = {"no", "false", "0"};
 			checkBoxFollowRedirects.Checked = !noes.Contains(Builder.ContainsKey("Follow") ? Builder["Follow"].ToString().StripBraces() : "yes");
@@ -171,6 +172,7 @@ namespace EsOdbcDsnEditor
 			toolTipBodySize.SetToolTip(numericUpDownBodySize, "The maximum number of megabytes that the driver will accept for one page.");
 			toolTipFloatsFormat.SetToolTip(comboBoxFloatsFormat, "How should the floating point numbers be printed, when these are converted to string by the driver.");
 			toolTipDataEncoding.SetToolTip(comboBoxDataEncoding, "How should the data between the server and the driver be encoded as.");
+			toolTipDataCompression.SetToolTip(comboBoxDataCompression, "Should the data between the server and the driver be compressed?");
 			toolTipFollowRedirects.SetToolTip(checkBoxFollowRedirects, "Should the driver follow HTTP redirects of the requests to the server?");
 			toolTipApplyTZ.SetToolTip(checkBoxApplyTZ, "Should the driver use machine's local timezone? The default is UTC.");
 			toolTipAutoEscapePVA.SetToolTip(checkBoxAutoEscapePVA, "Should the driver auto-escape the pattern-value arguments?");
@@ -286,6 +288,7 @@ namespace EsOdbcDsnEditor
 			Builder["MaxBodySizeMB"] = numericUpDownBodySize.Text;
 			Builder["ScientificFloats"] = comboBoxFloatsFormat.Text;
 			Builder["Packing"] = comboBoxDataEncoding.Text;
+			Builder["Compression"] = comboBoxDataCompression.Text;
 			Builder["Follow"] = checkBoxFollowRedirects.Checked ? "true" : "false";
 			Builder["ApplyTZ"] = checkBoxApplyTZ.Checked ? "true" : "false";
 			Builder["AutoEscapePVA"] = checkBoxAutoEscapePVA.Checked ? "true" : "false";
