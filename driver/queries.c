@@ -3837,13 +3837,16 @@ SQLRETURN EsSQLColAttributeW(
 		case SQL_DESC_CONCISE_TYPE: sint = rec->concise_type; break;
 		case SQL_DESC_TYPE: sint = rec->type; break;
 		case SQL_DESC_UNNAMED: sint = rec->unnamed; break;
+		case SQL_COLUMN_NULLABLE: /* 2.x attrib; no break */
 		case SQL_DESC_NULLABLE: sint = rec->es_type->nullable; break;
 		case SQL_DESC_SEARCHABLE: sint = rec->es_type->searchable; break;
 		case SQL_DESC_UNSIGNED: sint = rec->es_type->unsigned_attribute; break;
 		case SQL_DESC_UPDATABLE: sint = rec->updatable; break;
+		case SQL_COLUMN_PRECISION: /* 2.x attrib; no break */
 		case SQL_DESC_PRECISION:
 			sint = rec->es_type->fixed_prec_scale;
 			break;
+		case SQL_COLUMN_SCALE: /* 2.x attrib; no break */
 		case SQL_DESC_SCALE:
 			sint = rec->es_type->maximum_scale;
 			break;
@@ -3860,6 +3863,7 @@ SQLRETURN EsSQLColAttributeW(
 		case SQL_DESC_LABEL: wstrp = &rec->label; break;
 		case SQL_DESC_BASE_TABLE_NAME: wstrp = &rec->base_table_name; break;
 		case SQL_DESC_CATALOG_NAME: wstrp = &rec->catalog_name; break;
+		case SQL_COLUMN_NAME: /* 2.x attrib; no break */
 		case SQL_DESC_NAME: wstrp = &rec->name; break;
 		case SQL_DESC_SCHEMA_NAME: wstrp = &rec->schema_name; break;
 		case SQL_DESC_TABLE_NAME: wstrp = &rec->table_name; break;
@@ -3881,6 +3885,7 @@ SQLRETURN EsSQLColAttributeW(
 		/* SQLLEN */
 		do {
 		case SQL_DESC_DISPLAY_SIZE: len = rec->es_type->display_size; break;
+		case SQL_COLUMN_LENGTH: /* 2.x attrib; no break */
 		case SQL_DESC_OCTET_LENGTH: len = rec->octet_length; break;
 		} while (0);
 			PNUMATTR_ASSIGN(SQLLEN, len);
