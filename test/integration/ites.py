@@ -21,9 +21,10 @@ def ites(args):
 
 	# create a running instance of Elasticsearch if needed
 	if args.url is None:
-		if args.es_reset:
-			es_dir = os.path.abspath(args.es_reset)
-			es.reset(es_dir)
+		es_reset = args.es_rezet or args.es_reset
+		if es_reset:
+			es_dir = os.path.abspath(es_reset)
+			es.reset(es_dir, args.es_rezet is not None)
 		else:
 			assert(args.root_dir)
 			root_dir = os.path.abspath(args.root_dir)
@@ -80,6 +81,8 @@ def main():
 	stage_grp.add_argument("-r", "--root-dir", help="Root directory to [temporarily] stage Elasticsearch into.")
 	stage_grp.add_argument("-s", "--es-reset", help="Path to an already configured Elasticsearch folder to "
 			"use; data directory content will be removed; 'ephemeral' will be ignored.")
+	stage_grp.add_argument("-S", "--es-rezet", help="Path to the Elasticsearch folder; config file and data directory"
+			" content will be removed; 'ephemeral' will be ignored.")
 	stage_grp.add_argument("-p", "--url", help="Use a pre-staged and running Elasticsearch instance. If no URL is "
 			"provided, %s is assumed." % Elasticsearch.ES_BASE_URL, nargs="?", const="")
 
@@ -103,10 +106,10 @@ def main():
 			"default.")
 
 	args = parser.parse_args()
-	if not (args.root_dir or args.es_reset or args.url is not None):
+	if not (args.root_dir or args.es_reset or args.es_rezet or args.url is not None):
 		parser.error("no Elasticsearch instance or root/staged directory provided.")
 
-	if not (args.driver or args.version or args.es_reset or args.url is not None):
+	if not (args.driver or args.version or args.es_reset or args.es_rezet or args.url is not None):
 		parser.error("don't know what Elasticsearch version to test against.")
 
 	if args.driver and args.dsn and "Driver=" in args.dsn:
