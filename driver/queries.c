@@ -2497,8 +2497,7 @@ static esodbc_estype_st *match_es_type(esodbc_rec_st *arec,
 			length = irec->length ? irec->length : arec->octet_length;
 			return lookup_es_type(dbc, SQL_VARCHAR, length);
 		case METATYPE_BIN:
-			/* SQL_VARBINARY == -3 == ES/SQL BINARY */
-			return lookup_es_type(dbc, SQL_VARBINARY, /*no prec*/0);
+			return lookup_es_type(dbc, SQL_BINARY, /*no prec*/0);
 		case METATYPE_DATE_TIME:
 			assert(irec->concise_type == SQL_TYPE_DATE ||
 				irec->concise_type == SQL_TYPE_TIME);
@@ -2831,7 +2830,7 @@ static SQLRETURN convert_param_val(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			return c2sql_interval(arec, irec, pos, dest, len);
 
 		/* JSON (Base64 encoded) string */
-		case SQL_VARBINARY: /* BINARY */
+		case SQL_BINARY: /* BINARY */
 			// XXX: json_escape
 			ERRH(stmt, "conversion to SQL BINARY not implemented.");
 			RET_HDIAG(stmt, SQL_STATE_HYC00, "conversion to SQL BINARY "
