@@ -65,7 +65,7 @@ extern "C" {
 	\"rows\":[\
 		[\"BYTE\",-6,3,\"'\",\"'\",null,2,false,3,false,false,false,null,0,0,-6,0,10,null],\
 		[\"LONG\",-5,19,\"'\",\"'\",null,2,false,3,false,false,false,null,0,0,-5,0,10,null],\
-		[\"BINARY\",-3,2147483647,\"'\",\"'\",null,2,false,3,true,false,false,null,null,null,-3,0,null,null],\
+		[\"BINARY\",-2,2147483647,\"'\",\"'\",null,2,false,3,true,false,false,null,null,null,-3,0,null,null],\
 		[\"NULL\",0,0,\"'\",\"'\",null,2,false,3,true,false,false,null,null,null,0,0,null,null],\
 		[\"INTEGER\",4,10,\"'\",\"'\",null,2,false,3,false,false,false,null,0,0,4,0,10,null],\
 		[\"SHORT\",5,5,\"'\",\"'\",null,2,false,3,false,false,false,null,0,0,5,0,10,null],\
