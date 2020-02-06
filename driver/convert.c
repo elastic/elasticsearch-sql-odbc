@@ -4387,6 +4387,7 @@ SQLRETURN c2sql_date_time(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		return ret;
 	}
 
+	format = 0;
 	/*INDENT-OFF*/
 	switch ((ctype = get_rec_c_type(arec, irec))) {
 		case SQL_C_CHAR:
