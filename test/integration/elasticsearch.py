@@ -140,9 +140,9 @@ class Elasticsearch(object):
 
 		return dest_file
 
-	def _update_es_yaml(self, es_dir):
+	def _update_es_yaml(self, es_dir, append=True):
 		yaml = os.path.join(es_dir, "config", "elasticsearch.yml")
-		with open(yaml, mode="a", newline="\n") as f:
+		with open(yaml, mode="a" if append else "w", newline="\n") as f:
 			f.write("#\n# ODBC Integration Test\n#\n")
 			f.write("xpack.security.enabled: True\n")
 			f.write("http.port: %s\n" % self._port) # don't bind on next avail port
@@ -259,7 +259,7 @@ class Elasticsearch(object):
 		self._start_elasticsearch(es_dir)
 		self._enable_xpack(es_dir)
 
-	def reset(self, es_dir):
+	def reset(self, es_dir, reset_conf=False):
 		# make sure there's no instance running
 		try:
 			if self.is_listening():
@@ -277,6 +277,8 @@ class Elasticsearch(object):
 				else:
 					os.remove(path)
 
+		if reset_conf:
+			self._update_es_yaml(es_dir, False)
 		self._start_elasticsearch(es_dir)
 		self._enable_xpack(es_dir)
 
