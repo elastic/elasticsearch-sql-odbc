@@ -610,7 +610,7 @@ namespace EsOdbcDsnEditor
             this.labelBodySize.Name = "labelBodySize";
             this.labelBodySize.Size = new System.Drawing.Size(150, 17);
             this.labelBodySize.TabIndex = 10;
-            this.labelBodySize.Text = "Max page lenght (MB):";
+            this.labelBodySize.Text = "Max page length (MB):";
             // 
             // numericUpDownBodySize
             // 

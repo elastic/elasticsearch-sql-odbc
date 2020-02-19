@@ -167,8 +167,8 @@ namespace EsOdbcDsnEditor
 			checkBoxMultiFieldLenient.Checked = !noes.Contains(Builder.ContainsKey("MultiFieldLenient") ? Builder["MultiFieldLenient"].ToString().StripBraces() : "yes");
 			checkBoxIndexIncludeFrozen.Checked = !noes.Contains(Builder.ContainsKey("IndexIncludeFrozen") ? Builder["IndexIncludeFrozen"].ToString().StripBraces() : "no");
 
-			toolTipTimeout.SetToolTip(numericUpDownTimeout, "The maximum number of seconds a request to the server can take. The value 0 disables disables the timeout.");
-			toolTipFetchSize.SetToolTip(numericUpDownFetchSize, "The maximum number of rows that Elasticsearch SQL server should send the driver for one page.");
+			toolTipTimeout.SetToolTip(numericUpDownTimeout, "The maximum number of seconds for a request to the server. The value 0 disables the timeout.");
+			toolTipFetchSize.SetToolTip(numericUpDownFetchSize, "The maximum number of rows that Elasticsearch SQL server should send back to the driver for one page.");
 			toolTipBodySize.SetToolTip(numericUpDownBodySize, "The maximum number of megabytes that the driver will accept for one page.");
 			toolTipFloatsFormat.SetToolTip(comboBoxFloatsFormat, "How should the floating point numbers be printed, when these are converted to string by the driver.");
 			toolTipDataEncoding.SetToolTip(comboBoxDataEncoding, "How should the data between the server and the driver be encoded as.");
