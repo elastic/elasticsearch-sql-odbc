@@ -80,9 +80,9 @@ def main():
 	stage_grp = parser.add_mutually_exclusive_group()
 	stage_grp.add_argument("-r", "--root-dir", help="Root directory to [temporarily] stage Elasticsearch into.")
 	stage_grp.add_argument("-s", "--es-reset", help="Path to an already configured Elasticsearch folder to "
-			"use; data directory content will be removed; 'ephemeral' will be ignored.", dest="ES_DIR")
+			"use; data directory content will be removed; 'ephemeral' will be ignored.")
 	stage_grp.add_argument("-S", "--es-full-reset", help="Path to the Elasticsearch folder; config file and data "
-			"directory content will be removed; 'ephemeral' will be ignored.", dest="ES_DIR")
+			"directory content will be removed; 'ephemeral' will be ignored.")
 	stage_grp.add_argument("-p", "--url", help="Use a pre-staged and running Elasticsearch instance. If no URL is "
 			"provided, %s is assumed." % Elasticsearch.ES_BASE_URL, nargs="?", const="")
 
