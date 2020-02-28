@@ -1196,6 +1196,13 @@ void cleanup_dbc(esodbc_dbc_st *dbc)
 		dbc->srv_ver.string.str = NULL;
 		dbc->srv_ver.string.cnt = 0;
 	}
+	if (dbc->catalog.str) {
+		free(dbc->catalog.str);
+		dbc->catalog.str = NULL;
+		dbc->catalog.cnt = 0;
+	} else {
+		assert(dbc->catalog.cnt == 0);
+	}
 
 	assert(dbc->abuff == NULL);
 	cleanup_curl(dbc);
@@ -2595,7 +2602,37 @@ SQLRETURN EsSQLDisconnect(SQLHDBC ConnectionHandle)
 	return SQL_SUCCESS;
 }
 
-
+/* ES/SQL doesn't support catalogs (yet). This function checks that a
+ * previously retrieved (and cached) catalog value is the same with what the
+ * app currently tries to set it to.
+ * Ideally, the app provided value would be cached here too (as per the spec:
+ * "SQL_ATTR_CURRENT_CATALOG can be set before or after connecting"), in case
+ * there's no connection "established" yet and checked at "establishment"
+ * time. But there's no client reported yet setting a catalog value before
+ * connecting. */
+static SQLRETURN check_catalog_name(esodbc_dbc_st *dbc, SQLWCHAR *name,
+	SQLINTEGER len)
+{
+	wstr_st catalog;
+	catalog.str = name;
+	if (len < 0) {
+		catalog.cnt = wcslen(name);
+	} else {
+		catalog.cnt = (size_t)len;
+	}
+	if (! EQ_WSTR(&dbc->catalog, &catalog)) {
+		if (! dbc->catalog.cnt) {
+			/* this will happen if the app tries to set a value that it
+			 * discovered over a different connection.
+			 * TODO on a first reported issue. */
+			WARNH(dbc, "connection's current catalog not yet set!");
+		}
+		ERRH(dbc, "setting catalog name not supported.");
+		RET_HDIAGS(dbc, SQL_STATE_HYC00);
+	}
+	WARNH(dbc, "ignoring attempt to set the current catalog.");
+	return SQL_SUCCESS;
+}
 
 /*
  * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/unicode-drivers :
@@ -2735,8 +2772,7 @@ SQLRETURN EsSQLSetConnectAttrW(
 				/* string should be 0-term'd */
 				0 <= StringLength ? StringLength : SHRT_MAX,
 				(SQLWCHAR *)Value);
-			ERRH(dbc, "setting catalog name not supported.");
-			RET_HDIAGS(dbc, SQL_STATE_HYC00);
+			return check_catalog_name(dbc, (SQLWCHAR *)Value, StringLength);
 
 		case SQL_ATTR_TRACE:
 		case SQL_ATTR_TRACEFILE: /* DM-only */
