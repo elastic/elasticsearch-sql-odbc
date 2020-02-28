@@ -7,6 +7,11 @@
 #include <gtest/gtest.h>
 #include "connected_dbc.h"
 
+/*  */
+extern "C" {
+#include "catalogue.h" /* set_current_catalog() */
+}
+
 namespace test {
 
 class DriverConnect : public ::testing::Test, public ConnectedDBC
@@ -68,6 +73,42 @@ TEST_F(DriverConnect, OutputTruncated)
 	ASSERT_TRUE(buff_sz < out_avail);
 	ASSERT_EQ(out_buff[buff_sz - 1], (SQLWCHAR)L'\0');
 
+}
+
+TEST_F(DriverConnect, ReinitCurrentCatalog)
+{
+	ret = SQLDriverConnect(my_dbc, (SQLHWND)&types, (SQLWCHAR *)CONNECT_STRING,
+		sizeof(CONNECT_STRING) / sizeof(CONNECT_STRING[0]) - 1, NULL, 0,
+		&out_avail, ESODBC_SQL_DRIVER_TEST);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	esodbc_dbc_st *dbc = (esodbc_dbc_st *)my_dbc;
+	wstr_st crr_cat = WSTR_INIT("crr_catalog");
+	ASSERT_TRUE(set_current_catalog(dbc, &crr_cat));
+	ASSERT_FALSE(set_current_catalog(dbc, &crr_cat));
+
+	wstr_st other_cat = WSTR_INIT("other_catalog");
+	ASSERT_TRUE(set_current_catalog(dbc, &other_cat));
+}
+
+TEST_F(DriverConnect, ResetCurrentCatalog)
+{
+	ret = SQLDriverConnect(my_dbc, (SQLHWND)&types, (SQLWCHAR *)CONNECT_STRING,
+		sizeof(CONNECT_STRING) / sizeof(CONNECT_STRING[0]) - 1, NULL, 0,
+		&out_avail, ESODBC_SQL_DRIVER_TEST);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	esodbc_dbc_st *dbc = (esodbc_dbc_st *)my_dbc;
+	wstr_st crr_cat = WSTR_INIT("crr_catalog");
+	ASSERT_TRUE(set_current_catalog(dbc, &crr_cat));
+	ASSERT_TRUE(SQL_SUCCEEDED(SQLSetConnectAttrW(my_dbc,
+					SQL_ATTR_CURRENT_CATALOG, (SQLPOINTER)crr_cat.str,
+					(SQLINTEGER)crr_cat.cnt)));
+
+	wstr_st other_cat = WSTR_INIT("other_catalog");
+	ASSERT_FALSE(SQL_SUCCEEDED(SQLSetConnectAttrW(my_dbc,
+					SQL_ATTR_CURRENT_CATALOG, (SQLPOINTER)other_cat.str,
+					(SQLINTEGER)other_cat.cnt)));
 }
 
 } // test namespace
