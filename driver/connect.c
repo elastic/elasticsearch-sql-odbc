@@ -3098,7 +3098,7 @@ SQLRETURN EsSQLDisconnect(SQLHDBC ConnectionHandle)
  * time. But there's no client reported yet setting a catalog value before
  * connecting. */
 static SQLRETURN check_catalog_name(esodbc_dbc_st *dbc, SQLWCHAR *name,
-		SQLINTEGER len)
+	SQLINTEGER len)
 {
 	wstr_st catalog;
 	catalog.str = name;

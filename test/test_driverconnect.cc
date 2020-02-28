@@ -7,7 +7,6 @@
 #include <gtest/gtest.h>
 #include "connected_dbc.h"
 
-/*  */
 extern "C" {
 #include "catalogue.h" /* set_current_catalog() */
 }
