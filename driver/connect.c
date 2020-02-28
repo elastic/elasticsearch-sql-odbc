@@ -3196,6 +3196,8 @@ SQLRETURN EsSQLSetConnectAttrW(
 			RET_HDIAGS(dbc, SQL_STATE_HY092);
 			break;
 
+		case SQL_ATTR_QUERY_TIMEOUT: /* stmt attr -- 2.x */
+			WARNH(dbc, "applying a statement as connection attribute (2.x?)");
 		/* coalesce login and connection timeouts for a REST req. */
 		case SQL_ATTR_CONNECTION_TIMEOUT:
 		case SQL_ATTR_LOGIN_TIMEOUT:
@@ -3244,10 +3246,17 @@ SQLRETURN EsSQLSetConnectAttrW(
 			RET_HDIAGS(DBCH(ConnectionHandle), SQL_STATE_HY092);
 #endif
 
+		case SQL_ATTR_MAX_ROWS: /* stmt attr -- 2.x app */
+			WARNH(dbc, "applying a statement as connection attribute (2.x?)");
+			DBGH(dbc, "setting max rows: %llu.", (SQLULEN)Value);
+			if ((SQLULEN)Value != 0) {
+				WARNH(dbc, "requested max_rows substituted with 0.");
+				RET_HDIAGS(dbc, SQL_STATE_01S02);
+			}
+			break;
+
 		default:
 			ERRH(dbc, "unknown Attribute: %d.", Attribute);
-			// FIXME: add the other attributes
-			FIXME;
 			RET_HDIAGS(dbc, SQL_STATE_HY092);
 	}
 
