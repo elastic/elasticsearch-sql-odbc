@@ -122,8 +122,6 @@
 /* maximum DNS attribute value lenght (should be long enought to accomodate a
  * decently long FQ file path name) */
 #define ESODBC_DSN_MAX_ATTR_LEN			1024
-/* sample DSN name provisioned with the installation  */
-#define ESODBC_DSN_SAMPLE_NAME			"Elasticsearch ODBC Sample DSN"
 
 /* SQL plugin's REST endpoint for SQL */
 #define ELASTIC_SQL_PATH				"/_sql"
@@ -139,6 +137,8 @@
 #define ESODBC_DRIVER_VER	STR(DRV_VERSION) \
 	"(" STR(DRV_SRC_VER) "," STR(DRV_ENCODING) "," STR(DRV_BUILD_TYPE) ")"
 #define ESODBC_ELASTICSEARCH_NAME	"Elasticsearch"
+/* the driver will work with an ES node of this version and higher */
+#define ESODBC_MIN_ES_VER			"7.7.0"
 
 /*
  * Config defaults
@@ -176,8 +176,6 @@
 /* default of scientific floats printing */
 #define ESODBC_DEF_SCI_FLOATS		ESODBC_DSN_FLTS_DEF
 #define ESODBC_PWD_VAL_SUBST		"<redacted>"
-/* default version checking mode: strict, major, none (dbg only) */
-#define ESODBC_DEF_VERSION_CHECKING	ESODBC_DSN_VC_STRICT
 #define ESODBC_DEF_MFIELD_LENIENT	"true"
 #define ESODBC_DEF_ESC_PVA			"true"
 #define ESODBC_DEF_IDX_INC_FROZEN	"false"
