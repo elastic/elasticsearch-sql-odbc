@@ -136,7 +136,6 @@ SQLRETURN EsSQLRowCount(_In_ SQLHSTMT StatementHandle, _Out_ SQLLEN *RowCount);
 #define REQ_KEY_FETCH			"fetch_size"
 #define REQ_KEY_REQ_TOUT		"request_timeout"
 #define REQ_KEY_PAGE_TOUT		"page_timeout"
-#define REQ_KEY_TIME_ZONE		"time_zone"
 #define REQ_KEY_MODE			"mode"
 #define REQ_KEY_CLT_ID			"client_id"
 #define REQ_KEY_MULTIVAL		"field_multi_value_leniency"
@@ -163,7 +162,6 @@ SQLRETURN EsSQLRowCount(_In_ SQLHSTMT StatementHandle, _Out_ SQLLEN *RowCount);
 #define JSON_KEY_FETCH			", \"" REQ_KEY_FETCH "\": " /* n-th key */
 #define JSON_KEY_REQ_TOUT		", \"" REQ_KEY_REQ_TOUT "\": " /* n-th key */
 #define JSON_KEY_PAGE_TOUT		", \"" REQ_KEY_PAGE_TOUT "\": " /* n-th key */
-#define JSON_KEY_TIME_ZONE		", \"" REQ_KEY_TIME_ZONE "\": " /* n-th key */
 #define JSON_KEY_VAL_MODE		", \"" REQ_KEY_MODE "\": \"" \
 	REQ_VAL_MODE "\"" /* n-th key */
 #define JSON_KEY_CLT_ID			", \"" REQ_KEY_CLT_ID "\": \"" \
