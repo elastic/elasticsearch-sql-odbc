@@ -41,6 +41,7 @@ static SQLRETURN statement_params_len_cbor(esodbc_stmt_st *stmt,
 	size_t *enc_len, size_t *conv_len);
 
 static thread_local cstr_st tz_param;
+static cstr_st version = CSTR_INIT(STR(DRV_VERSION)); /* build-time define */
 
 static BOOL print_tz_param(long tz_dst_offt)
 {
@@ -142,9 +143,17 @@ static inline BOOL update_tz_param()
 
 BOOL queries_init()
 {
+	char *ptr;
+
 	/* for the casts in this module */
 	ASSERT_INTEGER_TYPES_EQUAL(wchar_t, SQLWCHAR);
 	ASSERT_INTEGER_TYPES_EQUAL(char, SQLCHAR);
+
+	/* trim qualifiers */
+	ptr = strchr(version.str, '-');
+	if (ptr) {
+		version.cnt = ptr - version.str;
+	}
 
 	/* needed to correctly run the unit tests */
 	return update_tz_param();
@@ -2979,7 +2988,9 @@ static SQLRETURN statement_len_cbor(esodbc_stmt_st *stmt, size_t *enc_len,
 	bodylen += cbor_str_obj_len(sizeof(REQ_VAL_MODE) - 1);
 	bodylen += cbor_str_obj_len(sizeof(REQ_KEY_CLT_ID) - 1);
 	bodylen += cbor_str_obj_len(sizeof(REQ_VAL_CLT_ID) - 1);
-	*keys += 2; /* mode, client_id */
+	bodylen += cbor_str_obj_len(sizeof(REQ_KEY_VERSION) - 1);
+	bodylen += version.cnt;
+	*keys += 3; /* mode, client_id, version */
 	/* TODO: request_/page_timeout */
 
 	*enc_len = bodylen;
@@ -3034,8 +3045,10 @@ static SQLRETURN statement_len_json(esodbc_stmt_st *stmt, size_t *outlen)
 		bodylen += sizeof(JSON_KEY_TIMEZONE) - 1;
 		bodylen += tz_param.cnt;
 	}
-	bodylen += sizeof(JSON_KEY_VAL_MODE) - 1; /* "mode": */
-	bodylen += sizeof(JSON_KEY_CLT_ID) - 1; /* "client_id": */
+	bodylen += sizeof(JSON_KEY_VAL_MODE) - 1; /* "mode": "ODBC" */
+	bodylen += sizeof(JSON_KEY_CLT_ID) - 1; /* "client_id": "odbcXX" */
+	bodylen += sizeof(JSON_KEY_VERSION) - 1; /* "version": */
+	bodylen += version.cnt + /* 2x`"` */2;
 	/* TODO: request_/page_timeout */
 	bodylen += 1; /* } */
 
@@ -3322,6 +3335,12 @@ static SQLRETURN serialize_to_cbor(esodbc_stmt_st *stmt, cstr_st *dest,
 	err = cbor_encode_text_string(&map, REQ_VAL_CLT_ID,
 			sizeof(REQ_VAL_CLT_ID) - 1);
 	FAIL_ON_CBOR_ERR(stmt, err);
+	/* version */
+	err = cbor_encode_text_string(&map, REQ_KEY_VERSION,
+			sizeof(REQ_KEY_VERSION) - 1);
+	FAIL_ON_CBOR_ERR(stmt, err);
+	err = cbor_encode_text_string(&map, version.str, version.cnt);
+	FAIL_ON_CBOR_ERR(stmt, err);
 
 	err = cbor_encoder_close_container(&encoder, &map);
 	FAIL_ON_CBOR_ERR(stmt, err);
@@ -3425,11 +3444,19 @@ static SQLRETURN serialize_to_json(esodbc_stmt_st *stmt, cstr_st *dest)
 			pos += sizeof(JSON_VAL_TIMEZONE_Z) - 1;
 		}
 	}
-	/* "mode": */
+	/* "mode": "ODBC" */
 	memcpy(body + pos, JSON_KEY_VAL_MODE, sizeof(JSON_KEY_VAL_MODE) - 1);
 	pos += sizeof(JSON_KEY_VAL_MODE) - 1;
+	/* "client_id": "odbcXX" */
 	memcpy(body + pos, JSON_KEY_CLT_ID, sizeof(JSON_KEY_CLT_ID) - 1);
 	pos += sizeof(JSON_KEY_CLT_ID) - 1;
+	/* "version": ... */
+	memcpy(body + pos, JSON_KEY_VERSION, sizeof(JSON_KEY_VERSION) - 1);
+	pos += sizeof(JSON_KEY_VERSION) - 1;
+	body[pos ++] = '"';
+	memcpy(body + pos, version.str, version.cnt);
+	pos += version.cnt;
+	body[pos ++] = '"';
 	body[pos ++] = '}';
 
 	/* check that the buffer hasn't been overrun. it can be used less than

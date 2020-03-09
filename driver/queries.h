@@ -138,6 +138,7 @@ SQLRETURN EsSQLRowCount(_In_ SQLHSTMT StatementHandle, _Out_ SQLLEN *RowCount);
 #define REQ_KEY_PAGE_TOUT		"page_timeout"
 #define REQ_KEY_MODE			"mode"
 #define REQ_KEY_CLT_ID			"client_id"
+#define REQ_KEY_VERSION			"version"
 #define REQ_KEY_MULTIVAL		"field_multi_value_leniency"
 #define REQ_KEY_IDX_FROZEN		"index_include_frozen"
 #define REQ_KEY_TIMEZONE		"time_zone"
@@ -166,6 +167,7 @@ SQLRETURN EsSQLRowCount(_In_ SQLHSTMT StatementHandle, _Out_ SQLLEN *RowCount);
 	REQ_VAL_MODE "\"" /* n-th key */
 #define JSON_KEY_CLT_ID			", \"" REQ_KEY_CLT_ID "\": \"" \
 	REQ_VAL_CLT_ID "\"" /* n-th k. */
+#define JSON_KEY_VERSION		", \"" REQ_KEY_VERSION "\": " /* n-th key */
 #define JSON_KEY_MULTIVAL		", \"" REQ_KEY_MULTIVAL "\": " /* n-th */
 #define JSON_KEY_IDX_FROZEN		", \"" REQ_KEY_IDX_FROZEN "\": " /* n-th */
 #define JSON_KEY_TIMEZONE		", \"" REQ_KEY_TIMEZONE "\": " /* n-th key */
