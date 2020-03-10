@@ -306,8 +306,8 @@ static SQLRETURN getinfo_dbms_product(
 					StringLengthPtr);
 		case SQL_DBMS_VER:
 			DBGH(dbc, "requested: DBMS version (`" LWPDL "`).",
-				LWSTR(&dbc->srv_ver.string));
-			return write_wstr(dbc, InfoValue, &dbc->srv_ver.string,
+				LWSTR(&dbc->srv_ver));
+			return write_wstr(dbc, InfoValue, &dbc->srv_ver,
 					BufferLength, StringLengthPtr);
 	}
 	*handled = FALSE;
