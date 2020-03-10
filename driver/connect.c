@@ -3196,9 +3196,9 @@ SQLRETURN EsSQLSetConnectAttrW(
 			RET_HDIAGS(dbc, SQL_STATE_HY092);
 			break;
 
+		/* coalesce login, connection and query timeouts for a REST req. */
 		case SQL_ATTR_QUERY_TIMEOUT: /* stmt attr -- 2.x */
 			WARNH(dbc, "applying a statement as connection attribute (2.x?)");
-		/* coalesce login and connection timeouts for a REST req. */
 		case SQL_ATTR_CONNECTION_TIMEOUT:
 		case SQL_ATTR_LOGIN_TIMEOUT:
 			INFOH(dbc, "setting login/connection timeout: %lu",
