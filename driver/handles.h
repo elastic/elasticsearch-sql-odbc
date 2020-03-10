@@ -132,10 +132,7 @@ typedef struct struct_dbc {
 	wstr_st dsn; /* data source name SQLGetInfo(SQL_DATA_SOURCE_NAME) */
 	wstr_st server; /* ~ name; requested with SQLGetInfo(SQL_SERVER_NAME) */
 	wstr_st catalog; /* cached value; checked against if app setting it */
-	union {
-		wstr_st string; /* version: SQLGetInfo(SQL_DBMS_VER)  */
-		unsigned char checking; /* first letter of DSN config option value */
-	} srv_ver; /* server version */
+	wstr_st srv_ver; /* server version: SQLGetInfo(SQL_DBMS_VER) */
 	cstr_st url; /* SQL URL (posts) */
 	cstr_st close_url; /* SQL close URL (posts) */
 	cstr_st root_url; /* root URL (gets) */

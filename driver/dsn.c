@@ -880,9 +880,6 @@ void assign_dsn_defaults(esodbc_dsn_attrs_st *attrs)
 	res |= assign_dsn_attr(attrs, &MK_WSTR(ESODBC_DSN_MAX_BODY_SIZE_MB),
 			&MK_WSTR(ESODBC_DEF_MAX_BODY_SIZE_MB),
 			/*overwrite?*/FALSE);
-	res |= assign_dsn_attr(attrs, &MK_WSTR(ESODBC_DSN_VERSION_CHECKING),
-			&MK_WSTR(ESODBC_DEF_VERSION_CHECKING),
-			/*overwrite?*/FALSE);
 
 	res |= assign_dsn_attr(attrs,
 			&MK_WSTR(ESODBC_DSN_APPLY_TZ), &MK_WSTR(ESODBC_DEF_APPLY_TZ),

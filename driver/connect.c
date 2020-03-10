@@ -97,6 +97,11 @@
 #define ESINFO_KEY_VERSION	"version"
 #define ESINFO_KEY_NUMBER	"number"
 
+/* "base" of the version number (how many values supported for each version
+ * constituent: major, minor, revision) */
+#define VER_LEVEL_MULTI		100L
+
+
 /* structure for one row returned by the ES.
  * This is a mirror of elasticsearch_type, with length-or-indicator fields
  * for each of the members in elasticsearch_type */
@@ -1411,28 +1416,6 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 		goto err;
 	}
 
-	/*
-	 * Version checking mode
-	 */
-	if (EQ_CASE_WSTR(&attrs->version_checking,
-			&MK_WSTR(ESODBC_DSN_VC_STRICT))
-		|| EQ_CASE_WSTR(&attrs->version_checking,
-			&MK_WSTR(ESODBC_DSN_VC_MAJOR))
-#			ifndef NDEBUG
-		|| EQ_CASE_WSTR(&attrs->version_checking,
-			&MK_WSTR(ESODBC_DSN_VC_NONE))
-#			endif /* NDEBUG */
-	) {
-		dbc->srv_ver.checking = (unsigned char)attrs->version_checking.str[0];
-		DBGH(dbc, "version checking mode: %c.", dbc->srv_ver.checking);
-	} else {
-		ERRH(dbc, "unknown version checking mode '" LWPDL "'.",
-			LWSTR(&attrs->version_checking));
-		SET_HDIAG(dbc, SQL_STATE_HY000, "invalid version checking mode "
-			"setting", 0);
-		goto err;
-	}
-
 	/* "multifield leniency" param */
 	dbc->mfield_lenient = wstr2bool(&attrs->mfield_lenient);
 	INFOH(dbc, "multifield lenient: %s.",
@@ -1523,10 +1506,10 @@ void cleanup_dbc(esodbc_dbc_st *dbc)
 	} else {
 		assert(dbc->no_types == 0);
 	}
-	if (dbc->srv_ver.string.cnt) { /* .str might be compromized by the union */
-		free(dbc->srv_ver.string.str);
-		dbc->srv_ver.string.str = NULL;
-		dbc->srv_ver.string.cnt = 0;
+	if (dbc->srv_ver.str) {
+		free(dbc->srv_ver.str);
+		dbc->srv_ver.str = NULL;
+		dbc->srv_ver.cnt = 0;
 	}
 	if (dbc->catalog.str) {
 		free(dbc->catalog.str);
@@ -1652,10 +1635,59 @@ static BOOL parse_es_version_json(esodbc_dbc_st *dbc, cstr_st *rsp_body,
 		return FALSE;
 	}
 	version->str = (SQLWCHAR *)UJReadString(o_number, &version->cnt);
-	DBGH(dbc, "Elasticsearch'es version number: [%zu] `" LWPDL "`.",
+	DBGH(dbc, "Elasticsearch's version number: [%zu] `" LWPDL "`.",
 		version->cnt, LWSTR(version));
 	return TRUE;
 }
+
+/* parses a Major.Minor.Revison version format and returns a numerical value
+ * of it */
+static long version_to_id(wstr_st *ver)
+{
+	SQLWCHAR *stop;
+	long id, val;
+
+	assert(ver->str[ver->cnt] == L'\0');
+
+	errno = 0;
+	stop = ver->str;
+
+	/* parse major */
+	id = wcstol(stop, &stop, /*base*/10);
+	if (errno || VER_LEVEL_MULTI <= id || id <= 0) {
+		return -1;
+	}
+	if (*stop != L'.') {
+		return -1;
+	} else {
+		stop ++;
+	}
+	id *= VER_LEVEL_MULTI;
+
+	/* parse minor */
+	val = wcstol(stop, &stop, /*base*/10);
+	if (errno || VER_LEVEL_MULTI <= val || val < 0) {
+		return -1;
+	}
+	if (*stop != L'.') {
+		return -1;
+	} else {
+		stop ++;
+	}
+	id += val;
+	id *= VER_LEVEL_MULTI;
+
+	/* parse minor */
+	val = wcstol(stop, &stop, /*base*/10);
+	if (errno || VER_LEVEL_MULTI <= val || val < 0) {
+		return -1;
+	}
+	id += val;
+	id *= VER_LEVEL_MULTI;
+
+	return id;
+}
+
 /*
  * Note: not thread safe: only usable on connection setup.
  */
@@ -1667,16 +1699,17 @@ static SQLRETURN check_server_version(esodbc_dbc_st *dbc)
 	BOOL is_json;
 	SQLRETURN ret;
 	void *state = NULL;
-	unsigned char ver_checking;
-	wstr_st own_ver = WSTR_INIT(STR(DRV_VERSION)); /*build-time define*/
-	wstr_st es_ver, ver_no;
+	static wstr_st min_es_ver = WSTR_INIT(ESODBC_MIN_ES_VER);
+	wstr_st es_ver;
 	cstr_st es_ver_c;
-	static const wchar_t err_msg_fmt[] = L"Version mismatch between server ("
-		WPFWP_LDESC ") and driver (" WPFWP_LDESC "). Please use a driver whose"
-		" version matches that of your server.";
+	long es_ver_l, min_es_ver_l;
+	static const wchar_t err_msg_fmt[] = L"Elasticsearch's version ("
+		WPFWP_LDESC ") is below minimum required (" ESODBC_MIN_ES_VER ") "
+		"version. Please use a driver whose version matches that of your "
+		"server.";
 	/* 32: max length of the version strings for which the explicit message
 	 * above is provided. */
-	SQLWCHAR wbuff[sizeof(err_msg_fmt)/sizeof(err_msg_fmt[0]) + 2*32];
+	SQLWCHAR wbuff[sizeof(err_msg_fmt)/sizeof(err_msg_fmt[0]) + 32];
 	int n;
 
 	ret = dbc_curl_set_url(dbc, ESODBC_CURL_ROOT);
@@ -1711,54 +1744,43 @@ static SQLRETURN check_server_version(esodbc_dbc_st *dbc)
 		goto err;
 	}
 
-	ver_checking = dbc->srv_ver.checking;
 	/* version is returned to application, which requires a NTS => +1 for \0 */
-	dbc->srv_ver.string.str = malloc((n + 1) * sizeof(SQLWCHAR));
-	if (! dbc->srv_ver.string.str) {
+	dbc->srv_ver.str = malloc((n + 1) * sizeof(SQLWCHAR));
+	if (! dbc->srv_ver.str) {
 		ERRNH(dbc, "OOM for %zu.", (n + 1) * sizeof(SQLWCHAR));
 		post_diagnostic(dbc, SQL_STATE_HY001, NULL, 0);
 		goto err;
 	} else if (is_json) {
-		memcpy(dbc->srv_ver.string.str, es_ver.str, n * sizeof(SQLWCHAR));
-	} else if (ascii_c2w(es_ver_c.str, dbc->srv_ver.string.str, n) < 0) {
+		memcpy(dbc->srv_ver.str, es_ver.str, n * sizeof(SQLWCHAR));
+	} else if (ascii_c2w(es_ver_c.str, dbc->srv_ver.str, n) < 0) {
 		/* non-ASCII or empty */
-		ERRH(dbc, "Elasticsearch version string is invalid.");
+		BUGH(dbc, "Elasticsearch version string is invalid.");
 		goto err;
 	}
-	dbc->srv_ver.string.cnt = n;
-	dbc->srv_ver.string.str[n] = 0;
-	ver_no = dbc->srv_ver.string;
+	dbc->srv_ver.cnt = n;
+	dbc->srv_ver.str[n] = 0;
 
-#	ifndef NDEBUG
-	/* strip any qualifiers (=anything following a first `-`) in debug mode */
-	wtrim_at(&ver_no, L'-');
-	wtrim_at(&own_ver, L'-');
-#	endif /* !NDEBUG */
-
-	if (tolower(ver_checking) == tolower(ESODBC_DSN_VC_MAJOR[0])) {
-		/* trim versions to the first dot, i.e. major version */
-		wtrim_at(&ver_no, L'.');
-		wtrim_at(&own_ver, L'.');
+	min_es_ver_l = version_to_id(&min_es_ver);
+	assert(0 < min_es_ver_l);
+	es_ver_l = version_to_id(&dbc->srv_ver);
+	if (es_ver_l <= 0) {
+		BUGH(dbc, "failed to parse Elasticsearch version `" LWPDL "`.",
+			LWSTR(&dbc->srv_ver));
+		goto err;
 	}
-
-	if (tolower(ver_checking) != tolower(ESODBC_DSN_VC_NONE[0])) {
-		if (! EQ_WSTR(&ver_no, &own_ver)) {
-			ERRH(dbc, "version mismatch: server: " LWPDL ", "
-				"own: " LWPDL ".", LWSTR(&ver_no), LWSTR(&own_ver));
-			n = swprintf(wbuff, sizeof(wbuff)/sizeof(wbuff[0]),
-					err_msg_fmt, LWSTR(&ver_no), LWSTR(&own_ver));
-			ret = post_diagnostic(dbc, SQL_STATE_HY000, (n <= 0) ?
-					L"Version mismatch between server and driver" :
-					wbuff, 0);
-		} else {
-			INFOH(dbc, "server and driver versions aligned to: " LWPDL ".",
-				LWSTR(&own_ver));
-			ret = SQL_SUCCESS;
-		}
-#	ifndef NDEBUG
+	if (es_ver_l < min_es_ver_l) {
+		ERRH(dbc, "Elasticsearch version `" LWPDL "` is below minimum required"
+			" `" LWPDL "`.", LWSTR(&dbc->srv_ver), LWSTR(&min_es_ver));
+		n = swprintf(wbuff, sizeof(wbuff)/sizeof(wbuff[0]),
+				err_msg_fmt, LWSTR(&dbc->srv_ver));
+		ret = post_diagnostic(dbc, SQL_STATE_HY000, (n <= 0) ?
+				L"Version mismatch between server and driver" :
+				wbuff, 0);
 	} else {
-		WARNH(dbc, "version checking disabled.");
-#	endif /* !NDEBUG */
+		INFOH(dbc, "server version (" LWPDL ") %s minimum required "
+			"(" ESODBC_MIN_ES_VER ").", LWSTR(&dbc->srv_ver),
+			es_ver_l == min_es_ver_l ? "meets" : "exceeds");
+		ret = SQL_SUCCESS;
 	}
 
 	free(rsp_body.str);

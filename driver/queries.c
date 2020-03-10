@@ -41,6 +41,7 @@ static SQLRETURN statement_params_len_cbor(esodbc_stmt_st *stmt,
 	size_t *enc_len, size_t *conv_len);
 
 static thread_local cstr_st tz_param;
+static cstr_st version = CSTR_INIT(STR(DRV_VERSION)); /* build-time define */
 
 static BOOL print_tz_param(long tz_dst_offt)
 {
@@ -142,9 +143,17 @@ static inline BOOL update_tz_param()
 
 BOOL queries_init()
 {
+	char *ptr;
+
 	/* for the casts in this module */
 	ASSERT_INTEGER_TYPES_EQUAL(wchar_t, SQLWCHAR);
 	ASSERT_INTEGER_TYPES_EQUAL(char, SQLCHAR);
+
+	/* trim qualifiers */
+	ptr = strchr(version.str, '-');
+	if (ptr) {
+		version.cnt = ptr - version.str;
+	}
 
 	/* needed to correctly run the unit tests */
 	return update_tz_param();
@@ -2973,7 +2982,9 @@ static SQLRETURN statement_len_cbor(esodbc_stmt_st *stmt, size_t *enc_len,
 		/* "time_zone": "-05:45" */
 		bodylen += cbor_str_obj_len(sizeof(REQ_KEY_TIMEZONE) - 1);
 		bodylen += cbor_str_obj_len(tz_param.cnt); /* lax len */
-		*keys += 3; /* field_m._val., idx._inc._frozen, time_zone */
+		bodylen += cbor_str_obj_len(sizeof(REQ_KEY_VERSION) - 1);
+		bodylen += cbor_str_obj_len(version.cnt);
+		*keys += 4; /* field_m._val., idx._inc._frozen, time_zone, version */
 	}
 	bodylen += cbor_str_obj_len(sizeof(REQ_KEY_MODE) - 1);
 	bodylen += cbor_str_obj_len(sizeof(REQ_VAL_MODE) - 1);
@@ -3033,9 +3044,12 @@ static SQLRETURN statement_len_json(esodbc_stmt_st *stmt, size_t *outlen)
 		/* "time_zone": "-05:45" */
 		bodylen += sizeof(JSON_KEY_TIMEZONE) - 1;
 		bodylen += tz_param.cnt;
+		/* "version": */
+		bodylen += sizeof(JSON_KEY_VERSION) - 1;
+		bodylen += version.cnt + /* 2x`"` */2;
 	}
-	bodylen += sizeof(JSON_KEY_VAL_MODE) - 1; /* "mode": */
-	bodylen += sizeof(JSON_KEY_CLT_ID) - 1; /* "client_id": */
+	bodylen += sizeof(JSON_KEY_VAL_MODE) - 1; /* "mode": "ODBC" */
+	bodylen += sizeof(JSON_KEY_CLT_ID) - 1; /* "client_id": "odbcXX" */
 	/* TODO: request_/page_timeout */
 	bodylen += 1; /* } */
 
@@ -3307,6 +3321,12 @@ static SQLRETURN serialize_to_cbor(esodbc_stmt_st *stmt, cstr_st *dest,
 		}
 		err = cbor_encode_text_string(&map, tz.str, tz.cnt);
 		FAIL_ON_CBOR_ERR(stmt, err);
+		/* version */
+		err = cbor_encode_text_string(&map, REQ_KEY_VERSION,
+				sizeof(REQ_KEY_VERSION) - 1);
+		FAIL_ON_CBOR_ERR(stmt, err);
+		err = cbor_encode_text_string(&map, version.str, version.cnt);
+		FAIL_ON_CBOR_ERR(stmt, err);
 	}
 	/* mode : ODBC */
 	err = cbor_encode_text_string(&map, REQ_KEY_MODE,
@@ -3424,10 +3444,18 @@ static SQLRETURN serialize_to_json(esodbc_stmt_st *stmt, cstr_st *dest)
 				sizeof(JSON_VAL_TIMEZONE_Z) - 1);
 			pos += sizeof(JSON_VAL_TIMEZONE_Z) - 1;
 		}
+		/* "version": ... */
+		memcpy(body + pos, JSON_KEY_VERSION, sizeof(JSON_KEY_VERSION) - 1);
+		pos += sizeof(JSON_KEY_VERSION) - 1;
+		body[pos ++] = '"';
+		memcpy(body + pos, version.str, version.cnt);
+		pos += version.cnt;
+		body[pos ++] = '"';
 	}
-	/* "mode": */
+	/* "mode": "ODBC" */
 	memcpy(body + pos, JSON_KEY_VAL_MODE, sizeof(JSON_KEY_VAL_MODE) - 1);
 	pos += sizeof(JSON_KEY_VAL_MODE) - 1;
+	/* "client_id": "odbcXX" */
 	memcpy(body + pos, JSON_KEY_CLT_ID, sizeof(JSON_KEY_CLT_ID) - 1);
 	pos += sizeof(JSON_KEY_CLT_ID) - 1;
 	body[pos ++] = '}';
