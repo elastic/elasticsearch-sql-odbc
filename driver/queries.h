@@ -142,6 +142,7 @@ SQLRETURN EsSQLRowCount(_In_ SQLHSTMT StatementHandle, _Out_ SQLLEN *RowCount);
 #define REQ_KEY_MULTIVAL		"field_multi_value_leniency"
 #define REQ_KEY_IDX_FROZEN		"index_include_frozen"
 #define REQ_KEY_TIMEZONE		"time_zone"
+#define REQ_KEY_BINARY_FMT		"binary_format"
 /* keys for the "params" argument */
 #define REQ_KEY_PARAM_TYPE		"type"
 #define REQ_KEY_PARAM_VAL		"value"
@@ -171,6 +172,7 @@ SQLRETURN EsSQLRowCount(_In_ SQLHSTMT StatementHandle, _Out_ SQLLEN *RowCount);
 #define JSON_KEY_MULTIVAL		", \"" REQ_KEY_MULTIVAL "\": " /* n-th */
 #define JSON_KEY_IDX_FROZEN		", \"" REQ_KEY_IDX_FROZEN "\": " /* n-th */
 #define JSON_KEY_TIMEZONE		", \"" REQ_KEY_TIMEZONE "\": " /* n-th key */
+#define JSON_KEY_BINARY_FMT		", \"" REQ_KEY_BINARY_FMT "\": " /* n-th key */
 
 #define JSON_VAL_TIMEZONE_Z		"\"" REQ_VAL_TIMEZONE_Z "\""
 

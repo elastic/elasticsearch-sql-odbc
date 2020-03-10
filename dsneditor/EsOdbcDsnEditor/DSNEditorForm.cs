@@ -157,7 +157,7 @@ namespace EsOdbcDsnEditor
 			numericUpDownFetchSize.Text = Builder.ContainsKey("MaxFetchSize") ? Builder["MaxFetchSize"].ToString().StripBraces() : "1000";
 			numericUpDownBodySize.Text = Builder.ContainsKey("MaxBodySizeMB") ? Builder["MaxBodySizeMB"].ToString().StripBraces() : "100";
 			comboBoxFloatsFormat.Text = Builder.ContainsKey("ScientificFloats") ? Builder["ScientificFloats"].ToString().StripBraces() : "default";
-			comboBoxDataEncoding.Text = Builder.ContainsKey("Packing") ? Builder["Packing"].ToString() : "JSON";
+			comboBoxDataEncoding.Text = Builder.ContainsKey("Packing") ? Builder["Packing"].ToString() : "CBOR";
 			comboBoxDataCompression.Text = Builder.ContainsKey("Compression") ? Builder["Compression"].ToString() : "auto";
 
 			string[] noes = {"no", "false", "0"};
