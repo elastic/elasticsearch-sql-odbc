@@ -110,9 +110,9 @@ void ConnectedDBC::assertRequest(const char *params, const char *tz)
 		JSON_KEY_MULTIVAL ESODBC_DEF_MFIELD_LENIENT
 		JSON_KEY_IDX_FROZEN ESODBC_DEF_IDX_INC_FROZEN
 		JSON_KEY_TIMEZONE "%s%s%s"
+		JSON_KEY_VERSION "\"%s\""
 		JSON_KEY_VAL_MODE
 		JSON_KEY_CLT_ID
-		JSON_KEY_VERSION "\"%s\""
 		"}";
 	char expect[1024];
 	int n;
