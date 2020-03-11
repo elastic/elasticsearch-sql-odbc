@@ -21,6 +21,8 @@ extern "C" {
 ConnectedDBC::ConnectedDBC()
 {
 	cstr_st types = {0};
+	static char buff[sizeof(STR(DRV_VERSION))] = {0};
+	char *ptr;
 
 	assert(getenv("TZ") == NULL);
 
@@ -46,6 +48,12 @@ ConnectedDBC::ConnectedDBC()
 	ret = SQLAllocHandle(SQL_HANDLE_STMT, dbc, &stmt);
 	assert(SQL_SUCCEEDED(ret));
 	assert(stmt != NULL);
+
+	version = STR(DRV_VERSION);
+	if ((ptr = strchr(version, '-'))) {
+		strncpy(buff, STR(DRV_VERSION), ptr - version);
+		version = buff;
+	}
 }
 
 ConnectedDBC::~ConnectedDBC()
@@ -102,6 +110,7 @@ void ConnectedDBC::assertRequest(const char *params, const char *tz)
 		JSON_KEY_MULTIVAL ESODBC_DEF_MFIELD_LENIENT
 		JSON_KEY_IDX_FROZEN ESODBC_DEF_IDX_INC_FROZEN
 		JSON_KEY_TIMEZONE "%s%s%s"
+		JSON_KEY_VERSION "\"%s\""
 		JSON_KEY_VAL_MODE
 		JSON_KEY_CLT_ID
 		JSON_KEY_BINARY_FMT "false"
@@ -115,10 +124,10 @@ void ConnectedDBC::assertRequest(const char *params, const char *tz)
 
 	if (tz) {
 		n = snprintf(expect, sizeof(expect), answ_templ, test_name, params,
-				"\"", tz, "\"");
+				"\"", tz, "\"", version);
 	} else {
 		n = snprintf(expect, sizeof(expect), answ_templ, test_name, params,
-				"", JSON_VAL_TIMEZONE_Z, "");
+				"", JSON_VAL_TIMEZONE_Z, "", version);
 	}
 	ASSERT_LT(actual.cnt, sizeof(expect));
 	ASSERT_EQ(n, actual.cnt);

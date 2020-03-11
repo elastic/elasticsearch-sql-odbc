@@ -108,6 +108,7 @@ class ConnectedDBC {
 		SQLRETURN ret;
 		SQLLEN ind_len = SQL_NULL_DATA;
 		const char *test_name;
+		char *version;
 
 
 	ConnectedDBC();

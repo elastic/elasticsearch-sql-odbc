@@ -51,10 +51,6 @@
 #define ESODBC_DSN_CMPSS_AUTO		"auto"
 #define ESODBC_DSN_CMPSS_ON			"on"
 #define ESODBC_DSN_CMPSS_OFF		"off"
-/* VersionChecking values */
-#define ESODBC_DSN_VC_STRICT		"strict"
-#define ESODBC_DSN_VC_MAJOR			"major"
-#define ESODBC_DSN_VC_NONE			"none"
 /* Floats printing */
 #define ESODBC_DSN_FLTS_DEF			"default"
 #define ESODBC_DSN_FLTS_SCI			"scientific"
