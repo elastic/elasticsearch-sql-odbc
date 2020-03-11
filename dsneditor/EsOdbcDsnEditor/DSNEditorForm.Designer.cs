@@ -502,8 +502,8 @@ namespace EsOdbcDsnEditor
             this.comboBoxDataEncoding.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.comboBoxDataEncoding.FormattingEnabled = true;
             this.comboBoxDataEncoding.Items.AddRange(new object[] {
-            "JSON",
-            "CBOR"});
+            "CBOR",
+            "JSON"});
             this.comboBoxDataEncoding.Location = new System.Drawing.Point(182, 155);
             this.comboBoxDataEncoding.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.comboBoxDataEncoding.Name = "comboBoxDataEncoding";

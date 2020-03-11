@@ -113,6 +113,7 @@ void ConnectedDBC::assertRequest(const char *params, const char *tz)
 		JSON_KEY_VERSION "\"%s\""
 		JSON_KEY_VAL_MODE
 		JSON_KEY_CLT_ID
+		JSON_KEY_BINARY_FMT "false"
 		"}";
 	char expect[1024];
 	int n;

@@ -2986,11 +2986,16 @@ static SQLRETURN statement_len_cbor(esodbc_stmt_st *stmt, size_t *enc_len,
 		bodylen += cbor_str_obj_len(version.cnt);
 		*keys += 4; /* field_m._val., idx._inc._frozen, time_zone, version */
 	}
+	/* mode */
 	bodylen += cbor_str_obj_len(sizeof(REQ_KEY_MODE) - 1);
 	bodylen += cbor_str_obj_len(sizeof(REQ_VAL_MODE) - 1);
+	/* client_id */
 	bodylen += cbor_str_obj_len(sizeof(REQ_KEY_CLT_ID) - 1);
 	bodylen += cbor_str_obj_len(sizeof(REQ_VAL_CLT_ID) - 1);
-	*keys += 2; /* mode, client_id */
+	/* binary_format */
+	bodylen += cbor_str_obj_len(sizeof(REQ_KEY_BINARY_FMT) - 1);
+	bodylen += CBOR_OBJ_BOOL_LEN;
+	*keys += 3; /* mode, client_id, binary_format */
 	/* TODO: request_/page_timeout */
 
 	*enc_len = bodylen;
@@ -3048,8 +3053,10 @@ static SQLRETURN statement_len_json(esodbc_stmt_st *stmt, size_t *outlen)
 		bodylen += sizeof(JSON_KEY_VERSION) - 1;
 		bodylen += version.cnt + /* 2x`"` */2;
 	}
-	bodylen += sizeof(JSON_KEY_VAL_MODE) - 1; /* "mode": "ODBC" */
-	bodylen += sizeof(JSON_KEY_CLT_ID) - 1; /* "client_id": "odbcXX" */
+	bodylen += sizeof(JSON_KEY_VAL_MODE) - 1; /* "mode": */
+	bodylen += sizeof(JSON_KEY_CLT_ID) - 1; /* "client_id": */
+	bodylen += sizeof(JSON_KEY_BINARY_FMT) - 1; /* "binary_format": false */
+	bodylen += sizeof("false") - 1;
 	/* TODO: request_/page_timeout */
 	bodylen += 1; /* } */
 
@@ -3342,6 +3349,11 @@ static SQLRETURN serialize_to_cbor(esodbc_stmt_st *stmt, cstr_st *dest,
 	err = cbor_encode_text_string(&map, REQ_VAL_CLT_ID,
 			sizeof(REQ_VAL_CLT_ID) - 1);
 	FAIL_ON_CBOR_ERR(stmt, err);
+	/* binary_format: true (false means JSON) */
+	err = cbor_encode_text_string(&map, REQ_KEY_BINARY_FMT,
+			sizeof(REQ_KEY_BINARY_FMT) - 1);
+	FAIL_ON_CBOR_ERR(stmt, err);
+	err = cbor_encode_boolean(&map, TRUE);
 
 	err = cbor_encoder_close_container(&encoder, &map);
 	FAIL_ON_CBOR_ERR(stmt, err);
@@ -3458,6 +3470,10 @@ static SQLRETURN serialize_to_json(esodbc_stmt_st *stmt, cstr_st *dest)
 	/* "client_id": "odbcXX" */
 	memcpy(body + pos, JSON_KEY_CLT_ID, sizeof(JSON_KEY_CLT_ID) - 1);
 	pos += sizeof(JSON_KEY_CLT_ID) - 1;
+	/* "binary_format": false (true means CBOR) */
+	memcpy(body + pos, JSON_KEY_BINARY_FMT, sizeof(JSON_KEY_BINARY_FMT) - 1);
+	pos += sizeof(JSON_KEY_BINARY_FMT) - 1;
+	pos += copy_bool_val(body + pos, FALSE);
 	body[pos ++] = '}';
 
 	/* check that the buffer hasn't been overrun. it can be used less than
