@@ -173,8 +173,8 @@ typedef struct struct_dbc {
 	esodbc_estype_st *es_types; /* array with ES types */
 	SQLULEN no_types; /* number of types in array */
 	/* maximum precision/length of types using same SQL data type ID */
-	SQLINTEGER max_float_size;
-	SQLINTEGER max_varchar_size;
+	esodbc_estype_st *max_varchar_type; /* pointer to TEXT type */
+	esodbc_estype_st *max_float_type; /* pointer to DOUBLE type */
 
 	CURL *curl; /* cURL handle */
 	CURLcode curl_err;

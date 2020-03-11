@@ -1305,7 +1305,10 @@ SQLRETURN copy_one_row_json(esodbc_stmt_st *stmt, SQLULEN pos)
 
 	ard = stmt->ard;
 	ird = stmt->ird;
-	rowno = stmt->tv_rows + /* current not yet counted */1;
+	rowno = stmt->tv_rows
+		+ STMT_GD_CALLING(stmt)
+		? /* SQLFetch() executed already, row counted */0
+		: /* SQLFetch() in progress, current row not yet counted */1;
 
 	with_info = FALSE;
 	/* iterate over the bound cols of one (table) row */
@@ -1496,7 +1499,10 @@ static SQLRETURN copy_one_row_cbor(esodbc_stmt_st *stmt, SQLULEN pos)
 
 	ard = stmt->ard;
 	ird = stmt->ird;
-	rowno = stmt->tv_rows + /* current row not yet counted */1;
+	rowno = stmt->tv_rows
+		+ STMT_GD_CALLING(stmt)
+		? /* SQLFetch() executed already, row counted */0
+		: /* SQLFetch() in progress, current row not yet counted */1;
 
 	with_info = FALSE;
 	/* iterate over the bound cols and contents of one (table) row */
@@ -2425,30 +2431,33 @@ SQLRETURN EsSQLPrepareW
 
 
 /* Find the ES/SQL type given in es_type; for ID matching multiple types
- * (scaled/half_float and keyword/text) use the best matching col_size, which
- * is the smallest, that's still matching (<=) the given one. This assumes the
- * types are ordered by it (as per the spec). */
+ * (scaled/half_float), but not  keyword/text, use the best matching col_size,
+ * which is the smallest, that's still matching (<=) the given one. This
+ * assumes the types are ordered by it (as per the spec). */
 esodbc_estype_st *lookup_es_type(esodbc_dbc_st *dbc,
 	SQLSMALLINT es_type, SQLULEN col_size)
 {
 	SQLULEN i;
+	SQLINTEGER sz;
 
+	/* for strings, choose text straight away: some type (IP, GEO) must coform
+	 * to a format and no content inspection is done in the driver */
+	if (es_type == SQL_VARCHAR) {
+		return dbc->max_varchar_type;
+	}
 	for (i = 0; i < dbc->no_types; i ++) {
 		if (dbc->es_types[i].data_type == es_type) {
 			if (col_size <= 0) {
 				return &dbc->es_types[i];
 			} else {
+				sz = dbc->es_types[i].column_size;
 				assert(col_size < LONG_MAX);
-				if ((SQLINTEGER)col_size <= dbc->es_types[i].column_size) {
-					return &dbc->es_types[i];
-				}
-				if (es_type == SQL_VARCHAR &&
-					dbc->es_types[i].column_size == dbc->max_varchar_size) {
+				if ((SQLINTEGER)col_size <= sz) {
 					return &dbc->es_types[i];
 				}
 				if (es_type == SQL_FLOAT &&
-					dbc->es_types[i].column_size == dbc->max_float_size) {
-					return &dbc->es_types[i];
+						sz == dbc->max_float_type->column_size) {
+					return dbc->max_float_type;
 				}
 			}
 		}
@@ -2460,33 +2469,28 @@ esodbc_estype_st *lookup_es_type(esodbc_dbc_st *dbc,
 
 /* find the matching ES/SQL type for app's SQL type, which can be an exact
  * match against ES/SQL types, but also some other valid SQL type. */
-static esodbc_estype_st *match_es_type(esodbc_rec_st *arec,
-	esodbc_rec_st *irec)
+static esodbc_estype_st *match_es_type(esodbc_rec_st *irec)
 {
-	SQLULEN i, length;
-	esodbc_dbc_st *dbc = arec->desc->hdr.stmt->hdr.dbc;
+	SQLULEN i;
+	SQLINTEGER col_sz;
+	esodbc_dbc_st *dbc = irec->desc->hdr.stmt->hdr.dbc;
 
 	for (i = 0; i < dbc->no_types; i ++) {
 		if (dbc->es_types[i].data_type == irec->concise_type) {
 			switch (irec->concise_type) {
-				/* For SQL types mappign to more than one ES/SQL type, choose
+				/* For SQL types mapping to more than one ES/SQL type, choose
 				 * the ES/SQL type with smallest "size" that covers user given
 				 * precision OR that has maximum precision (in case user's is
 				 * larger than max ES/SQL offers. */
 				case SQL_FLOAT: /* HALF_FLOAT, SCALED_FLOAT */
-					if (irec->precision <= dbc->es_types[i].column_size ||
-						dbc->es_types[i].column_size == dbc->max_float_size) {
+					col_sz = dbc->es_types[i].column_size;
+					if (irec->precision <= col_sz ||
+						col_sz == dbc->max_float_type->column_size) {
 						return &dbc->es_types[i];
 					}
 					break;
-				case SQL_VARCHAR: /* KEYWORD, TEXT */
-					length = irec->length ? irec->length : arec->octet_length;
-					assert(length < LONG_MAX);
-					if ((SQLINTEGER)length <= dbc->es_types[i].column_size ||
-						dbc->es_types[i].column_size==dbc->max_varchar_size) {
-						return &dbc->es_types[i];
-					}
-					break;
+				case SQL_VARCHAR: /* IP, CONSTANT_KEYWORD, KEYWORD, TEXT */
+					return lookup_es_type(dbc, SQL_VARCHAR, irec->precision);
 				default:
 					/* unequivocal match */
 					return &dbc->es_types[i];
@@ -2494,8 +2498,7 @@ static esodbc_estype_st *match_es_type(esodbc_rec_st *arec,
 		}
 	}
 
-	/* app specified an SQL type with no direct mapping to an ES/SQL type
-	 * TODO: IP, GEO? */
+	/* app specified an SQL type with no direct mapping to an ES/SQL type */
 	switch (irec->meta_type) {
 		case METATYPE_EXACT_NUMERIC:
 			assert(irec->concise_type == SQL_DECIMAL ||
@@ -2503,8 +2506,7 @@ static esodbc_estype_st *match_es_type(esodbc_rec_st *arec,
 			return lookup_es_type(dbc, SQL_FLOAT, irec->precision);
 
 		case METATYPE_STRING:
-			length = irec->length ? irec->length : arec->octet_length;
-			return lookup_es_type(dbc, SQL_VARCHAR, length);
+			return lookup_es_type(dbc, SQL_VARCHAR, irec->precision);
 		case METATYPE_BIN:
 			return lookup_es_type(dbc, SQL_BINARY, /*no prec*/0);
 		case METATYPE_DATE_TIME:
@@ -2698,7 +2700,7 @@ SQLRETURN EsSQLBindParameter(
 	}
 
 	arec = get_record(stmt->apd, ParameterNumber, /*grow?*/FALSE);
-	irec->es_type = match_es_type(arec, irec);
+	irec->es_type = match_es_type(irec);
 	if (! irec->es_type) {
 		/* validation shoudl have been done earlier on meta type setting
 		 * (SQL_DESC_CONCISE_TYPE) */
