@@ -417,6 +417,7 @@ typedef struct struct_stmt {
 #define STMT_GD_CALLING(_stmt)		(0 <= _stmt->gd_col)
 
 SQLRETURN update_rec_count(esodbc_desc_st *desc, SQLSMALLINT new_count);
+SQLSMALLINT count_bound(esodbc_desc_st *desc);
 esodbc_rec_st *get_record(esodbc_desc_st *desc, SQLSMALLINT rec_no, BOOL grow);
 void dump_record(esodbc_rec_st *rec);
 
