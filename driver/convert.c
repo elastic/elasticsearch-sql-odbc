@@ -3917,7 +3917,9 @@ static SQLRETURN c2sql_str2interval(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			INFOH(stmt, "translation buffer too small (%zu < %lld), "
 				"allocation needed.", sizeof(wbuff)/sizeof(wbuff[0]),
 				(size_t)octet_len);
-			wptr = malloc(octet_len * sizeof(SQLWCHAR));
+			/* 0-term is most of the time not counted in input str and
+			 * ascii_c2w() writes it -> always allocate space for it */
+			wptr = malloc((octet_len + 1) * sizeof(SQLWCHAR));
 			if (! wptr) {
 				ERRNH(stmt, "OOM for %lld x SQLWCHAR", octet_len);
 				RET_HDIAGS(stmt, SQL_STATE_HY001);
@@ -3936,6 +3938,8 @@ static SQLRETURN c2sql_str2interval(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			}
 			/* should only happen on too short input string */
 			RET_HDIAGS(stmt, SQL_STATE_22018);
+		} else {
+			assert(ret <= octet_len + 1); /* no overrun */
 		}
 		wstr.str = wptr;
 		wstr.cnt = (size_t)octet_len;
