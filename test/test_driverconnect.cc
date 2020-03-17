@@ -102,12 +102,12 @@ TEST_F(DriverConnect, ResetCurrentCatalog)
 	ASSERT_TRUE(set_current_catalog(dbc, &crr_cat));
 	ASSERT_TRUE(SQL_SUCCEEDED(SQLSetConnectAttrW(my_dbc,
 					SQL_ATTR_CURRENT_CATALOG, (SQLPOINTER)crr_cat.str,
-					(SQLINTEGER)crr_cat.cnt)));
+					(SQLINTEGER)(crr_cat.cnt * sizeof(SQLWCHAR)))));
 
 	wstr_st other_cat = WSTR_INIT("other_catalog");
 	ASSERT_FALSE(SQL_SUCCEEDED(SQLSetConnectAttrW(my_dbc,
 					SQL_ATTR_CURRENT_CATALOG, (SQLPOINTER)other_cat.str,
-					(SQLINTEGER)other_cat.cnt)));
+					(SQLINTEGER)(other_cat.cnt * sizeof(SQLWCHAR)))));
 }
 
 } // test namespace
