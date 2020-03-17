@@ -104,6 +104,17 @@ void ConnectedDBC::assertState(const SQLWCHAR *state)
 
 void ConnectedDBC::assertRequest(const char *params, const char *tz)
 {
+	const static char *answ_templ_no_params = "{"
+		JSON_KEY_QUERY "\"%s\""
+		/* params */ "%s"
+		JSON_KEY_MULTIVAL ESODBC_DEF_MFIELD_LENIENT
+		JSON_KEY_IDX_FROZEN ESODBC_DEF_IDX_INC_FROZEN
+		JSON_KEY_TIMEZONE "%s%s%s"
+		JSON_KEY_VERSION "\"%s\""
+		JSON_KEY_VAL_MODE
+		JSON_KEY_CLT_ID
+		JSON_KEY_BINARY_FMT "false"
+		"}";
 	const static char *answ_templ = "{"
 		JSON_KEY_QUERY "\"%s\""
 		JSON_KEY_PARAMS "%s"
@@ -115,6 +126,7 @@ void ConnectedDBC::assertRequest(const char *params, const char *tz)
 		JSON_KEY_CLT_ID
 		JSON_KEY_BINARY_FMT "false"
 		"}";
+	const char *templ;
 	char expect[1024];
 	int n;
 
@@ -122,11 +134,18 @@ void ConnectedDBC::assertRequest(const char *params, const char *tz)
 	ret = serialize_statement((esodbc_stmt_st *)stmt, &actual);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
+	if (params) {
+		templ = answ_templ;
+	} else {
+		templ = answ_templ_no_params;
+		params = "";
+	}
+
 	if (tz) {
-		n = snprintf(expect, sizeof(expect), answ_templ, test_name, params,
+		n = snprintf(expect, sizeof(expect), templ, test_name, params,
 				"\"", tz, "\"", version);
 	} else {
-		n = snprintf(expect, sizeof(expect), answ_templ, test_name, params,
+		n = snprintf(expect, sizeof(expect), templ, test_name, params,
 				"", JSON_VAL_TIMEZONE_Z, "", version);
 	}
 	ASSERT_LT(actual.cnt, sizeof(expect));
