@@ -2857,6 +2857,31 @@ static SQLRETURN convert_param_val(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	return SQL_SUCCESS;
 }
 
+static SQLRETURN get_param_recs(esodbc_stmt_st *stmt, SQLSMALLINT no,
+	esodbc_rec_st **arec, esodbc_rec_st **irec)
+{
+	esodbc_rec_st *a, *i;
+
+	a = get_record(stmt->apd, no, /*grow?*/FALSE);
+	if (a && REC_IS_BOUND(a)) {
+		*arec = a;
+	} else {
+		ERRH(stmt, "APD record #%hd @0x%p not bound", no, a);
+		RET_HDIAG(stmt, SQL_STATE_07002, "Invalid parameter configuration", 0);
+	}
+
+	i = get_record(stmt->ipd, no, /*grow?*/FALSE);
+	if (i && i->es_type) {
+		*irec = i;
+	} else {
+		ERRH(stmt, "IPD record #%hd @0x%p not configured", no, i);
+		/* possibly "manually" configured param (i.e. no SQLBindParam use) */
+		RET_HDIAG(stmt, SQL_STATE_07002, "Invalid parameter configuration", 0);
+	}
+
+	return SQL_SUCCESS;
+}
+
 /* Forms the JSON array with params:
  * [{"type": "<ES/SQL type name>", "value": <param value>}(,etc)*] */
 static SQLRETURN serialize_params_json(esodbc_stmt_st *stmt, char *dest,
@@ -2867,7 +2892,7 @@ static SQLRETURN serialize_params_json(esodbc_stmt_st *stmt, char *dest,
 	const static cstr_st j_val = CSTR_INIT("\", \"" REQ_KEY_PARAM_VAL "\": ");
 	esodbc_rec_st *arec, *irec;
 	SQLRETURN ret;
-	SQLSMALLINT i;
+	SQLSMALLINT i, count;
 	size_t l, pos;
 
 	pos = 0;
@@ -2876,10 +2901,17 @@ static SQLRETURN serialize_params_json(esodbc_stmt_st *stmt, char *dest,
 	}
 	pos ++;
 
-	for (i = 0; i < stmt->apd->count; i ++) {
-		arec = get_record(stmt->apd, i + 1, /*grow?*/FALSE);
-		irec = get_record(stmt->ipd, i + 1, /*grow?*/FALSE);
-		assert(arec && irec && irec->es_type);
+	/* some apps set/reset various parameter record attributes (maybe to
+	 * workaround for some driver issues? like Linked Servers), which increaes
+	 * the record count, but (1) do not bind the parameter and (2) do not use
+	 * the standard mechanism (through SQL_DESC_ARRAY_STATUS_PTR) to signal
+	 * params to ignore. */
+	count = count_bound(stmt->apd);
+	for (i = 0; i < count; i ++) {
+		ret = get_param_recs(stmt, i + 1, &arec, &irec);
+		if (! SQL_SUCCEEDED(ret)) {
+			return ret;
+		}
 
 		if (dest) {
 			if (i) {
@@ -2954,8 +2986,8 @@ static SQLRETURN statement_len_cbor(esodbc_stmt_st *stmt, size_t *enc_len,
 		bodylen += cbor_str_obj_len(sizeof(REQ_KEY_QUERY) - 1);
 		bodylen += cbor_str_obj_len(stmt->u8sql.cnt);
 
-		/* does the statement have any parameters? */
-		if (stmt->apd->count) {
+		/* does the statement have any bound parameters? */
+		if (count_bound(stmt->apd)) {
 			bodylen += cbor_str_obj_len(sizeof(REQ_KEY_PARAMS) - 1);
 
 			ret = statement_params_len_cbor(stmt, &len, conv_len);
@@ -3023,8 +3055,8 @@ static SQLRETURN statement_len_json(esodbc_stmt_st *stmt, size_t *outlen)
 		bodylen += json_escape(stmt->u8sql.str, stmt->u8sql.cnt, NULL, 0);
 		bodylen += 2; /* 2x `"` for query value */
 
-		/* does the statement have any parameters? */
-		if (stmt->apd->count) {
+		/* does the statement have any bound parameters? */
+		if (count_bound(stmt->apd)) {
 			bodylen += sizeof(JSON_KEY_PARAMS) - 1;
 			/* serialize_params_json will count/copy array delims (`[`, `]`) */
 			ret = serialize_params_json(stmt, /* no copy, just eval */NULL,
@@ -3193,7 +3225,7 @@ static SQLRETURN serialize_params_cbor(esodbc_stmt_st *stmt, CborEncoder *map,
 {
 	const static cstr_st p_type = CSTR_INIT(REQ_KEY_PARAM_TYPE);
 	const static cstr_st p_val = CSTR_INIT(REQ_KEY_PARAM_VAL);
-	SQLSMALLINT i;
+	SQLSMALLINT i, count;
 	CborError res;
 	SQLRETURN ret;
 	CborEncoder array; /* array for all params */
@@ -3204,10 +3236,13 @@ static SQLRETURN serialize_params_cbor(esodbc_stmt_st *stmt, CborEncoder *map,
 	res = cbor_encoder_create_array(map, &array, stmt->apd->count);
 	FAIL_ON_CBOR_ERR(stmt, res);
 
-	for (i = 0; i < stmt->apd->count; i ++) {
-		assert(stmt->ipd->count == stmt->apd->count);
-		arec = &stmt->apd->recs[i];
-		irec = &stmt->ipd->recs[i];
+	/* see note in serialize_params_json() */
+	count = count_bound(stmt->apd);
+	for (i = 0; i < count; i ++) {
+		ret = get_param_recs(stmt, i + 1, &arec, &irec);
+		if (! SQL_SUCCEEDED(ret)) {
+			return ret;
+		}
 
 		/* ~ { */
 		res = cbor_encoder_create_map(&array, &pmap, /* type + value = */2);
@@ -3289,8 +3324,8 @@ static SQLRETURN serialize_to_cbor(esodbc_stmt_st *stmt, cstr_st *dest,
 		err = cbor_encode_text_string(&map, stmt->u8sql.str, stmt->u8sql.cnt);
 		FAIL_ON_CBOR_ERR(stmt, err);
 
-		/* does the statement have any parameters? */
-		if (stmt->apd->count) {
+		/* does the statement have any bound parameters? */
+		if (count_bound(stmt->apd)) {
 			err = cbor_encode_text_string(&map, REQ_KEY_PARAMS,
 					sizeof(REQ_KEY_PARAMS) - 1);
 			FAIL_ON_CBOR_ERR(stmt, err);
@@ -3418,7 +3453,7 @@ static SQLRETURN serialize_to_json(esodbc_stmt_st *stmt, cstr_st *dest)
 		body[pos ++] = '"';
 
 		/* does the statement have any parameters? */
-		if (stmt->apd->count) {
+		if (count_bound(stmt->apd)) {
 			memcpy(body + pos, JSON_KEY_PARAMS, sizeof(JSON_KEY_PARAMS) - 1);
 			pos += sizeof(JSON_KEY_PARAMS) - 1;
 			/* serialize_params_json will count/copy array delims (`[`, `]`) */

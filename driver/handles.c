@@ -1138,8 +1138,8 @@ static esodbc_state_et check_buff(SQLSMALLINT field_id, SQLPOINTER buff,
 		/* pointer to a value other than string or binary string */
 		case SQL_DESC_DATA_PTR:
 			if ((buff_len != SQL_IS_POINTER) && (buff_len < 0)) {
-				/* spec says the length "should" be it's size => this check
-				 * might be too strict? */
+				/* according to the spec the length "should" be its size =>
+				 * this check might be too strict? */
 				ERR("buffer is for pointer, but its length indicator "
 					"doesn't match (%d).", buff_len);
 				return SQL_STATE_HY090;
@@ -1489,11 +1489,12 @@ esodbc_rec_st *get_record(esodbc_desc_st *desc, SQLSMALLINT rec_no, BOOL grow)
 	return &desc->recs[rec_no - 1];
 }
 
-static SQLSMALLINT recount_bound(esodbc_desc_st *desc)
+SQLSMALLINT count_bound(esodbc_desc_st *desc)
 {
 	SQLSMALLINT i;
-	for (i = desc->count; 0 < i && REC_IS_BOUND(&desc->recs[i-1]); i--)
+	for (i = desc->count; 0 < i && !REC_IS_BOUND(&desc->recs[i - 1]); i --) {
 		;
+	}
 	return i;
 }
 
@@ -2555,8 +2556,9 @@ SQLRETURN EsSQLSetDescFieldW(
 	 * buffer(s), so the above "binding" definition is incomplete.
 	 */
 	if (FieldIdentifier != SQL_DESC_DATA_PTR) {
-		DBGH(desc, "attribute to set is different than %d => unbinding data "
-			"buffer (was 0x%p).", rec->data_ptr);
+		DBGH(desc, "attribute to set is different than data ptr (%d) => "
+			"unbinding data buffer (was 0x%p).", SQL_DESC_DATA_PTR,
+			rec->data_ptr);
 		rec->data_ptr = NULL;
 	}
 
@@ -2654,10 +2656,10 @@ SQLRETURN EsSQLSetDescFieldW(
 					DBGH(desc, "rec 0x%p of desc type %d unbound.", rec,
 							desc->type);
 					if (RecNumber == desc->count) {
-						count = recount_bound(desc);
-						/* worst case: trying to unbound a not-yet-bound rec */
+						count = count_bound(desc);
+						/* worst case: trying to unbind a not-yet-bound rec */
 						if (count != desc->count) {
-							DBGH(desc, "adjusting rec count from %d to %d.",
+							DBGH(desc, "adjusting rec count from %hd to %hd.",
 									desc->count, count);
 							return update_rec_count(desc, count);
 						}
