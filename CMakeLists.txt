@@ -200,12 +200,6 @@ set(LIBCURL_PATH_SRC ${CMAKE_SOURCE_DIR}/libs/curl CACHE PATH
 set(LIBCURL_BUILD_TYPE debug CACHE STRING
 	"Lib curl build type: debug (default) or release")
 
-# zlib paths
-set(ZLIB_PATH_SRC ${CMAKE_SOURCE_DIR}/libs/zlib CACHE PATH
-	"Lib zlib source path")
-set(ZLIB_PATH_INST ${CMAKE_BINARY_DIR}/zlib CACHE PATH
-	"Lib zlib install path")
-
 if (${LIBCURL_BUILD_TYPE} MATCHES [Dd][Ee][Bb][Uu][Gg])
 	set(LIBCURL_DEBUG_ENABLED yes)
 	set(LIBCURL_BUILD_TYPE debug)
@@ -232,6 +226,12 @@ set(LIBCURL_LD_PATH
 set(LIBCURL_INC_PATH ${LIBCURL_PATH_SRC}/include CACHE PATH
 	"Lib curl include path")
 
+# zlib paths
+set(ZLIB_PATH_SRC ${CMAKE_SOURCE_DIR}/libs/zlib CACHE PATH
+	"Lib zlib source path")
+set(ZLIB_PATH_INST ${LIBCURL_PATH_SRC}/builds/zlib-${TARCH} CACHE PATH
+	"Lib zlib install path")
+
 # Build zlib, then libcurl.
 # Note: this happens at config time as a pre-requisite, for now. This might
 # be changed to a build target later (possibly as a CMake subproject: re-link
@@ -256,7 +256,7 @@ if (NOT IS_DIRECTORY ${LIBCURL_LD_PATH})
 	endif (${CMD_RETURN})
 	# libcurl expects a /lib and a /include folder under the location provided
 	# as the path to zlib. zlib/win32's makefile has no install target, so
-	# we'll just cmake-install them under the building dir.
+	# we'll just cmake-install them (under libcurl's build folder).
 	file(INSTALL ${ZLIB_PATH_SRC}/zlib.lib DESTINATION ${ZLIB_PATH_INST}/lib)
 	file(GLOB ZLIB_H_FILES LIST_DIRECTORIES false ${ZLIB_PATH_SRC}
 		${ZLIB_PATH_SRC}/*.h)

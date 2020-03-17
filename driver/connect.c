@@ -69,6 +69,9 @@
 #define TYPE_UNSUPPORTED	"UNSUPPORTED"
 /* 12 */
 #define TYPE_SCALED_FLOAT	"SCALED_FLOAT"
+/* 16 */
+#define TYPE_CONSTANT_KEYWORD	"CONSTANT_KEYWORD"
+
 /*
  * intervals
  */
@@ -2233,6 +2236,15 @@ static BOOL elastic_name2types(wstr_st *type_name,
 				return TRUE;
 			}
 			break;
+
+		/* 16: CONSTANT_KEYWORD */
+		case sizeof(TYPE_CONSTANT_KEYWORD) - 1:
+			if (! wmemncasecmp(type_name->str,
+					MK_WPTR(TYPE_CONSTANT_KEYWORD), type_name->cnt)) {
+				*c_sql = ES_CKEYWORD_TO_CSQL;
+				*sql = ES_CKEYWORD_TO_SQL;
+				return TRUE;
+			}
 	}
 
 	return elastic_intervals_name2types(type_name, c_sql, sql);
