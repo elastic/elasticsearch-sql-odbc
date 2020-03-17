@@ -3105,7 +3105,7 @@ static SQLRETURN check_catalog_name(esodbc_dbc_st *dbc, SQLWCHAR *name,
 	if (len < 0) {
 		catalog.cnt = wcslen(name);
 	} else {
-		catalog.cnt = (size_t)len;
+		catalog.cnt = ((size_t)len)/sizeof(SQLWCHAR);
 	}
 	if (! EQ_WSTR(&dbc->catalog, &catalog)) {
 		if (! dbc->catalog.cnt) {
@@ -3257,7 +3257,7 @@ SQLRETURN EsSQLSetConnectAttrW(
 		case SQL_ATTR_CURRENT_CATALOG:
 			INFOH(dbc, "setting current catalog to: `" LWPDL "`.",
 				/* string should be 0-term'd */
-				0 <= StringLength ? StringLength : SHRT_MAX,
+				0 <= StringLength ? StringLength/sizeof(SQLWCHAR) : SHRT_MAX,
 				(SQLWCHAR *)Value);
 			return check_catalog_name(dbc, (SQLWCHAR *)Value, StringLength);
 
