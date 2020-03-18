@@ -133,6 +133,11 @@ TEST_F(GetData, String2Char_zero_copy) {
 	ret = SQLGetData(stmt, /*col*/1, SQL_C_CHAR, buff, 0, &ind_len);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 	EXPECT_EQ(ind_len, sizeof(SQL_VAL) - /*\0*/1);
+
+	/* check if data is still available */
+	ret = SQLGetData(stmt, /*col*/1, SQL_C_CHAR, buff, sizeof(buff), NULL);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ASSERT_STREQ(SQL_VAL, (char *)buff);
 }
 
 
@@ -257,6 +262,12 @@ TEST_F(GetData, String2WChar_zero_copy) {
 	ret = SQLGetData(stmt, /*col*/1, SQL_C_WCHAR, buff, 0, &ind_len);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 	EXPECT_EQ(ind_len/sizeof(*buff), sizeof(SQL_VAL) - /*\0*/1);
+
+	/* check if data is still available */
+	ret = SQLGetData(stmt, /*col*/1, SQL_C_WCHAR, buff,
+			sizeof(buff)/sizeof(buff[0]), NULL);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	EXPECT_STREQ(MK_WPTR(SQL_VAL), (wchar_t *)buff);
 }
 
 TEST_F(GetData, String2SLong) {
