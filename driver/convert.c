@@ -1487,13 +1487,13 @@ static SQLRETURN wstr_to_cstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 					ERRNH(stmt, "failed to convert wchar_t* to char* for "
 						"string `" LWPDL "`.", c, xstr.w.str);
 					RET_HDIAGS(stmt, SQL_STATE_22018);
-				} // else: buffer too small for full string: trimm further
+				} // else: buffer too small for full string: trim further
 			}
 
 			assert(0 < out_bytes);
 			if (charp[out_bytes - 1] != '\0') {
 				/* ran out of buffer => not 0-term'd and truncated already */
-				charp[out_bytes - 1] = 0;
+				charp[out_bytes - 1] = '\0';
 				state = SQL_STATE_01004; /* indicate truncation */
 				c --; /* last char was overwritten with 0 -> dec xfed count */
 			}
