@@ -673,12 +673,12 @@ static SQLRETURN transfer_xstr0(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 				if (state != SQL_STATE_00000) {
 					/* 0-term the buffer */
-					dst_w[in_chars] = 0;
+					dst_w[in_chars] = L'\0';
 					DBGH(stmt, "aREC@0x%p: `" LWPDL "` transfered truncated "
 						"as `" LWPDL "` at data_ptr@0x%p.", arec,
 						LWSTR(&xsrc->w), in_chars, dst_w, dst_w);
 				} else {
-					assert(dst_w[in_chars] == 0);
+					assert(dst_w[in_chars] == L'\0');
 					DBGH(stmt, "aREC@0x%p: `" LWPDL "` transfered at "
 						"data_ptr@0x%p.", arec, LWSTR(&xsrc->w), dst_w);
 				}
@@ -688,12 +688,12 @@ static SQLRETURN transfer_xstr0(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 				if (state != SQL_STATE_00000) {
 					/* 0-term the buffer */
-					dst_c[in_chars] = 0;
+					dst_c[in_chars] = '\0';
 					DBGH(stmt, "aREC@0x%p: `" LCPDL "` transfered truncated "
 						"as `" LCPDL "` at data_ptr@0x%p.", arec,
 						LCSTR(&xsrc->w), in_chars, dst_c, dst_c);
 				} else {
-					assert(dst_c[in_chars] == 0);
+					assert(dst_c[in_chars] == '\0');
 					DBGH(stmt, "aREC@0x%p: `" LCPDL "` transfered at "
 						"data_ptr@0x%p.", arec, LCSTR(&xsrc->c), dst_c);
 				}
@@ -701,6 +701,9 @@ static SQLRETURN transfer_xstr0(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 			/* only update offset if data is copied out */
 			gd_offset_update(stmt, xsrc->w.cnt, in_chars); /*==->c.cnt*/
+		} else {
+			DBGH(stmt, "aREC@0x%p, data_ptr@0x%p, no room to copy bytes out.",
+				arec, data_ptr);
 		}
 	} else {
 		DBGH(stmt, "aREC@0x%p: NULL transfer buffer.", arec);
@@ -1472,37 +1475,37 @@ static SQLRETURN wstr_to_cstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		 * conversion function. */
 		in_bytes = (int)buff_octet_size(in_bytes, sizeof(SQLCHAR), arec, irec,
 				&state);
-		/* trim the original string until it fits in output buffer, with given
-		 * length limitation */
-		for (c = (int)xstr.w.cnt + 1; 0 < c; c --) {
-			out_bytes = U16WC_TO_MBU8(xstr.w.str, c, charp, in_bytes);
-			/* if user gives 0 as buffer size, out_bytes will also be 0 */
-			if (out_bytes <= 0) {
-				if (WAPI_ERR_EBUFF()) {
-					continue;
-				}
-				ERRNH(stmt, "failed to convert wchar_t* to char* for string `"
-					LWPDL "`.", c, xstr.w.str);
-				RET_HDIAGS(stmt, SQL_STATE_22018);
-			} else {
-				/* conversion succeeded */
-				break;
+		if (in_bytes) {
+			/* trim the original string until it fits in output buffer, with
+			 * given length limitation */
+			for (c = (int)xstr.w.cnt + 1; 0 < c; c --) {
+				out_bytes = U16WC_TO_MBU8(xstr.w.str, c, charp, in_bytes);
+				if (0 < out_bytes) {
+					break; /* conversion succeeded */
+				} // else: out_bytes <= 0
+				if (! WAPI_ERR_EBUFF()) {
+					ERRNH(stmt, "failed to convert wchar_t* to char* for "
+						"string `" LWPDL "`.", c, xstr.w.str);
+					RET_HDIAGS(stmt, SQL_STATE_22018);
+				} // else: buffer too small for full string: trimm further
 			}
+
+			assert(0 < out_bytes);
+			if (charp[out_bytes - 1] != '\0') {
+				/* ran out of buffer => not 0-term'd and truncated already */
+				charp[out_bytes - 1] = 0;
+				state = SQL_STATE_01004; /* indicate truncation */
+				c --; /* last char was overwritten with 0 -> dec xfed count */
+			}
+
+			/* only update offset if data is copied out */
+			gd_offset_update(stmt, xstr.w.cnt, c);
+			DBGH(stmt, "REC@0x%p, data_ptr@0x%p, copied %d bytes: `" LCPD "`.",
+				arec, data_ptr, out_bytes, charp);
+		} else {
+			DBGH(stmt, "REC@0x%p, data_ptr@0x%p, no room to copy bytes out.",
+				arec, data_ptr);
 		}
-
-		assert(0 < out_bytes);
-		if (charp[out_bytes - 1]) {
-			/* ran out of buffer => not 0-terminated and truncated already */
-			charp[out_bytes - 1] = 0;
-			state = SQL_STATE_01004; /* indicate truncation */
-			c --; /* last char was overwritten with 0 -> dec xfed count */
-		}
-
-		/* only update offset if data is copied out */
-		gd_offset_update(stmt, xstr.w.cnt, c);
-
-		DBGH(stmt, "REC@0x%p, data_ptr@0x%p, copied %d bytes: `" LCPD "`.",
-			arec, data_ptr, out_bytes, charp);
 	} else {
 		DBGH(stmt, "REC@0x%p, NULL data_ptr.", arec);
 	}
