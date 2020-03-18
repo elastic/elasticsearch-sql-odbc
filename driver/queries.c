@@ -39,6 +39,7 @@
 /* fwd decl */
 static SQLRETURN statement_params_len_cbor(esodbc_stmt_st *stmt,
 	size_t *enc_len, size_t *conv_len);
+static SQLRETURN count_param_markers(esodbc_stmt_st *stmt, SQLSMALLINT *p_cnt);
 
 static thread_local cstr_st tz_param;
 static cstr_st version = CSTR_INIT(STR(DRV_VERSION)); /* build-time define */
@@ -1103,6 +1104,7 @@ SQLRETURN TEST_API attach_sql(esodbc_stmt_st *stmt,
 	/* if the app correctly SQL_CLOSE'es the statement, this would not be
 	 * needed. but just in case: re-init counter of total # of rows and sets */
 	STMT_ROW_CNT_RESET(stmt);
+	stmt->early_executed = false;
 
 	return SQL_SUCCESS;
 }
@@ -2407,6 +2409,7 @@ SQLRETURN EsSQLPrepareW
 {
 	esodbc_stmt_st *stmt = STMH(hstmt);
 	SQLRETURN ret;
+	SQLSMALLINT markers;
 
 	if (cchSqlStr == SQL_NTS) {
 		cchSqlStr = (SQLINTEGER)wcslen(szSqlStr);
@@ -2420,7 +2423,29 @@ SQLRETURN EsSQLPrepareW
 	ret = EsSQLFreeStmt(stmt, ESODBC_SQL_CLOSE);
 	assert(SQL_SUCCEEDED(ret)); /* can't return error */
 
-	return attach_sql(stmt, szSqlStr, cchSqlStr);
+	ret = attach_sql(stmt, szSqlStr, cchSqlStr);
+	/* if early execution mode is on and the statement has no parameter
+	 * markers, execute the query right away */
+	if (HDRH(stmt)->dbc->early_exec && SQL_SUCCEEDED(ret)) {
+		assert(! stmt->early_executed); /* cleared by now */
+		if (! SQL_SUCCEEDED(count_param_markers(stmt, &markers))) {
+			ERRH(stmt, "failed to count parameter markers in query. "
+				"Early execution disabled.");
+			/* clear set diagnostic */
+			init_diagnostic(&HDRH(stmt)->diag);
+			return ret;
+		}
+		if (0 < markers) {
+			INFOH(stmt, "query contains %hd parameter markers -- early "
+					"execution disabled.", markers);
+			return ret;
+		}
+		ret = EsSQLExecute(hstmt);
+		if (SQL_SUCCEEDED(ret)) {
+			stmt->early_executed = true;
+		}
+	}
+	return ret;
 }
 
 
@@ -3604,7 +3629,18 @@ SQLRETURN EsSQLExecute(SQLHSTMT hstmt)
 	char buff[ESODBC_BODY_BUF_START_SIZE];
 	cstr_st body = {buff, sizeof(buff)};
 
-	DBGH(stmt, "executing SQL: [%zd] `" LCPDL "`.", stmt->u8sql.cnt,
+	if (stmt->early_executed) {
+		stmt->early_executed = false; /* re-enable subsequent executions */
+		if (STMT_HAS_RESULTSET(stmt)) {
+			DBGH(stmt, "query early executed: [%zd] `" LCPDL "`.",
+				stmt->u8sql.cnt, LCSTR(&stmt->u8sql));
+			return SQL_SUCCESS;
+		} else {
+			WARNH(stmt, "query `" LCPDL "` early executed, but lacking result"
+				" set.", LCSTR(&stmt->u8sql));
+		}
+	}
+	DBGH(stmt, "executing query: [%zd] `" LCPDL "`.", stmt->u8sql.cnt,
 		LCSTR(&stmt->u8sql));
 
 	ret = serialize_statement(stmt, &body);

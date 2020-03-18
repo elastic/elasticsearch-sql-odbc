@@ -170,6 +170,7 @@ static void init_stmt(esodbc_stmt_st *stmt, SQLHANDLE InputHandle)
 	 * set at connection level. */
 	stmt->metadata_id = DBCH(InputHandle)->metadata_id;
 	stmt->sql2c_conversion = CONVERSION_UNCHECKED;
+	stmt->early_executed = FALSE;
 }
 
 void dump_record(esodbc_rec_st *rec)
