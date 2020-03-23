@@ -36,7 +36,7 @@
 #define ESODBC_DSN_MAX_BODY_SIZE_MB	"MaxBodySizeMB"
 #define ESODBC_DSN_APPLY_TZ			"ApplyTZ"
 #define ESODBC_DSN_SCI_FLOATS		"ScientificFloats"
-#define ESODBC_DSN_VERSION_CHECKING	"VersionChecking"
+#define ESODBC_DSN_VARCHAR_LIMIT	"VarcharLimit"
 #define ESODBC_DSN_MFIELD_LENIENT	"MultiFieldLenient"
 #define ESODBC_DSN_ESC_PVA			"AutoEscapePVA"
 #define ESODBC_DSN_IDX_INC_FROZEN	"IndexIncludeFrozen"
@@ -79,7 +79,7 @@ typedef struct {
 	wstr_st max_body_size;
 	wstr_st apply_tz;
 	wstr_st sci_floats;
-	wstr_st version_checking;
+	wstr_st varchar_limit;
 	wstr_st mfield_lenient;
 	wstr_st auto_esc_pva;
 	wstr_st idx_inc_frozen;

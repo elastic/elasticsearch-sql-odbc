@@ -1450,7 +1450,7 @@ static SQLRETURN wstr_to_cstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 	assert(xstr.w.str[xstr.w.cnt] == L'\0');
 	/* how much space would the converted string take? */
-	in_bytes = U16WC_TO_MBU8(xstr.w.str, xstr.w.cnt + 1, NULL, 0);
+	in_bytes = U16WC_TO_MBU8(xstr.w.str, xstr.w.cnt + /*\0*/1, NULL, 0);
 	if (in_bytes <= 0) {
 		ERRNH(stmt, "failed to convert wchar* to char* for string `"
 			LWPDL "`.", LWSTR(&xstr.w));
@@ -3321,6 +3321,26 @@ static SQLRETURN wstr_to_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	return ret;
 }
 
+/* apply early truncation to the source data, to the limit enforced by the
+ * varchar limit; many functions downstream expect the 0-terminator in place,
+ * so an update of the count only would not suffice. */
+void varchar_limit_apply(esodbc_rec_st *irec, wchar_t *wstr, size_t *chars_0)
+{
+	esodbc_stmt_st *stmt = HDRH(irec->desc)->stmt;
+	SQLUINTEGER varchar_limit = HDRH(stmt)->dbc->varchar_limit;
+
+	if (varchar_limit <= 0) {
+		return;
+	}
+	if (*chars_0 - /*\0*/1 <= varchar_limit) {
+		return;
+	}
+	DBGH(stmt, "applying varchar limit truncation: %zu -> [%lu] `" LWPDL "`.",
+		*chars_0 - 1, varchar_limit, varchar_limit, wstr);
+	*chars_0 = varchar_limit + 1;
+	wstr[varchar_limit] = L'\0';
+}
+
 /*
  * wstr: is 0-terminated and terminator is counted in 'chars_0'.
  * However: "[w]hen C strings are used to hold character data, the
@@ -3343,6 +3363,11 @@ SQLRETURN sql2c_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	SQLWCHAR *endp;
 
 	stmt = arec->desc->hdr.stmt;
+
+	/* function updates the const wstr; this is however not the
+	 * originally received network buffer, but a re-allocated chunk by the
+	 * respective parsing library (json/cbor), so it should be safe; */
+	varchar_limit_apply(irec, (wchar_t *)wstr, &chars_0);
 
 	assert(1 <= chars_0); /* _0 is really counted */
 

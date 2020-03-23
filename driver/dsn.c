@@ -77,7 +77,7 @@ int assign_dsn_attr(esodbc_dsn_attrs_st *attrs,
 		{&MK_WSTR(ESODBC_DSN_MAX_BODY_SIZE_MB), &attrs->max_body_size},
 		{&MK_WSTR(ESODBC_DSN_APPLY_TZ), &attrs->apply_tz},
 		{&MK_WSTR(ESODBC_DSN_SCI_FLOATS), &attrs->sci_floats},
-		{&MK_WSTR(ESODBC_DSN_VERSION_CHECKING), &attrs->version_checking},
+		{&MK_WSTR(ESODBC_DSN_VARCHAR_LIMIT), &attrs->varchar_limit},
 		{&MK_WSTR(ESODBC_DSN_MFIELD_LENIENT), &attrs->mfield_lenient},
 		{&MK_WSTR(ESODBC_DSN_ESC_PVA), &attrs->auto_esc_pva},
 		{&MK_WSTR(ESODBC_DSN_IDX_INC_FROZEN), &attrs->idx_inc_frozen},
@@ -412,7 +412,7 @@ long TEST_API write_00_list(esodbc_dsn_attrs_st *attrs,
 		{&MK_WSTR(ESODBC_DSN_MAX_BODY_SIZE_MB), &attrs->max_body_size},
 		{&MK_WSTR(ESODBC_DSN_APPLY_TZ), &attrs->apply_tz},
 		{&MK_WSTR(ESODBC_DSN_SCI_FLOATS), &attrs->sci_floats},
-		{&MK_WSTR(ESODBC_DSN_VERSION_CHECKING), &attrs->version_checking},
+		{&MK_WSTR(ESODBC_DSN_VARCHAR_LIMIT), &attrs->varchar_limit},
 		{&MK_WSTR(ESODBC_DSN_MFIELD_LENIENT), &attrs->mfield_lenient},
 		{&MK_WSTR(ESODBC_DSN_ESC_PVA), &attrs->auto_esc_pva},
 		{&MK_WSTR(ESODBC_DSN_IDX_INC_FROZEN), &attrs->idx_inc_frozen},
@@ -680,9 +680,8 @@ BOOL write_system_dsn(esodbc_dsn_attrs_st *new_attrs,
 			old_attrs ? &old_attrs->sci_floats : NULL
 		},
 		{
-			&MK_WSTR(ESODBC_DSN_VERSION_CHECKING),
-			&new_attrs->version_checking,
-			old_attrs ? &old_attrs->version_checking : NULL
+			&MK_WSTR(ESODBC_DSN_VARCHAR_LIMIT), &new_attrs->varchar_limit,
+			old_attrs ? &old_attrs->varchar_limit : NULL
 		},
 		{
 			&MK_WSTR(ESODBC_DSN_MFIELD_LENIENT),
@@ -787,7 +786,7 @@ long TEST_API write_connection_string(esodbc_dsn_attrs_st *attrs,
 		{&attrs->max_body_size, &MK_WSTR(ESODBC_DSN_MAX_BODY_SIZE_MB)},
 		{&attrs->apply_tz, &MK_WSTR(ESODBC_DSN_APPLY_TZ)},
 		{&attrs->sci_floats, &MK_WSTR(ESODBC_DSN_SCI_FLOATS)},
-		{&attrs->version_checking, &MK_WSTR(ESODBC_DSN_VERSION_CHECKING)},
+		{&attrs->varchar_limit, &MK_WSTR(ESODBC_DSN_VARCHAR_LIMIT)},
 		{&attrs->mfield_lenient, &MK_WSTR(ESODBC_DSN_MFIELD_LENIENT)},
 		{&attrs->auto_esc_pva, &MK_WSTR(ESODBC_DSN_ESC_PVA)},
 		{&attrs->idx_inc_frozen, &MK_WSTR(ESODBC_DSN_IDX_INC_FROZEN)},
@@ -887,6 +886,9 @@ void assign_dsn_defaults(esodbc_dsn_attrs_st *attrs)
 	res |= assign_dsn_attr(attrs,
 			&MK_WSTR(ESODBC_DSN_SCI_FLOATS), &MK_WSTR(ESODBC_DEF_SCI_FLOATS),
 			/*overwrite?*/FALSE);
+	res |= assign_dsn_attr(attrs,
+			&MK_WSTR(ESODBC_DSN_VARCHAR_LIMIT),
+			&MK_WSTR(ESODBC_DEF_VARCHAR_LIMIT), /*overwrite?*/FALSE);
 	res |= assign_dsn_attr(attrs,
 			&MK_WSTR(ESODBC_DSN_MFIELD_LENIENT),
 			&MK_WSTR(ESODBC_DEF_MFIELD_LENIENT), /*overwrite?*/FALSE);

@@ -1452,7 +1452,7 @@ static SQLRETURN unpack_one_row_json(esodbc_stmt_st *stmt, SQLULEN pos)
 		irec = &ird->recs[i];
 		if (! UJIterArray(&iter_row, &irec->i_val.json)) {
 			ERRH(stmt, "current row %zd counts fewer elements: %hd than "
-				"columns: %hd.", rowno, i + 1, ird->count);
+				"columns: %hd.", rowno, i, ird->count);
 			return set_row_diag(ird, SQL_STATE_HY000, MSG_INV_SRV_ANS, pos,
 					i + 1);
 		}

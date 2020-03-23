@@ -175,6 +175,9 @@ typedef struct struct_dbc {
 	/* maximum precision/length of types using same SQL data type ID */
 	SQLINTEGER max_float_size;
 	SQLINTEGER max_varchar_size;
+	/* configuration imposed lenghts for the ES/SQL string types */
+	SQLUINTEGER varchar_limit;
+	wstr_st varchar_limit_str; /* convenience w-string of varchar limit */
 
 	CURL *curl; /* cURL handle */
 	CURLcode curl_err;
