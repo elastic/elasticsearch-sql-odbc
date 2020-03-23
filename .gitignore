@@ -8,6 +8,7 @@ installer/src/Installer/driver/
 dsneditor/EsOdbcDsnEditor/Debug/
 dsneditor/EsOdbcDsnEditorLauncher/bin/
 dsneditor/EsOdbcDsnEditorLauncher/obj/
+libs/zlib/zlib.lib
 
 # User-specific files
 *.suo
