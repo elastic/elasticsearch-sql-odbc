@@ -32,7 +32,6 @@
 esodbc_filelog_st *_gf_log = NULL;
 
 #ifdef WITH_EXTENDED_BUFF_LOG
-#define ESODBC_EXT_LOG_BUF_SIZE (ESODBC_LOG_BUF_SIZE * 1024)
 static char **log_buffs = NULL;
 static size_t log_buffs_cnt = 0;
 static esodbc_mutex_lt log_buffs_mux = ESODBC_MUX_SINIT;
@@ -111,6 +110,7 @@ void log_cleanup()
 		free(log_buffs);
 		log_buffs = NULL;
 		log_buffs_cnt = 0;
+		ESODBC_MUX_DEL(&log_buffs_mux);
 	}
 #	endif /* WITH_EXTENDED_BUFF_LOG */
 

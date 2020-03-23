@@ -13,6 +13,9 @@
 
 /* Tracing log buffer size. */
 #define ESODBC_LOG_BUF_SIZE			(4 * 1024)
+#ifdef WITH_EXTENDED_BUFF_LOG
+#	define ESODBC_EXT_LOG_BUF_SIZE (ESODBC_LOG_BUF_SIZE * 1024)
+#endif /* WITH_EXTENDED_BUFF_LOG */
 /* Log file prefix. The format is: prefix_datime */
 #define ESODBC_LOG_FILE_PREFIX		"esodbc"
 #define ESODBC_LOG_FILE_SUFFIX		".log"

@@ -741,13 +741,39 @@ BOOL TEST_API metadata_id_escape(wstr_st *src, wstr_st *dst, BOOL force)
  * Returns (thread local static) printed buffer, always 0-term'd. */
 char *cstr_hex_dump(const cstr_st *buff)
 {
+#	ifndef WITH_EXTENDED_BUFF_LOG
 	static thread_local char dest[ESODBC_LOG_BUF_SIZE];
+	const size_t dest_sz = sizeof(dest);
+#	else /* !WITH_EXTENDED_BUFF_LOG */
+	static char *dest = NULL;
+	static esodbc_mutex_lt dest_mux = ESODBC_MUX_SINIT;
+	const size_t dest_sz = ESODBC_EXT_LOG_BUF_SIZE;
+#	endif /* !WITH_EXTENDED_BUFF_LOG */
 	char *to, *from;
 	char *to_end, *from_end;
 	int n;
 
+
+#	ifdef WITH_EXTENDED_BUFF_LOG
+	ESODBC_MUX_LOCK(&dest_mux);
+	if (! buff) { /* free resorces */
+		if (dest) {
+			free(dest);
+			dest = NULL;
+		}
+		ESODBC_MUX_DEL(&dest_mux);
+		goto end;
+	} else if (! dest) {
+		if (! (dest = malloc(dest_sz))) {
+			ERRN("OOM for %zd bytes.", dest_sz);
+			ESODBC_MUX_UNLOCK(&dest_mux);
+			return "<OOM>";
+		}
+	}
+#	endif /* WITH_EXTENDED_BUFF_LOG */
+
 	to = dest;
-	to_end = dest + sizeof(dest);
+	to_end = dest + dest_sz;
 	from = buff->str;
 	from_end = buff->str + buff->cnt;
 	int i = 0;
@@ -761,10 +787,15 @@ char *cstr_hex_dump(const cstr_st *buff)
 	}
 	/* add the 0-terminator */
 	if (to < to_end) { /* still space for it? */
-		*to ++ = 0;
+		*to ++ = '\0';
 	} else { /* == */
-		dest[sizeof(dest) - 1] = 0; /* overwrite last position */
+		dest[dest_sz - 1] = '\0'; /* overwrite last position */
 	}
+
+#	ifdef WITH_EXTENDED_BUFF_LOG
+end:
+	ESODBC_MUX_UNLOCK(&dest_mux);
+#	endif /* WITH_EXTENDED_BUFF_LOG */
 	return dest;
 }
 
