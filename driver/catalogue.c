@@ -673,7 +673,7 @@ SQLRETURN TEST_API update_varchar_defs(esodbc_stmt_st *stmt)
 	DBGH(stmt, "table definition: [%zu] `" LWPDL "`.", dest.cnt, LWSTR(&dest));
 
 	if (! wstr_to_utf8(&dest, &u8mb)) {
-		ERRH(stmt, "UTC16 to UTF8 conversion failed for: [%zu] `" LWPDL "`.",
+		ERRH(stmt, "UTF16 to UTF8 conversion failed for: [%zu] `" LWPDL "`.",
 			dest.cnt, LWSTR(&dest));
 		ret = SET_HDIAG(stmt, SQL_STATE_HY000, "Strings conversion error", 0);
 	} else {
