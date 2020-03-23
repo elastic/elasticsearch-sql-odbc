@@ -2281,7 +2281,7 @@ static BOOL consistency_check(esodbc_rec_st *rec)
 				dbc = HDRH(HDRH(desc)->stmt)->dbc;
 				if (rec->concise_type == SQL_FLOAT) {
 					assert(desc->type == DESC_TYPE_IPD);
-					column_size = dbc->max_float_size;
+					column_size = dbc->max_float_type->column_size;
 				} else {
 					if (DESC_TYPE_IS_APPLICATION(desc->type)) {
 						concise_type = sqlctype_to_es(rec->concise_type);

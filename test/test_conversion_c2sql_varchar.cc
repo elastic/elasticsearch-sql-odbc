@@ -25,7 +25,7 @@ TEST_F(ConvertC2SQL_Varchar, CStr2Varchar_empty)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	assertRequest("[{\"type\": \"KEYWORD\", \"value\": \"\"}]");
+	assertRequest("[{\"type\": \"TEXT\", \"value\": \"\"}]");
 }
 
 /* note: test name used in test */
@@ -39,7 +39,7 @@ TEST_F(ConvertC2SQL_Varchar, WStr2Varchar_empty)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	assertRequest("[{\"type\": \"KEYWORD\", \"value\": \"\"}]");
+	assertRequest("[{\"type\": \"TEXT\", \"value\": \"\"}]");
 }
 
 /* note: test name used in test */
@@ -53,7 +53,7 @@ TEST_F(ConvertC2SQL_Varchar, WStr2Varchar_ansi)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	assertRequest("[{\"type\": \"KEYWORD\", \"value\": \"0123abcABC\"}]");
+	assertRequest("[{\"type\": \"TEXT\", \"value\": \"0123abcABC\"}]");
 }
 
 /* note: test name used in test */
@@ -67,7 +67,7 @@ TEST_F(ConvertC2SQL_Varchar, CStr2Varchar)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	assertRequest("[{\"type\": \"KEYWORD\", \"value\": \"0123abcABC\"}]");
+	assertRequest("[{\"type\": \"TEXT\", \"value\": \"0123abcABC\"}]");
 }
 
 /* note: test name used in test */
@@ -81,7 +81,7 @@ TEST_F(ConvertC2SQL_Varchar, WStr2Varchar_ansi_jsonescape)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	assertRequest("[{\"type\": \"KEYWORD\", "
+	assertRequest("[{\"type\": \"TEXT\", "
 		"\"value\": \"START_{xxx}=\\\"yyy\\\"\\r__END\"}]");
 }
 
@@ -96,7 +96,7 @@ TEST_F(ConvertC2SQL_Varchar, CStr2Varchar_jsonescape_oct_len_ptr)
 			&octet_len);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	assertRequest("[{\"type\": \"KEYWORD\", "
+	assertRequest("[{\"type\": \"TEXT\", "
 		"\"value\": \"START_{xxx}=\\\"yyy\\\"\\r__END\"}]");
 }
 
@@ -111,7 +111,7 @@ TEST_F(ConvertC2SQL_Varchar, CStr2Varchar_jsonescape)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	assertRequest("[{\"type\": \"KEYWORD\", "
+	assertRequest("[{\"type\": \"TEXT\", "
 		"\"value\": \"START_{xxx}=\\\"yyy\\\"\\r__END\"}]");
 }
 
@@ -126,7 +126,7 @@ TEST_F(ConvertC2SQL_Varchar, WStr2Varchar_u8_jsonescape)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	assertRequest("[{\"type\": \"KEYWORD\", "
+	assertRequest("[{\"type\": \"TEXT\", "
 		"\"value\": \"START_\\\"A\u00C4o\u00F6U\u00FC\\\"__END\"}]");
 }
 
@@ -141,7 +141,7 @@ TEST_F(ConvertC2SQL_Varchar, WStr2Varchar_u8_fullescape_oct_len_ptr)
 			&octet_len);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	assertRequest("[{\"type\": \"KEYWORD\", "
+	assertRequest("[{\"type\": \"TEXT\", "
 		"\"value\": \"\u00E4\u00F6\u00FC\u00C4\u00D6\u00DC\"}]");
 }
 
@@ -156,7 +156,7 @@ TEST_F(ConvertC2SQL_Varchar, WStr2Varchar_u8_fullescape)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	assertRequest("[{\"type\": \"KEYWORD\", "
+	assertRequest("[{\"type\": \"TEXT\", "
 		"\"value\": \"\u00E4\u00F6\u00FC\u00C4\u00D6\u00DC\"}]");
 }
 
@@ -171,7 +171,7 @@ TEST_F(ConvertC2SQL_Varchar, Short2Varchar)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	assertRequest("[{\"type\": \"KEYWORD\", \"value\": \"-12345\"}]");
+	assertRequest("[{\"type\": \"TEXT\", \"value\": \"-12345\"}]");
 }
 
 /* note: test name used in test */
@@ -185,7 +185,7 @@ TEST_F(ConvertC2SQL_Varchar, Bigint2Varchar)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	assertRequest("[{\"type\": \"KEYWORD\", "
+	assertRequest("[{\"type\": \"TEXT\", "
 		"\"value\": \"9223372036854775807\"}]");
 }
 
@@ -218,7 +218,7 @@ TEST_F(ConvertC2SQL_Varchar, Double2Varchar)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	assertRequest("[{\"type\": \"KEYWORD\", "
+	assertRequest("[{\"type\": \"TEXT\", "
 		"\"value\": \"1.20000000\"}]");
 }
 
@@ -232,7 +232,7 @@ TEST_F(ConvertC2SQL_Varchar, Double2Varchar_strip_trailing_dot)
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	assertRequest("[{\"type\": \"KEYWORD\", "
+	assertRequest("[{\"type\": \"TEXT\", "
 		"\"value\": \"-9999\"}]");
 }
 

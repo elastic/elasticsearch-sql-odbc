@@ -57,6 +57,10 @@ static void driver_cleanup()
 {
 	connect_cleanup();
 	tinycbor_cleanup();
+
+#	ifdef WITH_EXTENDED_BUFF_LOG
+	cstr_hex_dump(NULL); /* util.[ch] */
+#	endif /* WITH_EXTENDED_BUFF_LOG */
 }
 
 BOOL WINAPI DllMain(
