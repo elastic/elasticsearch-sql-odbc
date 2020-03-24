@@ -404,9 +404,6 @@
 #define ODBC_SQL92_VALUE_EXPRESSIONS			(0LU | \
 	SQL_SVE_CASE | SQL_SVE_CAST | SQL_SVE_COALESCE | SQL_SVE_NULLIF)
 
-/* the type ES/SQL uses for string types (KEYWORD, TEXT, CONSTANT_KEYWORD),
- * plus IP and GEO */
-#define ESODBC_SQL_STRING			SQL_VARCHAR
 /*
  * ES specific data types
  */
@@ -416,6 +413,99 @@
 #define ESODBC_SQL_UNSUPPORTED		1111
 #define ESODBC_SQL_OBJECT			2002
 #define ESODBC_SQL_NESTED			2002
+
+/* the SQL type ES/SQL uses for string types (KEYWORD, TEXT, CONSTANT_KEYWORD),
+ * plus IP and GEO */
+#define ESODBC_SQL_VARCHAR		SQL_VARCHAR
+
+/* C SQL and SQL types for ES types that
+ * - contain UTF8 chars */
+#define ES_WVARCHAR_CSQL		SQL_C_WCHAR
+#define ES_WVARCHAR_SQL			SQL_WVARCHAR
+/* - contain ANSI chars */
+#define ES_VARCHAR_CSQL			SQL_C_CHAR
+#define ES_VARCHAR_SQL			SQL_VARCHAR
+/*
+ * ES-to-C-SQL mappings.
+ * DATA_TYPE(SYS TYPES) : SQL_<type> -> SQL_C_<type>
+ * Intervals not covered, since C==SQL, with no ES customization.
+ */
+/* -6: BYTE */
+#define ES_BYTE_TO_CSQL			SQL_C_TINYINT
+#define ES_BYTE_TO_SQL			SQL_TINYINT
+/* 5: SHORT */
+#define ES_SHORT_TO_CSQL		SQL_C_SSHORT
+#define ES_SHORT_TO_SQL			SQL_SMALLINT
+/* 4: INTEGER */
+#define ES_INTEGER_TO_CSQL		SQL_C_SLONG
+#define ES_INTEGER_TO_SQL		SQL_INTEGER
+/* -5: LONG */
+#define ES_LONG_TO_CSQL			SQL_C_SBIGINT
+#define ES_LONG_TO_SQL			SQL_BIGINT
+/* 6: HALF_FLOAT */
+#define ES_HALF_TO_CSQL_FLOAT	SQL_C_DOUBLE
+#define ES_HALF_TO_SQL_FLOAT	SQL_FLOAT
+/* 7: FLOAT */
+#define ES_FLOAT_TO_CSQL		SQL_C_FLOAT
+#define ES_FLOAT_TO_SQL			SQL_REAL
+/* 8: DOUBLE */
+#define ES_DOUBLE_TO_CSQL		SQL_C_DOUBLE
+#define ES_DOUBLE_TO_SQL		SQL_DOUBLE
+/* 8: SCALED_FLOAT */
+#define ES_SCALED_TO_CSQL_FLOAT	SQL_C_DOUBLE
+#define ES_SCALED_TO_SQL_FLOAT	SQL_DOUBLE
+/* 16: BOOLEAN */
+#define ES_BOOLEAN_TO_CSQL		SQL_C_BIT
+/* BOOLEAN is used in catalog calls (like SYS TYPES / SQLGetTypeInfo), and the
+ * data type is piped through to the app (just like with any other statement),
+ * which causes issues, since it's not a standard type => use ODBC's SQL_BIT */
+#define ES_BOOLEAN_TO_SQL		SQL_BIT
+/* 12: KEYWORD */
+#define ES_KEYWORD_TO_CSQL		ES_WVARCHAR_CSQL
+#define ES_KEYWORD_TO_SQL		ES_WVARCHAR_SQL
+/* 12: CONSTANT_KEYWORD */
+#define ES_CKEYWORD_TO_CSQL		ES_WVARCHAR_CSQL
+#define ES_CKEYWORD_TO_SQL		ES_WVARCHAR_SQL
+/* 12: TEXT */
+#define ES_TEXT_TO_CSQL			ES_WVARCHAR_CSQL
+#define ES_TEXT_TO_SQL			ES_WVARCHAR_SQL
+/* 12: IP */
+#define ES_IP_TO_CSQL			ES_VARCHAR_CSQL
+#define ES_IP_TO_SQL			ES_VARCHAR_SQL
+/* 92: TIME */
+#define ES_TIME_TO_CSQL			SQL_C_TYPE_TIME
+#define ES_TIME_TO_SQL			SQL_TYPE_TIME
+/* 91: DATE */
+#define ES_DATE_TO_CSQL			SQL_C_TYPE_DATE
+#define ES_DATE_TO_SQL			SQL_TYPE_DATE
+/* 93: DATETIME (TIMESTAMP) */
+#define ES_DATETIME_TO_CSQL		SQL_C_TYPE_TIMESTAMP
+#define ES_DATETIME_TO_SQL		SQL_TYPE_TIMESTAMP
+/* -3: BINARY */
+#define ES_BINARY_TO_CSQL		SQL_C_BINARY
+#define ES_BINARY_TO_SQL		SQL_BINARY
+/* 0: NULL */
+/* there's no standard C SQL ID for a NULL type (but there's a SQL one); so
+ * map it to a valid C SQL ID (though it should actually be used). */
+#define ES_NULL_TO_CSQL			SQL_C_STINYINT
+#define ES_NULL_TO_SQL			SQL_TYPE_NULL
+/*
+ * ES-non mappable
+ */
+/* 114: GEO_POINT/_SHAPE, SHAPE */
+#define ES_GEO_TO_CSQL			ES_VARCHAR_CSQL
+/* WKT encodings */
+#define ES_GEO_TO_SQL			ES_VARCHAR_SQL
+
+/* 1111: UNSUPPORTED */
+#define ES_UNSUPPORTED_TO_CSQL	SQL_C_BINARY
+#define ES_UNSUPPORTED_TO_SQL	ESODBC_SQL_UNSUPPORTED
+/* 2002: OBJECT */
+#define ES_OBJECT_TO_CSQL		SQL_C_BINARY
+#define ES_OBJECT_TO_SQL		ESODBC_SQL_OBJECT
+/* 2002: NESTED */
+#define ES_NESTED_TO_CSQL		SQL_C_BINARY
+#define ES_NESTED_TO_SQL		ESODBC_SQL_NESTED
 
 
 #endif /* __DEFS_H__ */

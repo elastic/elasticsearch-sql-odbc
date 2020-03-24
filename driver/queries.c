@@ -2456,9 +2456,9 @@ SQLRETURN EsSQLPrepareW
 
 
 /* Find the ES/SQL type given in es_type; for ID matching multiple types
- * (scaled/half_float), but not  keyword/text, use the best matching col_size,
- * which is the smallest, that's still matching (<=) the given one. This
- * assumes the types are ordered by it (as per the spec). */
+ * (scaled_float/double), but not  keyword/text, use the best matching
+ * col_size, which is the smallest, that's still matching (<=) the given one.
+ * This assumes the types are ordered by it (as per the spec). */
 esodbc_estype_st *lookup_es_type(esodbc_dbc_st *dbc,
 	SQLSMALLINT es_type, SQLULEN col_size)
 {
@@ -2467,7 +2467,7 @@ esodbc_estype_st *lookup_es_type(esodbc_dbc_st *dbc,
 
 	/* for strings, choose text straight away: some type (IP, GEO) must coform
 	 * to a format and no content inspection is done in the driver */
-	if (es_type == SQL_VARCHAR) {
+	if (es_type == ES_VARCHAR_SQL || es_type == ES_WVARCHAR_SQL) {
 		return dbc->max_varchar_type;
 	}
 	for (i = 0; i < dbc->no_types; i ++) {
@@ -2480,7 +2480,7 @@ esodbc_estype_st *lookup_es_type(esodbc_dbc_st *dbc,
 				if ((SQLINTEGER)col_size <= sz) {
 					return &dbc->es_types[i];
 				}
-				if (es_type == SQL_FLOAT &&
+				if (es_type == SQL_DOUBLE &&
 					sz == dbc->max_float_type->column_size) {
 					return dbc->max_float_type;
 				}
@@ -2497,25 +2497,17 @@ esodbc_estype_st *lookup_es_type(esodbc_dbc_st *dbc,
 static esodbc_estype_st *match_es_type(esodbc_rec_st *irec)
 {
 	SQLULEN i;
-	SQLINTEGER col_sz;
 	esodbc_dbc_st *dbc = irec->desc->hdr.stmt->hdr.dbc;
 
 	for (i = 0; i < dbc->no_types; i ++) {
 		if (dbc->es_types[i].data_type == irec->concise_type) {
 			switch (irec->concise_type) {
-				/* For SQL types mapping to more than one ES/SQL type, choose
-				 * the ES/SQL type with smallest "size" that covers user given
-				 * precision OR that has maximum precision (in case user's is
-				 * larger than max ES/SQL offers. */
-				case SQL_FLOAT: /* HALF_FLOAT, SCALED_FLOAT */
-					col_sz = dbc->es_types[i].column_size;
-					if (irec->precision <= col_sz ||
-						col_sz == dbc->max_float_type->column_size) {
-						return &dbc->es_types[i];
-					}
+				case SQL_DOUBLE: /* DOUBLE, SCALED_FLOAT */
+					return dbc->max_float_type;
 					break;
-				case SQL_VARCHAR: /* IP, CONSTANT_KEYWORD, KEYWORD, TEXT */
-					return lookup_es_type(dbc, SQL_VARCHAR, irec->precision);
+				case ES_WVARCHAR_SQL: /* CONSTANT_KEYWORD, KEYWORD, TEXT */
+				case ES_VARCHAR_SQL: /* IP, GEO+ */
+					return dbc->max_varchar_type;
 				default:
 					/* unequivocal match */
 					return &dbc->es_types[i];
@@ -2528,10 +2520,10 @@ static esodbc_estype_st *match_es_type(esodbc_rec_st *irec)
 		case METATYPE_EXACT_NUMERIC:
 			assert(irec->concise_type == SQL_DECIMAL ||
 				irec->concise_type == SQL_NUMERIC);
-			return lookup_es_type(dbc, SQL_FLOAT, irec->precision);
+			return lookup_es_type(dbc, SQL_DOUBLE, irec->precision);
 
 		case METATYPE_STRING:
-			return lookup_es_type(dbc, SQL_VARCHAR, irec->precision);
+			return lookup_es_type(dbc, ES_TEXT_TO_SQL, irec->precision);
 		case METATYPE_BIN:
 			return lookup_es_type(dbc, SQL_BINARY, /*no prec*/0);
 		case METATYPE_DATE_TIME:
@@ -2539,9 +2531,9 @@ static esodbc_estype_st *match_es_type(esodbc_rec_st *irec)
 				irec->concise_type == SQL_TYPE_TIME);
 			return lookup_es_type(dbc, SQL_TYPE_TIMESTAMP, /*no prec*/0);
 		case METATYPE_BIT:
-			return lookup_es_type(dbc, SQL_BIT, /*no prec*/0);
+			return lookup_es_type(dbc, ES_BOOLEAN_TO_SQL, /*no prec*/0);
 		case METATYPE_UID:
-			return lookup_es_type(dbc, SQL_VARCHAR, /*no prec: TEXT*/0);
+			return lookup_es_type(dbc, ES_TEXT_TO_SQL, /*no prec: TEXT*/0);
 
 		case METATYPE_INTERVAL_WSEC:
 		case METATYPE_INTERVAL_WOSEC:
@@ -2832,8 +2824,8 @@ static SQLRETURN convert_param_val(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			max = FLT_MAX;
 			fixed = FALSE;
 			break;
-		case SQL_FLOAT: /* HALF_FLOAT, SCALED_FLOAT */
-		case SQL_DOUBLE: /* DOUBLE */
+		case SQL_FLOAT: /* HALF_FLOAT */
+		case SQL_DOUBLE: /* DOUBLE, SCALED_FLOAT */
 			min = DBL_MIN;
 			max = DBL_MAX;
 			fixed = FALSE;
@@ -2842,7 +2834,8 @@ static SQLRETURN convert_param_val(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			return c2sql_number(arec, irec, pos, &min, &max, fixed, dest, len);
 
 		/* JSON string */
-		case SQL_VARCHAR: /* KEYWORD, TEXT */
+		case ES_WVARCHAR_SQL: /* KEYWORD, TEXT, CONSTANT_KEYWORD */
+		case ES_VARCHAR_SQL: /* IP, GEO+ */
 			return c2sql_varchar(arec, irec, pos, dest, len);
 
 		case SQL_TYPE_DATE:

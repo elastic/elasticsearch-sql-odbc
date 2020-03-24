@@ -1859,7 +1859,8 @@ static SQLRETURN wstr_to_timestamp_struct(esodbc_rec_st *arec,
 				}
 				break;
 			case SQL_TYPE_TIME:
-			case SQL_VARCHAR:
+			case ES_VARCHAR_SQL:
+			case ES_WVARCHAR_SQL:
 				ret = parse_date_time_ts(stmt, &xstr, /*sql2c*/TRUE, tss,
 							format);
 				if (! SQL_SUCCEEDED(ret)) {
@@ -2783,7 +2784,7 @@ static SQLRETURN sql2c_interval(esodbc_rec_st *arec,
 	}
 
 	/* split processing by the source type */
-	if (sqltype == SQL_VARCHAR) {
+	if (sqltype == ES_WVARCHAR_SQL || sqltype == ES_VARCHAR_SQL) {
 		ret = parse_interval_literal(arec, wstr, &ivl);
 		assert(0 <= ivl.interval_type && ivl.interval_type <=
 			sizeof(ivl_type2c_type)/sizeof(ivl_type2c_type[0]));
