@@ -161,6 +161,7 @@ typedef struct struct_dbc {
 		ESODBC_CMPSS_AUTO,
 	} compression;
 	BOOL apply_tz; /* should the times be converted from UTC to local TZ? */
+	BOOL early_exec; /* should prepared, non-param queries be exec'd early? */
 	enum {
 		ESODBC_FLTS_DEFAULT = 0,
 		ESODBC_FLTS_SCIENTIFIC,
@@ -391,6 +392,8 @@ typedef struct struct_stmt {
 		CONVERSION_SUPPORTED,
 		CONVERSION_SKIPPED, /* used with driver's meta queries */
 	} sql2c_conversion;
+	/* early execution */
+	BOOL early_executed;
 
 	/* SQLGetData state members */
 	SQLINTEGER gd_col; /* current column to get from, if positive */
