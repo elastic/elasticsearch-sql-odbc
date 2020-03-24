@@ -1402,6 +1402,9 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	/* "apply TZ" param for time conversions */
 	dbc->apply_tz = wstr2bool(&attrs->apply_tz);
 	INFOH(dbc, "apply TZ: %s.", dbc->apply_tz ? "true" : "false");
+	/* early execution */
+	dbc->early_exec = wstr2bool(&attrs->early_exec);
+	INFOH(dbc, "early execution: %s.", dbc->early_exec ? "true" : "false");
 
 	/* how to print the floats? */
 	assert(1 <= attrs->sci_floats.cnt); /* default should apply */
