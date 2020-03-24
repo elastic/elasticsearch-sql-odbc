@@ -176,6 +176,8 @@
 #define ESODBC_DEF_TRACE_LEVEL		"WARN"
 /* default TZ handling */
 #define ESODBC_DEF_APPLY_TZ			"no"
+/* default early execution flag */
+#define ESODBC_DEF_EARLY_EXEC		"yes"
 /* default of scientific floats printing */
 #define ESODBC_DEF_SCI_FLOATS		ESODBC_DSN_FLTS_DEF
 #define ESODBC_PWD_VAL_SUBST		"<redacted>"
