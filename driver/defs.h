@@ -37,7 +37,7 @@
  * columns than this def, recs will be allocated dynamically. */
 #define ESODBC_GD_DESC_COUNT		128
 /* values for SQL_ATTR_MAX_LENGTH statement attribute */
-#define ESODBC_UP_MAX_LENGTH		0 // USHORT_MAX
+#define ESODBC_UP_MAX_LENGTH		0
 #define ESODBC_LO_MAX_LENGTH		0
 /* Prepare a STMT for a new SQL operation.
  * To be used with catalog functions, that can be all called with same stmt.
@@ -82,6 +82,8 @@
  * (Should move to 9 with nanosecond implementation) */
 #define ESODBC_MAX_SEC_PRECISION		9
 #define ESODBC_DEF_SEC_PRECISION		3
+/* max keyword column/"buffer" size ("Lucene's term byte-length limit") */
+#define ESODBC_MAX_KEYWORD_PRECISION	32766
 /*
  * standard specified defaults:
  * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetdescfield-function##record-fields
@@ -184,6 +186,7 @@
 #define ESODBC_DEF_MFIELD_LENIENT	"true"
 #define ESODBC_DEF_ESC_PVA			"true"
 #define ESODBC_DEF_IDX_INC_FROZEN	"false"
+#define ESODBC_DEF_VARCHAR_LIMIT	"0"
 
 /*
  *
@@ -401,6 +404,9 @@
 #define ODBC_SQL92_VALUE_EXPRESSIONS			(0LU | \
 	SQL_SVE_CASE | SQL_SVE_CAST | SQL_SVE_COALESCE | SQL_SVE_NULLIF)
 
+/* the type ES/SQL uses for string types (KEYWORD, TEXT, CONSTANT_KEYWORD),
+ * plus IP and GEO */
+#define ESODBC_SQL_STRING			SQL_VARCHAR
 /*
  * ES specific data types
  */

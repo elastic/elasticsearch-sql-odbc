@@ -47,8 +47,7 @@ class Testing(unittest.TestCase):
 		self._pyodbc = pyodbc
 
 	def _reconstitute_csv(self, index_name):
-		with self._pyodbc.connect(self._dsn) as cnxn:
-			cnxn.autocommit = True
+		with self._pyodbc.connect(self._dsn, autocommit=True) as cnxn:
 			csv = u""
 			cols = self._data.csv_attributes(index_name)[1]
 			fields = ",".join(cols)
@@ -82,8 +81,7 @@ class Testing(unittest.TestCase):
 	def _count_all(self, index_name):
 		print("Counting records in index '%s.'" % index_name)
 		cnt = 0
-		with self._pyodbc.connect(self._dsn) as cnxn:
-			cnxn.autocommit = True
+		with self._pyodbc.connect(self._dsn, autocommit=True) as cnxn:
 			with cnxn.execute("select 1 from %s" % index_name) as curs:
 				while curs.fetchone():
 					cnt += 1
@@ -94,8 +92,7 @@ class Testing(unittest.TestCase):
 
 	def _clear_cursor(self, index_name):
 		conn_str = self._dsn + ";MaxFetchSize=5"
-		with self._pyodbc.connect(conn_str) as cnxn:
-			cnxn.autocommit = True
+		with self._pyodbc.connect(conn_str, autocommit=True) as cnxn:
 			with cnxn.execute("select 1 from %s limit 10" % index_name) as curs:
 				for i in range(3): # must be lower than MaxFetchSize, so no next page be requested
 					curs.fetchone()
@@ -106,8 +103,7 @@ class Testing(unittest.TestCase):
 
 	def _select_columns(self, index_name, columns):
 		print("Selecting columns '%s' from index '%s'." % (columns, index_name))
-		with self._pyodbc.connect(self._dsn) as cnxn:
-			cnxn.autocommit = True
+		with self._pyodbc.connect(self._dsn, autocommit=True) as cnxn:
 			stmt = "select %s from %s" % (columns, index_name)
 			with cnxn.execute(stmt) as curs:
 				cnt = 0
@@ -116,15 +112,13 @@ class Testing(unittest.TestCase):
 				print("Selected %s rows from %s." % (cnt, index_name))
 
 	def _check_info(self, attr, expected):
-		with self._pyodbc.connect(self._dsn) as cnxn:
-			cnxn.autocommit = True
+		with self._pyodbc.connect(self._dsn, autocommit=True) as cnxn:
 			value = cnxn.getinfo(attr)
 			self.assertEqual(value, expected)
 
 	# tables(table=None, catalog=None, schema=None, tableType=None)
 	def _catalog_tables(self, no_table_type_as=""):
-		with self._pyodbc.connect(self._dsn) as cnxn:
-			cnxn.autocommit = True
+		with self._pyodbc.connect(self._dsn, autocommit=True) as cnxn:
 			curs = cnxn.cursor()
 
 			# enumerate catalogs
@@ -153,8 +147,7 @@ class Testing(unittest.TestCase):
 	# use_surrogate: pyodbc seems to not reliably null-terminate the catalog and/or table name string,
 	# despite indicating so.
 	def _catalog_columns(self, use_catalog=False, use_surrogate=True):
-		with self._pyodbc.connect(self._dsn) as cnxn:
-			cnxn.autocommit = True
+		with self._pyodbc.connect(self._dsn, autocommit=True) as cnxn:
 			curs = cnxn.cursor()
 			if not use_surrogate:
 				res = curs.columns(table=TestData.BATTERS_INDEX, \
@@ -264,8 +257,7 @@ class Testing(unittest.TestCase):
 
 	def _proto_tests(self):
 		tests = self._data.proto_tests()
-		with self._pyodbc.connect(self._dsn) as cnxn:
-			cnxn.autocommit = True
+		with self._pyodbc.connect(self._dsn, autocommit=True) as cnxn:
 			self._install_output_converters(cnxn)
 			try:
 				for t in tests:
@@ -327,30 +319,32 @@ class Testing(unittest.TestCase):
 			finally:
 				cnxn.clear_output_converters()
 
+
 	def perform(self):
 		self._check_info(self._pyodbc.SQL_USER_NAME, self._uid)
 		self._check_info(self._pyodbc.SQL_DATABASE_NAME, self._catalog)
 
-		# simulate catalog querying as apps do in ES/GH#40775 do
-		self._catalog_tables(no_table_type_as = "")
-		self._catalog_tables(no_table_type_as = None)
-		self._catalog_columns(use_catalog = False, use_surrogate = True)
-		self._catalog_columns(use_catalog = True, use_surrogate = True)
-
-		self._as_csv(TestData.LIBRARY_INDEX)
-		self._as_csv(TestData.EMPLOYEES_INDEX)
-
-		self._count_all(TestData.CALCS_INDEX)
-		self._count_all(TestData.STAPLES_INDEX)
-		self._count_all(TestData.BATTERS_INDEX)
-
-		self._clear_cursor(TestData.LIBRARY_INDEX)
-
-		self._select_columns(TestData.FLIGHTS_INDEX, "*")
-		self._select_columns(TestData.ECOMMERCE_INDEX, "*")
-		self._select_columns(TestData.LOGS_INDEX, "*")
-
 		self._proto_tests()
+
+		if self._data.has_csv_attributes():
+			# simulate catalog querying as apps do in ES/GH#40775 do
+			self._catalog_tables(no_table_type_as = "")
+			self._catalog_tables(no_table_type_as = None)
+			self._catalog_columns(use_catalog = False, use_surrogate = True)
+			self._catalog_columns(use_catalog = True, use_surrogate = True)
+
+			self._as_csv(TestData.LIBRARY_INDEX)
+			self._as_csv(TestData.EMPLOYEES_INDEX)
+
+			self._count_all(TestData.CALCS_INDEX)
+			self._count_all(TestData.STAPLES_INDEX)
+			self._count_all(TestData.BATTERS_INDEX)
+
+			self._clear_cursor(TestData.LIBRARY_INDEX)
+
+			self._select_columns(TestData.FLIGHTS_INDEX, "*")
+			self._select_columns(TestData.ECOMMERCE_INDEX, "*")
+			self._select_columns(TestData.LOGS_INDEX, "*")
 
 		print("Tests successful.")
 

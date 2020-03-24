@@ -253,6 +253,7 @@ def csv_to_ndjson(csv_text, index_name):
 
 class TestData(object):
 
+	MODE_NODATA = 0 # only load proto tests and no other data
 	MODE_NOINDEX = 1 # load CSVs and fill metadatas (_csv_* dictionaries)
 	MODE_REINDEX = 2 # drop old indices if any and index freshly
 	MODE_INDEX = 3 # index data
@@ -283,6 +284,13 @@ class TestData(object):
 	_es = None
 	_offline_dir = None
 	_mode = None
+
+	_data_processing = {
+		MODE_NODATA: "skipped",
+		MODE_NOINDEX: "meta-processed",
+		MODE_REINDEX: "reindexed",
+		MODE_INDEX: "indexed"
+	}
 
 	def __init__(self, es, mode=MODE_INDEX, offline_dir=None):
 		self._csv_md5 = {}
@@ -536,24 +544,27 @@ class TestData(object):
 			self._proto_tests.append((query, col_name, data_type, data_val, cli_val, disp_size))
 
 	def load(self):
-		self._load_tableau_sample(self.CALCS_FILE, self.CALCS_INDEX, CALCS_TEMPLATE, CALCS_PIPELINE)
-		self._load_tableau_sample(self.STAPLES_FILE, self.STAPLES_INDEX, STAPLES_TEMPLATE)
-		self._load_tableau_sample(self.BATTERS_FILE, self.BATTERS_INDEX, BATTERS_TEMPLATE, BATTERS_PIPELINE)
+		if self.MODE_NODATA < self._mode:
+			self._load_tableau_sample(self.CALCS_FILE, self.CALCS_INDEX, CALCS_TEMPLATE, CALCS_PIPELINE)
+			self._load_tableau_sample(self.STAPLES_FILE, self.STAPLES_INDEX, STAPLES_TEMPLATE)
+			self._load_tableau_sample(self.BATTERS_FILE, self.BATTERS_INDEX, BATTERS_TEMPLATE, BATTERS_PIPELINE)
 
-		self._load_elastic_sample(self.LIBRARY_FILE, self.LIBRARY_INDEX)
-		self._load_elastic_sample(self.EMPLOYEES_FILE, self.EMPLOYEES_INDEX)
+			self._load_elastic_sample(self.LIBRARY_FILE, self.LIBRARY_INDEX)
+			self._load_elastic_sample(self.EMPLOYEES_FILE, self.EMPLOYEES_INDEX)
 
-		self._load_kibana_sample(self.ECOMMERCE_INDEX)
-		self._load_kibana_sample(self.FLIGHTS_INDEX)
-		self._load_kibana_sample(self.LOGS_INDEX)
+			self._load_kibana_sample(self.ECOMMERCE_INDEX)
+			self._load_kibana_sample(self.FLIGHTS_INDEX)
+			self._load_kibana_sample(self.LOGS_INDEX)
 
 		self._load_proto_tests()
 
-		print("Data %s." % ("meta-processed" if self._mode == self.MODE_NOINDEX else "reindexed" if self._mode == \
-			self.MODE_REINDEX else "indexed"))
+		print("Test data: %s." % self._data_processing[self._mode])
 
 	def csv_attributes(self, csv_name):
 		return (self._csv_md5[csv_name],  self._csv_header[csv_name], self._csv_lines[csv_name])
+
+	def has_csv_attributes(self):
+		return 0 < len(self._csv_md5)
 
 	def proto_tests(self):
 		return self._proto_tests

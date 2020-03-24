@@ -46,7 +46,9 @@ def ites(args):
 
 	# add test data into it
 	if args.reindex or not (args.skip_indexing and args.skip_tests):
-		if args.skip_indexing:
+		if args.skip_indexing_tests:
+			test_mode = TestData.MODE_NODATA
+		elif args.skip_indexing:
 			test_mode = TestData.MODE_NOINDEX
 		elif args.reindex:
 			test_mode = TestData.MODE_REINDEX
@@ -96,6 +98,8 @@ def main():
 
 	idx_grp = parser.add_mutually_exclusive_group()
 	idx_grp.add_argument("-i", "--skip-indexing", help="Skip indexing test data.", action="store_true", default=False)
+	idx_grp.add_argument("-k", "--skip-indexing-tests", help="Skip indexing test data and running those tests "
+			"requiring it.", action="store_true", default=False)
 	idx_grp.add_argument("-x", "--reindex", help="Drop indices if any and (re)index test data.",
 			action="store_true", default=False)
 
