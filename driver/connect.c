@@ -1398,6 +1398,9 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	/* "apply TZ" param for time conversions */
 	dbc->apply_tz = wstr2bool(&attrs->apply_tz);
 	INFOH(dbc, "apply TZ: %s.", dbc->apply_tz ? "true" : "false");
+	/* early execution */
+	dbc->early_exec = wstr2bool(&attrs->early_exec);
+	INFOH(dbc, "early execution: %s.", dbc->early_exec ? "true" : "false");
 
 	/* how to print the floats? */
 	assert(1 <= attrs->sci_floats.cnt); /* default should apply */
@@ -2586,7 +2589,7 @@ static void *copy_types_rows(esodbc_dbc_st *dbc, estype_row_st *type_row,
 		if (types[i].sql_data_type == ESODBC_SQL_STRING) {
 			assert(0 <= types[i].column_size);
 			if (dbc->varchar_limit &&
-					dbc->varchar_limit < (SQLUINTEGER)types[i].column_size) {
+				dbc->varchar_limit < (SQLUINTEGER)types[i].column_size) {
 				types[i].column_size = dbc->varchar_limit;
 			}
 		}
@@ -2620,26 +2623,36 @@ static void set_es_types(esodbc_dbc_st *dbc, SQLULEN rows_fetched,
 	esodbc_estype_st *types)
 {
 	SQLULEN i;
+	SQLINTEGER max_float_size, max_varchar_size;
 
-	assert(!dbc->max_float_size && !dbc->max_varchar_size);
+	dbc->es_types = types;
+	dbc->no_types = rows_fetched;
+
+	assert(dbc->max_float_type == NULL);
+	assert(dbc->max_varchar_type == NULL);
 
 	for (i = 0; i < rows_fetched; i ++) {
 		if (types[i].data_type == SQL_FLOAT) {
-			if (dbc->max_float_size < types[i].column_size) {
-				dbc->max_float_size = types[i].column_size;
+			max_float_size = dbc->max_float_type ?
+				dbc->max_float_type->column_size : 0;
+			if (max_float_size < types[i].column_size) {
+				dbc->max_float_type = &types[i];
 			}
 		} else if (types[i].data_type == SQL_VARCHAR) {
-			if (dbc->max_varchar_size < types[i].column_size) {
-				dbc->max_varchar_size = types[i].column_size;
+			max_varchar_size = dbc->max_varchar_type ?
+				dbc->max_varchar_type->column_size : 0;
+			if (max_varchar_size < types[i].column_size) {
+				dbc->max_varchar_type = &types[i];
 			}
 		}
 	}
 
-	DBGH(dbc, "%llu ES/SQL types available, maximum sizes supported for: "
-		"SQL_FLOAT: %ld, SQL_VARCHAR: %ld.", rows_fetched,
-		dbc->max_float_size, dbc->max_varchar_size);
-	dbc->es_types = types;
-	dbc->no_types = rows_fetched;
+	assert(dbc->max_float_type);
+	assert(dbc->max_varchar_type);
+
+	DBGH(dbc, "%lu ES/SQL types available, maximum sizes supported for: "
+		"SQL_FLOAT: %ld, SQL_VARCHAR: %ld.", (unsigned long)rows_fetched,
+		dbc->max_float_type->column_size, dbc->max_varchar_type->column_size);
 }
 
 /*

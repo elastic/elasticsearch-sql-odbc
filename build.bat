@@ -334,11 +334,17 @@ REM CTESTS function: run CI testing
 REM PROPER function: clean up the build and libs dir.
 :PROPER
 	echo %~nx0: cleaning libs.
-	if exist %BUILD_DIR%\zlibclean.vcxproj (
-		MSBuild %BUILD_DIR%\zlibclean.vcxproj
+	if exist %BUILDS_DIR%\x86\zlibclean.vcxproj (
+		MSBuild %BUILDS_DIR%\x86\zlibclean.vcxproj
 	)
-	if exist %BUILD_DIR%\curlclean.vcxproj (
-		MSBuild %BUILD_DIR%\curlclean.vcxproj
+	if exist %BUILDS_DIR%\x64\zlibclean.vcxproj (
+		MSBuild %BUILDS_DIR%\x64\zlibclean.vcxproj
+	)
+	if exist %BUILDS_DIR%\x86\curlclean.vcxproj (
+		MSBuild %BUILDS_DIR%\x86\curlclean.vcxproj
+	)
+	if exist %BUILDS_DIR%\x64\curlclean.vcxproj (
+		MSBuild %BUILDS_DIR%\x64\curlclean.vcxproj
 	)
 	call:CLEAN
 	REM delete VisualStudio files

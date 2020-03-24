@@ -16,8 +16,8 @@ import tempfile
 from elasticsearch import Elasticsearch
 
 DRIVER_BASE_NAME = "Elasticsearch ODBC Driver"
-# Uninstallation can take quite a long time (over 10s)
-INSTALLATION_TIMEOUT = 60
+# Uninstallation can take quite a long time on VMs
+INSTALLATION_TIMEOUT = 120
 
 class Installer(object):
 	_driver_path = None

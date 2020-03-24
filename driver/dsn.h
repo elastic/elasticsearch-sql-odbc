@@ -35,6 +35,7 @@
 #define ESODBC_DSN_MAX_FETCH_SIZE	"MaxFetchSize"
 #define ESODBC_DSN_MAX_BODY_SIZE_MB	"MaxBodySizeMB"
 #define ESODBC_DSN_APPLY_TZ			"ApplyTZ"
+#define ESODBC_DSN_EARLY_EXEC		"EarlyExecution"
 #define ESODBC_DSN_SCI_FLOATS		"ScientificFloats"
 #define ESODBC_DSN_VARCHAR_LIMIT	"VarcharLimit"
 #define ESODBC_DSN_MFIELD_LENIENT	"MultiFieldLenient"
@@ -78,6 +79,7 @@ typedef struct {
 	wstr_st max_fetch_size;
 	wstr_st max_body_size;
 	wstr_st apply_tz;
+	wstr_st early_exec;
 	wstr_st sci_floats;
 	wstr_st varchar_limit;
 	wstr_st mfield_lenient;
@@ -86,7 +88,7 @@ typedef struct {
 	wstr_st trace_enabled;
 	wstr_st trace_file;
 	wstr_st trace_level;
-#define ESODBC_DSN_ATTRS_COUNT	28
+#define ESODBC_DSN_ATTRS_COUNT	29
 	SQLWCHAR buff[ESODBC_DSN_ATTRS_COUNT * ESODBC_DSN_MAX_ATTR_LEN];
 	/* DSN reading/writing functions are passed a SQLSMALLINT lenght param */
 #if SHRT_MAX < ESODBC_DSN_ATTRS_COUNT * ESODBC_DSN_MAX_ATTR_LEN

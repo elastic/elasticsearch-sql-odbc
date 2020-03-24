@@ -161,6 +161,7 @@ typedef struct struct_dbc {
 		ESODBC_CMPSS_AUTO,
 	} compression;
 	BOOL apply_tz; /* should the times be converted from UTC to local TZ? */
+	BOOL early_exec; /* should prepared, non-param queries be exec'd early? */
 	enum {
 		ESODBC_FLTS_DEFAULT = 0,
 		ESODBC_FLTS_SCIENTIFIC,
@@ -173,8 +174,8 @@ typedef struct struct_dbc {
 	esodbc_estype_st *es_types; /* array with ES types */
 	SQLULEN no_types; /* number of types in array */
 	/* maximum precision/length of types using same SQL data type ID */
-	SQLINTEGER max_float_size;
-	SQLINTEGER max_varchar_size;
+	esodbc_estype_st *max_varchar_type; /* pointer to TEXT type */
+	esodbc_estype_st *max_float_type; /* pointer to DOUBLE type */
 	/* configuration imposed lenghts for the ES/SQL string types */
 	SQLUINTEGER varchar_limit;
 	wstr_st varchar_limit_str; /* convenience w-string of varchar limit */
@@ -394,6 +395,8 @@ typedef struct struct_stmt {
 		CONVERSION_SUPPORTED,
 		CONVERSION_SKIPPED, /* used with driver's meta queries */
 	} sql2c_conversion;
+	/* early execution */
+	BOOL early_executed;
 
 	/* SQLGetData state members */
 	SQLINTEGER gd_col; /* current column to get from, if positive */

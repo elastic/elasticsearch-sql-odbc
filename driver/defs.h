@@ -13,6 +13,9 @@
 
 /* Tracing log buffer size. */
 #define ESODBC_LOG_BUF_SIZE			(4 * 1024)
+#ifdef WITH_EXTENDED_BUFF_LOG
+#	define ESODBC_EXT_LOG_BUF_SIZE (ESODBC_LOG_BUF_SIZE * 1024)
+#endif /* WITH_EXTENDED_BUFF_LOG */
 /* Log file prefix. The format is: prefix_datime */
 #define ESODBC_LOG_FILE_PREFIX		"esodbc"
 #define ESODBC_LOG_FILE_SUFFIX		".log"
@@ -175,6 +178,8 @@
 #define ESODBC_DEF_TRACE_LEVEL		"WARN"
 /* default TZ handling */
 #define ESODBC_DEF_APPLY_TZ			"no"
+/* default early execution flag */
+#define ESODBC_DEF_EARLY_EXEC		"yes"
 /* default of scientific floats printing */
 #define ESODBC_DEF_SCI_FLOATS		ESODBC_DSN_FLTS_DEF
 #define ESODBC_PWD_VAL_SUBST		"<redacted>"
