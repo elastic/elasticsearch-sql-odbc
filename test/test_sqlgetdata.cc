@@ -633,6 +633,75 @@ TEST_F(GetData, ScaledFloat2Char_whole) {
 	EXPECT_EQ(memcmp(buff, SQL_VAL, /*0.*/2+/*x64 dbl precision*/15), 0);
 }
 
+TEST_F(GetData, TrimOnVarcharLimit_whole) {
+#undef SQL_VAL
+#undef SQL
+#define SQL_VAL "12345678901234567890"
+#define SQL "CAST(" SQL_VAL " AS TEXT)"
+
+	const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"text\"}\
+  ],\
+  \"rows\": [\
+    [\"" SQL_VAL "\"]\
+  ]\
+}\
+";
+	prepareStatement(json_answer);
+
+	SQLWCHAR buff[1024];
+
+	DBCH(dbc)->varchar_limit = (sizeof(SQL_VAL) - 1) / 2;
+
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	ret = SQLGetData(stmt, /*col*/1, SQL_C_WCHAR, buff, sizeof(buff), &ind_len);
+	ASSERT_EQ(ret, SQL_SUCCESS);
+	EXPECT_EQ(ind_len/sizeof(*buff), DBCH(dbc)->varchar_limit);
+	EXPECT_EQ(wcsncmp(buff, MK_WPTR(SQL_VAL), DBCH(dbc)->varchar_limit), 0);
+	EXPECT_STREQ((wchar_t *)buff[DBCH(dbc)->varchar_limit], L'\0');
+}
+
+TEST_F(GetData, TrimOnVarcharLimit_chunked) {
+#undef SQL_VAL
+#undef SQL
+#define SQL_VAL "12345678901234567890"
+#define SQL "CAST(" SQL_VAL " AS TEXT)"
+
+	const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"text\"}\
+  ],\
+  \"rows\": [\
+    [\"" SQL_VAL "\"]\
+  ]\
+}\
+";
+	prepareStatement(json_answer);
+
+	const size_t chunk_sz = ((sizeof(SQL_VAL) - 1) / 4);
+	SQLWCHAR buff[chunk_sz + 1];
+
+	DBCH(dbc)->varchar_limit = chunk_sz * 2;
+
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	ret = SQLGetData(stmt, /*col*/1, SQL_C_WCHAR, buff, sizeof(buff), &ind_len);
+	ASSERT_EQ(ret, SQL_SUCCESS_WITH_INFO);
+	EXPECT_EQ(ind_len/sizeof(*buff), DBCH(dbc)->varchar_limit);
+	EXPECT_EQ(wcsncmp(buff, MK_WPTR(SQL_VAL), chunk_sz), 0);
+
+	ret = SQLGetData(stmt, /*col*/1, SQL_C_WCHAR, buff, sizeof(buff), &ind_len);
+	ASSERT_EQ(ret, SQL_SUCCESS);
+	EXPECT_EQ(ind_len/sizeof(*buff), chunk_sz);
+	EXPECT_EQ(wcsncmp(buff, MK_WPTR(SQL_VAL) + chunk_sz, chunk_sz), 0);
+	EXPECT_STREQ((wchar_t *)buff[chunk_sz], L'\0');
+}
 
 } // test namespace
 

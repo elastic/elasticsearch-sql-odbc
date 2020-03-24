@@ -11,6 +11,7 @@
 #include "ujdecode.h"
 
 #include "catalogue.h"
+#include "connect.h"
 #include "log.h"
 #include "handles.h"
 #include "info.h"
@@ -41,7 +42,6 @@
 #define SQL_COL_CAT \
 	" CATALOG " ESODBC_STRING_DELIM WPFWP_LDESC ESODBC_STRING_DELIM
 
-
 static SQLRETURN fake_answer(SQLHSTMT hstmt, cstr_st *answer)
 {
 	cstr_st fake = *answer;
@@ -51,7 +51,6 @@ static SQLRETURN fake_answer(SQLHSTMT hstmt, cstr_st *answer)
 		RET_HDIAGS(hstmt, SQL_STATE_HY001);
 	}
 	return attach_answer(STMH(hstmt), &fake, /*is JSON*/TRUE);
-
 }
 
 SQLRETURN EsSQLStatisticsW(
@@ -65,33 +64,27 @@ SQLRETURN EsSQLStatisticsW(
 	SQLUSMALLINT       fUnique,
 	SQLUSMALLINT       fAccuracy)
 {
-	/*INDENT-OFF*/
-#	define STATISTICS_EMPTY \
-	"{" \
-		"\"columns\":[" \
-			"{\"name\":\"TABLE_CAT\","			"\"type\":\"TEXT\"}," \
-			"{\"name\":\"TABLE_SCHEM\","		"\"type\":\"TEXT\"}," \
-			"{\"name\":\"TABLE_NAME\","			"\"type\":\"TEXT\"}," \
-			"{\"name\":\"NON_UNIQUE\","			"\"type\":\"SHORT\"}," \
-			"{\"name\":\"INDEX_QUALIFIER\","	"\"type\":\"TEXT\"}," \
-			"{\"name\":\"INDEX_NAME\","			"\"type\":\"TEXT\"}," \
-			"{\"name\":\"TYPE\","				"\"type\":\"SHORT\"}," \
-			"{\"name\":\"ORDINAL_POSITION\","	"\"type\":\"SHORT\"}," \
-			"{\"name\":\"COLUMN_NAME \","		"\"type\":\"TEXT\"}," \
-			"{\"name\":\"ASC_OR_DESC\","		"\"type\":\"BYTE\"}," \
-			"{\"name\":\"CARDINALITY\","		"\"type\":\"INTEGER\"}," \
-			"{\"name\":\"PAGES\","				"\"type\":\"INTEGER\"}," \
-			"{\"name\":\"FILTER_CONDITION\","	"\"type\":\"TEXT\"}" \
-		"]," \
-		"\"rows\":[]" \
-	"}"
-	/*INDENT-ON*/
-	cstr_st statistics = CSTR_INIT(STATISTICS_EMPTY);
+	cstr_st statistics = CSTR_INIT("{"
+			"\"columns\":["
+			"{\"name\":\"TABLE_CAT\", \"type\":\"TEXT\"},"
+			"{\"name\":\"TABLE_SCHEM\", \"type\":\"TEXT\"},"
+			"{\"name\":\"TABLE_NAME\", \"type\":\"TEXT\"},"
+			"{\"name\":\"NON_UNIQUE\", \"type\":\"SHORT\"},"
+			"{\"name\":\"INDEX_QUALIFIER\", \"type\":\"TEXT\"},"
+			"{\"name\":\"INDEX_NAME\", \"type\":\"TEXT\"},"
+			"{\"name\":\"TYPE\", \"type\":\"SHORT\"},"
+			"{\"name\":\"ORDINAL_POSITION\", \"type\":\"SHORT\"},"
+			"{\"name\":\"COLUMN_NAME \", \"type\":\"TEXT\"},"
+			"{\"name\":\"ASC_OR_DESC\", \"type\":\"BYTE\"},"
+			"{\"name\":\"CARDINALITY\", \"type\":\"INTEGER\"},"
+			"{\"name\":\"PAGES\", \"type\":\"INTEGER\"},"
+			"{\"name\":\"FILTER_CONDITION\", \"type\":\"TEXT\"}"
+			"],"
+			"\"rows\":[]"
+			"}");
 
 	INFOH(hstmt, "no statistics available.");
 	return fake_answer(hstmt, &statistics);
-
-#	undef STATISTICS_EMPTY
 }
 
 BOOL TEST_API set_current_catalog(esodbc_dbc_st *dbc, wstr_st *catalog)
@@ -456,6 +449,249 @@ end:
 	return ret;
 }
 
+static inline BOOL col_of_type(SQLSMALLINT idx, SQLSMALLINT type)
+{
+	switch (idx) {
+		case SQLCOLS_IDX_TABLE_CAT:
+		case SQLCOLS_IDX_TABLE_SCHEM:
+		case SQLCOLS_IDX_TABLE_NAME:
+		case SQLCOLS_IDX_COLUMN_NAME:
+		case SQLCOLS_IDX_TYPE_NAME:
+		case SQLCOLS_IDX_REMARKS:
+		case SQLCOLS_IDX_COLUMN_DEF:
+		case SQLCOLS_IDX_IS_NULLABLE:
+			return type == ES_KEYWORD_TO_SQL;
+
+		case SQLCOLS_IDX_DATA_TYPE:
+		case SQLCOLS_IDX_DECIMAL_DIGITS:
+		case SQLCOLS_IDX_NUM_PREC_RADIX:
+		case SQLCOLS_IDX_NULLABLE:
+		case SQLCOLS_IDX_SQL_DATA_TYPE:
+		case SQLCOLS_IDX_SQL_DATETIME_SUB:
+			return type == SQL_SMALLINT;
+
+		case SQLCOLS_IDX_COLUMN_SIZE:
+		case SQLCOLS_IDX_BUFFER_LENGTH:
+		case SQLCOLS_IDX_CHAR_OCTET_LENGTH:
+		case SQLCOLS_IDX_ORDINAL_POSITION:
+			return type == SQL_INTEGER;
+
+		default:
+			BUG("unexpected index %hd.", idx);
+	}
+	return false;
+}
+
+static SQLRETURN safe_copy(esodbc_stmt_st *stmt, wstr_st *dest,
+	size_t *pos, SQLWCHAR *str, size_t cnt)
+{
+	SQLWCHAR *r;
+
+	DBGH(stmt, "writing @pos=%zu / max=%zu string [%zu] `" LWPDL "`.", *pos,
+		dest->cnt, cnt, cnt, str ? str : L"<null>");
+	/* is there enough room to copy the new string? */
+	assert(cnt);
+	if (dest->cnt <= *pos + cnt) {
+		dest->cnt = dest->cnt ? dest->cnt : ESODBC_BODY_BUF_START_SIZE;
+		while (dest->cnt <= *pos + cnt) {
+			dest->cnt *= 3;
+		}
+		if (! (r = realloc(dest->str, dest->cnt * sizeof(SQLWCHAR)))) {
+			ERRNH(stmt, "OOM: %zu w-chars.", dest->cnt);
+			RET_HDIAGS(stmt, SQL_STATE_HY001);
+		} else {
+			dest->str = r;
+		}
+	}
+	if (str) {
+		wmemcpy(dest->str + *pos, str, cnt);
+		*pos += cnt;
+		DBGH(stmt, "crr buffer: [%zu] `" LWPDL "`.", *pos, *pos, dest->str);
+	}
+	return SQL_SUCCESS;
+}
+
+static SQLRETURN copy_one_cell(esodbc_stmt_st *stmt, wstr_st *dest,
+	size_t *pos, long row_cnt, SQLSMALLINT col_idx)
+{
+	SQLRETURN ret;
+	BOOL is_str;
+	SQLLEN len_ind;
+	const static wstr_st null = WSTR_INIT("null"), qmark = WSTR_INIT("\"");
+
+	/* fetch data's length (always converted to w-string) */
+	ret = EsSQLGetData(stmt, col_idx, SQL_C_WCHAR, dest->str, 0, &len_ind);
+	if (! SQL_SUCCEEDED(ret)) {
+		ERRH(stmt, "failed to get data lenght for cell@[%ld, %hd].",
+			row_cnt, col_idx);
+		return ret;
+	}
+	/* null data */
+	if (len_ind == SQL_NULL_DATA) {
+		return safe_copy(stmt, dest, pos, null.str, null.cnt);
+	} else if (len_ind < 0) {
+		ERRH(stmt, "unexpected no-total indicator for cell@[%ld, %hd].",
+			row_cnt, col_idx);
+		RET_HDIAGS(stmt, SQL_STATE_HY000);
+	} /* else: indicator >= 0 */
+
+	is_str = col_of_type(col_idx, ES_KEYWORD_TO_SQL);
+	/* make sure there's enough space to write string */
+	ret = safe_copy(stmt, dest, pos, NULL,
+			len_ind/sizeof(SQLWCHAR) + /*2x'"'*/2 * is_str + /*\0*/1);
+	if (! SQL_SUCCEEDED(ret)) {
+		return ret;
+	}
+	/* write opening quote */
+	if (is_str) {
+		ret = safe_copy(stmt, dest, pos, qmark.str, qmark.cnt);
+		assert(SQL_SUCCEEDED(ret));
+	}
+	ret = EsSQLGetData(stmt, col_idx, SQL_C_WCHAR, dest->str + *pos,
+			(len_ind + /*\0*/1) * sizeof(SQLWCHAR), &len_ind);
+	if (! SQL_SUCCEEDED(ret)) {
+		ERRH(stmt, "failed to get data for cell@[%ld, %hd].",
+			row_cnt, col_idx);
+		return ret;
+	} else {
+		assert(0 < len_ind);
+		*pos += len_ind / sizeof(SQLWCHAR);
+	}
+	/* write closing quote */
+	if (is_str) {
+		ret = safe_copy(stmt, dest, pos, qmark.str, qmark.cnt);
+		assert(SQL_SUCCEEDED(ret));
+	}
+
+	return SQL_SUCCESS;
+}
+
+/* in received result set update those varchar columns (DATA_TYPE ==
+ * SQL_VARCHAR) whose COLUMN_SIZE and BUFFER_LENGTH columns exceed the set
+ * limit */
+SQLRETURN TEST_API update_varchar_defs(esodbc_stmt_st *stmt)
+{
+	const static wstr_st sqlcols_resp_head = WSTR_INIT("{"
+			"\"columns\":["
+			"{\"name\":\"TABLE_CAT\", \"type\":\"keyword\"},"
+			"{\"name\":\"TABLE_SCHEM\", \"type\":\"keyword\"},"
+			"{\"name\":\"TABLE_NAME\", \"type\":\"keyword\"},"
+			"{\"name\":\"COLUMN_NAME\", \"type\":\"keyword\"},"
+			"{\"name\":\"DATA_TYPE\", \"type\":\"integer\"},"
+			"{\"name\":\"TYPE_NAME\", \"type\":\"keyword\"},"
+			"{\"name\":\"COLUMN_SIZE\", \"type\":\"integer\"},"
+			"{\"name\":\"BUFFER_LENGTH\", \"type\":\"integer\"},"
+			"{\"name\":\"DECIMAL_DIGITS\", \"type\":\"integer\"},"
+			"{\"name\":\"NUM_PREC_RADIX\", \"type\":\"integer\"},"
+			"{\"name\":\"NULLABLE\", \"type\":\"integer\"},"
+			"{\"name\":\"REMARKS\", \"type\":\"keyword\"},"
+			"{\"name\":\"COLUMN_DEF\", \"type\":\"keyword\"},"
+			"{\"name\":\"SQL_DATA_TYPE\", \"type\":\"integer\"},"
+			"{\"name\":\"SQL_DATETIME_SUB\", \"type\":\"integer\"},"
+			"{\"name\":\"CHAR_OCTET_LENGTH\", \"type\":\"integer\"},"
+			"{\"name\":\"ORDINAL_POSITION\", \"type\":\"integer\"},"
+			"{\"name\":\"IS_NULLABLE\", \"type\":\"keyword\"}"
+			"],"
+			"\"rows\":["
+		);
+	const static wstr_st sqlcols_resp_tail = WSTR_INIT("]}");
+	const static wstr_st first_brkt = WSTR_INIT("[");
+	const static wstr_st subseq_brkt = WSTR_INIT(",[");
+	const static wstr_st close_brkt = WSTR_INIT("]");
+	const static wstr_st comma = WSTR_INIT(", ");
+	const wstr_st *brkt;
+	SQLRETURN ret;
+	SQLSMALLINT col_cnt, i;
+	long row_cnt;
+	wstr_st dest = {0};
+	size_t pos;
+	cstr_st u8mb;
+	wstr_st *lim = &HDRH(stmt)->dbc->varchar_limit_str;
+
+	/* check that we have as many columns as members in target row struct */
+	ret = EsSQLNumResultCols(stmt, &col_cnt);
+	if (! SQL_SUCCEEDED(ret)) {
+		ERRH(stmt, "failed to get result columns count.");
+		goto end;
+	} else if (col_cnt < SQLCOLS_IDX_MAX) {
+		ERRH(stmt, "Elasticsearch returned an unexpected number of columns "
+			"(%hd vs min expected %d).", col_cnt, SQLCOLS_IDX_MAX);
+		goto end;
+	} else {
+		DBGH(stmt, "Elasticsearch types columns count: %hd.", col_cnt);
+	}
+
+	pos = 0;
+	ret = safe_copy(stmt, &dest, &pos, sqlcols_resp_head.str,
+			sqlcols_resp_head.cnt);
+	if (! SQL_SUCCEEDED(ret)) {
+		goto end;
+	}
+
+	row_cnt = 1;
+	while (SQL_SUCCEEDED(ret = EsSQLFetch(stmt))) {
+		brkt = 1 < row_cnt ? &subseq_brkt : &first_brkt;
+		ret = safe_copy(stmt, &dest, &pos, brkt->str, brkt->cnt);
+		if (! SQL_SUCCEEDED(ret)) {
+			goto end;
+		}
+		for (i = 0; i < SQLCOLS_IDX_MAX; i ++) {
+			if (i) {
+				ret = safe_copy(stmt, &dest, &pos, comma.str, comma.cnt);
+				if (! SQL_SUCCEEDED(ret)) {
+					goto end;
+				}
+			}
+			switch (i + 1) {
+				case SQLCOLS_IDX_COLUMN_SIZE:
+				case SQLCOLS_IDX_BUFFER_LENGTH:
+				case SQLCOLS_IDX_CHAR_OCTET_LENGTH:
+					ret = safe_copy(stmt, &dest, &pos, lim->str, lim->cnt);
+					break;
+				default:
+					ret = copy_one_cell(stmt, &dest, &pos, row_cnt, i + 1);
+			}
+			if (! SQL_SUCCEEDED(ret)) {
+				goto end;
+			}
+		}
+		ret = safe_copy(stmt, &dest, &pos, close_brkt.str,
+				close_brkt.cnt);
+		if (! SQL_SUCCEEDED(ret)) {
+			goto end;
+		}
+		row_cnt ++;
+	}
+
+	ret = safe_copy(stmt, &dest, &pos, sqlcols_resp_tail.str,
+			sqlcols_resp_tail.cnt);
+	if (! SQL_SUCCEEDED(ret)) {
+		goto end;
+	}
+	/* answer succesfully rewritten */
+	dest.cnt = pos;
+	DBGH(stmt, "table definition: [%zu] `" LWPDL "`.", dest.cnt, LWSTR(&dest));
+
+	if (! wstr_to_utf8(&dest, &u8mb)) {
+		ERRH(stmt, "UTF16 to UTF8 conversion failed for: [%zu] `" LWPDL "`.",
+			dest.cnt, LWSTR(&dest));
+		ret = SET_HDIAG(stmt, SQL_STATE_HY000, "Strings conversion error", 0);
+	} else {
+		/* unbind previously received result set */
+		ret = EsSQLFreeStmt(stmt, SQL_CLOSE);
+		if (! SQL_SUCCEEDED(ret)) {
+			goto end;
+		}
+		ret = attach_answer(stmt, &u8mb, /*is json*/TRUE);
+	}
+end:
+	if (dest.str) {
+		free(dest.str);
+		dest.cnt = 0;
+	}
+	return ret;
+}
+
 SQLRETURN EsSQLColumnsW
 (
 	SQLHSTMT           hstmt,
@@ -584,7 +820,7 @@ SQLRETURN EsSQLColumnsW
 		metadata_id_escape(&src_col, &dst_col, (BOOL)stmt->metadata_id);
 	}
 
-	/* print SQL to send to server */
+	/* print query to send to server */
 	if (catalog.str) {
 		cnt = swprintf(pbuf, cnt, SQL_COLUMNS(SQL_COL_CAT),
 				(int)catalog.cnt, catalog.str,
@@ -602,6 +838,9 @@ SQLRETURN EsSQLColumnsW
 	}
 
 	ret = EsSQLExecDirectW(stmt, pbuf, (SQLINTEGER)cnt);
+	if (SQL_SUCCEEDED(ret) && HDRH(stmt)->dbc->varchar_limit) {
+		ret = update_varchar_defs(stmt);
+	}
 end:
 	free(pbuf);
 	return ret;
@@ -621,29 +860,22 @@ SQLRETURN EsSQLSpecialColumnsW
 	SQLUSMALLINT       fNullable
 )
 {
-	/*INDENT-OFF*/
-#	define SPECIAL_COLUMNS_EMPTY \
-	"{" \
-		"\"columns\":[" \
-			"{\"name\":\"SCOPE\","			"\"type\":\"SHORT\"}," \
-			"{\"name\":\"COLUMN_NAME\","	"\"type\":\"TEXT\"}," \
-			"{\"name\":\"DATA_TYPE\","		"\"type\":\"SHORT\"}," \
-			"{\"name\":\"TYPE_NAME\","		"\"type\":\"TEXT\"}," \
-			"{\"name\":\"COLUMN_SIZE\","	"\"type\":\"INTEGER\"}," \
-			"{\"name\":\"BUFFER_LENGTH\","	"\"type\":\"INTEGER\"}," \
-			"{\"name\":\"DECIMAL_DIGITS\","	"\"type\":\"SHORT\"}," \
-			"{\"name\":\"PSEUDO_COLUMN\","	"\"type\":\"SHORT\"}" \
-		"]," \
-		"\"rows\":[]" \
-	"}"
-	/*INDENT-ON*/
-	cstr_st special_cols = CSTR_INIT(SPECIAL_COLUMNS_EMPTY);
-
+	cstr_st special_cols = CSTR_INIT("{"
+			"\"columns\":["
+			"{\"name\":\"SCOPE\", \"type\":\"SHORT\"},"
+			"{\"name\":\"COLUMN_NAME\", \"type\":\"TEXT\"},"
+			"{\"name\":\"DATA_TYPE\", \"type\":\"SHORT\"},"
+			"{\"name\":\"TYPE_NAME\", \"type\":\"TEXT\"},"
+			"{\"name\":\"COLUMN_SIZE\", \"type\":\"INTEGER\"},"
+			"{\"name\":\"BUFFER_LENGTH\", \"type\":\"INTEGER\"},"
+			"{\"name\":\"DECIMAL_DIGITS\", \"type\":\"SHORT\"},"
+			"{\"name\":\"PSEUDO_COLUMN\", \"type\":\"SHORT\"}"
+			"],"
+			"\"rows\":[]"
+			"}");
 
 	INFOH(hstmt, "no special columns available.");
 	return fake_answer(hstmt, &special_cols);
-
-#	undef SPECIAL_COLUMNS_EMPTY
 }
 
 
@@ -662,34 +894,28 @@ SQLRETURN EsSQLForeignKeysW(
 	_In_reads_opt_(cchFkTableName) SQLWCHAR      *szFkTableName,
 	SQLSMALLINT        cchFkTableName)
 {
-	/*INDENT-OFF*/
-#	define FOREIGN_KEYS_EMPTY \
-	"{" \
-		"\"columns\":[" \
-			"{\"name\":\"PKTABLE_CAT\","	"\"type\":\"TEXT\"}," \
-			"{\"name\":\"PKTABLE_SCHEM\","	"\"type\":\"TEXT\"}," \
-			"{\"name\":\"PKTABLE_NAME\","	"\"type\":\"TEXT\"}," \
-			"{\"name\":\"PKCOLUMN_NAME\","	"\"type\":\"TEXT\"}," \
-			"{\"name\":\"FKTABLE_CAT\","	"\"type\":\"TEXT\"}," \
-			"{\"name\":\"FKTABLE_SCHEM\","	"\"type\":\"TEXT\"}," \
-			"{\"name\":\"FKTABLE_NAME\","	"\"type\":\"TEXT\"}," \
-			"{\"name\":\"FKCOLUMN_NAME\","	"\"type\":\"TEXT\"}," \
-			"{\"name\":\"KEY_SEQ\","		"\"type\":\"SHORT\"}," \
-			"{\"name\":\"UPDATE_RULE\","	"\"type\":\"SHORT\"}," \
-			"{\"name\":\"DELETE_RULE\","	"\"type\":\"SHORT\"}," \
-			"{\"name\":\"FK_NAME\","		"\"type\":\"TEXT\"}," \
-			"{\"name\":\"PK_NAME\","		"\"type\":\"TEXT\"}," \
-			"{\"name\":\"DEFERRABILITY\","	"\"type\":\"SHORT\"}" \
-		"]," \
-		"\"rows\":[]" \
-	"}"
-	/*INDENT-ON*/
-	cstr_st foreign_keys = CSTR_INIT(FOREIGN_KEYS_EMPTY);
+	cstr_st foreign_keys = CSTR_INIT("{"
+			"\"columns\":["
+			"{\"name\":\"PKTABLE_CAT\", \"type\":\"TEXT\"},"
+			"{\"name\":\"PKTABLE_SCHEM\", \"type\":\"TEXT\"},"
+			"{\"name\":\"PKTABLE_NAME\", \"type\":\"TEXT\"},"
+			"{\"name\":\"PKCOLUMN_NAME\", \"type\":\"TEXT\"},"
+			"{\"name\":\"FKTABLE_CAT\", \"type\":\"TEXT\"},"
+			"{\"name\":\"FKTABLE_SCHEM\", \"type\":\"TEXT\"},"
+			"{\"name\":\"FKTABLE_NAME\", \"type\":\"TEXT\"},"
+			"{\"name\":\"FKCOLUMN_NAME\", \"type\":\"TEXT\"},"
+			"{\"name\":\"KEY_SEQ\", \"type\":\"SHORT\"},"
+			"{\"name\":\"UPDATE_RULE\", \"type\":\"SHORT\"},"
+			"{\"name\":\"DELETE_RULE\", \"type\":\"SHORT\"},"
+			"{\"name\":\"FK_NAME\", \"type\":\"TEXT\"},"
+			"{\"name\":\"PK_NAME\", \"type\":\"TEXT\"},"
+			"{\"name\":\"DEFERRABILITY\", \"type\":\"SHORT\"}"
+			"],"
+			"\"rows\":[]"
+			"}");
 
 	INFOH(hstmt, "no foreign keys supported.");
 	return fake_answer(hstmt, &foreign_keys);
-
-#	undef FOREIGN_KEYS_EMPTY
 }
 
 SQLRETURN EsSQLPrimaryKeysW(
@@ -701,26 +927,20 @@ SQLRETURN EsSQLPrimaryKeysW(
 	_In_reads_opt_(cchTableName) SQLWCHAR      *szTableName,
 	SQLSMALLINT        cchTableName)
 {
-	/*INDENT-OFF*/
-#	define PRIMARY_KEYS_EMPTY \
-	"{" \
-		"\"columns\":[" \
-			"{\"name\":\"TABLE_CAT\","		"\"type\":\"TEXT\"}," \
-			"{\"name\":\"TABLE_SCHEM\","	"\"type\":\"TEXT\"}," \
-			"{\"name\":\"TABLE_NAME\","		"\"type\":\"TEXT\"}," \
-			"{\"name\":\"COLUMN_NAME\","	"\"type\":\"TEXT\"}," \
-			"{\"name\":\"KEY_SEQ\","		"\"type\":\"SHORT\"}," \
-			"{\"name\":\"PK_NAME\","		"\"type\":\"TEXT\"}" \
-		"]," \
-		"\"rows\":[]" \
-	"}"
-	/*INDENT-ON*/
-	cstr_st prim_keys = CSTR_INIT(PRIMARY_KEYS_EMPTY);
+	cstr_st prim_keys = CSTR_INIT("{"
+			"\"columns\":["
+			"{\"name\":\"TABLE_CAT\", \"type\":\"TEXT\"},"
+			"{\"name\":\"TABLE_SCHEM\", \"type\":\"TEXT\"},"
+			"{\"name\":\"TABLE_NAME\", \"type\":\"TEXT\"},"
+			"{\"name\":\"COLUMN_NAME\", \"type\":\"TEXT\"},"
+			"{\"name\":\"KEY_SEQ\", \"type\":\"SHORT\"},"
+			"{\"name\":\"PK_NAME\", \"type\":\"TEXT\"}"
+			"],"
+			"\"rows\":[]"
+			"}");
 
 	INFOH(hstmt, "no primary keys supported.");
 	return fake_answer(hstmt, &prim_keys);
-
-#	undef PRIMARY_KEYS_EMPTY
 }
 
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 tw=78 : */

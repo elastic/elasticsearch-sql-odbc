@@ -1133,8 +1133,7 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	const static wstr_st https_prefix = WSTR_INIT("https://");
 	wstr_st prefix;
 	int cnt, ipv6;
-	SQLBIGINT secure;
-	long long timeout, max_body_size, max_fetch_size;
+	SQLBIGINT secure, timeout, max_body_size, max_fetch_size, varchar_limit;
 	SQLWCHAR buff_url[ESODBC_MAX_URL_LEN];
 	wstr_st url = (wstr_st) {
 		buff_url, /*will be init'ed later*/0
@@ -1188,7 +1187,7 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 		SET_HDIAG(dbc, SQL_STATE_HY000, "invalid security setting", 0);
 		goto err;
 	} else {
-		dbc->secure = (long)secure;
+		dbc->secure = (int)secure;
 		INFOH(dbc, "connection security level: %ld.", dbc->secure);
 	}
 
@@ -1297,16 +1296,16 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	/*
 	 * request timeout for liburl: negative reset to 0
 	 */
-	if (str2bigint(&attrs->timeout, /*wide?*/TRUE,
-			(SQLBIGINT *)&timeout, /*strict*/TRUE) < 0) {
+	if (str2bigint(&attrs->timeout, /*wide?*/TRUE, &timeout,
+			/*strict*/TRUE) < 0) {
 		ERRH(dbc, "failed to convert `" LWPDL "` [%zu] to big int.",
 			LWSTR(&attrs->timeout), attrs->timeout.cnt);
 		SET_HDIAG(dbc, SQL_STATE_HY000, "timeout setting number "
 			"conversion failure", 0);
 		goto err;
 	}
-	if (timeout < 0) {
-		WARNH(dbc, "set timeout is negative (%ld), normalized to 0.", timeout);
+	if (ULONG_MAX <= timeout || timeout < 0) {
+		WARNH(dbc, "invalid timeout value (%lld), normalized to 0.", timeout);
 		timeout = 0;
 	}
 	dbc->timeout = (SQLUINTEGER)timeout;
@@ -1315,19 +1314,18 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	/*
 	 * set max body size
 	 */
-	if (str2bigint(&attrs->max_body_size, /*wide?*/TRUE,
-			(SQLBIGINT *)&max_body_size, /*strict*/TRUE) < 0) {
-		ERRH(dbc, "failed to convert max body size `" LWPDL "` [%zu] to LL.",
-			LWSTR(&attrs->max_body_size), attrs->max_body_size.cnt);
+	if (str2bigint(&attrs->max_body_size, /*wide?*/TRUE, &max_body_size,
+			/*strict*/TRUE) < 0) {
+		ERRH(dbc, "failed to convert max body size [%zu] `" LWPDL "`.",
+			attrs->max_body_size.cnt, LWSTR(&attrs->max_body_size));
 		SET_HDIAG(dbc, SQL_STATE_HY000, "max body size setting number "
 			"conversion failure", 0);
 		goto err;
 	}
-	if (max_body_size < 0) {
-		ERRH(dbc, "'%s' setting can't be negative (%ld).",
+	if ((SIZE_MAX / (1024 * 1024)) <= max_body_size || max_body_size < 0) {
+		ERRH(dbc, "invalid '%s' setting value (%lld).",
 			ESODBC_DSN_MAX_BODY_SIZE_MB, max_body_size);
-		SET_HDIAG(dbc, SQL_STATE_HY000, "invalid max body size setting "
-			"(negative)", 0);
+		SET_HDIAG(dbc, SQL_STATE_HY000, "invalid max body size setting", 0);
 		goto err;
 	} else {
 		dbc->amax = (size_t)max_body_size * 1024 * 1024;
@@ -1340,19 +1338,18 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	/*
 	 * set max fetch size
 	 */
-	if (str2bigint(&attrs->max_fetch_size, /*wide?*/TRUE,
-			(SQLBIGINT *)&max_fetch_size, /*strict*/TRUE) < 0) {
-		ERRH(dbc, "failed to convert max fetch size `" LWPDL "` [%zu] to LL.",
-			LWSTR(&attrs->max_fetch_size), attrs->max_fetch_size.cnt);
+	if (str2bigint(&attrs->max_fetch_size, /*wide?*/TRUE, &max_fetch_size,
+			/*strict*/TRUE) < 0) {
+		ERRH(dbc, "failed to convert max fetch size [%zu] `" LWPDL "`.",
+			attrs->max_fetch_size.cnt, LWSTR(&attrs->max_fetch_size));
 		SET_HDIAG(dbc, SQL_STATE_HY000, "max fetch size setting number "
 			"conversion failure", 0);
 		goto err;
 	}
-	if (max_fetch_size < 0) {
-		ERRH(dbc, "'%s' setting can't be negative (%ld).",
+	if (SIZE_MAX <= max_fetch_size || max_fetch_size < 0) {
+		ERRH(dbc, "invalid '%s' setting value (%lld).",
 			ESODBC_DSN_MAX_FETCH_SIZE, max_fetch_size);
-		SET_HDIAG(dbc, SQL_STATE_HY000, "invalid max fetch size setting "
-			"(negative)", 0);
+		SET_HDIAG(dbc, SQL_STATE_HY000, "invalid max fetch size setting", 0);
 		goto err;
 	} else {
 		dbc->fetch.max = (size_t)max_fetch_size;
@@ -1370,7 +1367,6 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	}
 	INFOH(dbc, "fetch_size: %s.", dbc->fetch.str ? dbc->fetch.str : "none" );
 
-	// TODO: catalog handling
 
 	/*
 	 * set the REST body format: JSON/CBOR
@@ -1433,6 +1429,35 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	/* auto escape pattern value argument */
 	dbc->auto_esc_pva = wstr2bool(&attrs->auto_esc_pva);
 	INFOH(dbc, "auto escape PVA: %s.", dbc->auto_esc_pva ? "true" : "false");
+	/* varchar limit */
+	if (str2bigint(&attrs->varchar_limit, /*wide?*/TRUE, &varchar_limit,
+			/*strict*/TRUE) < 0) {
+		ERRH(dbc, "failed to convert varchar limit [%zu] `" LWPDL "`.",
+			attrs->varchar_limit.cnt, LWSTR(&attrs->varchar_limit));
+		SET_HDIAG(dbc, SQL_STATE_HY000, "varchar limit value conversion "
+			"failure", 0);
+		goto err;
+	} else if (ESODBC_MAX_KEYWORD_PRECISION < varchar_limit ||
+		varchar_limit < 0) {
+		ERRH(dbc, "varchar limit (`" LWPDL "`) outside the allowed range "
+			"[%d, %d].", LWSTR(&attrs->varchar_limit), 0,
+			ESODBC_MAX_KEYWORD_PRECISION);
+		SET_HDIAG(dbc, SQL_STATE_HY000, "invalid varchar limit setting", 0);
+		goto err;
+	} else {
+		dbc->varchar_limit = (SQLUINTEGER)varchar_limit;
+		/* duplicate w-char setting */
+		if (! (dbc->varchar_limit_str.str = calloc(attrs->varchar_limit.cnt +
+						/*\0*/1, sizeof(SQLWCHAR)))) {
+			ERRNH(dbc, "OOM: %zu w-chars.", attrs->varchar_limit.cnt + 1);
+			SET_HDIAG(dbc, SQL_STATE_HY001, "Memory allocation error", 0);
+			goto err;
+		}
+		wmemcpy(dbc->varchar_limit_str.str, attrs->varchar_limit.str,
+			attrs->varchar_limit.cnt);
+		dbc->varchar_limit_str.cnt = attrs->varchar_limit.cnt;
+		INFOH(dbc, "varchar limit: %lu.", dbc->varchar_limit);
+	}
 
 	return SQL_SUCCESS;
 err:
@@ -1523,6 +1548,11 @@ void cleanup_dbc(esodbc_dbc_st *dbc)
 		dbc->catalog.cnt = 0;
 	} else {
 		assert(dbc->catalog.cnt == 0);
+	}
+	if (dbc->varchar_limit_str.str) {
+		free(dbc->varchar_limit_str.str);
+		dbc->varchar_limit_str.str = NULL;
+		dbc->varchar_limit_str.cnt = 0;
 	}
 
 	assert(dbc->abuff == NULL);
@@ -2516,7 +2546,7 @@ static void *copy_types_rows(esodbc_dbc_st *dbc, estype_row_st *type_row,
 				types[i].maximum_scale, types[i].minimum_scale);
 		}
 
-		/* resolve ES type to SQL C type */
+		/* resolve ES type to SQL and SQL C type */
 		if (! elastic_name2types(&types[i].type_name, &types[i].c_concise_type,
 				&sql_type)) {
 			/* ES version newer than driver's? */
@@ -2529,8 +2559,8 @@ static void *copy_types_rows(esodbc_dbc_st *dbc, estype_row_st *type_row,
 
 		/* BOOLEAN is used in catalog calls (like SYS TYPES / SQLGetTypeInfo),
 		 * and the data type is piped through to the app (just like with any
-		 * other statement), which causes issues, since it's a non-SQL type
-		 * => change it to SQL_BIT */
+		 * other statement), which causes issues, since it's not a standard
+		 * type => change it to SQL_BIT */
 		if (types[i].data_type == ESODBC_SQL_BOOLEAN) {
 			types[i].data_type = ES_BOOLEAN_TO_SQL;
 		}
@@ -2554,6 +2584,15 @@ static void *copy_types_rows(esodbc_dbc_st *dbc, estype_row_st *type_row,
 		/* fix SQL_DATA_TYPE and SQL_DATETIME_SUB columns */
 		concise_to_type_code(types[i].data_type, &types[i].sql_data_type,
 			&types[i].sql_datetime_sub);
+
+		/* if there's a varchar limit, apply it to string types */
+		if (types[i].sql_data_type == ESODBC_SQL_STRING) {
+			assert(0 <= types[i].column_size);
+			if (dbc->varchar_limit &&
+				dbc->varchar_limit < (SQLUINTEGER)types[i].column_size) {
+				types[i].column_size = dbc->varchar_limit;
+			}
+		}
 
 		set_display_size(types + i);
 
@@ -2691,10 +2730,10 @@ static BOOL load_es_types(esodbc_dbc_st *dbc)
 		goto end;
 	} else if (col_cnt != ESODBC_TYPES_COLUMNS) {
 		ERRH(stmt, "Elasticsearch returned an unexpected number of columns "
-			"(%d vs expected %d).", col_cnt, ESODBC_TYPES_COLUMNS);
+			"(%hd vs expected %d).", col_cnt, ESODBC_TYPES_COLUMNS);
 		goto end;
 	} else {
-		DBGH(stmt, "Elasticsearch types columns count: %d.", col_cnt);
+		DBGH(stmt, "Elasticsearch types columns count: %hd.", col_cnt);
 	}
 
 	/* check that we have received proper number of rows (non-0, less than
