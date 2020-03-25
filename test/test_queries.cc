@@ -208,6 +208,66 @@ TEST_F(Queries, SQLNumParams_duplicates_escape) {
 	ASSERT_EQ(params, 2);
 }
 
+TEST_F(Queries, SQLDescribeCol_wchar) {
+
+#	define COL_NAME "SQLDescribeCol_wchar"
+
+	const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" COL_NAME "\", \"type\": \"text\"}\
+  ],\
+  \"rows\": [\
+    [\"bar\"]\
+  ]\
+}\
+";
+	prepareStatement(json_answer);
+
+	SQLWCHAR col_name[sizeof(COL_NAME)];
+	SQLSMALLINT col_name_len, sql_type, scale, nullable;
+	SQLULEN col_size;
+	ret = SQLDescribeCol(stmt, /*col#*/1, col_name, sizeof(col_name),
+			&col_name_len, &sql_type, &col_size, &scale, &nullable);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ASSERT_EQ(col_name_len, sizeof(COL_NAME) - 1);
+	ASSERT_STREQ(col_name, MK_WPTR(COL_NAME));
+	ASSERT_EQ(sql_type, ES_WVARCHAR_SQL);
+	ASSERT_EQ(col_size, INT_MAX);
+	ASSERT_EQ(nullable, SQL_NULLABLE_UNKNOWN);
+}
+
+TEST_F(Queries, SQLDescribeCol_char) {
+
+#	undef COL_NAME
+#	define COL_NAME "SQLDescribeCol_char"
+
+	const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" COL_NAME "\", \"type\": \"IP\"}\
+  ],\
+  \"rows\": [\
+    [\"1.2.3.4\"]\
+  ]\
+}\
+";
+	prepareStatement(json_answer);
+
+	SQLWCHAR col_name[sizeof(COL_NAME)];
+	SQLSMALLINT col_name_len, sql_type, scale, nullable;
+	SQLULEN col_size;
+	ret = SQLDescribeCol(stmt, /*col#*/1, col_name, sizeof(col_name),
+			&col_name_len, &sql_type, &col_size, &scale, &nullable);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ASSERT_EQ(col_name_len, sizeof(COL_NAME) - 1);
+	ASSERT_STREQ(col_name, MK_WPTR(COL_NAME));
+	ASSERT_EQ(sql_type, ES_VARCHAR_SQL);
+	ASSERT_EQ(col_size, 0);
+	ASSERT_EQ(nullable, SQL_NULLABLE_UNKNOWN);
+}
+
+
 } // test namespace
 
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */
