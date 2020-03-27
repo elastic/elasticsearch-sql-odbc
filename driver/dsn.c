@@ -93,7 +93,7 @@ int assign_dsn_attr(esodbc_dsn_attrs_st *attrs,
 		ESODBC_DSN_ATTRS_COUNT);
 
 	if (ESODBC_DSN_MAX_ATTR_LEN < value->cnt) {
-		ERR("attribute value lenght too large: %zu; max=%zu.", value->cnt,
+		ERR("attribute value length too large: %zu; max=%zu.", value->cnt,
 			ESODBC_DSN_MAX_ATTR_LEN);
 		return -1;
 	}
@@ -356,7 +356,7 @@ BOOL TEST_API parse_00_list(esodbc_dsn_attrs_st *attrs, SQLWCHAR *list00)
 		cnt = wcslen(pos);
 
 		if (SHRT_MAX < cnt) {
-			ERR("invalid list lenght (%zu).", cnt);
+			ERR("invalid list length (%zu).", cnt);
 			return FALSE;
 		}
 		if (! parse_connection_string(attrs, pos, (SQLSMALLINT)cnt)) {
