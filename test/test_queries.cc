@@ -263,7 +263,7 @@ TEST_F(Queries, SQLDescribeCol_char) {
 	ASSERT_EQ(col_name_len, sizeof(COL_NAME) - 1);
 	ASSERT_STREQ(col_name, MK_WPTR(COL_NAME));
 	ASSERT_EQ(sql_type, ES_VARCHAR_SQL);
-	ASSERT_EQ(col_size, 0);
+	ASSERT_EQ(col_size, 45);
 	ASSERT_EQ(nullable, SQL_NULLABLE_UNKNOWN);
 }
 
