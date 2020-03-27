@@ -92,6 +92,11 @@ TEST_F(Catalogue, Columns_update_varchar_defs) {
 		"]"
 	"}";
 
+	/* setting this attribute should not affect the outcome */
+	ret = SQLSetStmtAttr(stmt, SQL_ATTR_MAX_LENGTH, (SQLPOINTER)INT_MAX,
+			SQL_IS_UINTEGER);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
 	prepareStatement(response);
 
 	/* needs to be lower than ESODBC_MAX_KEYWORD_PRECISION (~32k) */
@@ -118,6 +123,26 @@ TEST_F(Catalogue, Columns_update_varchar_defs) {
 		ASSERT_TRUE(SQL_SUCCEEDED(ret));
 		ASSERT_NE(len_ind, SQL_NULL_DATA);
 		ASSERT_EQ(val, VARCHAR_LIMIT);
+	}
+
+	/* above SYS COLUMNS result contains wrong (integer) type for the following
+	 * columns that should be short */
+	const SQLUSMALLINT short_cols[] = {
+		SQLCOLS_IDX_DATA_TYPE,
+		SQLCOLS_IDX_DECIMAL_DIGITS,
+		SQLCOLS_IDX_NUM_PREC_RADIX,
+		SQLCOLS_IDX_NULLABLE,
+		SQLCOLS_IDX_SQL_DATA_TYPE,
+		SQLCOLS_IDX_SQL_DATETIME_SUB
+	};
+	SQLWCHAR col_name[128];
+	SQLSMALLINT col_name_len, sql_type, scale, nullable;
+	SQLULEN col_size;
+	for (size_t i = 0; i < sizeof(short_cols)/sizeof(short_cols[0]); i ++) {
+		ret = SQLDescribeCol(stmt, short_cols[i], col_name, sizeof(col_name),
+				&col_name_len, &sql_type, &col_size, &scale, &nullable);
+		ASSERT_TRUE(SQL_SUCCEEDED(ret));
+		ASSERT_EQ(sql_type, SQL_SMALLINT);
 	}
 
 	HDRH(stmt)->dbc->varchar_limit = 0;

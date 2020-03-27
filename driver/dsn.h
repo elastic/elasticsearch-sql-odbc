@@ -90,7 +90,7 @@ typedef struct {
 	wstr_st trace_level;
 #define ESODBC_DSN_ATTRS_COUNT	29
 	SQLWCHAR buff[ESODBC_DSN_ATTRS_COUNT * ESODBC_DSN_MAX_ATTR_LEN];
-	/* DSN reading/writing functions are passed a SQLSMALLINT lenght param */
+	/* DSN reading/writing functions are passed a SQLSMALLINT length param */
 #if SHRT_MAX < ESODBC_DSN_ATTRS_COUNT * ESODBC_DSN_MAX_ATTR_LEN
 #error "attrs buffer too large"
 #endif
