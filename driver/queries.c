@@ -1243,7 +1243,7 @@ SQLRETURN EsSQLBindCol(
 
 	DBGH(stmt, "succesfully bound column #%hu of type %hd, "
 		"buffer@0x%p of length: %lld, LenInd@0x%p", ColumnNumber, TargetType,
-		TargetValue, BufferLength, StrLen_or_Ind);
+		TargetValue, (int64_t)BufferLength, StrLen_or_Ind);
 
 	return SQL_SUCCESS;
 
@@ -1905,7 +1905,7 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 
 	/* return number of processed rows (even if 0) */
 	if (ird->rows_processed_ptr) {
-		DBGH(stmt, "setting number of processed rows to: %llu.", i);
+		DBGH(stmt, "setting number of processed rows to: %llu.", (uint64_t)i);
 		*ird->rows_processed_ptr = i;
 	}
 
@@ -1917,7 +1917,7 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 	}
 
 	if (errors && i <= errors) {
-		ERRH(stmt, "processing failed for all rows [%llu].", errors);
+		ERRH(stmt, "processing failed for all rows [%llu].", (uint64_t)errors);
 		return SQL_ERROR;
 	}
 
@@ -1957,7 +1957,7 @@ static SQLRETURN gd_checks(esodbc_stmt_st *stmt, SQLUSMALLINT colno)
 	/* is there a block cursor bound? */
 	if (1 < stmt->ard->array_size) {
 		ERRH(stmt, "can't use function with block cursor "
-			"(array_size=%llu).", stmt->ard->array_size);
+			"(array_size=%llu).", (uint64_t)stmt->ard->array_size);
 		RET_HDIAGS(stmt, SQL_STATE_HYC00);
 	}
 #	ifndef NDEBUG
@@ -2045,7 +2045,7 @@ SQLRETURN EsSQLGetData(
 
 	if (stmt->gd_col == ColumnNumber && stmt->gd_ctype == TargetType) {
 		DBGH(stmt, "resuming get on column #%hu (pos @ %lld).",
-			stmt->gd_col, stmt->gd_offt);
+			stmt->gd_col, (int64_t)stmt->gd_offt);
 		if (stmt->gd_offt < 0) {
 			WARNH(stmt, "data for current column exhausted.");
 			return SQL_NO_DATA;
@@ -2054,7 +2054,8 @@ SQLRETURN EsSQLGetData(
 		if (0 <= stmt->gd_col) {
 			DBGH(stmt, "previous source column #%hu (pos @ %lld), SQL C %hd "
 				"abandoned for new #%hu, SQL C %hd.", stmt->gd_col,
-				stmt->gd_offt, stmt->gd_ctype, ColumnNumber, TargetType);
+				(int64_t)stmt->gd_offt, stmt->gd_ctype, ColumnNumber,
+				TargetType);
 			/* reset fields now, should the call eventually fail */
 			STMT_GD_RESET(stmt);
 		} else {
@@ -2099,7 +2100,7 @@ SQLRETURN EsSQLGetData(
 	}
 
 	DBGH(stmt, "succesfully copied data from column #%hu (pos @ %lld), "
-		"SQL C %hd.", ColumnNumber, stmt->gd_offt, TargetType);
+		"SQL C %hd.", ColumnNumber, (int64_t)stmt->gd_offt, TargetType);
 end:
 	/* XXX: if get_record(gd_ard, ColumnNumber)->meta_type != string/bin,
 	 * should stmt->gd_offt bet set to -1 ?? */
@@ -2603,7 +2604,7 @@ SQLRETURN EsSQLBindParameter(
 		if (*StrLen_or_IndPtr == SQL_DATA_AT_EXEC ||
 			*StrLen_or_IndPtr < SQL_NTSL) {
 			ERRH(stmt, "data-at-exec not supported (LenInd=%lld).",
-				*StrLen_or_IndPtr);
+				(int64_t)*StrLen_or_IndPtr);
 			RET_HDIAG(stmt, SQL_STATE_HYC00, "data-at-exec not supported", 0);
 		}
 	} else {
@@ -2739,8 +2740,9 @@ SQLRETURN EsSQLBindParameter(
 	DBGH(stmt, "succesfully bound parameter #%hu, IO-type: %hd, "
 		"SQL C type: %hd, SQL type: %hd, size: %llu, decdigits: %hd, "
 		"buffer@0x%p, length: %lld, LenInd@0x%p.", ParameterNumber,
-		InputOutputType, ValueType, ParameterType, ColumnSize, DecimalDigits,
-		ParameterValuePtr, BufferLength, StrLen_or_IndPtr);
+		InputOutputType, ValueType, ParameterType, (uint64_t)ColumnSize,
+		DecimalDigits, ParameterValuePtr, (int64_t)BufferLength,
+		StrLen_or_IndPtr);
 
 	return SQL_SUCCESS;
 
@@ -3870,7 +3872,7 @@ SQLRETURN EsSQLDescribeColW(
 	}
 	*pcbColDef = get_col_size(rec);
 	DBGH(stmt, "col #%d of meta type %d has size=%llu.",
-		icol, rec->meta_type, *pcbColDef);
+		icol, rec->meta_type, (uint64_t)*pcbColDef);
 
 	if (! pibScale) {
 		ERRH(stmt, "no column decimal digits buffer provided.");

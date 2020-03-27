@@ -77,11 +77,11 @@
 				/* SQL[U]LEN = [unsigned] long OR [u]int64_t (64b _WIN32) */ \
 			case 'n': /* long/int64_t signed */ \
 				_n = snprintf(_BUFF + _ps, _AVAIL(_ps), "%lld", \
-						val ? *(int64_t *)(uintptr_t)val : 0); \
+						val ? (int64_t)*(SQLLEN *)(uintptr_t)val : 0); \
 				break; \
 			case 'N': /* long/int64_t unsigned */ \
 				_n = snprintf(_BUFF + _ps, _AVAIL(_ps), "%llu", \
-						val ? *(uint64_t *)(uintptr_t)val : 0); \
+						val ? (int64_t)*(SQLULEN *)(uintptr_t)val : 0); \
 				break; \
 				/*
 				 * non-numeric pointers
