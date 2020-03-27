@@ -336,7 +336,7 @@ char *cstr_hex_dump(const cstr_st *buff);
 #endif /* _WIN32 */
 
 
-/* ISO time formats lenghts.
+/* ISO time formats lengths.
  * ES/SQL interface should only use UTC ('Z'ulu offset). */
 #define ISO8601_TIMESTAMP_LEN(prec)		\
 	(sizeof("yyyy-mm-ddThh:mm:ss+hh:mm") - /*\0*/1 + /*'.'*/!!prec + prec)
