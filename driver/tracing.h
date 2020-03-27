@@ -81,7 +81,7 @@
 				break; \
 			case 'N': /* long/int64_t unsigned */ \
 				_n = snprintf(_BUFF + _ps, _AVAIL(_ps), "%llu", \
-						val ? (int64_t)*(SQLULEN *)(uintptr_t)val : 0); \
+						val ? (uint64_t)*(SQLULEN *)(uintptr_t)val : 0); \
 				break; \
 				/*
 				 * non-numeric pointers
