@@ -124,7 +124,7 @@
  */
 /* maximum URL size */
 #define ESODBC_MAX_URL_LEN				2048
-/* maximum DNS attribute value lenght (should be long enought to accomodate a
+/* maximum DNS attribute value length (should be long enought to accomodate a
  * decently long FQ file path name) */
 #define ESODBC_DSN_MAX_ATTR_LEN			1024
 

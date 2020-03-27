@@ -522,7 +522,7 @@ static SQLRETURN copy_one_cell(esodbc_stmt_st *stmt, wstr_st *dest,
 	/* fetch data's length (always converted to w-string) */
 	ret = EsSQLGetData(stmt, col_idx, SQL_C_WCHAR, dest->str, 0, &len_ind);
 	if (! SQL_SUCCEEDED(ret)) {
-		ERRH(stmt, "failed to get data lenght for cell@[%ld, %hd].",
+		ERRH(stmt, "failed to get data length for cell@[%ld, %hd].",
 			row_cnt, col_idx);
 		return ret;
 	}
@@ -610,7 +610,7 @@ SQLRETURN TEST_API update_varchar_defs(esodbc_stmt_st *stmt)
 	wstr_st *lim = &HDRH(stmt)->dbc->varchar_limit_str;
 
 	/* save and reset SQL_ATTR_MAX_LENGTH attribute, it'll interfere with
-	 * reading lenght of avail data with SQLGetData() otherwise. */
+	 * reading length of avail data with SQLGetData() otherwise. */
 	max_length = stmt->max_length;
 	stmt->max_length = 0;
 

@@ -52,7 +52,7 @@ static thread_local struct tm today;
 	} while (0)
 
 #define DBL_BASE10_MAX_LEN /*-0.*/3 + DBL_DIG - DBL_MIN_10_EXP
-/* maximum lenght of an interval literal (with terminator; both ISO and SQL),
+/* maximum length of an interval literal (with terminator; both ISO and SQL),
  * with no field sanity checks: five longs with separators and sign */
 #define INTERVAL_VAL_MAX_LEN (5 * sizeof("4294967295"))
 
@@ -2835,7 +2835,7 @@ static size_t print_interval_sec(esodbc_rec_st *rec, SQL_INTERVAL_STRUCT *ivl,
 
 		if (wide) {
 			wfmt[2] = L'0' + rec->precision;
-			/* printf's limits: max lenght of '<second>.<fraction>', accounted
+			/* printf's limits: max length of '<second>.<fraction>', accounted
 			 * in buffer's max len estimation. */
 			res = swprintf((wchar_t *)dest, 2 * sizeof("4294967295") + 1,
 					wfmt, dbl);
