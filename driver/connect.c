@@ -2290,12 +2290,11 @@ static void set_display_size(esodbc_estype_st *es_type)
 {
 	switch (es_type->data_type) {
 		case SQL_CHAR:
-		case SQL_VARCHAR: /* KEYWORD, TEXT */
+		case SQL_VARCHAR:
 		case SQL_LONGVARCHAR:
 		case SQL_WCHAR:
 		case SQL_WVARCHAR:
 		case SQL_WLONGVARCHAR:
-			// TODO: 45 if IP?
 			es_type->display_size = es_type->column_size;
 			break;
 
@@ -2412,7 +2411,7 @@ static void set_display_size(esodbc_estype_st *es_type)
 	}
 
 	DBG("data type: %hd, display size: %lld", es_type->data_type,
-		es_type->display_size);
+		(int64_t)es_type->display_size);
 }
 
 static BOOL bind_types_cols(esodbc_stmt_st *stmt, estype_row_st *type_row)
@@ -2465,7 +2464,7 @@ static void *copy_types_rows(esodbc_dbc_st *dbc, estype_row_st *type_row,
 	SQLWCHAR *pos;
 	int c;
 	SQLULEN i;
-	SQLSMALLINT sql_type, sec_prec;
+	SQLSMALLINT sec_prec;
 
 	/* pointer to start position where the strings will be copied in */
 	pos = (SQLWCHAR *)&types[rows_fetched];
@@ -2548,35 +2547,16 @@ static void *copy_types_rows(esodbc_dbc_st *dbc, estype_row_st *type_row,
 
 		/* resolve ES type to SQL and SQL C type */
 		if (! elastic_name2types(&types[i].type_name, &types[i].c_concise_type,
-				&sql_type)) {
+				&types[i].data_type)) {
 			/* ES version newer than driver's? */
 			ERRH(dbc, "failed to convert type name `" LWPDL "` to SQL C type.",
 				LWSTR(&types[i].type_name));
 			return NULL;
 		}
-		DBGH(dbc, "ES type `" LWPDL "` resolved to C concise: %hd, SQL: %hd.",
-			LWSTR(&types[i].type_name), types[i].c_concise_type, sql_type);
+		DBGH(dbc, "ES type `" LWPDL "` resolved to concise: C=%hd, SQL=%hd.",
+			LWSTR(&types[i].type_name), types[i].c_concise_type,
+			types[i].data_type);
 
-		/* BOOLEAN is used in catalog calls (like SYS TYPES / SQLGetTypeInfo),
-		 * and the data type is piped through to the app (just like with any
-		 * other statement), which causes issues, since it's not a standard
-		 * type => change it to SQL_BIT */
-		if (types[i].data_type == ESODBC_SQL_BOOLEAN) {
-			types[i].data_type = ES_BOOLEAN_TO_SQL;
-		}
-		/* GEO (SHAPE, POINT), SHAPE types are WKT encodings */
-		if (types[i].data_type == ESODBC_SQL_GEO) {
-			types[i].data_type = ES_GEO_TO_SQL;
-		}
-
-		/* .data_type is used in data conversions -> make sure the SQL type
-		 * derived from type's name is the same with type reported value */
-		if (sql_type != types[i].data_type) {
-			ERRH(dbc, "type `" LWPDL "` derived (%d) and reported (%d) SQL "
-				"type identifiers differ.", LWSTR(&types[i].type_name),
-				sql_type, types[i].data_type);
-			return NULL;
-		}
 		/* set meta type */
 		types[i].meta_type = concise_to_meta(types[i].c_concise_type,
 				/*C type -> AxD*/DESC_TYPE_ARD);
@@ -2585,8 +2565,9 @@ static void *copy_types_rows(esodbc_dbc_st *dbc, estype_row_st *type_row,
 		concise_to_type_code(types[i].data_type, &types[i].sql_data_type,
 			&types[i].sql_datetime_sub);
 
-		/* if there's a varchar limit, apply it to string types */
-		if (types[i].sql_data_type == ESODBC_SQL_STRING) {
+		/* if there's a set varchar limit, apply it to the string types */
+		if (types[i].data_type == ES_WVARCHAR_SQL ||
+			types[i].data_type == ES_VARCHAR_SQL) {
 			assert(0 <= types[i].column_size);
 			if (dbc->varchar_limit &&
 				dbc->varchar_limit < (SQLUINTEGER)types[i].column_size) {
@@ -2632,18 +2613,21 @@ static void set_es_types(esodbc_dbc_st *dbc, SQLULEN rows_fetched,
 	assert(dbc->max_varchar_type == NULL);
 
 	for (i = 0; i < rows_fetched; i ++) {
-		if (types[i].data_type == SQL_FLOAT) {
-			max_float_size = dbc->max_float_type ?
-				dbc->max_float_type->column_size : 0;
-			if (max_float_size < types[i].column_size) {
-				dbc->max_float_type = &types[i];
-			}
-		} else if (types[i].data_type == SQL_VARCHAR) {
-			max_varchar_size = dbc->max_varchar_type ?
-				dbc->max_varchar_type->column_size : 0;
-			if (max_varchar_size < types[i].column_size) {
-				dbc->max_varchar_type = &types[i];
-			}
+		switch (types[i].data_type) {
+			case SQL_DOUBLE:
+				max_float_size = dbc->max_float_type ?
+					dbc->max_float_type->column_size : 0;
+				if (max_float_size < types[i].column_size) {
+					dbc->max_float_type = &types[i];
+				}
+				break;
+			case ES_VARCHAR_SQL:
+			case ES_WVARCHAR_SQL:
+				max_varchar_size = dbc->max_varchar_type ?
+					dbc->max_varchar_type->column_size : 0;
+				if (max_varchar_size < types[i].column_size) {
+					dbc->max_varchar_type = &types[i];
+				}
 		}
 	}
 
@@ -2651,7 +2635,7 @@ static void set_es_types(esodbc_dbc_st *dbc, SQLULEN rows_fetched,
 	assert(dbc->max_varchar_type);
 
 	DBGH(dbc, "%lu ES/SQL types available, maximum sizes supported for: "
-		"SQL_FLOAT: %ld, SQL_VARCHAR: %ld.", (unsigned long)rows_fetched,
+		"floats: %ld, varchar: %ld.", (unsigned long)rows_fetched,
 		dbc->max_float_type->column_size, dbc->max_varchar_type->column_size);
 }
 
@@ -3264,14 +3248,14 @@ SQLRETURN EsSQLSetConnectAttrW(
 
 		case SQL_ATTR_ASYNC_ENABLE:
 			ERRH(dbc, "no support for async API (setting param: %llu)",
-				(SQLULEN)(uintptr_t)Value);
+				(uint64_t)Value);
 			if ((SQLULEN)(uintptr_t)Value == SQL_ASYNC_ENABLE_ON) {
 				RET_HDIAGS(dbc, SQL_STATE_HYC00);
 			}
 			break;
 		case SQL_ATTR_ASYNC_DBC_FUNCTIONS_ENABLE:
 			ERRH(dbc, "no support for async API (setting param: %llu)",
-				(SQLULEN)(uintptr_t)Value);
+				(uint64_t)Value);
 			if ((SQLULEN)(uintptr_t)Value == SQL_ASYNC_DBC_ENABLE_ON) {
 				RET_HDIAGS(dbc, SQL_STATE_HY114);
 			}
@@ -3370,8 +3354,8 @@ SQLRETURN EsSQLSetConnectAttrW(
 
 		case SQL_ATTR_MAX_ROWS: /* stmt attr -- 2.x app */
 			WARNH(dbc, "applying a statement as connection attribute (2.x?)");
-			DBGH(dbc, "setting max rows: %llu.", (SQLULEN)Value);
-			if ((SQLULEN)Value != 0) {
+			DBGH(dbc, "setting max rows: %llu.", (uint64_t)Value);
+			if (Value) {
 				WARNH(dbc, "requested max_rows substituted with 0.");
 				RET_HDIAGS(dbc, SQL_STATE_01S02);
 			}
@@ -3429,7 +3413,7 @@ SQLRETURN EsSQLGetConnectAttrW(
 			*(SQLULEN *)ValuePtr = dbc->metadata_id;
 			break;
 		case SQL_ATTR_ASYNC_ENABLE:
-			DBGH(dbc, "getting async mode: %llu", SQL_ASYNC_ENABLE_OFF);
+			DBGH(dbc, "getting async mode: %lu", SQL_ASYNC_ENABLE_OFF);
 			*(SQLULEN *)ValuePtr = SQL_ASYNC_ENABLE_OFF;
 			break;
 

@@ -1243,7 +1243,7 @@ SQLRETURN EsSQLBindCol(
 
 	DBGH(stmt, "succesfully bound column #%hu of type %hd, "
 		"buffer@0x%p of length: %lld, LenInd@0x%p", ColumnNumber, TargetType,
-		TargetValue, BufferLength, StrLen_or_Ind);
+		TargetValue, (int64_t)BufferLength, StrLen_or_Ind);
 
 	return SQL_SUCCESS;
 
@@ -1905,7 +1905,7 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 
 	/* return number of processed rows (even if 0) */
 	if (ird->rows_processed_ptr) {
-		DBGH(stmt, "setting number of processed rows to: %llu.", i);
+		DBGH(stmt, "setting number of processed rows to: %llu.", (uint64_t)i);
 		*ird->rows_processed_ptr = i;
 	}
 
@@ -1917,7 +1917,7 @@ SQLRETURN EsSQLFetch(SQLHSTMT StatementHandle)
 	}
 
 	if (errors && i <= errors) {
-		ERRH(stmt, "processing failed for all rows [%llu].", errors);
+		ERRH(stmt, "processing failed for all rows [%llu].", (uint64_t)errors);
 		return SQL_ERROR;
 	}
 
@@ -1957,7 +1957,7 @@ static SQLRETURN gd_checks(esodbc_stmt_st *stmt, SQLUSMALLINT colno)
 	/* is there a block cursor bound? */
 	if (1 < stmt->ard->array_size) {
 		ERRH(stmt, "can't use function with block cursor "
-			"(array_size=%llu).", stmt->ard->array_size);
+			"(array_size=%llu).", (uint64_t)stmt->ard->array_size);
 		RET_HDIAGS(stmt, SQL_STATE_HYC00);
 	}
 #	ifndef NDEBUG
@@ -2045,7 +2045,7 @@ SQLRETURN EsSQLGetData(
 
 	if (stmt->gd_col == ColumnNumber && stmt->gd_ctype == TargetType) {
 		DBGH(stmt, "resuming get on column #%hu (pos @ %lld).",
-			stmt->gd_col, stmt->gd_offt);
+			stmt->gd_col, (int64_t)stmt->gd_offt);
 		if (stmt->gd_offt < 0) {
 			WARNH(stmt, "data for current column exhausted.");
 			return SQL_NO_DATA;
@@ -2054,7 +2054,8 @@ SQLRETURN EsSQLGetData(
 		if (0 <= stmt->gd_col) {
 			DBGH(stmt, "previous source column #%hu (pos @ %lld), SQL C %hd "
 				"abandoned for new #%hu, SQL C %hd.", stmt->gd_col,
-				stmt->gd_offt, stmt->gd_ctype, ColumnNumber, TargetType);
+				(int64_t)stmt->gd_offt, stmt->gd_ctype, ColumnNumber,
+				TargetType);
 			/* reset fields now, should the call eventually fail */
 			STMT_GD_RESET(stmt);
 		} else {
@@ -2099,7 +2100,7 @@ SQLRETURN EsSQLGetData(
 	}
 
 	DBGH(stmt, "succesfully copied data from column #%hu (pos @ %lld), "
-		"SQL C %hd.", ColumnNumber, stmt->gd_offt, TargetType);
+		"SQL C %hd.", ColumnNumber, (int64_t)stmt->gd_offt, TargetType);
 end:
 	/* XXX: if get_record(gd_ard, ColumnNumber)->meta_type != string/bin,
 	 * should stmt->gd_offt bet set to -1 ?? */
@@ -2456,9 +2457,9 @@ SQLRETURN EsSQLPrepareW
 
 
 /* Find the ES/SQL type given in es_type; for ID matching multiple types
- * (scaled/half_float), but not  keyword/text, use the best matching col_size,
- * which is the smallest, that's still matching (<=) the given one. This
- * assumes the types are ordered by it (as per the spec). */
+ * (scaled_float/double), but not  keyword/text, use the best matching
+ * col_size, which is the smallest, that's still matching (<=) the given one.
+ * This assumes the types are ordered by it (as per the spec). */
 esodbc_estype_st *lookup_es_type(esodbc_dbc_st *dbc,
 	SQLSMALLINT es_type, SQLULEN col_size)
 {
@@ -2467,7 +2468,7 @@ esodbc_estype_st *lookup_es_type(esodbc_dbc_st *dbc,
 
 	/* for strings, choose text straight away: some type (IP, GEO) must coform
 	 * to a format and no content inspection is done in the driver */
-	if (es_type == SQL_VARCHAR) {
+	if (es_type == ES_VARCHAR_SQL || es_type == ES_WVARCHAR_SQL) {
 		return dbc->max_varchar_type;
 	}
 	for (i = 0; i < dbc->no_types; i ++) {
@@ -2480,7 +2481,7 @@ esodbc_estype_st *lookup_es_type(esodbc_dbc_st *dbc,
 				if ((SQLINTEGER)col_size <= sz) {
 					return &dbc->es_types[i];
 				}
-				if (es_type == SQL_FLOAT &&
+				if (es_type == SQL_DOUBLE &&
 					sz == dbc->max_float_type->column_size) {
 					return dbc->max_float_type;
 				}
@@ -2497,25 +2498,17 @@ esodbc_estype_st *lookup_es_type(esodbc_dbc_st *dbc,
 static esodbc_estype_st *match_es_type(esodbc_rec_st *irec)
 {
 	SQLULEN i;
-	SQLINTEGER col_sz;
 	esodbc_dbc_st *dbc = irec->desc->hdr.stmt->hdr.dbc;
 
 	for (i = 0; i < dbc->no_types; i ++) {
 		if (dbc->es_types[i].data_type == irec->concise_type) {
 			switch (irec->concise_type) {
-				/* For SQL types mapping to more than one ES/SQL type, choose
-				 * the ES/SQL type with smallest "size" that covers user given
-				 * precision OR that has maximum precision (in case user's is
-				 * larger than max ES/SQL offers. */
-				case SQL_FLOAT: /* HALF_FLOAT, SCALED_FLOAT */
-					col_sz = dbc->es_types[i].column_size;
-					if (irec->precision <= col_sz ||
-						col_sz == dbc->max_float_type->column_size) {
-						return &dbc->es_types[i];
-					}
+				case SQL_DOUBLE: /* DOUBLE, SCALED_FLOAT */
+					return dbc->max_float_type;
 					break;
-				case SQL_VARCHAR: /* IP, CONSTANT_KEYWORD, KEYWORD, TEXT */
-					return lookup_es_type(dbc, SQL_VARCHAR, irec->precision);
+				case ES_WVARCHAR_SQL: /* CONSTANT_KEYWORD, KEYWORD, TEXT */
+				case ES_VARCHAR_SQL: /* IP, GEO+ */
+					return dbc->max_varchar_type;
 				default:
 					/* unequivocal match */
 					return &dbc->es_types[i];
@@ -2528,10 +2521,10 @@ static esodbc_estype_st *match_es_type(esodbc_rec_st *irec)
 		case METATYPE_EXACT_NUMERIC:
 			assert(irec->concise_type == SQL_DECIMAL ||
 				irec->concise_type == SQL_NUMERIC);
-			return lookup_es_type(dbc, SQL_FLOAT, irec->precision);
+			return lookup_es_type(dbc, SQL_DOUBLE, irec->precision);
 
 		case METATYPE_STRING:
-			return lookup_es_type(dbc, SQL_VARCHAR, irec->precision);
+			return lookup_es_type(dbc, ES_TEXT_TO_SQL, irec->precision);
 		case METATYPE_BIN:
 			return lookup_es_type(dbc, SQL_BINARY, /*no prec*/0);
 		case METATYPE_DATE_TIME:
@@ -2539,9 +2532,9 @@ static esodbc_estype_st *match_es_type(esodbc_rec_st *irec)
 				irec->concise_type == SQL_TYPE_TIME);
 			return lookup_es_type(dbc, SQL_TYPE_TIMESTAMP, /*no prec*/0);
 		case METATYPE_BIT:
-			return lookup_es_type(dbc, SQL_BIT, /*no prec*/0);
+			return lookup_es_type(dbc, ES_BOOLEAN_TO_SQL, /*no prec*/0);
 		case METATYPE_UID:
-			return lookup_es_type(dbc, SQL_VARCHAR, /*no prec: TEXT*/0);
+			return lookup_es_type(dbc, ES_TEXT_TO_SQL, /*no prec: TEXT*/0);
 
 		case METATYPE_INTERVAL_WSEC:
 		case METATYPE_INTERVAL_WOSEC:
@@ -2603,7 +2596,7 @@ SQLRETURN EsSQLBindParameter(
 		if (*StrLen_or_IndPtr == SQL_DATA_AT_EXEC ||
 			*StrLen_or_IndPtr < SQL_NTSL) {
 			ERRH(stmt, "data-at-exec not supported (LenInd=%lld).",
-				*StrLen_or_IndPtr);
+				(int64_t)*StrLen_or_IndPtr);
 			RET_HDIAG(stmt, SQL_STATE_HYC00, "data-at-exec not supported", 0);
 		}
 	} else {
@@ -2739,8 +2732,9 @@ SQLRETURN EsSQLBindParameter(
 	DBGH(stmt, "succesfully bound parameter #%hu, IO-type: %hd, "
 		"SQL C type: %hd, SQL type: %hd, size: %llu, decdigits: %hd, "
 		"buffer@0x%p, length: %lld, LenInd@0x%p.", ParameterNumber,
-		InputOutputType, ValueType, ParameterType, ColumnSize, DecimalDigits,
-		ParameterValuePtr, BufferLength, StrLen_or_IndPtr);
+		InputOutputType, ValueType, ParameterType, (uint64_t)ColumnSize,
+		DecimalDigits, ParameterValuePtr, (int64_t)BufferLength,
+		StrLen_or_IndPtr);
 
 	return SQL_SUCCESS;
 
@@ -2832,8 +2826,8 @@ static SQLRETURN convert_param_val(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			max = FLT_MAX;
 			fixed = FALSE;
 			break;
-		case SQL_FLOAT: /* HALF_FLOAT, SCALED_FLOAT */
-		case SQL_DOUBLE: /* DOUBLE */
+		case SQL_FLOAT: /* HALF_FLOAT */
+		case SQL_DOUBLE: /* DOUBLE, SCALED_FLOAT */
 			min = DBL_MIN;
 			max = DBL_MAX;
 			fixed = FALSE;
@@ -2842,7 +2836,8 @@ static SQLRETURN convert_param_val(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			return c2sql_number(arec, irec, pos, &min, &max, fixed, dest, len);
 
 		/* JSON string */
-		case SQL_VARCHAR: /* KEYWORD, TEXT */
+		case ES_WVARCHAR_SQL: /* KEYWORD, TEXT, CONSTANT_KEYWORD */
+		case ES_VARCHAR_SQL: /* IP, GEO+ */
 			return c2sql_varchar(arec, irec, pos, dest, len);
 
 		case SQL_TYPE_DATE:
@@ -3870,7 +3865,7 @@ SQLRETURN EsSQLDescribeColW(
 	}
 	*pcbColDef = get_col_size(rec);
 	DBGH(stmt, "col #%d of meta type %d has size=%llu.",
-		icol, rec->meta_type, *pcbColDef);
+		icol, rec->meta_type, (uint64_t)*pcbColDef);
 
 	if (! pibScale) {
 		ERRH(stmt, "no column decimal digits buffer provided.");

@@ -201,8 +201,11 @@ void dump_record(esodbc_rec_st *rec)
 	DUMP_FIELD(rec, indicator_ptr, "0x%p");
 	DUMP_FIELD(rec, octet_length_ptr, "0x%p");
 
-	DUMP_FIELD(rec, octet_length, "%lld");
-	DUMP_FIELD(rec, length, "%llu");
+	/* these fields are SQLLEN and SQLULEN, so they'd need long long
+	 * specifiers on WIN64 and long on WIN32; however it's hard to conceive a
+	 * case where their fields would either be negative or exceed INT_MAX. */
+	DUMP_FIELD(rec, octet_length, "%ld");
+	DUMP_FIELD(rec, length, "%lu");
 
 	DUMP_FIELD(rec, datetime_interval_precision, "%d");
 	DUMP_FIELD(rec, num_prec_radix, "%d");
@@ -533,7 +536,7 @@ SQLRETURN EsSQLSetEnvAttr(SQLHENV EnvironmentHandle,
 						"application version not supported", 0);
 			}
 			ENVH(EnvironmentHandle)->version = (SQLUINTEGER)(uintptr_t)Value;
-			INFOH(EnvironmentHandle, "set version to %u.",
+			INFOH(EnvironmentHandle, "set version to %lu.",
 				ENVH(EnvironmentHandle)->version);
 			break;
 
@@ -597,7 +600,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 	/*INDENT-OFF*/
 	switch(Attribute) {
 		case SQL_ATTR_USE_BOOKMARKS:
-			DBGH(stmt, "setting use-bookmarks to: %u.", (SQLULEN)ValuePtr);
+			DBGH(stmt, "setting use-bookmarks to: %llu.", (uint64_t)ValuePtr);
 			if ((SQLULEN)ValuePtr != SQL_UB_OFF) {
 				ERRH(stmt, "bookmarks are not supported by driver.");
 				RET_HDIAG(stmt, SQL_STATE_HYC00,
@@ -799,14 +802,14 @@ SQLRETURN EsSQLSetStmtAttrW(
 			RET_HDIAGS(stmt, SQL_STATE_HY024);
 
 		case SQL_ATTR_METADATA_ID:
-			DBGH(stmt, "setting metadata_id to: %u", (SQLULEN)ValuePtr);
+			DBGH(stmt, "setting metadata_id to: %llu", (uint64_t)ValuePtr);
 			stmt->metadata_id = (SQLULEN)ValuePtr;
 			break;
 
 		case SQL_ATTR_ASYNC_ENABLE:
 			ERRH(stmt, "no support for async API (setting param: %llu)",
-					(SQLULEN)(uintptr_t)ValuePtr);
-			if ((SQLULEN)(uintptr_t)ValuePtr == SQL_ASYNC_ENABLE_ON) {
+					(uint64_t)ValuePtr);
+			if ((SQLULEN)ValuePtr == SQL_ASYNC_ENABLE_ON) {
 				RET_HDIAGS(stmt, SQL_STATE_HYC00);
 			}
 			break;
@@ -818,7 +821,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 
 		case SQL_ATTR_MAX_LENGTH:
 			ulen = (SQLULEN)ValuePtr;
-			DBGH(stmt, "setting max_length to: %u.", ulen);
+			DBGH(stmt, "setting max_length to: %llu.", (uint64_t)ulen);
 			if (ulen < ESODBC_LO_MAX_LENGTH) {
 				WARNH(stmt, "MAX_LENGTH lower than min allowed (%d) -- "
 						"correcting value.", ESODBC_LO_MAX_LENGTH);
@@ -834,37 +837,37 @@ SQLRETURN EsSQLSetStmtAttrW(
 			break;
 
 		case SQL_ATTR_QUERY_TIMEOUT:
-			DBGH(stmt, "setting query timeout to: %u.", (SQLULEN)ValuePtr);
+			DBGH(stmt, "setting query timeout to: %llu.", (uint64_t)ValuePtr);
 			stmt->query_timeout = (SQLULEN)ValuePtr;
 			break;
 
 		case SQL_ATTR_CURSOR_TYPE:
-			DBGH(stmt, "setting cursor type: %llu.", (SQLULEN)ValuePtr);
+			DBGH(stmt, "setting cursor type: %llu.", (SQLUBIGINT)ValuePtr);
 			if ((SQLULEN)ValuePtr != SQL_CURSOR_FORWARD_ONLY) {
 				WARNH(stmt, "requested cursor_type substituted with "
-						"forward-only (%llu).", SQL_CURSOR_FORWARD_ONLY);
+						"forward-only (%lu).", SQL_CURSOR_FORWARD_ONLY);
 				RET_HDIAGS(stmt, SQL_STATE_01S02);
 			}
 			break;
 
 		case SQL_ATTR_NOSCAN:
 			DBGH(stmt, "setting escape seq scanning: %llu -- NOOP.",
-					(SQLULEN)ValuePtr);
+					(uint64_t)ValuePtr);
 			/* nothing to do: the driver never scans the input, ESSQL processes
 			 * the escape sequences */
 			break;
 
 		case SQL_ATTR_CONCURRENCY:
-			DBGH(stmt, "setting concurrency: %llu.", (SQLULEN)ValuePtr);
+			DBGH(stmt, "setting concurrency: %llu.", (uint64_t)ValuePtr);
 			if ((SQLULEN)ValuePtr != SQL_CONCUR_READ_ONLY) {
 				WARNH(stmt, "requested concurrency substituted with "
-						"read-only (%llu).", SQL_CONCUR_READ_ONLY);
+						"read-only (%d).", SQL_CONCUR_READ_ONLY);
 				RET_HDIAGS(stmt, SQL_STATE_01S02);
 			}
 			break;
 
 		case SQL_ATTR_MAX_ROWS:
-			DBGH(stmt, "setting max rows: %llu.", (SQLULEN)ValuePtr);
+			DBGH(stmt, "setting max rows: %llu.", (uint64_t)ValuePtr);
 			if ((SQLULEN)ValuePtr != 0) {
 				WARNH(stmt, "requested max_rows substituted with 0.");
 				RET_HDIAGS(stmt, SQL_STATE_01S02);
@@ -872,7 +875,8 @@ SQLRETURN EsSQLSetStmtAttrW(
 			break;
 
 		case SQL_ATTR_CURSOR_SENSITIVITY:
-			DBGH(stmt, "setting cursor sensitivity: %llu.", (SQLULEN)ValuePtr);
+			DBGH(stmt, "setting cursor sensitivity: %llu.",
+					(uint64_t)ValuePtr);
 			if ((SQLULEN)ValuePtr != SQL_UNSPECIFIED) {
 				ERRH(stmt, "driver supports forward-only cursors.");
 				RET_HDIAGS(stmt, SQL_STATE_HYC00);
@@ -880,7 +884,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 			break;
 
 		case SQL_ATTR_CURSOR_SCROLLABLE:
-			DBGH(stmt, "setting scrollable cursor: %llu.", (SQLULEN)ValuePtr);
+			DBGH(stmt, "setting scrollable cursor: %llu.", (uint64_t)ValuePtr);
 			if ((SQLULEN)ValuePtr != SQL_NONSCROLLABLE) {
 				ERRH(stmt, "driver supports only non-scrollable cursors.");
 				RET_HDIAGS(stmt, SQL_STATE_HYC00);
@@ -888,7 +892,7 @@ SQLRETURN EsSQLSetStmtAttrW(
 			break;
 
 		case SQL_ATTR_RETRIEVE_DATA:
-			DBGH(stmt, "setting data retrieving: %llu.", (SQLULEN)ValuePtr);
+			DBGH(stmt, "setting data retrieving: %llu.", (uint64_t)ValuePtr);
 			if ((SQLULEN)ValuePtr != SQL_RD_ON) {
 				WARNH(stmt, "no fetching without data retrieval possible.");
 				RET_HDIAGS(stmt, SQL_STATE_01S02);
@@ -938,30 +942,34 @@ SQLRETURN EsSQLGetStmtAttrW(
 			break;
 
 		case SQL_ATTR_METADATA_ID:
-			DBGH(stmt, "getting metadata_id: %llu", stmt->metadata_id);
+			DBGH(stmt, "getting metadata_id: %llu",
+					(uint64_t)stmt->metadata_id);
 			*(SQLULEN *)ValuePtr = stmt->metadata_id;
 			break;
 		case SQL_ATTR_ASYNC_ENABLE:
-			DBGH(stmt, "getting async mode: %llu", SQL_ASYNC_ENABLE_OFF);
+			DBGH(stmt, "getting async mode: %lu", SQL_ASYNC_ENABLE_OFF);
 			*(SQLULEN *)ValuePtr = SQL_ASYNC_ENABLE_OFF;
 			break;
 		case SQL_ATTR_MAX_LENGTH:
-			DBGH(stmt, "getting max_length: %llu", stmt->max_length);
+			DBGH(stmt, "getting max_length: %llu",
+					(uint64_t)stmt->max_length);
 			*(SQLULEN *)ValuePtr = stmt->max_length;
 			break;
 		case SQL_ATTR_QUERY_TIMEOUT:
-			DBGH(stmt, "getting query timeout: %llu", stmt->query_timeout);
+			DBGH(stmt, "getting query timeout: %llu",
+					(uint64_t)stmt->query_timeout);
 			*(SQLULEN *)ValuePtr = stmt->query_timeout;
 			break;
 
 		/* "determine the number of the current row in the result set" */
 		case SQL_ATTR_ROW_NUMBER:
 			*(SQLULEN *)ValuePtr = (SQLULEN)stmt->tv_rows;
-			DBGH(stmt, "getting row number: %llu", *(SQLULEN *)ValuePtr);
+			DBGH(stmt, "getting row number: %llu",
+					(uint64_t)*(SQLULEN *)ValuePtr);
 			break;
 
 		case SQL_ATTR_CURSOR_TYPE:
-			DBGH(stmt, "getting cursor type: %llu.", SQL_CURSOR_FORWARD_ONLY);
+			DBGH(stmt, "getting cursor type: %lu.", SQL_CURSOR_FORWARD_ONLY);
 			/* we only support forward only cursor, so far - TODO */
 			*(SQLULEN *)ValuePtr = SQL_CURSOR_FORWARD_ONLY;
 			break;
@@ -991,17 +999,17 @@ SQLRETURN EsSQLGetStmtAttrW(
 			return ret;
 
 		case SQL_ATTR_USE_BOOKMARKS:
-			DBGH(stmt, "getting use-bookmarks: %llu.", SQL_UB_OFF);
+			DBGH(stmt, "getting use-bookmarks: %lu.", SQL_UB_OFF);
 			*(SQLULEN *)ValuePtr = SQL_UB_OFF;
 			break;
 
 		case SQL_ATTR_NOSCAN:
-			DBGH(stmt, "getting noscan: %llu.", SQL_NOSCAN_OFF);
+			DBGH(stmt, "getting noscan: %lu.", SQL_NOSCAN_OFF);
 			*(SQLULEN *)ValuePtr = SQL_NOSCAN_OFF;
 			break;
 
 		case SQL_ATTR_CONCURRENCY:
-			DBGH(stmt, "getting concurrency: %llu.", SQL_CONCUR_READ_ONLY);
+			DBGH(stmt, "getting concurrency: %d.", SQL_CONCUR_READ_ONLY);
 			*(SQLULEN *)ValuePtr = SQL_CONCUR_READ_ONLY;
 			break;
 
@@ -1011,22 +1019,22 @@ SQLRETURN EsSQLGetStmtAttrW(
 			break;
 
 		case SQL_ATTR_CURSOR_SENSITIVITY:
-			DBGH(stmt, "getting cursor sensitivity: %llu.", SQL_UNSPECIFIED);
+			DBGH(stmt, "getting cursor sensitivity: %d.", SQL_UNSPECIFIED);
 			*(SQLULEN *)ValuePtr = SQL_UNSPECIFIED;
 			break;
 
 		case SQL_ATTR_CURSOR_SCROLLABLE:
-			DBGH(stmt, "getting scrollable cursor: %llu.", SQL_NONSCROLLABLE);
+			DBGH(stmt, "getting scrollable cursor: %d.", SQL_NONSCROLLABLE);
 			*(SQLULEN *)ValuePtr = SQL_NONSCROLLABLE;
 			break;
 
 		case SQL_ATTR_RETRIEVE_DATA:
-			DBGH(stmt, "getting data retrieving: %llu.", SQL_RD_ON);
+			DBGH(stmt, "getting data retrieving: %lu.", SQL_RD_ON);
 			*(SQLULEN *)ValuePtr = SQL_RD_ON;
 			break;
 
 		default:
-			ERRH(stmt, "unknown attribute: %d.", Attribute);
+			ERRH(stmt, "unknown attribute: %ld.", Attribute);
 			RET_HDIAGS(stmt, SQL_STATE_HY092);
 	}
 	/*INDENT-ON*/
@@ -1602,14 +1610,14 @@ SQLRETURN EsSQLGetDescFieldW(
 	switch (FieldIdentifier) {
 		case SQL_DESC_ALLOC_TYPE:
 			*(SQLSMALLINT *)ValuePtr = desc->alloc_type;
-			DBGH(desc, "returning: desc alloc type: %u.",
+			DBGH(desc, "returning: desc alloc type: %hu.",
 				*(SQLSMALLINT *)ValuePtr);
 			return SQL_SUCCESS;
 
 		case SQL_DESC_ARRAY_SIZE:
 			*(SQLULEN *)ValuePtr = desc->array_size;
-			DBGH(desc, "returning: desc array size: %u.",
-				*(SQLULEN *)ValuePtr);
+			DBGH(desc, "returning: desc array size: %llu.",
+				(uint64_t)*(SQLULEN *)ValuePtr);
 			return SQL_SUCCESS;
 
 		case SQL_DESC_ARRAY_STATUS_PTR:
@@ -1627,12 +1635,12 @@ SQLRETURN EsSQLGetDescFieldW(
 
 		case SQL_DESC_BIND_TYPE:
 			*(SQLUINTEGER *)ValuePtr = desc->bind_type;
-			DBGH(desc, "returning bind type: %u.", *(SQLUINTEGER *)ValuePtr);
+			DBGH(desc, "returning bind type: %lu.", *(SQLUINTEGER *)ValuePtr);
 			return SQL_SUCCESS;
 
 		case SQL_DESC_COUNT:
 			*(SQLSMALLINT *)ValuePtr = desc->count;
-			DBGH(desc, "returning count: %d.", *(SQLSMALLINT *)ValuePtr);
+			DBGH(desc, "returning count: %hd.", *(SQLSMALLINT *)ValuePtr);
 			return SQL_SUCCESS;
 
 		case SQL_DESC_ROWS_PROCESSED_PTR:
@@ -1742,7 +1750,7 @@ SQLRETURN EsSQLGetDescFieldW(
 		/* <SQLULEN> */
 		case SQL_DESC_LENGTH:
 			*(SQLULEN *)ValuePtr = rec->length;
-			DBGH(desc, "returning length: %u.", rec->length);
+			DBGH(desc, "returning length: %llu.", (uint64_t)rec->length);
 			break;
 
 		/* <SQLSMALLINT> */
@@ -2455,12 +2463,12 @@ SQLRETURN EsSQLSetDescFieldW(
 	switch (FieldIdentifier) {
 		case SQL_DESC_ARRAY_SIZE:
 			ulen = (SQLULEN)(uintptr_t)ValuePtr;
-			DBGH(desc, "setting desc array size to: %llu.", ulen);
+			DBGH(desc, "setting desc array size to: %llu.", (uint64_t)ulen);
 			if (DESC_TYPE_IS_RECORD(desc->type)) {
 				if (ESODBC_MAX_ROW_ARRAY_SIZE < ulen) {
-					WARNH(desc, "provided desc array size (%u) larger than "
-						"allowed max (%u) -- set value adjusted to max.", ulen,
-						ESODBC_MAX_ROW_ARRAY_SIZE);
+					WARNH(desc, "provided desc array size (%llu) larger than "
+						"allowed max (%hu) -- set value adjusted to max.",
+						(uint64_t)ulen, ESODBC_MAX_ROW_ARRAY_SIZE);
 					desc->array_size = ESODBC_MAX_ROW_ARRAY_SIZE;
 					RET_HDIAGS(desc, SQL_STATE_01S02);
 				} else if (ulen < 1) {
@@ -2491,7 +2499,7 @@ SQLRETURN EsSQLSetDescFieldW(
 			return SQL_SUCCESS;
 
 		case SQL_DESC_BIND_TYPE:
-			DBGH(desc, "setting bind type to: %u.",
+			DBGH(desc, "setting bind type to: %lu.",
 				(SQLUINTEGER)(uintptr_t)ValuePtr);
 			desc->bind_type = (SQLUINTEGER)(uintptr_t)ValuePtr;
 			return SQL_SUCCESS;
@@ -2727,11 +2735,12 @@ SQLRETURN EsSQLSetDescFieldW(
 		/* <SQLLEN> */
 		/* R/O fields: display_size */
 		case SQL_DESC_OCTET_LENGTH:
-			slen = (SQLLEN)(intptr_t)ValuePtr;
-			DBGH(desc, "setting octet length: %ld.", slen);
+			slen = (SQLLEN)ValuePtr;
+			DBGH(desc, "setting octet length: %lld.", (int64_t)slen);
 			/* rec field's type is signed; a negative can be dangerous */
 			if (slen < 0) {
-				WARNH(desc, "negative octet length provided (%lld)", slen);
+				WARNH(desc, "negative octet length provided (%lld)",
+						(int64_t)slen);
 				/* no eror returned: in non-str/binary, it is to be ignorred */
 			}
 			rec->octet_length = slen;
@@ -2739,8 +2748,8 @@ SQLRETURN EsSQLSetDescFieldW(
 
 		/* <SQLULEN> */
 		case SQL_DESC_LENGTH:
-			DBGH(desc, "setting length: %u.", (SQLULEN)(uintptr_t)ValuePtr);
-			rec->length = (SQLULEN)(uintptr_t)ValuePtr;
+			DBGH(desc, "setting length: %llu.", (uint64_t)ValuePtr);
+			rec->length = (SQLULEN)ValuePtr;
 			break;
 
 		/* <SQLSMALLINT> */
