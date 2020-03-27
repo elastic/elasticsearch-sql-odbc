@@ -2411,7 +2411,7 @@ static void set_display_size(esodbc_estype_st *es_type)
 	}
 
 	DBG("data type: %hd, display size: %lld", es_type->data_type,
-		es_type->display_size);
+		(int64_t)es_type->display_size);
 }
 
 static BOOL bind_types_cols(esodbc_stmt_st *stmt, estype_row_st *type_row)
@@ -3248,14 +3248,14 @@ SQLRETURN EsSQLSetConnectAttrW(
 
 		case SQL_ATTR_ASYNC_ENABLE:
 			ERRH(dbc, "no support for async API (setting param: %llu)",
-				(SQLULEN)(uintptr_t)Value);
+				(uint64_t)Value);
 			if ((SQLULEN)(uintptr_t)Value == SQL_ASYNC_ENABLE_ON) {
 				RET_HDIAGS(dbc, SQL_STATE_HYC00);
 			}
 			break;
 		case SQL_ATTR_ASYNC_DBC_FUNCTIONS_ENABLE:
 			ERRH(dbc, "no support for async API (setting param: %llu)",
-				(SQLULEN)(uintptr_t)Value);
+				(uint64_t)Value);
 			if ((SQLULEN)(uintptr_t)Value == SQL_ASYNC_DBC_ENABLE_ON) {
 				RET_HDIAGS(dbc, SQL_STATE_HY114);
 			}
@@ -3354,8 +3354,8 @@ SQLRETURN EsSQLSetConnectAttrW(
 
 		case SQL_ATTR_MAX_ROWS: /* stmt attr -- 2.x app */
 			WARNH(dbc, "applying a statement as connection attribute (2.x?)");
-			DBGH(dbc, "setting max rows: %llu.", (SQLULEN)Value);
-			if ((SQLULEN)Value != 0) {
+			DBGH(dbc, "setting max rows: %llu.", (uint64_t)Value);
+			if (Value) {
 				WARNH(dbc, "requested max_rows substituted with 0.");
 				RET_HDIAGS(dbc, SQL_STATE_01S02);
 			}
@@ -3413,7 +3413,7 @@ SQLRETURN EsSQLGetConnectAttrW(
 			*(SQLULEN *)ValuePtr = dbc->metadata_id;
 			break;
 		case SQL_ATTR_ASYNC_ENABLE:
-			DBGH(dbc, "getting async mode: %llu", SQL_ASYNC_ENABLE_OFF);
+			DBGH(dbc, "getting async mode: %lu", SQL_ASYNC_ENABLE_OFF);
 			*(SQLULEN *)ValuePtr = SQL_ASYNC_ENABLE_OFF;
 			break;
 

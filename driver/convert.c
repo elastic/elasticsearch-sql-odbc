@@ -447,7 +447,7 @@ inline void *deferred_address(SQLSMALLINT field_id, size_t pos,
 #undef ROW_OFFSETS
 
 	DBGH(desc->hdr.stmt, "rec@0x%p, field_id:%hd, pos: %zu : base@0x%p, "
-		"offset=%lld, elem_size=%zu", rec, field_id, pos, base, offt,
+		"offset=%lld, elem_size=%zu", rec, field_id, pos, base, (int64_t)offt,
 		elem_size);
 
 	return base ? (char *)base + offt + pos * elem_size : NULL;
@@ -600,7 +600,7 @@ static inline void gd_offset_apply(esodbc_stmt_st *stmt, xstr_st *xstr)
 		xstr->c.cnt -= stmt->gd_offt;
 	}
 
-	DBGH(stmt, "applied an offset of %lld.", stmt->gd_offt);
+	DBGH(stmt, "applied an offset of %lld.", (int64_t)stmt->gd_offt);
 }
 
 /*
@@ -622,7 +622,7 @@ static inline void gd_offset_update(esodbc_stmt_st *stmt, size_t cnt,
 	}
 
 	DBGH(stmt, "offset updated with %zu to new value of %lld.", xfed,
-		stmt->gd_offt);
+		(int64_t)stmt->gd_offt);
 }
 
 
@@ -990,7 +990,7 @@ SQLRETURN sql2c_longlong(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		*(_sqlctype *)data_ptr = (_sqlctype)_ll; \
 		write_out_octets(octet_len_ptr, sizeof(_sqlctype), irec); \
 		DBGH(stmt, "converted long long %lld to " STR(_sqlctype) " 0x%llx.", \
-			_ll, (intptr_t)*(_sqlctype *)data_ptr); \
+			_ll, (uint64_t)*(_sqlctype *)data_ptr); \
 	} while (0)
 
 	switch ((ctype = get_rec_c_type(arec, irec))) {
@@ -3812,7 +3812,8 @@ SQLRETURN c2sql_boolean(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	}
 	/*INDENT-ON*/
 
-	DBGH(stmt, "parameter (pos#%lld) converted to boolean: %d.", pos, val);
+	DBGH(stmt, "parameter (pos#%llu) converted to boolean: %d.",
+			(uint64_t)pos, val);
 
 	if (val) {
 		memcpy(dest, JSON_VAL_TRUE, sizeof(JSON_VAL_TRUE) - /*\0*/1);
@@ -4064,7 +4065,7 @@ static SQLRETURN binary_to_number(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		if (osize != sizeof(_sqlc_type)) { \
 			ERRH(stmt, "binary data length (%zu) misaligned with target" \
 				" data type (%hd) size (%lld)", sizeof(_sqlc_type), \
-				irec->es_type->data_type, osize); \
+				irec->es_type->data_type, (int64_t)osize); \
 			RET_HDIAGS(stmt, SQL_STATE_HY090); \
 		} \
 	} while (0)
@@ -4322,10 +4323,10 @@ static SQLRETURN size_decdigits_for_iso8601(esodbc_rec_st *irec,
 	esodbc_stmt_st *stmt = HDRH(irec->desc)->stmt;
 
 	colsize = get_param_size(irec);
-	DBGH(stmt, "requested column size: %llu.", colsize);
+	DBGH(stmt, "requested column size: %llu.", (uint64_t)colsize);
 
 	decdigits = get_param_decdigits(irec);
-	DBGH(stmt, "requested decimal digits: %llu.", decdigits);
+	DBGH(stmt, "requested decimal digits: %hd.", decdigits);
 	if (ESODBC_MAX_SEC_PRECISION < decdigits) {
 		WARNH(stmt, "requested decimal digits adjusted from %hd to %d (max).",
 			decdigits, ESODBC_MAX_SEC_PRECISION);
@@ -4338,7 +4339,7 @@ static SQLRETURN size_decdigits_for_iso8601(esodbc_rec_st *irec,
 				if (colsize < TIME_TEMPLATE_LEN(0) ||
 					colsize == TIME_TEMPLATE_LEN(1) - 1 /* `:ss.`*/) {
 					ERRH(stmt, "invalid column size value: %llu; allowed: "
-						"8 or 9 + fractions count.", colsize);
+						"8 or 9 + fractions count.", (uint64_t)colsize);
 					RET_HDIAGS(stmt, SQL_STATE_HY104);
 				}
 				colsize += DATE_TEMPLATE_LEN + /* ` `/`T` */1;
@@ -4350,7 +4351,7 @@ static SQLRETURN size_decdigits_for_iso8601(esodbc_rec_st *irec,
 			if (colsize) {
 				if (colsize != DATE_TEMPLATE_LEN) {
 					ERRH(stmt, "invalid column size value: %llu; allowed: "
-						"%zu.", colsize, DATE_TEMPLATE_LEN);
+						"%zu.", (uint64_t)colsize, DATE_TEMPLATE_LEN);
 					RET_HDIAGS(stmt, SQL_STATE_HY104);
 				}
 				colsize += /* ` `/`T` */1 + TIME_TEMPLATE_LEN(0);
@@ -4365,7 +4366,7 @@ static SQLRETURN size_decdigits_for_iso8601(esodbc_rec_st *irec,
 			if (colsize && (colsize < TIMESTAMP_NOSEC_TEMPLATE_LEN ||
 					colsize == 17 || colsize == 18)) {
 				ERRH(stmt, "invalid column size value: %llu; allowed: "
-					"16, 19 or 20 + fractions count.", colsize);
+					"16, 19 or 20 + fractions count.", (uint64_t)colsize);
 				RET_HDIAGS(stmt, SQL_STATE_HY104);
 			}
 			break;
@@ -4374,7 +4375,7 @@ static SQLRETURN size_decdigits_for_iso8601(esodbc_rec_st *irec,
 	}
 
 	DBGH(stmt, "applying: column size: %llu, decimal digits: %hd.",
-		colsize, decdigits);
+		(uint64_t)colsize, decdigits);
 	*_colsize = colsize;
 	*_decdigits = decdigits;
 	return SQL_SUCCESS;
@@ -4514,21 +4515,22 @@ static SQLRETURN c2sql_str2interval(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	} else {
 		octet_len = *octet_len_ptr;
 		if (octet_len <= 0) {
-			ERRH(stmt, "invalid interval buffer length: %llu.", octet_len);
+			ERRH(stmt, "invalid interval buffer length: %lld.",
+					(int64_t)octet_len);
 			RET_HDIAGS(stmt, SQL_STATE_HY090);
 		}
 	}
 
 	if (ctype == SQL_C_CHAR) {
 		if (sizeof(wbuff)/sizeof(wbuff[0]) < (size_t)octet_len) {
-			INFOH(stmt, "translation buffer too small (%zu < %lld), "
+			INFOH(stmt, "translation buffer too small (%zu < %zu), "
 				"allocation needed.", sizeof(wbuff)/sizeof(wbuff[0]),
 				(size_t)octet_len);
 			/* 0-term is most of the time not counted in input str and
 			 * ascii_c2w() writes it -> always allocate space for it */
 			wptr = malloc((octet_len + 1) * sizeof(SQLWCHAR));
 			if (! wptr) {
-				ERRNH(stmt, "OOM for %lld x SQLWCHAR", octet_len);
+				ERRNH(stmt, "OOM for %lld x SQLWCHAR", (int64_t)octet_len);
 				RET_HDIAGS(stmt, SQL_STATE_HY001);
 			}
 		} else {
@@ -4537,7 +4539,7 @@ static SQLRETURN c2sql_str2interval(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		ret = ascii_c2w((SQLCHAR *)data_ptr, wptr, octet_len);
 		if (ret <= 0) {
 			ERRH(stmt, "SQLCHAR-to-SQLWCHAR conversion failed for "
-				"[%lld] `" LCPDL "`.", octet_len, octet_len,
+				"[%lld] `" LCPDL "`.", (int64_t)octet_len, octet_len,
 				(char *)data_ptr);
 			if (wptr != wbuff) {
 				free(wptr);
@@ -4780,7 +4782,7 @@ static SQLRETURN c2sql_cstr2qstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		*dest = '"';
 	} else if ((SQLLEN)get_param_size(irec) < cnt) {
 		ERRH(stmt, "string's length (%lld) longer than parameter size (%llu).",
-			cnt, get_param_size(irec));
+			(int64_t)cnt, (uint64_t)get_param_size(irec));
 		RET_HDIAGS(stmt, SQL_STATE_22001);
 	}
 
@@ -4815,13 +4817,13 @@ static SQLRETURN c2sql_wstr2qstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	} else {
 		if ((SQLLEN)get_param_size(irec) < cnt) {
 			ERRH(stmt, "string's length (%lld) longer than parameter "
-				"size (%llu).", cnt, get_param_size(irec));
+				"size (%llu).", (int64_t)cnt, (uint64_t)get_param_size(irec));
 			RET_HDIAGS(stmt, SQL_STATE_22001);
 		}
 	}
 
 	DBGH(stmt, "converting w-string [%lld] `" LWPDL "`; target@0x%p.",
-		cnt, cnt, (wchar_t *)data_ptr, dest);
+		(int64_t)cnt, cnt, (wchar_t *)data_ptr, dest);
 	if (cnt) { /* U16WC_TO_MBU8 will fail with empty string, but set no err */
 		WAPI_CLR_ERRNO();
 		octets = U16WC_TO_MBU8((wchar_t *)data_ptr, cnt, dest + !!dest,
@@ -4869,7 +4871,7 @@ static SQLRETURN c2sql_number2qstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		/* compare lengths only once number has actually been converted */
 		if (get_param_size(irec) < *len) {
 			ERRH(stmt, "converted number length (%zu) larger than parameter "
-				"size (%llu)", *len, get_param_size(irec));
+				"size (%llu)", *len, (uint64_t)get_param_size(irec));
 			RET_HDIAGS(stmt, SQL_STATE_22003);
 		}
 		dest[*len + /*1st `"`*/1] = '"';
