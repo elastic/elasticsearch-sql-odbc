@@ -176,7 +176,7 @@ SQLSMALLINT fetch_server_attr(esodbc_dbc_st *dbc, SQLINTEGER attr_id,
 	} else {
 		if (1 < row_cnt) {
 			WARNH(dbc, "more than one value (%lld) available for "
-				"attribute %ld; picking first.", row_cnt, attr_id);
+				"attribute %ld; picking first.", (int64_t)row_cnt, attr_id);
 		}
 
 		if (! SQL_SUCCEEDED(EsSQLBindCol(stmt, /*col#*/1, SQL_C_WCHAR, buff,
@@ -577,17 +577,17 @@ SQLRETURN TEST_API update_varchar_defs(esodbc_stmt_st *stmt)
 			"{\"name\":\"TABLE_SCHEM\", \"type\":\"keyword\"},"
 			"{\"name\":\"TABLE_NAME\", \"type\":\"keyword\"},"
 			"{\"name\":\"COLUMN_NAME\", \"type\":\"keyword\"},"
-			"{\"name\":\"DATA_TYPE\", \"type\":\"integer\"},"
+			"{\"name\":\"DATA_TYPE\", \"type\":\"short\"},"
 			"{\"name\":\"TYPE_NAME\", \"type\":\"keyword\"},"
 			"{\"name\":\"COLUMN_SIZE\", \"type\":\"integer\"},"
 			"{\"name\":\"BUFFER_LENGTH\", \"type\":\"integer\"},"
-			"{\"name\":\"DECIMAL_DIGITS\", \"type\":\"integer\"},"
-			"{\"name\":\"NUM_PREC_RADIX\", \"type\":\"integer\"},"
-			"{\"name\":\"NULLABLE\", \"type\":\"integer\"},"
+			"{\"name\":\"DECIMAL_DIGITS\", \"type\":\"short\"},"
+			"{\"name\":\"NUM_PREC_RADIX\", \"type\":\"short\"},"
+			"{\"name\":\"NULLABLE\", \"type\":\"short\"},"
 			"{\"name\":\"REMARKS\", \"type\":\"keyword\"},"
 			"{\"name\":\"COLUMN_DEF\", \"type\":\"keyword\"},"
-			"{\"name\":\"SQL_DATA_TYPE\", \"type\":\"integer\"},"
-			"{\"name\":\"SQL_DATETIME_SUB\", \"type\":\"integer\"},"
+			"{\"name\":\"SQL_DATA_TYPE\", \"type\":\"short\"},"
+			"{\"name\":\"SQL_DATETIME_SUB\", \"type\":\"short\"},"
 			"{\"name\":\"CHAR_OCTET_LENGTH\", \"type\":\"integer\"},"
 			"{\"name\":\"ORDINAL_POSITION\", \"type\":\"integer\"},"
 			"{\"name\":\"IS_NULLABLE\", \"type\":\"keyword\"}"
@@ -605,8 +605,14 @@ SQLRETURN TEST_API update_varchar_defs(esodbc_stmt_st *stmt)
 	long row_cnt;
 	wstr_st dest = {0};
 	size_t pos;
+	SQLULEN max_length;
 	cstr_st u8mb;
 	wstr_st *lim = &HDRH(stmt)->dbc->varchar_limit_str;
+
+	/* save and reset SQL_ATTR_MAX_LENGTH attribute, it'll interfere with
+	 * reading lenght of avail data with SQLGetData() otherwise. */
+	max_length = stmt->max_length;
+	stmt->max_length = 0;
 
 	/* check that we have as many columns as members in target row struct */
 	ret = EsSQLNumResultCols(stmt, &col_cnt);
@@ -689,6 +695,8 @@ end:
 		free(dest.str);
 		dest.cnt = 0;
 	}
+	/* reinstate any saved SQL_ATTR_MAX_LENGTH value */
+	stmt->max_length = max_length;
 	return ret;
 }
 

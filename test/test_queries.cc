@@ -208,6 +208,67 @@ TEST_F(Queries, SQLNumParams_duplicates_escape) {
 	ASSERT_EQ(params, 2);
 }
 
+TEST_F(Queries, SQLDescribeCol_varchar_lim) {
+
+#	undef COL_NAME
+#	define COL_NAME "SQLDescribeCol_varchar_lim"
+#	define VARCHAR_LIMIT 333
+#	define CONN_STR CONNECT_STRING "VarcharLimit=" STR(VARCHAR_LIMIT) ";"
+
+	const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" COL_NAME "\", \"type\": \"text\"},\
+    {\"name\": \"binary\", \"type\": \"binary\"}\
+  ],\
+  \"rows\": [\
+    [\"foo\", \"binary\"]\
+  ]\
+}\
+";
+
+	/* set varchar limit: this is set onto the varchar types structures, so the
+	 * DBC needs "reconnecting" and the corresponding DSN param set */
+	ret = SQLFreeHandle(SQL_HANDLE_STMT, stmt);
+	assert(SQL_SUCCEEDED(ret));
+	ret = SQLFreeHandle(SQL_HANDLE_DBC, dbc);
+	assert(SQL_SUCCEEDED(ret));
+	ret = SQLAllocHandle(SQL_HANDLE_DBC, env, &dbc);
+	assert(SQL_SUCCEEDED(ret));
+	cstr_st types = {0};
+	types.str = (SQLCHAR *)strdup(SYSTYPES_ANSWER);
+	assert(types.str != NULL);
+	types.cnt = sizeof(SYSTYPES_ANSWER) - 1;
+	ret = SQLDriverConnect(dbc, (SQLHWND)&types, (SQLWCHAR *)CONN_STR,
+			sizeof(CONN_STR) / sizeof(CONN_STR[0]) - 1, NULL, 0, NULL,
+			ESODBC_SQL_DRIVER_TEST);
+	assert(SQL_SUCCEEDED(ret));
+	ret = SQLAllocHandle(SQL_HANDLE_STMT, dbc, &stmt);
+	assert(SQL_SUCCEEDED(ret));
+	assert(stmt != NULL);
+
+	prepareStatement(json_answer);
+
+	SQLWCHAR col_name[sizeof(COL_NAME)];
+	SQLSMALLINT col_name_len, sql_type, scale, nullable;
+	SQLULEN col_size;
+	/* text column */
+	ret = SQLDescribeCol(stmt, /*col#*/1, col_name, sizeof(col_name),
+			&col_name_len, &sql_type, &col_size, &scale, &nullable);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ASSERT_EQ(col_name_len, sizeof(COL_NAME) - 1);
+	ASSERT_STREQ(col_name, MK_WPTR(COL_NAME));
+	ASSERT_EQ(sql_type, ES_WVARCHAR_SQL);
+	ASSERT_EQ(col_size, VARCHAR_LIMIT); /* limit enforced */
+	ASSERT_EQ(nullable, SQL_NULLABLE_UNKNOWN);
+
+	/* binary column */
+	ret = SQLDescribeCol(stmt, /*col#*/2, col_name, sizeof(col_name),
+			&col_name_len, &sql_type, &col_size, &scale, &nullable);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ASSERT_EQ(col_size, INT_MAX); /* binary col's length must not be affected */
+}
+
 } // test namespace
 
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */
