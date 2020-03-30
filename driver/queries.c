@@ -179,6 +179,17 @@ void clear_resultset(esodbc_stmt_st *stmt, BOOL on_close)
 		} else {
 			assert(! stmt->rset.pack.cbor.cols_buff.str);
 		}
+		if (stmt->rset.pack.cbor.curs_allocd) {
+			free(stmt->rset.pack.cbor.curs.str);
+			stmt->rset.pack.cbor.curs.str = NULL;
+			stmt->rset.pack.cbor.curs_allocd = false;
+		} else if (stmt->rset.pack.cbor.curs.str) {
+			/* the cursor is contained entirely in the received body */
+			assert(stmt->rset.body.str < stmt->rset.pack.cbor.curs.str); // &&
+			assert(stmt->rset.pack.cbor.curs.str +
+					stmt->rset.pack.cbor.curs.cnt <
+					stmt->rset.body.str + stmt->rset.body.cnt);
+		}
 	}
 	memset(&stmt->rset, 0, sizeof(stmt->rset));
 
@@ -521,7 +532,7 @@ static BOOL iterate_on_columns(esodbc_stmt_st *stmt, CborValue columns)
 			ERRH(stmt, "invalid non-text element '" PACK_PARAM_COL_NAME "'.");
 			return FALSE;
 		}
-		res = cbor_value_get_string_chunk(&name_obj, &name_cstr.str,
+		res = cbor_value_get_unchunked_string(&name_obj, &name_cstr.str,
 				&name_cstr.cnt);
 		CHK_RES(stmt, "can't fetch value of '" PACK_PARAM_COL_NAME "' elem");
 
@@ -553,7 +564,7 @@ static BOOL iterate_on_columns(esodbc_stmt_st *stmt, CborValue columns)
 			ERRH(stmt, "invalid non-text element '" PACK_PARAM_COL_TYPE "'.");
 			return FALSE;
 		}
-		res = cbor_value_get_string_chunk(&type_obj, &type_cstr.str,
+		res = cbor_value_get_unchunked_string(&type_obj, &type_cstr.str,
 				&type_cstr.cnt);
 		CHK_RES(stmt, "can't fetch value of '" PACK_PARAM_COL_TYPE "' elem");
 		/* U8MB_TO_U16WC fails with 0-len source */
@@ -727,9 +738,20 @@ static SQLRETURN attach_answer_cbor(esodbc_stmt_st *stmt)
 		}
 		/* should have been cleared by now */
 		assert(! stmt->rset.pack.cbor.curs.cnt);
-		res = cbor_value_get_string_chunk(&curs_obj,
+		res = cbor_value_get_unchunked_string(&curs_obj,
 				&stmt->rset.pack.cbor.curs.str,
 				&stmt->rset.pack.cbor.curs.cnt);
+		if (res == CborErrorUnknownLength) {
+			assert(stmt->rset.pack.cbor.curs_allocd == false);
+			/* cursor is in chunked string; get it assembled in one chunk */
+			res = cbor_value_dup_text_string(&curs_obj,
+					&stmt->rset.pack.cbor.curs.str,
+					&stmt->rset.pack.cbor.curs.cnt,
+					&curs_obj);
+			if (res == CborNoError) {
+				stmt->rset.pack.cbor.curs_allocd = true;
+			}
+		}
 		CHK_RES(stmt, "failed to read '" PACK_PARAM_CURSOR "' value");
 		DBGH(stmt, "new paginating cursor: [%zd] `" LCPDL "`.",
 			stmt->rset.pack.cbor.curs.cnt, LWSTR(&stmt->rset.pack.cbor.curs));

@@ -314,7 +314,8 @@ typedef struct struct_desc {
 	assert(DESC_TYPE_IS_IMPLEMENTATION(_rec->desc->type) && _rec->es_type)
 
 struct resultset_cbor {
-	cstr_st curs; /* ES'es cursor; refs req's body */
+	cstr_st curs; /* ES'es cursor */
+	BOOL curs_allocd; /* curs.str is allocated (and reassembled) */
 	CborValue rows_obj; /* top object rows container (EsSQLRowCount()) */
 	CborValue rows_iter; /* iterator over received rows; refs req's body */
 	wstr_st cols_buff /* columns descriptions; refs allocated chunk */;

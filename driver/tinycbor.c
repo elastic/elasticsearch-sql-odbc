@@ -264,7 +264,6 @@ CborError cbor_value_get_utf16_wstr(CborValue *it, wstr_st *utf16)
 			} /* else: buffer hasn't yet been allocated or is too small */
 			/* what's the minimum space needed? */
 			if ((n = U8MB_TO_U16WC(mb_str.str, mb_str.cnt, NULL, 0)) < 0) {
-				TRACE;
 				return CborErrorInvalidUtf8TextString;
 			}
 		} else {

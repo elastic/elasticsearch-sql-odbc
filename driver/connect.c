@@ -1626,7 +1626,8 @@ static BOOL parse_es_version_cbor(esodbc_dbc_st *dbc, cstr_st *rsp_body,
 	}
 
 	/* fetch `version` value */
-	res = cbor_value_get_string_chunk(&iter_ver, &version->str, &version->cnt);
+	res = cbor_value_get_unchunked_string(&iter_ver, &version->str,
+			&version->cnt);
 	CHK_RES("failed to fetch " ESINFO_KEY_NUMBER " value");
 
 	/* Note: containers must be "left" (cbor_value_leave_container()) if ever
