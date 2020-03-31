@@ -713,7 +713,7 @@ TEST_F(GetData, CborChunkedStrings) {
 	ret = attach_answer(STMH(stmt), &answer, false);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	/* check reassembled value lenght */
+	/* check reassembled value length */
 	ret = SQLFetch(stmt);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 	ret = SQLGetData(stmt, CBOR_ANSWER_STRING_CHUNKED_STRVAL_COL, SQL_C_CHAR,

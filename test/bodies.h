@@ -7,7 +7,7 @@
 #ifndef __BODIES_H__
 #define __BODIES_H__
 
-/* lenghts of objects of interest for the test */
+/* lengths of objects of interest for the test */
 #define CBOR_ANSWER_STRING_CHUNKED_CURS_LEN		5624
 #define CBOR_ANSWER_STRING_CHUNKED_STRVAL_LEN	6041
 #define CBOR_ANSWER_STRING_CHUNKED_STRVAL_COL	36
