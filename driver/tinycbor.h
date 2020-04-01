@@ -95,4 +95,15 @@ void tinycbor_cleanup();
 CborError cbor_value_get_string_chunk(CborValue *it,
 	const char **bufferptr, size_t *len);
 
+static inline CborError cbor_value_get_unchunked_string(CborValue *it,
+	const char **bufferptr, size_t *len)
+{
+	return cbor_value_is_length_known(it)
+		/* string is all in one chunk */
+		? cbor_value_get_string_chunk(it, bufferptr, len)
+		/* if the string is chunked, fail the call */
+		: CborErrorUnknownLength;
+}
+
+
 #endif /* __TINYCBOR_H__ */

@@ -4,10 +4,10 @@
  * you may not use this file except in compliance with the Elastic License.
  */
 
+#include <string.h>
 #include <gtest/gtest.h>
 #include "connected_dbc.h"
-
-#include <string.h>
+#include "bodies.h"
 
 /* placeholders; will be undef'd and redef'd */
 #define SQL_RAW
@@ -701,6 +701,36 @@ TEST_F(GetData, TrimOnVarcharLimit_chunked) {
 	EXPECT_EQ(ind_len/sizeof(*buff), chunk_sz);
 	EXPECT_EQ(wcsncmp(buff, MK_WPTR(SQL_VAL) + chunk_sz, chunk_sz), 0);
 	EXPECT_STREQ((wchar_t *)buff[chunk_sz], L'\0');
+}
+
+TEST_F(GetData, CborChunkedStrings) {
+	cstr_st answer;
+	answer.cnt = sizeof(cbor_answer_string_chunked) - 1;
+	answer.str = (SQLCHAR *)malloc(answer.cnt);
+	assert(answer.str);
+	memcpy(answer.str, cbor_answer_string_chunked, answer.cnt);
+	DBCH(dbc)->pack_json = false;
+	ret = attach_answer(STMH(stmt), &answer, false);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	/* check reassembled value length */
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ret = SQLGetData(stmt, CBOR_ANSWER_STRING_CHUNKED_STRVAL_COL, SQL_C_CHAR,
+			/* buff: can't be NULL */(SQLPOINTER)0x1, /* buff size */0, &ind_len);
+	assertState(SQL_HANDLE_STMT, L"01004");
+	EXPECT_EQ(ind_len, CBOR_ANSWER_STRING_CHUNKED_STRVAL_LEN);
+
+	ASSERT_FALSE(STMH(stmt)->rset.pack_json);
+	ASSERT_TRUE(STMH(stmt)->rset.pack.cbor.curs_allocd);
+	ASSERT_NE(STMH(stmt)->rset.pack.cbor.curs.str, (SQLCHAR *)NULL);
+	ASSERT_EQ(STMH(stmt)->rset.pack.cbor.curs.cnt,
+			CBOR_ANSWER_STRING_CHUNKED_CURS_LEN);
+	/* "manually" free the cursor, so that the driver won't attempt to send a
+	 * closing request when deleting the statement */
+	free(STMH(stmt)->rset.pack.cbor.curs.str);
+	STMH(stmt)->rset.pack.cbor.curs.str = NULL;
+	STMH(stmt)->rset.pack.cbor.curs.cnt = 0;
 }
 
 } // test namespace

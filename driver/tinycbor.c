@@ -12,9 +12,9 @@
  * Note: these can't be freed per thread, since
  * DllMain(DLL_THREAD_ATTACH/DLL_THREAD_DETACH) is optional (and apps are
  * inconsistent even calling attach-detach for same thread). */
-static wchar_t **u16buffs = NULL;
-static size_t u16buff_cnt = 0;
-static esodbc_mutex_lt u16buff_mux = ESODBC_MUX_SINIT;
+static void **utf_buffs = NULL;
+static size_t utf_buff_cnt = 0;
+static esodbc_mutex_lt utf_buff_mux = ESODBC_MUX_SINIT;
 
 /* advance an iterator of an "entered" JSON-sytle map to the value for the
  * given key, if that exists */
@@ -189,31 +189,30 @@ CborError cbor_container_is_empty(CborValue cont, BOOL *empty)
 	return CborNoError;
 }
 
-static BOOL enlist_utf16_buffer(wchar_t *old, wchar_t *new)
+static BOOL enlist_utf_buffer(void *old, void *new)
 {
-	wchar_t **r;
+	void **r;
 	size_t i;
 
-	if (! old) {
-		/* new entry must be inserted into list */
-		ESODBC_MUX_LOCK(&u16buff_mux);
-		r = realloc(u16buffs, (u16buff_cnt + 1) * sizeof(wchar_t *));
+	if (! old) { /* new entry must be inserted into list */
+		ESODBC_MUX_LOCK(&utf_buff_mux);
+		r = realloc(utf_buffs, (utf_buff_cnt + 1) * sizeof(void *));
 		if (r) {
-			u16buffs = r;
-			u16buffs[u16buff_cnt ++] = new;
+			utf_buffs = r;
+			utf_buffs[utf_buff_cnt ++] = new;
 		}
-		ESODBC_MUX_UNLOCK(&u16buff_mux);
-	} else {
-		ESODBC_MUX_LOCK(&u16buff_mux);
+		ESODBC_MUX_UNLOCK(&utf_buff_mux);
+	} else { /* old entry has be reallocated, store its updated ref */
+		ESODBC_MUX_LOCK(&utf_buff_mux);
 		r = NULL;
-		for (i = 0; i < u16buff_cnt; i ++) {
-			if (u16buffs[i] == old) {
-				r = &u16buffs[i];
-				u16buffs[i] = new;
+		for (i = 0; i < utf_buff_cnt; i ++) {
+			if (utf_buffs[i] == old) {
+				r = &utf_buffs[i];
+				utf_buffs[i] = new;
 				break;
 			}
 		}
-		ESODBC_MUX_UNLOCK(&u16buff_mux);
+		ESODBC_MUX_UNLOCK(&utf_buff_mux);
 	}
 
 	return !!r;
@@ -222,12 +221,45 @@ static BOOL enlist_utf16_buffer(wchar_t *old, wchar_t *new)
 void tinycbor_cleanup()
 {
 	size_t i;
-	for (i = 0; i < u16buff_cnt; i ++) {
-		free(u16buffs[i]);
+	for (i = 0; i < utf_buff_cnt; i ++) {
+		free(utf_buffs[i]);
 	}
 	if (i) {
-		free(u16buffs);
+		free(utf_buffs);
 	}
+}
+
+static BOOL enlarge_buffer(void *str_ptr, size_t new_cnt, size_t usize)
+{
+	wstr_st r; /* reallocated */
+	wstr_st *wbuff = (wstr_st *)str_ptr;
+	/* the two string struct types should remain identical (ptr, size_t),
+	 * for the above cast to work also for cstr_st inputs */
+	assert(sizeof(cstr_st) == sizeof(wstr_st));
+	assert((void *)wbuff->str == (void *)((cstr_st *)str_ptr)->str);
+	assert(wbuff->cnt == ((cstr_st *)str_ptr)->cnt);
+
+	/* double scratchpad size until exceeding min needed space.
+	 * condition on equality, to allow for a 0-term */
+	for (r.cnt = (0 < wbuff->cnt && wbuff->cnt < (size_t)-1) ? wbuff->cnt :
+			ESODBC_BODY_BUF_START_SIZE; r.cnt <= new_cnt; r.cnt *= 2) {
+		;
+	}
+	if (! (r.str = realloc(wbuff->str, r.cnt * usize))) {
+		return false;
+	}
+	if (! enlist_utf_buffer(wbuff->str, r.str)) {
+		/* it should only possibly fail on 1st allocation per-thread (since
+		 * the rest of invocations are to swap the pointers) */
+		assert(! wbuff->str);
+		free(r.str);
+		return false;
+	} else {
+		*wbuff = r;
+	}
+	DBG("new UTF conv. buffer @0x%p, size %zu, usize: %zu.", wbuff->str,
+		wbuff->cnt, usize);
+	return true;
 }
 
 /* Fetches and converts a(n always UTF8) text string to UTF16 wide char.
@@ -235,18 +267,36 @@ void tinycbor_cleanup()
  * 0-terminates the string */
 CborError cbor_value_get_utf16_wstr(CborValue *it, wstr_st *utf16)
 {
+	/* .cnt needs to be non-zero, for U8MB_TO_U16WC() to fail on 1st invoc. */
 	static thread_local wstr_st wbuff = {.str = NULL, .cnt = (size_t)-1};
-	wstr_st r; /* reallocated */
+	static thread_local cstr_st cbuff = {0};
 	cstr_st mb_str; /* multibyte string */
 	CborError res;
 	int n;
+	size_t len;
 
 	assert(cbor_value_is_text_string(it));
 	/* get the multibyte string to convert */
-	res = cbor_value_get_string_chunk(it, &mb_str.str, &mb_str.cnt);
-	if (res != CborNoError) {
-		return res;
+	if (cbor_value_is_length_known(it)) { /* str contained in single chunk? */
+		res = cbor_value_get_string_chunk(it, &mb_str.str, &mb_str.cnt);
+		if (res != CborNoError) {
+			return res;
+		}
+	} else { /* string is spread across multiple chunks */
+		res = cbor_value_calculate_string_length(it, &len);
+		if (res != CborNoError) {
+			return res;
+		}
+		if (cbuff.cnt <= len && !enlarge_buffer(&cbuff, len, sizeof(char))) {
+			return CborErrorOutOfMemory;
+		}
+		mb_str = cbuff;
+		res = cbor_value_copy_text_string(it, mb_str.str, &mb_str.cnt, it);
+		if (res != CborNoError) {
+			return res;
+		}
 	}
+
 	/* attempt string conversion */
 	while ((n = U8MB_TO_U16WC(mb_str.str, mb_str.cnt, wbuff.str,
 					wbuff.cnt)) <= 0) {
@@ -264,7 +314,6 @@ CborError cbor_value_get_utf16_wstr(CborValue *it, wstr_st *utf16)
 			} /* else: buffer hasn't yet been allocated or is too small */
 			/* what's the minimum space needed? */
 			if ((n = U8MB_TO_U16WC(mb_str.str, mb_str.cnt, NULL, 0)) < 0) {
-				TRACE;
 				return CborErrorInvalidUtf8TextString;
 			}
 		} else {
@@ -273,28 +322,13 @@ CborError cbor_value_get_utf16_wstr(CborValue *it, wstr_st *utf16)
 				break;
 			}
 		}
-		/* double scratchpad size until exceeding min needed space.
-		 * condition on equality, to allow for a 0-term */
-		for (r.cnt = wbuff.cnt < (size_t)-1 ? wbuff.cnt :
-				ESODBC_BODY_BUF_START_SIZE; r.cnt <= (size_t)n; r.cnt *= 2) {
-			;
-		}
-		if (! (r.str = realloc(wbuff.str, r.cnt))) {
+		if (! enlarge_buffer(&wbuff, (size_t)n, sizeof(wchar_t))) {
 			return CborErrorOutOfMemory;
 		}
-		if (! enlist_utf16_buffer(wbuff.str, r.str)) {
-			/* it should only fail on 1st allocation per-thread */
-			assert(! wbuff.str);
-			free(r.str);
-			return CborErrorOutOfMemory;
-		} else {
-			wbuff = r;
-		}
-		DBG("new UTF8/16 conv. buffer @0x%p, size %zu.", wbuff.str, wbuff.cnt);
 	}
 
 	/* U8MB_TO_U16WC() will only convert the 0-term if counted in input*/
-	wbuff.str[n] = '\0'; /* set, but not counted */
+	wbuff.str[n] = L'\0'; /* set, but not counted */
 	utf16->str = wbuff.str;
 	utf16->cnt = n;
 	return CborNoError;
