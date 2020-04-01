@@ -342,6 +342,7 @@ list(APPEND DRV_SRC ${CMAKE_BINARY_DIR}/cborparser.c)
 list(APPEND DRV_SRC ${TINYCBOR_PATH_SRC}/src/cborvalidation.c)
 list(APPEND DRV_SRC ${TINYCBOR_PATH_SRC}/src/cborerrorstrings.c)
 list(APPEND DRV_SRC ${TINYCBOR_PATH_SRC}/src/cborencoder.c)
+list(APPEND DRV_SRC ${TINYCBOR_PATH_SRC}/src/cborparser_dup_string.c)
 list(APPEND DRV_SRC
 	${TINYCBOR_PATH_SRC}/src/cborencoder_close_container_checked.c)
 set(TINYCBOR_INC ${TINYCBOR_PATH_SRC}/src)
