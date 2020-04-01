@@ -156,6 +156,7 @@ namespace EsOdbcDsnEditor
 			numericUpDownTimeout.Text = Builder.ContainsKey("Timeout") ? Builder["Timeout"].ToString().StripBraces() : "0";
 			numericUpDownFetchSize.Text = Builder.ContainsKey("MaxFetchSize") ? Builder["MaxFetchSize"].ToString().StripBraces() : "1000";
 			numericUpDownBodySize.Text = Builder.ContainsKey("MaxBodySizeMB") ? Builder["MaxBodySizeMB"].ToString().StripBraces() : "100";
+			numericUpDownVarcharLimit.Text = Builder.ContainsKey("VarcharLimit") ? Builder["VarcharLimit"].ToString().StripBraces() : "0";
 			comboBoxFloatsFormat.Text = Builder.ContainsKey("ScientificFloats") ? Builder["ScientificFloats"].ToString().StripBraces() : "default";
 			comboBoxDataEncoding.Text = Builder.ContainsKey("Packing") ? Builder["Packing"].ToString() : "CBOR";
 			comboBoxDataCompression.Text = Builder.ContainsKey("Compression") ? Builder["Compression"].ToString() : "auto";
@@ -164,12 +165,15 @@ namespace EsOdbcDsnEditor
 			checkBoxFollowRedirects.Checked = !noes.Contains(Builder.ContainsKey("Follow") ? Builder["Follow"].ToString().StripBraces() : "yes");
 			checkBoxApplyTZ.Checked = !noes.Contains(Builder.ContainsKey("ApplyTZ") ? Builder["ApplyTZ"].ToString().StripBraces() : "no");
 			checkBoxAutoEscapePVA.Checked = !noes.Contains(Builder.ContainsKey("AutoEscapePVA") ? Builder["AutoEscapePVA"].ToString().StripBraces() : "yes");
+			checkBoxEarlyExecution.Checked = !noes.Contains(Builder.ContainsKey("EarlyExecution") ? Builder["EarlyExecution"].ToString().StripBraces() : "yes");
 			checkBoxMultiFieldLenient.Checked = !noes.Contains(Builder.ContainsKey("MultiFieldLenient") ? Builder["MultiFieldLenient"].ToString().StripBraces() : "yes");
 			checkBoxIndexIncludeFrozen.Checked = !noes.Contains(Builder.ContainsKey("IndexIncludeFrozen") ? Builder["IndexIncludeFrozen"].ToString().StripBraces() : "no");
 
 			toolTipTimeout.SetToolTip(numericUpDownTimeout, "The maximum number of seconds for a request to the server. The value 0 disables the timeout.");
 			toolTipFetchSize.SetToolTip(numericUpDownFetchSize, "The maximum number of rows that Elasticsearch SQL server should send back to the driver for one page.");
 			toolTipBodySize.SetToolTip(numericUpDownBodySize, "The maximum number of megabytes that the driver will accept for one page.");
+			toolTipVarcharLimit.SetToolTip(numericUpDownVarcharLimit, "The maximum number of characters that the string type (TEXT, KEYWORD etc.) columns will exhibit. "
+				+ "The value 0 disables the driver limitation.");
 			toolTipFloatsFormat.SetToolTip(comboBoxFloatsFormat, "How should the floating point numbers be printed, when these are converted to string by the driver.");
 			toolTipDataEncoding.SetToolTip(comboBoxDataEncoding, "How should the data between the server and the driver be encoded as.");
 			toolTipDataCompression.SetToolTip(comboBoxDataCompression, "Should the data between the server and the driver be compressed?");
@@ -177,6 +181,7 @@ namespace EsOdbcDsnEditor
 			toolTipApplyTZ.SetToolTip(checkBoxApplyTZ, "Should the driver use machine's local timezone? The default is UTC.");
 			toolTipAutoEscapePVA.SetToolTip(checkBoxAutoEscapePVA, "Should the driver auto-escape the pattern-value arguments?");
 			toolTipMultiFieldLenient.SetToolTip(checkBoxMultiFieldLenient, "Should the server return one value out of a multi-value field (instead of rejecting the request)?");
+			toolTipEarlyExecution.SetToolTip(checkBoxEarlyExecution, "Should a query be executed already at preparation time? This will only happen if the query lacks parameters.");
 			toolTipIndexIncludeFrozen.SetToolTip(checkBoxIndexIncludeFrozen, "Should the server consider the frozen indices when servicing a request?");
 
 			// Set initial state of action buttons.
@@ -286,12 +291,14 @@ namespace EsOdbcDsnEditor
 			Builder["Timeout"] = numericUpDownTimeout.Text;
 			Builder["MaxFetchSize"] = numericUpDownFetchSize.Text;
 			Builder["MaxBodySizeMB"] = numericUpDownBodySize.Text;
+			Builder["VarcharLimit"] = numericUpDownVarcharLimit.Text;
 			Builder["ScientificFloats"] = comboBoxFloatsFormat.Text;
 			Builder["Packing"] = comboBoxDataEncoding.Text;
 			Builder["Compression"] = comboBoxDataCompression.Text;
 			Builder["Follow"] = checkBoxFollowRedirects.Checked ? "true" : "false";
 			Builder["ApplyTZ"] = checkBoxApplyTZ.Checked ? "true" : "false";
 			Builder["AutoEscapePVA"] = checkBoxAutoEscapePVA.Checked ? "true" : "false";
+			Builder["EarlyExecution"] = checkBoxEarlyExecution.Checked ? "true" : "false";
 			Builder["MultiFieldLenient"] = checkBoxMultiFieldLenient.Checked ? "true" : "false";
 			Builder["IndexIncludeFrozen"] = checkBoxIndexIncludeFrozen.Checked ? "true" : "false";
 
