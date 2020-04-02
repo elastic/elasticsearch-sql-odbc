@@ -68,6 +68,11 @@ namespace EsOdbcDsnEditor
             this.labelName = new System.Windows.Forms.Label();
             this.pageSecurity = new System.Windows.Forms.TabPage();
             this.pageMisc = new System.Windows.Forms.TabPage();
+            this.labelVarcharLimit = new System.Windows.Forms.Label();
+            this.numericUpDownVarcharLimit = new System.Windows.Forms.NumericUpDown();
+            this.checkBoxEarlyExecution = new System.Windows.Forms.CheckBox();
+            this.comboBoxDataCompression = new System.Windows.Forms.ComboBox();
+            this.labelDataCompression = new System.Windows.Forms.Label();
             this.comboBoxDataEncoding = new System.Windows.Forms.ComboBox();
             this.labelDataEncoding = new System.Windows.Forms.Label();
             this.checkBoxAutoEscapePVA = new System.Windows.Forms.CheckBox();
@@ -117,9 +122,9 @@ namespace EsOdbcDsnEditor
             this.toolTipMultiFieldLenient = new System.Windows.Forms.ToolTip(this.components);
             this.toolTipIndexIncludeFrozen = new System.Windows.Forms.ToolTip(this.components);
             this.toolTipDataEncoding = new System.Windows.Forms.ToolTip(this.components);
-            this.labelDataCompression = new System.Windows.Forms.Label();
-            this.comboBoxDataCompression = new System.Windows.Forms.ComboBox();
             this.toolTipDataCompression = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipEarlyExecution = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipVarcharLimit = new System.Windows.Forms.ToolTip(this.components);
             ((System.ComponentModel.ISupportInitialize)(this.header)).BeginInit();
             this.groupSSL.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDownPort)).BeginInit();
@@ -127,6 +132,7 @@ namespace EsOdbcDsnEditor
             this.pageBasic.SuspendLayout();
             this.pageSecurity.SuspendLayout();
             this.pageMisc.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.numericUpDownVarcharLimit)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDownBodySize)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDownFetchSize)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDownTimeout)).BeginInit();
@@ -472,6 +478,9 @@ namespace EsOdbcDsnEditor
             // 
             // pageMisc
             // 
+            this.pageMisc.Controls.Add(this.labelVarcharLimit);
+            this.pageMisc.Controls.Add(this.numericUpDownVarcharLimit);
+            this.pageMisc.Controls.Add(this.checkBoxEarlyExecution);
             this.pageMisc.Controls.Add(this.comboBoxDataCompression);
             this.pageMisc.Controls.Add(this.labelDataCompression);
             this.pageMisc.Controls.Add(this.comboBoxDataEncoding);
@@ -497,6 +506,63 @@ namespace EsOdbcDsnEditor
             this.pageMisc.Text = "Misc";
             this.pageMisc.UseVisualStyleBackColor = true;
             // 
+            // labelVarcharLimit
+            // 
+            this.labelVarcharLimit.AutoSize = true;
+            this.labelVarcharLimit.Location = new System.Drawing.Point(24, 123);
+            this.labelVarcharLimit.Name = "labelVarcharLimit";
+            this.labelVarcharLimit.Size = new System.Drawing.Size(95, 17);
+            this.labelVarcharLimit.TabIndex = 12;
+            this.labelVarcharLimit.Text = "Varchar Limit:";
+            // 
+            // numericUpDownVarcharLimit
+            // 
+            this.numericUpDownVarcharLimit.Location = new System.Drawing.Point(182, 121);
+            this.numericUpDownVarcharLimit.Maximum = new decimal(new int[] {
+            32766,
+            0,
+            0,
+            0});
+            this.numericUpDownVarcharLimit.Name = "numericUpDownVarcharLimit";
+            this.numericUpDownVarcharLimit.Size = new System.Drawing.Size(104, 22);
+            this.numericUpDownVarcharLimit.TabIndex = 13;
+            // 
+            // checkBoxEarlyExecution
+            // 
+            this.checkBoxEarlyExecution.AutoSize = true;
+            this.checkBoxEarlyExecution.Checked = true;
+            this.checkBoxEarlyExecution.CheckState = System.Windows.Forms.CheckState.Checked;
+            this.checkBoxEarlyExecution.Location = new System.Drawing.Point(338, 191);
+            this.checkBoxEarlyExecution.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.checkBoxEarlyExecution.Name = "checkBoxEarlyExecution";
+            this.checkBoxEarlyExecution.Size = new System.Drawing.Size(170, 21);
+            this.checkBoxEarlyExecution.TabIndex = 18;
+            this.checkBoxEarlyExecution.Text = "Early Query Execution";
+            this.checkBoxEarlyExecution.UseVisualStyleBackColor = true;
+            // 
+            // comboBoxDataCompression
+            // 
+            this.comboBoxDataCompression.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this.comboBoxDataCompression.FormattingEnabled = true;
+            this.comboBoxDataCompression.Items.AddRange(new object[] {
+            "auto",
+            "on",
+            "off"});
+            this.comboBoxDataCompression.Location = new System.Drawing.Point(182, 227);
+            this.comboBoxDataCompression.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.comboBoxDataCompression.Name = "comboBoxDataCompression";
+            this.comboBoxDataCompression.Size = new System.Drawing.Size(108, 24);
+            this.comboBoxDataCompression.TabIndex = 19;
+            // 
+            // labelDataCompression
+            // 
+            this.labelDataCompression.AutoSize = true;
+            this.labelDataCompression.Location = new System.Drawing.Point(24, 234);
+            this.labelDataCompression.Name = "labelDataCompression";
+            this.labelDataCompression.Size = new System.Drawing.Size(126, 17);
+            this.labelDataCompression.TabIndex = 18;
+            this.labelDataCompression.Text = "Data compression:";
+            // 
             // comboBoxDataEncoding
             // 
             this.comboBoxDataEncoding.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
@@ -504,19 +570,19 @@ namespace EsOdbcDsnEditor
             this.comboBoxDataEncoding.Items.AddRange(new object[] {
             "CBOR",
             "JSON"});
-            this.comboBoxDataEncoding.Location = new System.Drawing.Point(182, 155);
+            this.comboBoxDataEncoding.Location = new System.Drawing.Point(182, 191);
             this.comboBoxDataEncoding.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.comboBoxDataEncoding.Name = "comboBoxDataEncoding";
             this.comboBoxDataEncoding.Size = new System.Drawing.Size(108, 24);
-            this.comboBoxDataEncoding.TabIndex = 15;
+            this.comboBoxDataEncoding.TabIndex = 17;
             // 
             // labelDataEncoding
             // 
             this.labelDataEncoding.AutoSize = true;
-            this.labelDataEncoding.Location = new System.Drawing.Point(24, 158);
+            this.labelDataEncoding.Location = new System.Drawing.Point(24, 194);
             this.labelDataEncoding.Name = "labelDataEncoding";
             this.labelDataEncoding.Size = new System.Drawing.Size(104, 17);
-            this.labelDataEncoding.TabIndex = 30;
+            this.labelDataEncoding.TabIndex = 16;
             this.labelDataEncoding.Text = "Data encoding:";
             // 
             // checkBoxAutoEscapePVA
@@ -527,9 +593,9 @@ namespace EsOdbcDsnEditor
             this.checkBoxAutoEscapePVA.Location = new System.Drawing.Point(339, 86);
             this.checkBoxAutoEscapePVA.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.checkBoxAutoEscapePVA.Name = "checkBoxAutoEscapePVA";
-            this.checkBoxAutoEscapePVA.Size = new System.Drawing.Size(156, 21);
+            this.checkBoxAutoEscapePVA.Size = new System.Drawing.Size(148, 21);
             this.checkBoxAutoEscapePVA.TabIndex = 12;
-            this.checkBoxAutoEscapePVA.Text = "Auto-escape PVAs?";
+            this.checkBoxAutoEscapePVA.Text = "Auto-escape PVAs";
             this.checkBoxAutoEscapePVA.UseVisualStyleBackColor = true;
             // 
             // comboBoxFloatsFormat
@@ -540,19 +606,19 @@ namespace EsOdbcDsnEditor
             "default",
             "scientific",
             "auto"});
-            this.comboBoxFloatsFormat.Location = new System.Drawing.Point(182, 119);
+            this.comboBoxFloatsFormat.Location = new System.Drawing.Point(182, 155);
             this.comboBoxFloatsFormat.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.comboBoxFloatsFormat.Name = "comboBoxFloatsFormat";
             this.comboBoxFloatsFormat.Size = new System.Drawing.Size(108, 24);
-            this.comboBoxFloatsFormat.TabIndex = 13;
+            this.comboBoxFloatsFormat.TabIndex = 15;
             // 
             // labelFloatsFormat
             // 
             this.labelFloatsFormat.AutoSize = true;
-            this.labelFloatsFormat.Location = new System.Drawing.Point(24, 122);
+            this.labelFloatsFormat.Location = new System.Drawing.Point(24, 158);
             this.labelFloatsFormat.Name = "labelFloatsFormat";
             this.labelFloatsFormat.Size = new System.Drawing.Size(94, 17);
-            this.labelFloatsFormat.TabIndex = 27;
+            this.labelFloatsFormat.TabIndex = 14;
             this.labelFloatsFormat.Text = "Floats format:";
             // 
             // checkBoxIndexIncludeFrozen
@@ -561,9 +627,9 @@ namespace EsOdbcDsnEditor
             this.checkBoxIndexIncludeFrozen.Location = new System.Drawing.Point(339, 154);
             this.checkBoxIndexIncludeFrozen.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.checkBoxIndexIncludeFrozen.Name = "checkBoxIndexIncludeFrozen";
-            this.checkBoxIndexIncludeFrozen.Size = new System.Drawing.Size(175, 21);
+            this.checkBoxIndexIncludeFrozen.Size = new System.Drawing.Size(167, 21);
             this.checkBoxIndexIncludeFrozen.TabIndex = 16;
-            this.checkBoxIndexIncludeFrozen.Text = "Include frozen indices?";
+            this.checkBoxIndexIncludeFrozen.Text = "Include frozen indices";
             this.checkBoxIndexIncludeFrozen.UseVisualStyleBackColor = true;
             // 
             // checkBoxMultiFieldLenient
@@ -574,9 +640,9 @@ namespace EsOdbcDsnEditor
             this.checkBoxMultiFieldLenient.Location = new System.Drawing.Point(339, 119);
             this.checkBoxMultiFieldLenient.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.checkBoxMultiFieldLenient.Name = "checkBoxMultiFieldLenient";
-            this.checkBoxMultiFieldLenient.Size = new System.Drawing.Size(181, 21);
+            this.checkBoxMultiFieldLenient.Size = new System.Drawing.Size(173, 21);
             this.checkBoxMultiFieldLenient.TabIndex = 14;
-            this.checkBoxMultiFieldLenient.Text = "Multi value field lenient?";
+            this.checkBoxMultiFieldLenient.Text = "Multi value field lenient";
             this.checkBoxMultiFieldLenient.UseVisualStyleBackColor = true;
             // 
             // checkBoxApplyTZ
@@ -585,9 +651,9 @@ namespace EsOdbcDsnEditor
             this.checkBoxApplyTZ.Location = new System.Drawing.Point(339, 53);
             this.checkBoxApplyTZ.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.checkBoxApplyTZ.Name = "checkBoxApplyTZ";
-            this.checkBoxApplyTZ.Size = new System.Drawing.Size(157, 21);
+            this.checkBoxApplyTZ.Size = new System.Drawing.Size(149, 21);
             this.checkBoxApplyTZ.TabIndex = 10;
-            this.checkBoxApplyTZ.Text = "Use local timezone?";
+            this.checkBoxApplyTZ.Text = "Use local timezone";
             this.checkBoxApplyTZ.UseVisualStyleBackColor = true;
             // 
             // checkBoxFollowRedirects
@@ -598,9 +664,9 @@ namespace EsOdbcDsnEditor
             this.checkBoxFollowRedirects.Location = new System.Drawing.Point(339, 20);
             this.checkBoxFollowRedirects.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.checkBoxFollowRedirects.Name = "checkBoxFollowRedirects";
-            this.checkBoxFollowRedirects.Size = new System.Drawing.Size(177, 21);
+            this.checkBoxFollowRedirects.Size = new System.Drawing.Size(169, 21);
             this.checkBoxFollowRedirects.TabIndex = 8;
-            this.checkBoxFollowRedirects.Text = "Follow HTTP redirects?";
+            this.checkBoxFollowRedirects.Text = "Follow HTTP redirects";
             this.checkBoxFollowRedirects.UseVisualStyleBackColor = true;
             // 
             // labelBodySize
@@ -765,29 +831,6 @@ namespace EsOdbcDsnEditor
             this.labelLogDirectory.TabIndex = 16;
             this.labelLogDirectory.Text = "Log Directory:";
             // 
-            // labelDataCompression
-            // 
-            this.labelDataCompression.AutoSize = true;
-            this.labelDataCompression.Location = new System.Drawing.Point(24, 198);
-            this.labelDataCompression.Name = "labelDataCompression";
-            this.labelDataCompression.Size = new System.Drawing.Size(126, 17);
-            this.labelDataCompression.TabIndex = 31;
-            this.labelDataCompression.Text = "Data compression:";
-            // 
-            // comboBoxDataCompression
-            // 
-            this.comboBoxDataCompression.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
-            this.comboBoxDataCompression.FormattingEnabled = true;
-            this.comboBoxDataCompression.Items.AddRange(new object[] {
-            "auto",
-            "on",
-            "off"});
-            this.comboBoxDataCompression.Location = new System.Drawing.Point(182, 191);
-            this.comboBoxDataCompression.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
-            this.comboBoxDataCompression.Name = "comboBoxDataCompression";
-            this.comboBoxDataCompression.Size = new System.Drawing.Size(108, 24);
-            this.comboBoxDataCompression.TabIndex = 32;
-            // 
             // DsnEditorForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
@@ -817,6 +860,7 @@ namespace EsOdbcDsnEditor
             this.pageSecurity.PerformLayout();
             this.pageMisc.ResumeLayout(false);
             this.pageMisc.PerformLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.numericUpDownVarcharLimit)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDownBodySize)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDownFetchSize)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDownTimeout)).EndInit();
@@ -911,6 +955,11 @@ namespace EsOdbcDsnEditor
 		private System.Windows.Forms.ComboBox comboBoxDataCompression;
 		private System.Windows.Forms.Label labelDataCompression;
 		private System.Windows.Forms.ToolTip toolTipDataCompression;
+		private System.Windows.Forms.Label labelVarcharLimit;
+		private System.Windows.Forms.NumericUpDown numericUpDownVarcharLimit;
+		private System.Windows.Forms.CheckBox checkBoxEarlyExecution;
+		private System.Windows.Forms.ToolTip toolTipEarlyExecution;
+		private System.Windows.Forms.ToolTip toolTipVarcharLimit;
 	}
 }
 
