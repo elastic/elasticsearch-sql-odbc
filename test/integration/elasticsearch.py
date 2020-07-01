@@ -5,6 +5,7 @@
 #
 
 import requests
+import urllib3
 import psutil
 
 import sys
@@ -43,6 +44,8 @@ class Elasticsearch(object):
 	_credentials = None
 	_base_url = None
 
+	_req = None
+
 	def __init__(self, offline_dir=None, url=None):
 		self._offline_dir = offline_dir
 		if not url:
@@ -57,6 +60,10 @@ class Elasticsearch(object):
 		print("Using Elasticsearch instance at %s, credentials (%s, %s)" % (self._base_url, self._credentials[0],
 			"*" * len(self._credentials[1])))
 
+		self._req = requests.session()
+		self._req.verify = False
+		urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 	@staticmethod
 	def elasticsearch_distro_filename(version):
 		return "%s-%s%s.%s" % (ES_PROJECT, version, ES_ARCH, PACKAGING)
@@ -68,13 +75,13 @@ class Elasticsearch(object):
 		return self._base_url
 
 	def _latest_build(self, version):
-		req = requests.get(ARTIF_URL, timeout=self.REQ_TIMEOUT)
+		req = self._req.get(ARTIF_URL, timeout=self.REQ_TIMEOUT)
 		vers = req.json()["versions"]
 		if version not in vers:
 			raise Exception("version %s not found; available: %s" % (version, vers))
 
 		builds_url = ARTIF_URL + "/" + version + "/builds"
-		req = requests.get(builds_url, timeout=self.REQ_TIMEOUT)
+		req = self._req.get(builds_url, timeout=self.REQ_TIMEOUT)
 		builds = req.json()["builds"]
 
 		# file name to download
@@ -86,7 +93,7 @@ class Elasticsearch(object):
 		# requests.async: no Windows support
 		for build in builds:
 			build_url = builds_url + "/" + build
-			req = requests.get(build_url, timeout=self.REQ_TIMEOUT)
+			req = self._req.get(build_url, timeout=self.REQ_TIMEOUT)
 			build_json = req.json()["build"]
 			dt_et = datetime.strptime(build_json["end_time"], "%a, %d %b %Y %X %Z")
 			if latest_et < dt_et:
@@ -103,7 +110,7 @@ class Elasticsearch(object):
 	def _download_build(self, url, dest_dir):
 		print("- downloading %s: " % url, end='')
 		size = 0
-		req = requests.get(url, stream=True, timeout=self.REQ_TIMEOUT)
+		req = self._req.get(url, stream=True, timeout=self.REQ_TIMEOUT)
 		dest_file = os.path.join(dest_dir, req.url[req.url.rfind('/')+1 : ])
 		with open(dest_file, "wb") as f:
 			for chunk in req.iter_content(chunk_size = 32 * K1):
@@ -217,12 +224,12 @@ class Elasticsearch(object):
 		# setup passwords to random generated ones first...
 		pwd = self._gen_passwords(es_dir)
 		# ...then change passwords, easier to restart with failed tests
-		req = requests.post("%s/_security/user/_password" % self._base_url, auth=(self._credentials[0], pwd),
+		req = self._req.post("%s/_security/user/_password" % self._base_url, auth=(self._credentials[0], pwd),
 				json={"password": self._credentials[1]})
 		if req.status_code != 200:
 			raise Exception("attempt to change elastic's password failed with code %s" % req.status_code)
 		# kibana too (debug convenience)
-		req = requests.post("%s/_security/user/kibana/_password" % self._base_url, auth=self._credentials,
+		req = self._req.post("%s/_security/user/kibana/_password" % self._base_url, auth=self._credentials,
 				json={"password": self._credentials[1]})
 		if req.status_code != 200:
 			print("ERROR: kibana user password change failed with code: %s" % req.status_code)
@@ -231,7 +238,7 @@ class Elasticsearch(object):
 		url = "%s/_license/start_trial?acknowledge=true" % self._base_url
 		failures = 0
 		while True:
-			req = requests.post(url, auth=self._credentials, timeout=self.REQ_TIMEOUT)
+			req = self._req.post(url, auth=self._credentials, timeout=self.REQ_TIMEOUT)
 			if req.status_code == 200:
 				# TODO: check content?
 				break
@@ -282,7 +289,7 @@ class Elasticsearch(object):
 
 	def cluster_name(self, fail_on_non200=True):
 		try:
-			resp = requests.get(self._base_url, auth=self._credentials, timeout=self.REQ_TIMEOUT)
+			resp = self._req.get(self._base_url, auth=self._credentials, timeout=self.REQ_TIMEOUT)
 		except (requests.Timeout, requests.ConnectionError):
 			return None
 		if resp.status_code != 200:

@@ -5,6 +5,7 @@
 #
 
 import requests
+import urllib3
 import io
 import csv
 import json
@@ -205,6 +206,81 @@ BATTERS_PIPELINE =\
 		]
 	}
 
+EMP_TEST_MAPPING =\
+	{
+		"mappings" : {
+			"properties" : {
+				"birth_date" : {
+					"type" : "date"
+				},
+				"emp_no" : {
+					"type" : "integer"
+				},
+				"first_name" : {
+					"type" : "text",
+					"fields" : {
+						"keyword" : {
+							"type" : "keyword",
+							"ignore_above" : 256
+						}
+					}
+				},
+				"gender" : {
+					"type" : "keyword"
+				},
+				"hire_date" : {
+					"type" : "date"
+				},
+				"languages" : {
+					"type" : "integer"
+				},
+				"last_name" : {
+					"type" : "text",
+					"fields" : {
+						"keyword" : {
+							"type" : "keyword",
+							"ignore_above" : 256
+						}
+					}
+				},
+				"salary" : {
+					"type" : "long"
+				}
+			}
+		}
+	}
+
+LIB_TEST_MAPPING =\
+	{
+		"mappings": {
+			"properties": {
+				"author": {
+					"type": "text",
+					"fields": {
+						"keyword": {
+							"type": "keyword",
+							"ignore_above": 256
+						}
+					}
+				},
+				"name": {
+					"type": "text",
+					"fields": {
+						"keyword": {
+							"type": "keyword",
+							"ignore_above": 256
+						}
+					}
+				},
+				"page_count": {
+					"type": "integer"
+				},
+				"release_date": {
+					"type": "date"
+				}
+			}
+		}
+	}
 
 ES_DATASET_BASE_URL = "https://raw.githubusercontent.com/elastic/elasticsearch/eda31b0ac00c952a52885902be59ac429b0ca81a/x-pack/plugin/sql/qa/src/main/resources/"
 
@@ -266,8 +342,10 @@ class TestData(object):
 	BATTERS_INDEX = "batters"
 	LIBRARY_FILE = "library.csv"
 	LIBRARY_INDEX = "library"
+	LIB_TEST_INDEX = "test_lib"
 	EMPLOYEES_FILE = "employees.csv"
 	EMPLOYEES_INDEX = "employees"
+	EMP_TEST_INDEX = "test_emp"
 	PROTO_CASE_FILE = "SqlProtocolTestCase.java"
 
 
@@ -292,6 +370,8 @@ class TestData(object):
 		MODE_INDEX: "indexed"
 	}
 
+	_session = None
+
 	def __init__(self, es, mode=MODE_INDEX, offline_dir=None):
 		self._csv_md5 = {}
 		self._csv_header = {}
@@ -300,6 +380,10 @@ class TestData(object):
 		self._es = es
 		self._offline_dir = offline_dir
 		self._mode = mode
+
+		self._req = requests.Session()
+		self._req.verify = False
+		urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 	def _csv_to_json_docs(self, csv_text):
 		stream = io.StringIO(csv_text)
@@ -374,23 +458,10 @@ class TestData(object):
 		else:
 			assert(base_url.endswith("/"))
 			url = base_url + csv_name
-			req = requests.get(url, timeout = Elasticsearch.REQ_TIMEOUT)
+			req = self._req.get(url, timeout = Elasticsearch.REQ_TIMEOUT)
 			if req.status_code != 200:
 				raise Exception("failed to fetch %s with code %s" % (url, req.status_code))
 			return self._csv_as_ndjson(req.text, req.encoding, index_name)
-
-
-	def _prepare_tableau_load(self, file_name, index_name, index_template):
-		ndjson = self._get_csv_as_ndjson(TABLEAU_DATASET_BASE_URL, file_name, index_name)
-
-		if self.MODE_NOINDEX < self._mode:
-			with requests.put("%s/_template/%s_template" % (self._es.base_url(), index_name),
-					json=index_template, auth=self._es.credentials()) as req:
-				if req.status_code != 200:
-					raise Exception("PUT %s template failed with code: %s (content: %s)" % (index_name,
-						req.status_code, req.text))
-
-		return ndjson
 
 	def _post_ndjson(self, ndjsons, index_name, pipeline_name=None):
 		print("Indexing data for index '%s'." % index_name)
@@ -400,7 +471,7 @@ class TestData(object):
 		if type(ndjsons) is not list:
 			ndjsons = [ndjsons]
 		for n in ndjsons:
-			with requests.post(url, data=n, headers = {"Content-Type": "application/x-ndjson"},
+			with self._req.post(url, data=n, headers = {"Content-Type": "application/x-ndjson"},
 					auth=self._es.credentials()) as req:
 				if req.status_code not in [200, 201]:
 					raise Exception("bulk POST to %s failed with code: %s (content: %s)" % (index_name,
@@ -415,7 +486,7 @@ class TestData(object):
 		waiting_since = time.time()
 		while hits < MIN_INDEXED_DOCS:
 			url = "%s/%s/_search" % (self._es.base_url(), index_name)
-			req = requests.get(url, timeout = Elasticsearch.REQ_TIMEOUT, auth=self._es.credentials())
+			req = self._req.get(url, timeout = Elasticsearch.REQ_TIMEOUT, auth=self._es.credentials())
 			if req.status_code != 200:
 				raise Exception("failed to _search %s: code: %s, body: %s" % (index_name, req.status_code, req.text))
 			answer = json.loads(req.text)
@@ -424,32 +495,48 @@ class TestData(object):
 			if Elasticsearch.REQ_TIMEOUT < time.time() - waiting_since:
 				raise Exception("index '%s' has less than %s documents indexed" % (index_name, MIN_INDEXED_DOCS))
 
-	def _delete_if_needed(self, index_name):
+	def _del_resource(self, url):
+		with self._req.delete(url, timeout = Elasticsearch.REQ_TIMEOUT, auth=self._es.credentials()) as req:
+			if req.status_code != 200 and req.status_code != 404:
+				raise Exception("Deleting %s failed; code=%s, body: %s." % (url, req.status_code, req.text))
+
+	def _delete_if_needed(self, index_name, template=False, pipeline=False):
 		if self._mode != self.MODE_REINDEX:
 			return
-		print("Deleting any old index '%s'." % index_name);
+		print("Deleting any old: index '%s'." % index_name);
 
 		url = "%s/%s" % (self._es.base_url(), index_name)
-		with requests.delete(url, timeout = Elasticsearch.REQ_TIMEOUT, auth=self._es.credentials()) as req:
-			if req.status_code != 200 and req.status_code != 404:
-				raise Exception("Deleting index %s failed; code=%s, body: %s." %
-						(index_name, req.status_code, req.text))
+		self._del_resource(url)
+
+		if template:
+			url = "%s/_template/%s" % (self._es.base_url(), index_name)
+			self._del_resource(url)
+
+		if pipeline:
+			url = "%s/_ingest/pipeline/%s" % (self._es.base_url(), index_name)
+			self._del_resource(url)
 
 	def _load_tableau_sample(self, file_name, index_name, template, pipeline=None):
-		ndjsons = self._prepare_tableau_load(file_name, index_name, template)
+		if self._mode <= self.MODE_NOINDEX:
+			return
+		self._delete_if_needed(index_name, True, pipeline is not None)
 
-		if self.MODE_NOINDEX < self._mode:
-			self._delete_if_needed(index_name)
+		with self._req.put("%s/_template/%s" % (self._es.base_url(), index_name),
+				json=template, auth=self._es.credentials()) as req:
+			if req.status_code != 200:
+				raise Exception("PUT %s template failed with code: %s (content: %s)" % (index_name,
+					req.status_code, req.text))
 
-			if pipeline:
-				with requests.put("%s/_ingest/pipeline/parse_%s" % (self._es.base_url(), index_name),
-						json=pipeline, auth=self._es.credentials()) as req:
-					if req.status_code != 200:
-						raise Exception("PUT %s pipeline failed with code: %s (content: %s) " % (index_name,
-							req.status_code, req.text))
+		if pipeline:
+			with self._req.put("%s/_ingest/pipeline/%s" % (self._es.base_url(), index_name),
+					json=pipeline, auth=self._es.credentials()) as req:
+				if req.status_code != 200:
+					raise Exception("PUT %s pipeline failed with code: %s (content: %s) " % (index_name,
+						req.status_code, req.text))
 
-			self._post_ndjson(ndjsons, index_name, ("parse_" + index_name) if pipeline else None)
-			self._wait_for_results(index_name)
+		ndjsons = self._get_csv_as_ndjson(TABLEAU_DATASET_BASE_URL, file_name, index_name)
+		self._post_ndjson(ndjsons, index_name, index_name if pipeline else None)
+		self._wait_for_results(index_name)
 
 	def _load_elastic_sample(self, file_name, index_name):
 		ndjson = self._get_csv_as_ndjson(ES_DATASET_BASE_URL, file_name, index_name)
@@ -457,6 +544,25 @@ class TestData(object):
 			self._delete_if_needed(index_name)
 			self._post_ndjson(ndjson, index_name)
 			self._wait_for_results(index_name)
+
+	def _derive_with_mapping(self, src_index, dst_index, mapping_json):
+		if self._mode < self.MODE_REINDEX:
+			return
+		print("Reindexing '%s' into '%s'." % (src_index, dst_index))
+		self._delete_if_needed(dst_index)
+
+		with self._req.put("%s/%s" % (self._es.base_url(), dst_index),
+				json=mapping_json, auth=self._es.credentials()) as req:
+			if req.status_code != 200:
+				raise Exception("PUT %s mapping failed with code: %s (content: %s) " % (dst_index,
+					req.status_code, req.text))
+
+		reindex_json = {"source": {"index": src_index}, "dest": {"index": dst_index}}
+		with self._req.post("%s/_reindex?wait_for_completion=true" % self._es.base_url(),
+				json=reindex_json, auth=self._es.credentials()) as req:
+			if req.status_code != 200:
+				raise Exception("POST reindexing into %s failed with code: %s (content: %s) " % (dst_index,
+					req.status_code, req.text))
 
 	def _get_kibana_file(self, sample_name, is_mapping=True):
 		print("Fetching JS sample data for index '%s'." % sample_name)
@@ -468,7 +574,7 @@ class TestData(object):
 		else:
 			url = KIBANA_SAMPLES_BASE_URL + "/" + sample_name + "/"
 			url += file_name
-			req = requests.get(url, timeout = Elasticsearch.REQ_TIMEOUT)
+			req = self._req.get(url, timeout = Elasticsearch.REQ_TIMEOUT)
 			if req.status_code != 200:
 				raise Exception("failed to GET URL %s for index %s with: code: %s, body: %s" %
 						(url, sample_name, req.status_code, req.text))
@@ -492,8 +598,8 @@ class TestData(object):
 		# turn it to JSON (to deal with trailing commas past last member on a level
 		mapping = eval(mapping)
 		# PUT the built template
-		url = "%s/_template/%s_template" % (self._es.base_url(), index_name)
-		with requests.put(url, json=mapping, auth=self._es.credentials(), timeout=Elasticsearch.REQ_TIMEOUT) as req:
+		url = "%s/_template/%s" % (self._es.base_url(), index_name)
+		with self._req.put(url, json=mapping, auth=self._es.credentials(), timeout=Elasticsearch.REQ_TIMEOUT) as req:
 			if req.status_code != 200:
 				raise Exception("PUT %s template failed with code: %s (content: %s)" % (index_name,
 						req.status_code, req.text))
@@ -522,7 +628,7 @@ class TestData(object):
 				case_src = f.read()
 		else:
 			url = ES_PROTO_CASE_BASE_URL + "/" + self.PROTO_CASE_FILE
-			req = requests.get(url, timeout=Elasticsearch.REQ_TIMEOUT)
+			req = self._req.get(url, timeout=Elasticsearch.REQ_TIMEOUT)
 			if req.status_code != 200:
 				raise Exception("failed to fetch %s with code %s" % (url, req.status_code))
 			case_src = req.text
@@ -550,7 +656,9 @@ class TestData(object):
 			self._load_tableau_sample(self.BATTERS_FILE, self.BATTERS_INDEX, BATTERS_TEMPLATE, BATTERS_PIPELINE)
 
 			self._load_elastic_sample(self.LIBRARY_FILE, self.LIBRARY_INDEX)
+			self._derive_with_mapping(self.LIBRARY_INDEX, self.LIB_TEST_INDEX, LIB_TEST_MAPPING)
 			self._load_elastic_sample(self.EMPLOYEES_FILE, self.EMPLOYEES_INDEX)
+			self._derive_with_mapping(self.EMPLOYEES_INDEX, self.EMP_TEST_INDEX, EMP_TEST_MAPPING)
 
 			self._load_kibana_sample(self.ECOMMERCE_INDEX)
 			self._load_kibana_sample(self.FLIGHTS_INDEX)
