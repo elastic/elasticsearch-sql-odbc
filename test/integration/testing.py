@@ -132,7 +132,7 @@ class Testing(unittest.TestCase):
 			res = curs.tables("", "", "", "%").fetchall()
 			self.assertEqual(len(res), 2)
 			for i in range(0,10):
-				self.assertEqual(res[0][i], None if i != 3 else 'BASE TABLE')
+				self.assertEqual(res[0][i], None if i != 3 else 'TABLE')
 				self.assertEqual(res[1][i], None if i != 3 else 'VIEW')
 
 			# enumerate tables of selected type in catalog
