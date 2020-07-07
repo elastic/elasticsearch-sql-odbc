@@ -308,7 +308,6 @@ REM USAGE function: output a usage message
 	echo                  param (needs Administrator privileges^).
 	echo    regdel      : deregister the driver from the registry;
 	echo                  (needs Administrator privileges^).
-	echo    tests       : (deprecated^) synonym with utests.
 	echo.
 	goto:eof
 
@@ -376,7 +375,7 @@ REM CLEAN function: clean up the build dir.
 
 REM SETUP function: set-up the build environment
 :SETUP
-	set RELEASE=2017
+	set RELEASE=2019
 	for %%e in (Enterprise, Professional, Community) do (
 		if exist "C:\Program Files (x86)\Microsoft Visual Studio\%RELEASE%\%%e\Common7\Tools\VsDevCmd.bat" (
 			if /i "%%e" == "Community" (
@@ -507,8 +506,9 @@ REM BUILD function: build various targets
 		rem call:BUILDTYPE
 
 		set CMAKE_ARGS=-DDRIVER_BASE_NAME=%DRIVER_BASE_NAME%
-		REM no explicit x86 generator and is the default (MSVC2017 only?).
-		set CMAKE_ARGS=!CMAKE_ARGS! -DCMAKE_GENERATOR_PLATFORM=%TARCH:x86=%
+		REM CMAKE_GENERATOR_TOOLSET (or cmake -T v142) to specify a toolset
+		REM cmake's architecture specs for MSVC are x64 and Win32
+		set CMAKE_ARGS=!CMAKE_ARGS! -DCMAKE_GENERATOR_PLATFORM=!TARCH:x86=Win32!
 
 		if /i [!BUILD_TYPE!] == [Debug] (
 			set CMAKE_ARGS=!CMAKE_ARGS! -DLIBCURL_BUILD_TYPE=debug
@@ -530,13 +530,7 @@ REM BUILD function: build various targets
 		goto:eof
 	)
 
-	if /i not [%ARG: tests=%] == [%ARG%] ( REM utests dup'd
-		echo %~nx0: building all the project.
-		MSBuild ALL_BUILD.vcxproj %MSBUILD_ARGS%
-		if ERRORLEVEL 1 (
-			goto END
-		)
-	) else if /i not [%ARG:utests=%] == [%ARG%] (
+	if /i not [%ARG:utests=%] == [%ARG%] (
 		echo %~nx0: building all the project.
 		MSBuild ALL_BUILD.vcxproj %MSBUILD_ARGS%
 		if ERRORLEVEL 1 (
@@ -588,12 +582,7 @@ REM BUILD function: build various targets
 
 REM TESTS_SUITE_S function: run the compiled unit tests
 :TESTS_SUITE_S
-	if /i not [%ARG: tests=%] == [%ARG%] ( REM utests dup'd
-		MSBuild RUN_TESTS.vcxproj !MSBUILD_ARGS!
-		if ERRORLEVEL 1 (
-			goto END
-		)
-	) else if /i not [%ARG:utests=%] == [%ARG%] (
+	if /i not [%ARG:utests=%] == [%ARG%] (
 		MSBuild RUN_TESTS.vcxproj !MSBUILD_ARGS!
 		if ERRORLEVEL 1 (
 			goto END
