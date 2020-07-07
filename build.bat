@@ -508,7 +508,7 @@ REM BUILD function: build various targets
 
 		set CMAKE_ARGS=-DDRIVER_BASE_NAME=%DRIVER_BASE_NAME%
 		REM no explicit x86 generator and is the default (MSVC2017 only?).
-		set CMAKE_ARGS=!CMAKE_ARGS! -DCMAKE_GENERATOR_PLATFORM=%TARCH:x86=%
+		set CMAKE_ARGS=!CMAKE_ARGS! -G "Visual Studio 15 2017" -DCMAKE_GENERATOR_PLATFORM=%TARCH:x86=%
 
 		if /i [!BUILD_TYPE!] == [Debug] (
 			set CMAKE_ARGS=!CMAKE_ARGS! -DLIBCURL_BUILD_TYPE=debug
