@@ -525,7 +525,7 @@ REM generator string to feed CMake
 		echo %~nx0: ERROR: no Visual Studio edition detected (%VSCMD_VER%^).
 		echo %~nx0:        Retry running with 'setup' argument.
 		echo.
-		goto END
+		exit /b 1
 	)
 
 	goto:eof
@@ -541,6 +541,9 @@ REM BUILD function: build various targets
 		echo %~nx0: generating the project files.
 
 		call:SETGENERATOR
+		if ERRORLEVEL 1 (
+			goto:END
+		)
 
 		set CMAKE_ARGS=-DDRIVER_BASE_NAME=%DRIVER_BASE_NAME%
 		set CMAKE_ARGS=!CMAKE_ARGS! -G !VS_GENERATOR! -A %TARCH:x86=Win32%
