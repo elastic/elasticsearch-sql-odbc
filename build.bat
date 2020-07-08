@@ -385,7 +385,7 @@ REM SETUP function: set-up the build environment
 		)
 	)
 	if [%VS_YEAR%] == [] (
-		set VS_YEARS=2019 2018
+		set VS_YEARS=2019 2017
 	) else (
 		set VS_YEARS=%VS_YEAR%
 	)
