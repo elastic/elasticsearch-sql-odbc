@@ -95,18 +95,17 @@ module Builder =
                         <| sprintf "Could not kill process %s  %s after timeout." proc.StartInfo.FileName redactedArgs
                     failwithf "Process %s %s timed out." proc.StartInfo.FileName redactedArgs
                 proc.WaitForExit()
-                proc.ExitCode
+                (timestampServer, proc.ExitCode)
 
-            let mutable notSigned = true
-            for server in timestampServers do
-                if notSigned then
-                    let exitCode = sign server
-                    if (exitCode = 0) then
-                        notSigned <- false
-                    else
-                        tracefn "Signing with a timestamp from %s failed with code: %i" server exitCode
-            if notSigned then failwithf "Signing failed"
-            else tracefn "Signing succeeded."
+            let validExitCode =
+                timestampServers
+                |> Seq.map sign
+                |> Seq.takeWhile (fun (server, exitCode) -> exitCode <> 0)
+                |> Seq.tryFind (fun (server, exitCode) -> exitCode = 0)
+
+            match validExitCode with
+            | Some (server, exitCode) ->  failwithf "Signing with a timestamp from %s failed with code: %i" server exitCode
+            | None -> tracefn "Signing succeeded."
 
     // Using DotNetZip due to errors with CMAKE zip files: https://github.com/fsharp/FAKE/issues/775
     let unzipFile(zipFolder: string, unzipFolder: string) =
