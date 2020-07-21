@@ -57,12 +57,15 @@ module Builder =
             tracefn "Signing MSI"
             let certificate = getBuildParam "certificate"
             let password = getBuildParam "password"
-            let timestampServer = "http://timestamp.comodoca.com"
             let timeout = TimeSpan.FromMinutes 1.
+            let timestampServers = ["http://timestamp.digicert.com" ; "http://timestamp.comodoca.com" ;
+                                    "http://timestamp.globalsign.com/scripts/timestamp.dll" ; "http://tsa.starfieldtech.com" ;
+                                    "http://zeitstempel.dfn.de"]
 
-            let sign () =
+            let sign timestampServer =
                 let signToolExe = ToolsDir @@ "signtool/signtool.exe"
-                let args = ["sign"; "/f"; certificate; "/p"; password; "/t"; timestampServer; "/d"; "\"Elasticsearch ODBC Driver\""; "/v"; file] |> String.concat " "
+                let args = ["sign"; "/debug" ; "/f"; certificate; "/p"; password; "/tr"; timestampServer; "/td" ; "SHA256" ;
+                            "/d"; "\"Elasticsearch ODBC Driver\""; "/v"; file] |> String.concat " "
                 let redactedArgs = args.Replace(password, "<redacted>")
 
                 use proc = new Process()
@@ -94,8 +97,16 @@ module Builder =
                 proc.WaitForExit()
                 proc.ExitCode
 
-            let exitCode = sign()
-            if exitCode <> 0 then failwithf "Signing returned error exit code: %i" exitCode
+            let mutable notSigned = true
+            for server in timestampServers do
+                if notSigned then
+                    let exitCode = sign server
+                    if (exitCode = 0) then
+                        notSigned <- false
+                    else
+                        tracefn "Signing with a timestamp from %s failed with code: %i" server exitCode
+            if notSigned then failwithf "Signing failed"
+            else tracefn "Signing succeeded."
 
     // Using DotNetZip due to errors with CMAKE zip files: https://github.com/fsharp/FAKE/issues/775
     let unzipFile(zipFolder: string, unzipFolder: string) =
