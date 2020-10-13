@@ -1278,6 +1278,7 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 				"failed", 0);
 			goto err;
 		}
+		INFOH(dbc, "connection UID: `%s`.", dbc->uid.str);
 		if (attrs->pwd.cnt) {
 			if (! wstr_to_utf8(&attrs->pwd, &dbc->pwd)) {
 				ERRH(dbc, "failed to convert password [%zu] `%s` to "
@@ -1286,6 +1287,8 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 					"conversion failed", 0);
 				goto err;
 			}
+			/* indicates the presence of a non-empty password */
+			INFOH(dbc, "connection PWD: " ESODBC_PWD_VAL_SUBST ".");
 		}
 	}
 
