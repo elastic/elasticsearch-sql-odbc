@@ -10,6 +10,7 @@ import unittest
 import re
 import struct
 import ctypes
+import urllib3
 
 from elasticsearch import Elasticsearch
 from data import TestData, BATTERS_TEMPLATE
@@ -27,12 +28,14 @@ class Testing(unittest.TestCase):
 	def __init__(self, es, test_data, catalog, dsn=None):
 		super().__init__()
 		uid, pwd = es.credentials()
+		es_url = urllib3.util.parse_url(es.base_url())
 
 		self._uid = uid
 		self._data = test_data
 		self._catalog = catalog
 
-		conn_str = "Driver={%s};UID=%s;PWD=%s;Secure=0;" % (DRIVER_NAME, uid, pwd)
+		conn_str = "Driver={%s};UID=%s;PWD=%s;Server=%s;Port=%s;Secure=%s;" % (DRIVER_NAME, uid, pwd, es_url.host,
+				es_url.port, "1" if es_url.scheme.lower() == "https" else "0")
 		if dsn:
 			if "Driver=" not in dsn:
 				self._dsn = conn_str + dsn

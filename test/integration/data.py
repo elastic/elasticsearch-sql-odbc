@@ -517,6 +517,8 @@ class TestData(object):
 			self._del_resource(url)
 
 	def _load_tableau_sample(self, file_name, index_name, template, pipeline=None):
+		# function will build meta-data, needed also for the MODE_NOINDEX testing
+		ndjsons = self._get_csv_as_ndjson(TABLEAU_DATASET_BASE_URL, file_name, index_name)
 		if self._mode <= self.MODE_NOINDEX:
 			return
 		self._delete_if_needed(index_name, True, pipeline is not None)
@@ -534,7 +536,6 @@ class TestData(object):
 					raise Exception("PUT %s pipeline failed with code: %s (content: %s) " % (index_name,
 						req.status_code, req.text))
 
-		ndjsons = self._get_csv_as_ndjson(TABLEAU_DATASET_BASE_URL, file_name, index_name)
 		self._post_ndjson(ndjsons, index_name, index_name if pipeline else None)
 		self._wait_for_results(index_name)
 
