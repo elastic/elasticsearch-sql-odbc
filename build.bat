@@ -253,8 +253,9 @@ REM USAGE function: output a usage message
 	echo    help^|*?*    : output this message and exit; ?? for more options.
 	echo    32^|64       : set the architecture to x86 or x64, respectively;
 	echo                  if none is specified, autodetection is attempted.
-	echo    setup       : invoke MSVC's build environment setup script before
-	echo                  building (requires 2017 version or later^).
+	echo    setup[:Y]   : invoke MSVC's build environment setup script before
+	echo                  building; optional Y specifies the release year
+	echo                  (requires 2017 version or later^).
 	echo    clean       : remove all the files in the build dir.
 	echo    proper      : clean libs, builds, project dirs and exit.
 	echo    type:T      : selects the build type, T: Debug or Release.
@@ -308,7 +309,6 @@ REM USAGE function: output a usage message
 	echo                  param (needs Administrator privileges^).
 	echo    regdel      : deregister the driver from the registry;
 	echo                  (needs Administrator privileges^).
-	echo    tests       : (deprecated^) synonym with utests.
 	echo.
 	goto:eof
 
@@ -376,22 +376,37 @@ REM CLEAN function: clean up the build dir.
 
 REM SETUP function: set-up the build environment
 :SETUP
-	set RELEASE=2017
-	for %%e in (Enterprise, Professional, Community) do (
-		if exist "C:\Program Files (x86)\Microsoft Visual Studio\%RELEASE%\%%e\Common7\Tools\VsDevCmd.bat" (
-			if /i "%%e" == "Community" (
-				echo.
-				echo %~nx0: WARNING: Community edition is not licensed to build commerical projects.
-				echo.
+	REM cycle through the args, look for '^setup:' token and use the
+	REM remaining string in argument
+	for %%a in (%ARG:"=%) do (
+		set crr=%%a
+		if /i ["!crr:~0,6!"] == ["setup:"] (
+			set VS_YEAR=!crr:~6!
+		)
+	)
+	if [%VS_YEAR%] == [] (
+		set VS_YEARS=2019 2017
+	) else (
+		set VS_YEARS=%VS_YEAR%
+	)
+
+	for %%r in (%VS_YEARS%) do (
+		for %%e in (Enterprise, Professional, Community) do (
+			if exist "C:\Program Files (x86)\Microsoft Visual Studio\%%r\%%e\Common7\Tools\VsDevCmd.bat" (
+				if /i "%%e" == "Community" (
+					echo.
+					echo %~nx0: WARNING: Community edition is not licensed to build commerical projects.
+					echo.
+				)
+				call "C:\Program Files (x86)\Microsoft Visual Studio\%%r\%%e\Common7\Tools\VsDevCmd.bat" -arch=!TARCH!
+				set EDITION=%%r
+				goto:eof
 			)
-			call "C:\Program Files (x86)\Microsoft Visual Studio\%RELEASE%\%%e\Common7\Tools\VsDevCmd.bat" -arch=!TARCH!
-			set EDITION=%%e
-			goto:eof
 		)
 	)
 	if [%EDITION%] == [] (
 		echo.
-		echo %~nx0: WARNING: no MSVC edition found, environment not set.
+		echo %~nx0: WARNING: no Visual Studio edition found, environment not set.
 		echo.
 	)
 
@@ -493,6 +508,28 @@ REM BUILDTYPE function: set the build config to feed MSBuild
 
 	goto:eof
 
+REM SETGENERATOR function: reads the environment variables and sets the
+REM generator string to feed CMake
+:SETGENERATOR
+	for /f "tokens=1 delims=. " %%a in ("%VSCMD_VER%") do (
+		set REL_MAJOR=%%a
+	)
+	if [%REL_MAJOR%] == [16] (
+		set VS_GENERATOR="Visual Studio 16 2019"
+	) else if [%REL_MAJOR%] == [15] (
+		set VS_GENERATOR="Visual Studio 15 2017"
+	)
+
+	if [%VS_GENERATOR%] == [] (
+		echo.
+		echo %~nx0: ERROR: no Visual Studio edition detected (%VSCMD_VER%^).
+		echo %~nx0:        Retry running with 'setup' argument.
+		echo.
+		exit /b 1
+	)
+
+	goto:eof
+
 REM BUILD function: build various targets
 :BUILD
 	REM set the wanted or previously set build type.
@@ -503,12 +540,13 @@ REM BUILD function: build various targets
 	if not exist ALL_BUILD.vcxproj (
 		echo %~nx0: generating the project files.
 
-		REM set the wanted build type.
-		rem call:BUILDTYPE
+		call:SETGENERATOR
+		if ERRORLEVEL 1 (
+			goto:END
+		)
 
 		set CMAKE_ARGS=-DDRIVER_BASE_NAME=%DRIVER_BASE_NAME%
-		REM no explicit x86 generator and is the default (MSVC2017 only?).
-		set CMAKE_ARGS=!CMAKE_ARGS! -G "Visual Studio 15 2017" -DCMAKE_GENERATOR_PLATFORM=%TARCH:x86=%
+		set CMAKE_ARGS=!CMAKE_ARGS! -G !VS_GENERATOR! -A %TARCH:x86=Win32%
 
 		if /i [!BUILD_TYPE!] == [Debug] (
 			set CMAKE_ARGS=!CMAKE_ARGS! -DLIBCURL_BUILD_TYPE=debug
@@ -530,13 +568,7 @@ REM BUILD function: build various targets
 		goto:eof
 	)
 
-	if /i not [%ARG: tests=%] == [%ARG%] ( REM utests dup'd
-		echo %~nx0: building all the project.
-		MSBuild ALL_BUILD.vcxproj %MSBUILD_ARGS%
-		if ERRORLEVEL 1 (
-			goto END
-		)
-	) else if /i not [%ARG:utests=%] == [%ARG%] (
+	if /i not [%ARG:utests=%] == [%ARG%] (
 		echo %~nx0: building all the project.
 		MSBuild ALL_BUILD.vcxproj %MSBUILD_ARGS%
 		if ERRORLEVEL 1 (
@@ -588,12 +620,7 @@ REM BUILD function: build various targets
 
 REM TESTS_SUITE_S function: run the compiled unit tests
 :TESTS_SUITE_S
-	if /i not [%ARG: tests=%] == [%ARG%] ( REM utests dup'd
-		MSBuild RUN_TESTS.vcxproj !MSBUILD_ARGS!
-		if ERRORLEVEL 1 (
-			goto END
-		)
-	) else if /i not [%ARG:utests=%] == [%ARG%] (
+	if /i not [%ARG:utests=%] == [%ARG%] (
 		MSBuild RUN_TESTS.vcxproj !MSBUILD_ARGS!
 		if ERRORLEVEL 1 (
 			goto END
