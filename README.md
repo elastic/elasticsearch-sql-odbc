@@ -32,8 +32,9 @@ On the server side, the requirements follow Elasticsearch SQL's requirements.
 The project is CMake enabled, which generates the environment-dependent build
 pipeline. This is a general build requirement.
 
-The building itself is then delegated to the platform-specific tools (MSVC or
-make).
+The building itself is then delegated to the platform-specific tools.
+
+CMake 3.14 or newer is required for building with Visual Studio 2019.
 
 ### External libraries/headers
 
@@ -75,9 +76,9 @@ The required libraries are added as subtrees to the project, in the libs directo
 Building the driver requires the installation of Microsoft tools. These can be
 from the Visual Studio pack or with the [standalone tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/).
 
-Version 2017 Enterprise 15 is used to develop with, older versions
+Version 2019 Enterprise 16 is used to develop with, older versions
 should work fine too, with their corresponding modules. The lists of packages
-for MSVC 2017 are given below.
+for MSVC 2019 are given below.
 
 Required packages:
 
