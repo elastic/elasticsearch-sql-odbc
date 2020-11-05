@@ -73,7 +73,6 @@ extern "C" {
     [\"FLOAT\", 7, 7, \"'\", \"'\", null, 2, false, 3, false, false, false, null, 7, 7, 7, 0, 2, null],\
     [\"DOUBLE\", 8, 15, \"'\", \"'\", null, 2, false, 3, false, false, false, null, 15, 15, 8, 0, 2, null],\
     [\"SCALED_FLOAT\", 8, 15, \"'\", \"'\", null, 2, false, 3, false, false, false, null, 15, 15, 8, 0, 2, null],\
-    [\"CONSTANT_KEYWORD\", 12, 32766, \"'\", \"'\", null, 2, true, 3, true, false, false, null, null, null, 12, 0, null, null],\
     [\"IP\", 12, 45, \"'\", \"'\", null, 2, false, 3, true, false, false, null, null, null, 12, 0, null, null],\
     [\"KEYWORD\", 12, 32766, \"'\", \"'\", null, 2, true, 3, true, false, false, null, null, null, 12, 0, null, null],\
     [\"TEXT\", 12, 2147483647, \"'\", \"'\", null, 2, true, 3, true, false, false, null, null, null, 12, 0, null, null],\
