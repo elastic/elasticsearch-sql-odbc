@@ -3813,7 +3813,7 @@ SQLRETURN c2sql_boolean(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	/*INDENT-ON*/
 
 	DBGH(stmt, "parameter (pos#%llu) converted to boolean: %d.",
-			(uint64_t)pos, val);
+		(uint64_t)pos, val);
 
 	if (val) {
 		memcpy(dest, JSON_VAL_TRUE, sizeof(JSON_VAL_TRUE) - /*\0*/1);
@@ -4516,7 +4516,7 @@ static SQLRETURN c2sql_str2interval(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		octet_len = *octet_len_ptr;
 		if (octet_len <= 0) {
 			ERRH(stmt, "invalid interval buffer length: %lld.",
-					(int64_t)octet_len);
+				(int64_t)octet_len);
 			RET_HDIAGS(stmt, SQL_STATE_HY090);
 		}
 	}
