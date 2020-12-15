@@ -187,8 +187,8 @@ void clear_resultset(esodbc_stmt_st *stmt, BOOL on_close)
 			/* the cursor is contained entirely in the received body */
 			assert(stmt->rset.body.str < stmt->rset.pack.cbor.curs.str); // &&
 			assert(stmt->rset.pack.cbor.curs.str +
-					stmt->rset.pack.cbor.curs.cnt <
-					stmt->rset.body.str + stmt->rset.body.cnt);
+				stmt->rset.pack.cbor.curs.cnt <
+				stmt->rset.body.str + stmt->rset.body.cnt);
 		}
 	}
 	memset(&stmt->rset, 0, sizeof(stmt->rset));
@@ -2528,7 +2528,7 @@ static esodbc_estype_st *match_es_type(esodbc_rec_st *irec)
 				case SQL_DOUBLE: /* DOUBLE, SCALED_FLOAT */
 					return dbc->max_float_type;
 					break;
-				case ES_WVARCHAR_SQL: /* CONSTANT_KEYWORD, KEYWORD, TEXT */
+				case ES_WVARCHAR_SQL: /* KEYWORD, TEXT */
 				case ES_VARCHAR_SQL: /* IP, GEO+ */
 					return dbc->max_varchar_type;
 				default:
@@ -2858,7 +2858,7 @@ static SQLRETURN convert_param_val(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			return c2sql_number(arec, irec, pos, &min, &max, fixed, dest, len);
 
 		/* JSON string */
-		case ES_WVARCHAR_SQL: /* KEYWORD, TEXT, CONSTANT_KEYWORD */
+		case ES_WVARCHAR_SQL: /* KEYWORD, TEXT */
 		case ES_VARCHAR_SQL: /* IP, GEO+ */
 			return c2sql_varchar(arec, irec, pos, dest, len);
 
