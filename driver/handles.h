@@ -133,6 +133,10 @@ typedef struct struct_dbc {
 	wstr_st server; /* ~ name; requested with SQLGetInfo(SQL_SERVER_NAME) */
 	wstr_st catalog; /* cached value; checked against if app setting it */
 	wstr_st srv_ver; /* server version: SQLGetInfo(SQL_DBMS_VER) */
+
+	cstr_st proxy_url;
+	cstr_st proxy_uid;
+	cstr_st proxy_pwd;
 	cstr_st url; /* SQL URL (posts) */
 	cstr_st close_url; /* SQL close URL (posts) */
 	cstr_st root_url; /* root URL (gets) */
@@ -145,6 +149,7 @@ typedef struct struct_dbc {
 		ESODBC_SEC_MAX /* meta */
 	} secure;
 	cstr_st ca_path;
+
 	cstr_st uid;
 	cstr_st pwd;
 	SQLUINTEGER timeout;
