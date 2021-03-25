@@ -129,6 +129,13 @@ namespace EsOdbcDsnEditor
 			checkProxyAuthEnabled.Checked = !noes.Contains(Builder.ContainsKey("ProxyAuthEnabled") ? Builder["ProxyAuthEnabled"].ToString() : "no");
 			textBoxProxyUsername.Text = Builder.ContainsKey("ProxyAuthUID") ? Builder["ProxyAuthUID"].ToString().StripBraces() : string.Empty;
 			textBoxProxyPassword.Text = Builder.ContainsKey("ProxyAuthPWD") ? Builder["ProxyAuthPWD"].ToString().StripBraces() : string.Empty;
+			toolTipProxyEnabled.SetToolTip(checkProxyEnabled, "This will enable relaying the connection to Elasticsearch over a proxy.");
+			toolTipProxyType.SetToolTip(comboBoxProxyType, "The protocol to use when connecting to the proxy.");
+			toolTipProxyHostname.SetToolTip(textProxyHostname, "The IP or domain name of the proxy server.");
+			toolTipProxyPort.SetToolTip(numericUpDownProxyPort, "The port the proxy is listening on for connections.");
+			toolTipProxyAuthEnabled.SetToolTip(checkProxyAuthEnabled, "Enables the authentication of the connection to the proxy.");
+			toolTipProxyUsername.SetToolTip(textBoxProxyUsername, "The ID to use when authenticating to the proxy.");
+			toolTipProxyPassword.SetToolTip(textBoxProxyPassword, "The password to use when authenticating to the proxy");
 
 			// Logging Panel
 			textLogDirectoryPath.Text = Builder.ContainsKey("tracefile") ? Builder["tracefile"].ToString().StripBraces() : string.Empty;
@@ -483,6 +490,8 @@ namespace EsOdbcDsnEditor
 			switch(comboBoxProxyType.Text.ToUpperInvariant())
 			{
 				case "HTTP": numericUpDownProxyPort.Text = "8080"; break;
+				// TODO: https://github.com/jeroen/curl/issues/186 : "Schannel backend doesn't support HTTPS proxy"
+				case "HTTPS": numericUpDownProxyPort.Text = "443"; break;
 				case "SOCKS4":
 				case "SOCKS4A":
 				case "SOCKS5":

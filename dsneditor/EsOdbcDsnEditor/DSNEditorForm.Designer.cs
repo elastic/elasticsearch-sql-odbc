@@ -138,6 +138,13 @@ namespace EsOdbcDsnEditor
             this.labelProxyPort = new System.Windows.Forms.Label();
             this.numericUpDownProxyPort = new System.Windows.Forms.NumericUpDown();
             this.checkProxyEnabled = new System.Windows.Forms.CheckBox();
+            this.toolTipProxyEnabled = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipProxyType = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipProxyHostname = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipProxyPort = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipProxyAuthEnabled = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipProxyUsername = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTipProxyPassword = new System.Windows.Forms.ToolTip(this.components);
             ((System.ComponentModel.ISupportInitialize)(this.header)).BeginInit();
             this.pageLogging.SuspendLayout();
             this.pageMisc.SuspendLayout();
@@ -966,7 +973,6 @@ namespace EsOdbcDsnEditor
             this.comboBoxProxyType.FormattingEnabled = true;
             this.comboBoxProxyType.Items.AddRange(new object[] {
             "HTTP",
-            "HTTPS",
             "SOCKS4",
             "SOCKS4a",
             "SOCKS5",
@@ -1199,6 +1205,13 @@ namespace EsOdbcDsnEditor
 		private System.Windows.Forms.Label labelProxyPort;
 		private System.Windows.Forms.NumericUpDown numericUpDownProxyPort;
 		private System.Windows.Forms.CheckBox checkProxyEnabled;
+		private System.Windows.Forms.ToolTip toolTipProxyEnabled;
+		private System.Windows.Forms.ToolTip toolTipProxyType;
+		private System.Windows.Forms.ToolTip toolTipProxyHostname;
+		private System.Windows.Forms.ToolTip toolTipProxyPort;
+		private System.Windows.Forms.ToolTip toolTipProxyAuthEnabled;
+		private System.Windows.Forms.ToolTip toolTipProxyUsername;
+		private System.Windows.Forms.ToolTip toolTipProxyPassword;
 	}
 }
 
