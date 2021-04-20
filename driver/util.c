@@ -19,7 +19,7 @@ BOOL wstr2bool(wstr_st *val)
 		case /*""*/0: return FALSE;
 		case /*0*/1: return ! EQ_CASE_WSTR(val, &MK_WSTR("0"));
 		case /*no*/2: return ! EQ_CASE_WSTR(val, &MK_WSTR("no"));
-		case /*no*/3: return ! EQ_CASE_WSTR(val, &MK_WSTR("off"));
+		case /*off*/3: return ! EQ_CASE_WSTR(val, &MK_WSTR("off"));
 		case /*false*/5: return ! EQ_CASE_WSTR(val, &MK_WSTR("false"));
 	}
 	/*INDENT-ON*/

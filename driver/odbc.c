@@ -68,6 +68,7 @@ BOOL WINAPI DllMain(
 	DWORD fdwReason,     // reason for calling function
 	LPVOID lpReserved)  // reserved
 {
+	SQLWCHAR path[MAX_PATH];
 	// Perform actions based on the reason for calling.
 	switch (fdwReason) {
 		// Initialize once for each new process.
@@ -77,6 +78,10 @@ BOOL WINAPI DllMain(
 				return FALSE;
 			}
 			INFO("process %u attached.", GetCurrentProcessId());
+			if (GetModuleFileNameW(NULL, path, sizeof(path)/sizeof(*path))
+				> 0) {
+				INFO("process path: `" PFWP_DESC "`.", path);
+			}
 			break;
 
 		// Do thread-specific initialization.

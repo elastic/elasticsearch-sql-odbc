@@ -41,6 +41,13 @@
 #define ESODBC_DSN_MFIELD_LENIENT	"MultiFieldLenient"
 #define ESODBC_DSN_ESC_PVA			"AutoEscapePVA"
 #define ESODBC_DSN_IDX_INC_FROZEN	"IndexIncludeFrozen"
+#define ESODBC_DSN_PROXY_ENABLED	"ProxyEnabled"
+#define ESODBC_DSN_PROXY_TYPE		"ProxyType"
+#define ESODBC_DSN_PROXY_HOST		"ProxyHost"
+#define ESODBC_DSN_PROXY_PORT		"ProxyPort"
+#define ESODBC_DSN_PROXY_AUTH_ENA	"ProxyAuthEnabled"
+#define ESODBC_DSN_PROXY_AUTH_UID	"ProxyAuthUID"
+#define ESODBC_DSN_PROXY_AUTH_PWD	"ProxyAuthPWD"
 #define ESODBC_DSN_TRACE_ENABLED	"TraceEnabled"
 #define ESODBC_DSN_TRACE_FILE		"TraceFile"
 #define ESODBC_DSN_TRACE_LEVEL		"TraceLevel"
@@ -85,10 +92,18 @@ typedef struct {
 	wstr_st mfield_lenient;
 	wstr_st auto_esc_pva;
 	wstr_st idx_inc_frozen;
+	wstr_st proxy_enabled;
+	wstr_st proxy_type;
+	wstr_st proxy_host;
+	wstr_st proxy_port;
+	wstr_st proxy_auth_enabled;
+	wstr_st proxy_auth_uid;
+	wstr_st proxy_auth_pwd;
 	wstr_st trace_enabled;
 	wstr_st trace_file;
 	wstr_st trace_level;
-#define ESODBC_DSN_ATTRS_COUNT	29
+#define ESODBC_DSN_ATTRS_COUNT	36
+
 	SQLWCHAR buff[ESODBC_DSN_ATTRS_COUNT * ESODBC_DSN_MAX_ATTR_LEN];
 	/* DSN reading/writing functions are passed a SQLSMALLINT length param */
 #if SHRT_MAX < ESODBC_DSN_ATTRS_COUNT * ESODBC_DSN_MAX_ATTR_LEN
