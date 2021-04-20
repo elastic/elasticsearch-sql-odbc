@@ -583,6 +583,37 @@ static SQLRETURN dbc_curl_init(esodbc_dbc_st *dbc)
 		INFOH(dbc, "no username provided: auth disabled.");
 	}
 
+	/* proxy parameters */
+	if (dbc->proxy_url.cnt) {
+		dbc->curl_err = curl_easy_setopt(curl, CURLOPT_PROXY,
+				dbc->proxy_url.str);
+		if (dbc->curl_err != CURLE_OK) {
+			ERRH(dbc, "libcurl: failed to set the proxy URL.");
+			goto err;
+		}
+		if (dbc->proxy_uid.cnt) {
+			dbc->curl_err = curl_easy_setopt(curl, CURLOPT_PROXYUSERNAME,
+					dbc->proxy_uid.str);
+			if (dbc->curl_err != CURLE_OK) {
+				ERRH(dbc, "libcurl: failed to set the proxy username.");
+				goto err;
+			}
+			if (dbc->proxy_pwd.cnt) {
+				dbc->curl_err = curl_easy_setopt(curl, CURLOPT_PROXYPASSWORD,
+						dbc->proxy_pwd.str);
+				if (dbc->curl_err != CURLE_OK) {
+					ERRH(dbc, "libcurl: failed to set the proxy password.");
+					goto err;
+				}
+			}
+		}
+	} else {
+		dbc->curl_err = curl_easy_setopt(curl, CURLOPT_PROXY, "");
+		if (dbc->curl_err != CURLE_OK) {
+			WARNH(dbc, "libcurl: failed to generally disable proxying.");
+		}
+	}
+
 	/* set the write call-back for answers */
 	dbc->curl_err = curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION,
 			write_callback);
@@ -1130,7 +1161,7 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	const static wstr_st http_prefix = WSTR_INIT("http://");
 	const static wstr_st https_prefix = WSTR_INIT("https://");
 	wstr_st prefix;
-	int cnt, ipv6;
+	int cnt, ipv6, n;
 	SQLBIGINT secure, timeout, max_body_size, max_fetch_size, varchar_limit;
 	SQLWCHAR buff_url[ESODBC_MAX_URL_LEN];
 	wstr_st url = (wstr_st) {
@@ -1191,7 +1222,7 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 
 	if (secure) {
 		if (! wstr_to_utf8(&attrs->ca_path, &dbc->ca_path)) {
-			ERRNH(dbc, "failed to convert CA path `" LWPDL "` to UTF8.",
+			ERRH(dbc, "failed to convert CA path `" LWPDL "` to UTF8.",
 				LWSTR(&attrs->ca_path));
 			SET_HDIAG(dbc, SQL_STATE_HY000, "reading the CA file path "
 				"failed", 0);
@@ -1222,7 +1253,7 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 		url.cnt = (size_t)cnt;
 	}
 	if (! wstr_to_utf8(&url, &dbc->close_url)) {
-		ERRNH(dbc, "failed to convert URL `" LWPDL "` to UTF8.", LWSTR(&url));
+		ERRH(dbc, "failed to convert URL `" LWPDL "` to UTF8.", LWSTR(&url));
 		SET_HDIAG(dbc, SQL_STATE_HY000, "server SQL URL's UTF8 conversion "
 			"failed", 0);
 		goto err;
@@ -1233,7 +1264,7 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	 * dup'ed since libcurl needs the 0 terminator */
 	url.cnt -= sizeof(ELASTIC_SQL_CLOSE_SUBPATH) - /*\0*/1;
 	if (! wstr_to_utf8(&url, &dbc->url)) {
-		ERRNH(dbc, "failed to convert URL `" LWPDL "` to UTF8.", LWSTR(&url));
+		ERRH(dbc, "failed to convert URL `" LWPDL "` to UTF8.", LWSTR(&url));
 		SET_HDIAG(dbc, SQL_STATE_HY000, "server SQL URL's UTF8 conversion "
 			"failed", 0);
 		goto err;
@@ -1258,7 +1289,7 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 		url.cnt = (size_t)cnt;
 	}
 	if (! wstr_to_utf8(&url, &dbc->root_url)) {
-		ERRNH(dbc, "failed to convert URL `" LWPDL "` to UTF8.", LWSTR(&url));
+		ERRH(dbc, "failed to convert URL `" LWPDL "` to UTF8.", LWSTR(&url));
 		SET_HDIAG(dbc, SQL_STATE_HY000, "server root URL's UTF8 conversion "
 			"failed", 0);
 		goto err;
@@ -1311,6 +1342,74 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	}
 	dbc->timeout = (SQLUINTEGER)timeout;
 	INFOH(dbc, "timeout: %lu.", dbc->timeout);
+
+	/*
+	 * proxy settings
+	 */
+	if (wstr2bool(&attrs->proxy_enabled)) {
+		ipv6 = wcsnstr(attrs->proxy_host.str, attrs->proxy_host.cnt, L':') !=
+			NULL;
+		cnt = swprintf(url.str, sizeof(buff_url)/sizeof(*buff_url),
+				L"" WPFWP_LDESC "://" WPFCP_DESC WPFWP_LDESC WPFCP_DESC,
+				LWSTR(&attrs->proxy_type),
+				ipv6 ? "[" : "", LWSTR(&attrs->proxy_host), ipv6 ? "]" : "");
+		if (cnt > 0 && attrs->proxy_port.cnt) {
+			n = swprintf(url.str + cnt,
+					sizeof(buff_url)/sizeof(*buff_url) - cnt,
+					L":" WPFWP_LDESC, LWSTR(&attrs->proxy_port));
+		} else {
+			n = 0;
+		}
+		if (cnt <= 0 || n < 0) {
+			ERRNH(dbc, "failed to print proxy URL out of type: `" LWPDL "`, "
+				"host: `" LWPDL "` and port: `" LWPDL "`.",
+				LWSTR(&attrs->proxy_type), LWSTR(&attrs->proxy_host),
+				LWSTR(&attrs->proxy_port));
+			SET_HDIAG(dbc, SQL_STATE_HY000, "printing proxy URL failed", 0);
+			goto err;
+		} else {
+			url.cnt = cnt + n;
+		}
+		if (! wstr_to_utf8(&url, &dbc->proxy_url)) {
+			ERRH(dbc, "failed to convert URL `" LWPDL "` to UTF8.",
+				LWSTR(&url));
+			SET_HDIAG(dbc, SQL_STATE_HY000, "proxy URL's UTF8 conversion "
+				"failed", 0);
+			goto err;
+		}
+		INFOH(dbc, "proxy URL: `%s`.", dbc->proxy_url.str);
+
+		if (wstr2bool(&attrs->proxy_auth_enabled)) {
+			if (attrs->proxy_auth_uid.cnt) {
+				if (! wstr_to_utf8(&attrs->proxy_auth_uid, &dbc->proxy_uid)) {
+					ERRH(dbc, "failed to convert proxy user ID `" LWPDL "` to"
+						" UTF8.", LWSTR(&attrs->proxy_auth_uid));
+					SET_HDIAG(dbc, SQL_STATE_HY000, "proxy UID's UTF8 "
+						"conversion failed", 0);
+					goto err;
+				}
+				INFOH(dbc, "proxy UID: `%s`.", dbc->proxy_uid.str);
+
+				if (attrs->proxy_auth_pwd.cnt) {
+					if (! wstr_to_utf8(&attrs->proxy_auth_pwd,
+							&dbc->proxy_pwd)) {
+						ERRH(dbc, "failed to convert proxy password [%zu] `%s`"
+							" to UTF8", attrs->proxy_auth_pwd.cnt,
+							ESODBC_PWD_VAL_SUBST);
+						SET_HDIAG(dbc, SQL_STATE_HY000, "proxy password's "
+							"UTF8 conversion failed", 0);
+						goto err;
+					}
+					/* indicates the presence of a non-empty password */
+					INFOH(dbc, "proxy PWD: " ESODBC_PWD_VAL_SUBST ".");
+				}
+			}
+		} else {
+			INFOH(dbc, "proxy authentication disabled.");
+		}
+	} else {
+		INFOH(dbc, "proxy disabled.");
+	}
 
 	/*
 	 * set max body size
@@ -1512,6 +1611,21 @@ void cleanup_dbc(esodbc_dbc_st *dbc)
 		dbc->pwd.cnt = 0;
 	} else {
 		assert(dbc->pwd.cnt == 0);
+	}
+	if (dbc->proxy_url.str) {
+		free(dbc->proxy_url.str);
+		dbc->proxy_url.str = NULL;
+		dbc->proxy_url.cnt = 0;
+	}
+	if (dbc->proxy_uid.str) {
+		free(dbc->proxy_uid.str);
+		dbc->proxy_uid.str = NULL;
+		dbc->proxy_uid.cnt = 0;
+	}
+	if (dbc->proxy_pwd.str) {
+		free(dbc->proxy_pwd.str);
+		dbc->proxy_pwd.str = NULL;
+		dbc->proxy_pwd.cnt = 0;
 	}
 	if (dbc->fetch.str) {
 		free(dbc->fetch.str);

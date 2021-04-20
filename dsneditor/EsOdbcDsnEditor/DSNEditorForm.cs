@@ -120,6 +120,23 @@ namespace EsOdbcDsnEditor
 				"In case the server uses a certificate that is not part of the PKI, for example using a self-signed certificate," + Environment.NewLine
 				+ "you can configure the path to a X509 certificate file that will be used by the driver to validate server's offered certificate.");
 
+			// Proxy Panel
+			string[] noes = {"no", "false", "0"};
+			checkProxyEnabled.Checked = !noes.Contains(Builder.ContainsKey("ProxyEnabled") ? Builder["ProxyEnabled"].ToString() : "no");
+			comboBoxProxyType.Text = Builder.ContainsKey("ProxyType") ? Builder["ProxyType"].ToString() : "HTTP";
+			textProxyHostname.Text = Builder.ContainsKey("ProxyHost") ? Builder["ProxyHost"].ToString().StripBraces() : string.Empty;
+			numericUpDownProxyPort.Text = Builder.ContainsKey("ProxyPort") ? Builder["ProxyPort"].ToString() : string.Empty;
+			checkProxyAuthEnabled.Checked = !noes.Contains(Builder.ContainsKey("ProxyAuthEnabled") ? Builder["ProxyAuthEnabled"].ToString() : "no");
+			textBoxProxyUsername.Text = Builder.ContainsKey("ProxyAuthUID") ? Builder["ProxyAuthUID"].ToString().StripBraces() : string.Empty;
+			textBoxProxyPassword.Text = Builder.ContainsKey("ProxyAuthPWD") ? Builder["ProxyAuthPWD"].ToString().StripBraces() : string.Empty;
+			toolTipProxyEnabled.SetToolTip(checkProxyEnabled, "This will enable relaying the connection to Elasticsearch over a proxy.");
+			toolTipProxyType.SetToolTip(comboBoxProxyType, "The protocol to use when connecting to the proxy.");
+			toolTipProxyHostname.SetToolTip(textProxyHostname, "The IP or domain name of the proxy server.");
+			toolTipProxyPort.SetToolTip(numericUpDownProxyPort, "The port the proxy is listening on for connections.");
+			toolTipProxyAuthEnabled.SetToolTip(checkProxyAuthEnabled, "Enables the authentication of the connection to the proxy.");
+			toolTipProxyUsername.SetToolTip(textBoxProxyUsername, "The ID to use when authenticating to the proxy.");
+			toolTipProxyPassword.SetToolTip(textBoxProxyPassword, "The password to use when authenticating to the proxy");
+
 			// Logging Panel
 			textLogDirectoryPath.Text = Builder.ContainsKey("tracefile") ? Builder["tracefile"].ToString().StripBraces() : string.Empty;
 			comboLogLevel.Text = "DEBUG"; // Default setting
@@ -161,7 +178,6 @@ namespace EsOdbcDsnEditor
 			comboBoxDataEncoding.Text = Builder.ContainsKey("Packing") ? Builder["Packing"].ToString() : "CBOR";
 			comboBoxDataCompression.Text = Builder.ContainsKey("Compression") ? Builder["Compression"].ToString() : "auto";
 
-			string[] noes = {"no", "false", "0"};
 			checkBoxFollowRedirects.Checked = !noes.Contains(Builder.ContainsKey("Follow") ? Builder["Follow"].ToString().StripBraces() : "yes");
 			checkBoxApplyTZ.Checked = !noes.Contains(Builder.ContainsKey("ApplyTZ") ? Builder["ApplyTZ"].ToString().StripBraces() : "no");
 			checkBoxAutoEscapePVA.Checked = !noes.Contains(Builder.ContainsKey("AutoEscapePVA") ? Builder["AutoEscapePVA"].ToString().StripBraces() : "yes");
@@ -282,6 +298,15 @@ namespace EsOdbcDsnEditor
 			if (radioEnabledHostname.Checked) Builder["secure"] = 3;
 			if (radioEnabledFull.Checked) Builder["secure"] = 4;
 
+			// Proxy Panel
+			Builder["ProxyEnabled"] = checkProxyEnabled.Checked ? "true" : "false";
+			Builder["ProxyType"] = comboBoxProxyType.Text;
+			Builder["ProxyHost"] = textProxyHostname.Text;
+			Builder["ProxyPort"] = numericUpDownProxyPort.Text;
+			Builder["ProxyAuthEnabled"] = checkProxyAuthEnabled.Checked ? "true" : "false";
+			Builder["ProxyAuthUID"] = textBoxProxyUsername.Text;
+			Builder["ProxyAuthPWD"] = textBoxProxyPassword.Text;
+
 			// Logging Panel
 			Builder["tracefile"] = textLogDirectoryPath.Text;
 			Builder["tracelevel"] = comboLogLevel.Text;
@@ -394,6 +419,12 @@ namespace EsOdbcDsnEditor
 
 		private void CheckLoggingEnabled_CheckedChanged(object sender, EventArgs e) => EnableDisableLoggingControls();
 
+		private void CheckProxyEnabled_CheckedChanged(object sender, EventArgs e) => EnableDisableProxyControls();
+
+		private void CheckProxyAuthEnabled_CheckedChanged(object sender, EventArgs e) => EnableDisableProxyAuthControls();
+
+		private void ComboBoxProxyType_SelectedIndexChanged(object sender, EventArgs e) => UpdateDefaultPort();
+
 		private void EnableDisableActionButtons()
 		{
 			if (string.IsNullOrEmpty(textCloudID.Text) == false) {
@@ -436,6 +467,36 @@ namespace EsOdbcDsnEditor
 			textLogDirectoryPath.Enabled = checkLoggingEnabled.Checked;
 			comboLogLevel.Enabled = checkLoggingEnabled.Checked;
 			logDirectoryPathButton.Enabled = checkLoggingEnabled.Checked;
+		}
+
+		private void EnableDisableProxyControls()
+		{
+			comboBoxProxyType.Enabled = checkProxyEnabled.Checked;
+			textProxyHostname.Enabled = checkProxyEnabled.Checked;
+			numericUpDownProxyPort.Enabled = checkProxyEnabled.Checked;
+			checkProxyAuthEnabled.Enabled = checkProxyEnabled.Checked;
+			textBoxProxyUsername.Enabled = checkProxyAuthEnabled.Checked && checkProxyEnabled.Checked;
+			textBoxProxyPassword.Enabled = checkProxyAuthEnabled.Checked && checkProxyEnabled.Checked;
+		}
+
+		private void EnableDisableProxyAuthControls()
+		{
+			textBoxProxyUsername.Enabled = checkProxyAuthEnabled.Checked;
+			textBoxProxyPassword.Enabled = checkProxyAuthEnabled.Checked;
+		}
+
+		private void UpdateDefaultPort()
+		{
+			switch(comboBoxProxyType.Text.ToUpperInvariant())
+			{
+				case "HTTP": numericUpDownProxyPort.Text = "8080"; break;
+				// TODO: https://github.com/jeroen/curl/issues/186 : "Schannel backend doesn't support HTTPS proxy"
+				case "HTTPS": numericUpDownProxyPort.Text = "443"; break;
+				case "SOCKS4":
+				case "SOCKS4A":
+				case "SOCKS5":
+				case "SOCKS5H": numericUpDownProxyPort.Text = "1080"; break;
+			}
 		}
 
 		private void CancelButton_Click(object sender, EventArgs e)
