@@ -3052,28 +3052,40 @@ static SQLRETURN statement_len_cbor(esodbc_stmt_st *stmt, size_t *enc_len,
 		/* "field_multi_value_leniency": true/false */
 		bodylen += cbor_str_obj_len(sizeof(REQ_KEY_MULTIVAL) - 1);
 		bodylen += CBOR_OBJ_BOOL_LEN;
+		(*keys) ++;
 		/* "index_include_frozen": true/false */
 		bodylen += cbor_str_obj_len(sizeof(REQ_KEY_IDX_FROZEN) - 1);
 		bodylen += CBOR_OBJ_BOOL_LEN;
+		(*keys) ++;
 		/* "time_zone": "-05:45" */
 		bodylen += cbor_str_obj_len(sizeof(REQ_KEY_TIMEZONE) - 1);
 		bodylen += cbor_str_obj_len(tz_param.cnt); /* lax len */
+		(*keys) ++;
+		/* "catalog": "my_cluster" */
+		if (dbc->catalog.c.cnt) {
+			bodylen += cbor_str_obj_len(sizeof(REQ_KEY_CATALOG) - 1);
+			bodylen += cbor_str_obj_len(dbc->catalog.c.cnt);
+			(*keys) ++;
+		}
 		bodylen += cbor_str_obj_len(sizeof(REQ_KEY_VERSION) - 1);
 		bodylen += cbor_str_obj_len(version.cnt);
-		*keys += 4; /* field_m._val., idx._inc._frozen, time_zone, version */
+		(*keys) ++;
 	}
 	/* mode */
 	bodylen += cbor_str_obj_len(sizeof(REQ_KEY_MODE) - 1);
 	bodylen += cbor_str_obj_len(sizeof(REQ_VAL_MODE) - 1);
+	(*keys) ++;
 	/* client_id */
 	bodylen += cbor_str_obj_len(sizeof(REQ_KEY_CLT_ID) - 1);
 	bodylen += cbor_str_obj_len(sizeof(REQ_VAL_CLT_ID) - 1);
+	(*keys) ++;
 	/* binary_format */
 	bodylen += cbor_str_obj_len(sizeof(REQ_KEY_BINARY_FMT) - 1);
 	bodylen += CBOR_OBJ_BOOL_LEN;
-	*keys += 3; /* mode, client_id, binary_format */
+	(*keys) ++;
 	/* TODO: request_/page_timeout */
 
+	assert(*keys <= REST_REQ_KEY_COUNT);
 	*enc_len = bodylen;
 	return SQL_SUCCESS;
 }
@@ -3125,6 +3137,12 @@ static SQLRETURN statement_len_json(esodbc_stmt_st *stmt, size_t *outlen)
 		/* "time_zone": "-05:45" */
 		bodylen += sizeof(JSON_KEY_TIMEZONE) - 1;
 		bodylen += tz_param.cnt;
+		/* "catalog": "my_cluster" */
+		if (dbc->catalog.c.cnt) {
+			bodylen += sizeof(JSON_KEY_CATALOG) - 1;
+			bodylen += dbc->catalog.c.cnt;
+			bodylen += /* 2x `"` */2;
+		}
 		/* "version": */
 		bodylen += sizeof(JSON_KEY_VERSION) - 1;
 		bodylen += version.cnt + /* 2x`"` */2;
@@ -3407,6 +3425,14 @@ static SQLRETURN serialize_to_cbor(esodbc_stmt_st *stmt, cstr_st *dest,
 		}
 		err = cbor_encode_text_string(&map, tz.str, tz.cnt);
 		FAIL_ON_CBOR_ERR(stmt, err);
+		if (dbc->catalog.c.cnt) {
+			err = cbor_encode_text_string(&map, REQ_KEY_CATALOG,
+					sizeof(REQ_KEY_CATALOG) - 1);
+			FAIL_ON_CBOR_ERR(stmt, err);
+			err = cbor_encode_text_string(&map, dbc->catalog.c.str,
+					dbc->catalog.c.cnt);
+			FAIL_ON_CBOR_ERR(stmt, err);
+		}
 		/* version */
 		err = cbor_encode_text_string(&map, REQ_KEY_VERSION,
 				sizeof(REQ_KEY_VERSION) - 1);
@@ -3534,6 +3560,15 @@ static SQLRETURN serialize_to_json(esodbc_stmt_st *stmt, cstr_st *dest)
 			memcpy(body + pos, JSON_VAL_TIMEZONE_Z,
 				sizeof(JSON_VAL_TIMEZONE_Z) - 1);
 			pos += sizeof(JSON_VAL_TIMEZONE_Z) - 1;
+		}
+		if (dbc->catalog.c.cnt) {
+			/* "catalog": "my_cluster" */
+			memcpy(body + pos, JSON_KEY_CATALOG, sizeof(JSON_KEY_CATALOG) - 1);
+			pos += sizeof(JSON_KEY_CATALOG) - 1;
+			body[pos ++] = '"';
+			memcpy(body + pos, dbc->catalog.c.str, dbc->catalog.c.cnt);
+			pos += dbc->catalog.c.cnt;
+			body[pos ++] = '"';
 		}
 		/* "version": ... */
 		memcpy(body + pos, JSON_KEY_VERSION, sizeof(JSON_KEY_VERSION) - 1);

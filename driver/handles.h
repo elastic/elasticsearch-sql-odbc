@@ -131,7 +131,6 @@ typedef struct struct_dbc {
 
 	wstr_st dsn; /* data source name SQLGetInfo(SQL_DATA_SOURCE_NAME) */
 	wstr_st server; /* ~ name; requested with SQLGetInfo(SQL_SERVER_NAME) */
-	wstr_st catalog; /* cached value; checked against if app setting it */
 	wstr_st srv_ver; /* server version: SQLGetInfo(SQL_DBMS_VER) */
 
 	cstr_st proxy_url;
@@ -166,6 +165,10 @@ typedef struct struct_dbc {
 		ESODBC_CMPSS_AUTO,
 	} compression;
 	BOOL apply_tz; /* should the times be converted from UTC to local TZ? */
+	struct {
+		wstr_st w; /* NB: w.str and c.str are co-allocated */
+		cstr_st c;
+	} catalog; /* current ~  */
 	BOOL early_exec; /* should prepared, non-param queries be exec'd early? */
 	enum {
 		ESODBC_FLTS_DEFAULT = 0,
@@ -559,7 +562,7 @@ SQLRETURN EsSQLSetDescRec(
 /* return the code associated with the given state (and debug-log) */
 #define RET_STATE(_s)	\
 	do { \
-		assert(_s < SQL_STATE_MAX); \
+		assert(SQL_STATE_00000 <= _s && _s < SQL_STATE_MAX); \
 		return esodbc_errors[_s].retcode; \
 	} while (0)
 
