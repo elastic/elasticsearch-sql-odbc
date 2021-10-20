@@ -35,7 +35,8 @@ enum {
 
 SQLSMALLINT fetch_server_attr(esodbc_dbc_st *dbc, SQLINTEGER attr_id,
 	SQLWCHAR *dest, SQLSMALLINT room);
-BOOL TEST_API set_current_catalog(esodbc_dbc_st *dbc, wstr_st *catalog);
+SQLRETURN set_current_catalog(esodbc_dbc_st *dbc, wstr_st *catalog);
+void free_current_catalog(esodbc_dbc_st *dbc);
 SQLRETURN TEST_API update_varchar_defs(esodbc_stmt_st *stmt);
 
 

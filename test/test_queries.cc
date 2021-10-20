@@ -328,6 +328,53 @@ TEST_F(Queries, SQLDescribeCol_varchar_lim) {
 	ASSERT_EQ(col_size, INT_MAX); /* binary col's length must not be affected */
 }
 
+TEST_F(Queries, serialize_with_catalog) {
+#	define CURRENT_CATALOG	"current_catalog_at_" __TIMESTAMP__
+
+	wstr_st crr_cat = WSTR_INIT(CURRENT_CATALOG);
+	ASSERT_TRUE(SQL_SUCCEEDED(SQLSetConnectAttrW(dbc,
+					SQL_ATTR_CURRENT_CATALOG, (SQLPOINTER)crr_cat.str,
+					(SQLINTEGER)(crr_cat.cnt * sizeof(SQLWCHAR)))));
+
+	const size_t bsz = 64;
+	wchar_t buff[bsz];
+	wstr_st select = WSTR_INIT("SELECT '");
+	cstr_st body = {(SQLCHAR *)buff, /*same size as the Q: force realloc*/bsz};
+
+	/* construct a valid query */
+	wmemset(buff, L'*', bsz);
+	wmemcpy(buff, select.str, select.cnt);
+	buff[bsz - 2] = L'\'';
+	buff[bsz - 1] = L'\0';
+
+	ASSERT_TRUE(SQL_SUCCEEDED(attach_sql(STMH(stmt), (SQLWCHAR *)buff,
+					bsz - 1)));
+
+	/* JSON test */
+	DBCH(dbc)->pack_json = TRUE;
+	ASSERT_TRUE(SQL_SUCCEEDED(serialize_statement(STMH(stmt), &body)));
+	ASSERT_NE((void *)body.str, (void *)buff);
+	ASSERT_NE(nullptr,
+			strstr((char *)body.str, JSON_KEY_CATALOG "\"" CURRENT_CATALOG "\""));
+	free(body.str);
+	body.str = NULL;
+	body.cnt = 0;
+
+	/* CBOR test */
+	DBCH(dbc)->pack_json = FALSE;
+	ASSERT_TRUE(SQL_SUCCEEDED(serialize_statement(STMH(stmt), &body)));
+	ASSERT_NE((void *)body.str, (void *)buff);
+	ASSERT_NE(nullptr,
+			// `x+` : the ASCII (partial) representation of the packed map
+			strstr((char *)body.str, REQ_KEY_CATALOG "x+" CURRENT_CATALOG));
+	free(body.str);
+
+	ASSERT_TRUE(SQL_SUCCEEDED(SQLSetConnectAttrW(dbc,
+					SQL_ATTR_CURRENT_CATALOG, NULL, 0)));
+
+#	undef CURRENT_CATALOG
+}
+
 } // test namespace
 
 /* vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 : */

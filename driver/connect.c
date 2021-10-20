@@ -1501,6 +1501,11 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	/* early execution */
 	dbc->early_exec = wstr2bool(&attrs->early_exec);
 	INFOH(dbc, "early execution: %s.", dbc->early_exec ? "true" : "false");
+	/* default current catalog */
+	if (attrs->catalog.cnt &&
+			(! SQL_SUCCEEDED(set_current_catalog(dbc, &attrs->catalog)))) {
+		goto err;
+	}
 
 	/* how to print the floats? */
 	assert(1 <= attrs->sci_floats.cnt); /* default should apply */
@@ -1657,13 +1662,9 @@ void cleanup_dbc(esodbc_dbc_st *dbc)
 		dbc->srv_ver.str = NULL;
 		dbc->srv_ver.cnt = 0;
 	}
-	if (dbc->catalog.str) {
-		free(dbc->catalog.str);
-		dbc->catalog.str = NULL;
-		dbc->catalog.cnt = 0;
-	} else {
-		assert(dbc->catalog.cnt == 0);
-	}
+	free_current_catalog(dbc);
+	assert(dbc->catalog.w.cnt == 0);
+	assert(dbc->catalog.c.cnt == 0);
 	if (dbc->varchar_limit_str.str) {
 		free(dbc->varchar_limit_str.str);
 		dbc->varchar_limit_str.str = NULL;
@@ -3266,38 +3267,6 @@ SQLRETURN EsSQLDisconnect(SQLHDBC ConnectionHandle)
 	return SQL_SUCCESS;
 }
 
-/* ES/SQL doesn't support catalogs (yet). This function checks that a
- * previously retrieved (and cached) catalog value is the same with what the
- * app currently tries to set it to.
- * Ideally, the app provided value would be cached here too (as per the spec:
- * "SQL_ATTR_CURRENT_CATALOG can be set before or after connecting"), in case
- * there's no connection "established" yet and checked at "establishment"
- * time. But there's no client reported yet setting a catalog value before
- * connecting. */
-static SQLRETURN check_catalog_name(esodbc_dbc_st *dbc, SQLWCHAR *name,
-	SQLINTEGER len)
-{
-	wstr_st catalog;
-	catalog.str = name;
-	if (len < 0) {
-		catalog.cnt = wcslen(name);
-	} else {
-		catalog.cnt = ((size_t)len)/sizeof(SQLWCHAR);
-	}
-	if (! EQ_WSTR(&dbc->catalog, &catalog)) {
-		if (! dbc->catalog.cnt) {
-			/* this will happen if the app tries to set a value that it
-			 * discovered over a different connection.
-			 * TODO on a first reported issue. */
-			WARNH(dbc, "connection's current catalog not yet set!");
-		}
-		ERRH(dbc, "setting catalog name not supported.");
-		RET_HDIAGS(dbc, SQL_STATE_HYC00);
-	}
-	WARNH(dbc, "ignoring attempt to set the current catalog.");
-	return SQL_SUCCESS;
-}
-
 /*
  * https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/unicode-drivers :
  * """
@@ -3325,6 +3294,7 @@ SQLRETURN EsSQLSetConnectAttrW(
 	_In_reads_bytes_opt_(StringLength) SQLPOINTER Value,
 	SQLINTEGER StringLength)
 {
+	wstr_st catalog;
 	esodbc_dbc_st *dbc = DBCH(ConnectionHandle);
 
 	switch(Attribute) {
@@ -3434,11 +3404,13 @@ SQLRETURN EsSQLSetConnectAttrW(
 			RET_HDIAGS(dbc, SQL_STATE_IM009);
 
 		case SQL_ATTR_CURRENT_CATALOG:
-			INFOH(dbc, "setting current catalog to: `" LWPDL "`.",
-				/* string should be 0-term'd */
-				0 <= StringLength ? StringLength/sizeof(SQLWCHAR) : SHRT_MAX,
-				(SQLWCHAR *)Value);
-			return check_catalog_name(dbc, (SQLWCHAR *)Value, StringLength);
+			if (StringLength < 0) {
+				ERRH(dbc, "invalid catalog name lenght: %ld", StringLength);
+				RET_HDIAGS(dbc, SQL_STATE_HY090);
+			}
+			catalog.str = (SQLWCHAR *)Value;
+			catalog.cnt = StringLength/sizeof(SQLWCHAR);
+			return set_current_catalog(dbc, &catalog);
 
 		case SQL_ATTR_TRACE:
 		case SQL_ATTR_TRACEFILE: /* DM-only */
@@ -3504,7 +3476,16 @@ SQLRETURN EsSQLGetConnectAttrW(
 				ERRH(dbc, "no connection active.");
 				RET_HDIAGS(dbc, SQL_STATE_08003);
 			}
-			if ((used = fetch_server_attr(dbc, SQL_ATTR_CURRENT_CATALOG,
+			if (dbc->catalog.w.cnt) {
+				if (! SQL_SUCCEEDED(write_wstr(dbc, (SQLWCHAR *)ValuePtr,
+								&dbc->catalog.w, (SQLSMALLINT)BufferLength,
+								&used))) {
+					ERRH(dbc, "failed to copy current catalog out.");
+					RET_STATE(dbc->hdr.diag.state);
+				}
+				used = SHRT_MAX <= dbc->catalog.w.cnt ? SHRT_MAX :
+					(SQLSMALLINT)dbc->catalog.w.cnt;
+			} else if ((used = fetch_server_attr(dbc, SQL_ATTR_CURRENT_CATALOG,
 							(SQLWCHAR *)ValuePtr,
 							(SQLSMALLINT)BufferLength)) < 0) {
 				ERRH(dbc, "failed to get current catalog.");
@@ -3583,14 +3564,14 @@ SQLRETURN EsSQLGetConnectAttrW(
 		/* MS Access/Jet proprietary info type */
 		case 30002:
 			ERRH(dbc, "unsupported info type.");
-			RET_HDIAGS(DBCH(ConnectionHandle), SQL_STATE_HY092);
+			RET_HDIAGS(dbc, SQL_STATE_HY092);
 #endif
 
 		default:
 			ERRH(dbc, "unknown Attribute type %ld.", Attribute);
 			// FIXME: add the other attributes
 			FIXME;
-			RET_HDIAGS(DBCH(ConnectionHandle), SQL_STATE_HY092);
+			RET_HDIAGS(dbc, SQL_STATE_HY092);
 	}
 
 	return SQL_SUCCESS;

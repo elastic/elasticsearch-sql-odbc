@@ -87,35 +87,52 @@ SQLRETURN EsSQLStatisticsW(
 	return fake_answer(hstmt, &statistics);
 }
 
-BOOL TEST_API set_current_catalog(esodbc_dbc_st *dbc, wstr_st *catalog)
+void free_current_catalog(esodbc_dbc_st *dbc)
 {
-	if (dbc->catalog.cnt) {
-		DBGH(dbc, "catalog already set to `" LWPDL "`.", LWSTR(&dbc->catalog));
-		if (! EQ_WSTR(&dbc->catalog, catalog)) {
-			/* this should never happen, as cluster's name is not updateable
-			 * on the fly. */
-			ERRH(dbc, "overwriting previously set catalog value!");
-			free(dbc->catalog.str);
-			dbc->catalog.str = NULL;
-			dbc->catalog.cnt = 0;
-		} else {
-			return FALSE;
+	if (dbc->catalog.w.str) {
+		free(dbc->catalog.w.str);
+		dbc->catalog.w.str = NULL;
+		dbc->catalog.w.cnt = 0;
+	}
+	if (dbc->catalog.c.str) {
+		free(dbc->catalog.c.str);
+		dbc->catalog.c.str = NULL;
+		dbc->catalog.c.cnt = 0;
+	}
+}
+
+SQLRETURN set_current_catalog(esodbc_dbc_st *dbc, wstr_st *catalog)
+{
+	if (dbc->catalog.w.cnt) {
+		DBGH(dbc, "catalog previously set to `" LWPDL "`.",
+			LWSTR(&dbc->catalog.w));
+		if (! EQ_WSTR(&dbc->catalog.w, catalog)) {
+			free_current_catalog(dbc);
 		}
 	}
-	if (! catalog->cnt) {
-		WARNH(dbc, "attempting to set catalog name to empty value.");
-		return FALSE;
+	if (! catalog->cnt || ! catalog->str) {
+		WARNH(dbc, "catalog name set to empty value.");
+		return SQL_SUCCESS;
 	}
-	if (! (dbc->catalog.str = malloc((catalog->cnt + 1) * sizeof(SQLWCHAR)))) {
+	dbc->catalog.w.str = malloc((catalog->cnt + 1) * sizeof(SQLWCHAR));
+	if (! dbc->catalog.w.str) {
 		ERRNH(dbc, "OOM for %zu wchars.", catalog->cnt + 1);
-		return FALSE;
+		RET_HDIAGS(dbc, SQL_STATE_HY001);
 	}
-	wmemcpy(dbc->catalog.str, catalog->str, catalog->cnt);
-	dbc->catalog.str[catalog->cnt] = L'\0';
-	dbc->catalog.cnt = catalog->cnt;
-	INFOH(dbc, "current catalog name: `" LWPDL "`.", LWSTR(&dbc->catalog));
+	wmemcpy(dbc->catalog.w.str, catalog->str, catalog->cnt);
+	dbc->catalog.w.str[catalog->cnt] = L'\0';
+	dbc->catalog.w.cnt = catalog->cnt;
 
-	return TRUE;
+	if (! wstr_to_utf8(catalog, &dbc->catalog.c)) {
+		goto err;
+	}
+
+	INFOH(dbc, "current catalog name: `" LWPDL "`.", LWSTR(&dbc->catalog.w));
+	return SQL_SUCCESS;
+
+err:
+	free_current_catalog(dbc);
+	RET_HDIAG(dbc, SQL_STATE_HY000, "Saving current catalog failed", 0);
 }
 
 /* writes into 'dest', of size 'room', the current requested attr. of 'dbc'.
@@ -197,9 +214,6 @@ SQLSMALLINT fetch_server_attr(esodbc_dbc_st *dbc, SQLINTEGER attr_id,
 			attr_val.cnt = ind_len / sizeof(*buff);
 			/* 0-term room left out when binding */
 			buff[attr_val.cnt] = L'\0'; /* write_wstr() expects the 0-term */
-		}
-		if (attr_id == SQL_ATTR_CURRENT_CATALOG) {
-			set_current_catalog(dbc, &attr_val);
 		}
 	}
 	DBGH(dbc, "attribute %ld value: `" LWPDL "`.", attr_id, LWSTR(&attr_val));
