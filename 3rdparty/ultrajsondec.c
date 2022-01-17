@@ -102,7 +102,7 @@ FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_numeric (struct DecoderState *ds)
 {
   int intNeg = 1;
   int mantSize = 0;
-  JSUINT64 intValue;
+  JSUINT64 intValue, chrValue;
   int chr;
   int decimalCount = 0;
   double frcValue = 0.0;
@@ -139,14 +139,13 @@ FASTCALL_ATTR JSOBJ FASTCALL_MSVC decode_numeric (struct DecoderState *ds)
       case '8':
       case '9':
       {
-        //FIXME: Check for arithemtic overflow here
-        //PERF: Don't do 64-bit arithmetic here unless we know we have to
-        intValue = intValue * 10ULL + (JSLONG) (chr - 48);
-
-        if (intValue > overflowLimit)
+        chrValue = chr - '0';
+        if (intValue > (ULLONG_MAX - chrValue) / 10ULL)
         {
-          return SetError(ds, -1, overflowLimit == LLONG_MAX ? "Value is too big" : "Value is too small");
+          return SetError(ds, -1, intNeg > 0 ? "Value is too big" :
+              "Value is too small");
         }
+        intValue = intValue * 10ULL + chrValue;
 
         offset ++;
         mantSize ++;
@@ -181,7 +180,17 @@ BREAK_INT_LOOP:
 
   if ((intValue >> 31))
   {
-    return ds->dec->newLong(ds->prv, (JSINT64) (intValue * (JSINT64) intNeg));
+    if (intNeg > 0)
+    {
+      return (intValue > LLONG_MAX)
+        ? ds->dec->newUnsignedLong(ds->prv, intValue)
+        : ds->dec->newLong(ds->prv, (JSINT64) intValue);
+    }
+    else if (intValue > LLONG_MIN)
+    {
+      return SetError(ds, -1, "Value is too small");
+    }
+    return ds->dec->newLong(ds->prv, -(JSINT64)intValue);
   }
   else
   {

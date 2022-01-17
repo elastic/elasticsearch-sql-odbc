@@ -90,6 +90,12 @@ typedef struct __LongLongValue
 	long long value;
 } LongLongValue;
 
+typedef struct __UnsignedLongLongValue
+{
+	Item item;
+	unsigned long long value;
+} UnsignedLongLongValue;
+
 typedef struct __DoubleValue
 {
 	Item item;
@@ -143,6 +149,9 @@ static void *alloc(struct DecoderState *ds, size_t cbSize)
 			newSize *= 2;
 
 		newSlab = (HeapSlab *) ds->malloc(newSize);
+		if (! newSlab) {
+			return NULL;
+		}
 		newSlab->start = (unsigned char *) (newSlab + 1);
 		newSlab->end = (unsigned char *) newSlab + newSize;
 		newSlab->size = newSize;
@@ -297,6 +306,18 @@ static JSOBJ newLong(void *context, JSINT64 value)
 	return (JSOBJ) llv;
 }
 
+static JSOBJ newUnsignedLong(void *context, JSUINT64 value)
+{
+	struct DecoderState *ds = context;
+	UnsignedLongLongValue *llv =
+		(UnsignedLongLongValue *) alloc(ds, sizeof(UnsignedLongLongValue));
+	if (llv) {
+		llv->item.type = UJT_UnsignedLongLong;
+		llv->value = (long long unsigned) value;
+	}
+	return (JSOBJ) llv;
+}
+
 static JSOBJ newDouble(void *context, double value)
 {
 	struct DecoderState *ds = context;
@@ -327,6 +348,11 @@ static long GetLong(UJObject obj)
 static long long GetLongLong(UJObject obj)
 {
 	return ((LongLongValue *) obj)->value;
+}
+
+static unsigned long long GetUnsignedLongLong(UJObject obj)
+{
+	return ((UnsignedLongLongValue *) obj)->value;
 }
 
 void UJFree(void *state)
@@ -518,12 +544,27 @@ int UJIterObject(void **iter, UJString *outKey, UJObject *outValue)
 	return 1;
 }
 
+unsigned long long UJNumericUnsignedLongLong(UJObject obj)
+{
+	switch ( ((Item *) obj)->type)
+	{
+	case UJT_Long: return (unsigned long long) GetLong(obj);
+	case UJT_LongLong: return (unsigned long long) GetLongLong(obj);
+	case UJT_UnsignedLongLong: return GetUnsignedLongLong(obj);
+	case UJT_Double: return (unsigned long long) GetDouble(obj);
+	default: break;
+	}
+
+	return 0;
+}
+
 long long UJNumericLongLong(UJObject obj)
 {
 	switch ( ((Item *) obj)->type)
 	{
 	case UJT_Long: return (long long) GetLong(obj);
 	case UJT_LongLong: return (long long) GetLongLong(obj);
+	case UJT_UnsignedLongLong: return (long long) GetUnsignedLongLong(obj);
 	case UJT_Double: return (long long) GetDouble(obj);
 	default: break;
 	}
@@ -537,6 +578,7 @@ int UJNumericInt(UJObject obj)
 	{
 	case UJT_Long: return (int) GetLong(obj);
 	case UJT_LongLong: return (int) GetLongLong(obj);
+	case UJT_UnsignedLongLong: return (int) GetUnsignedLongLong(obj);
 	case UJT_Double: return (int) GetDouble(obj);
 	default: break;
 	}
@@ -550,6 +592,7 @@ double UJNumericFloat(UJObject obj)
 	{
 	case UJT_Long: return (double) GetLong(obj);
 	case UJT_LongLong: return (double) GetLongLong(obj);
+	case UJT_UnsignedLongLong: return (double) GetUnsignedLongLong(obj);
 	case UJT_Double: return (double) GetDouble(obj);
 	default: break;
 	}
@@ -781,6 +824,7 @@ UJObject UJDecode(const char *input, size_t cbInput, UJHeapFuncs *hf, void **out
 		newArray,
 		newInt,
 		newLong,
+		newUnsignedLong,
 		newDouble,
 		releaseObject,
 		NULL,
