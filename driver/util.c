@@ -63,7 +63,7 @@ int str2ubigint(void *val, BOOL wide, SQLUBIGINT *out, BOOL strict)
 		}
 		assert(sizeof(SQLUBIGINT) == sizeof(uint64_t));
 		if (i < ESODBC_PRECISION_UINT64 - 1) {
-			res *= 10;
+			res *= 10ULL;
 			res += digit;
 		} else {
 			/* would it overflow? */
@@ -71,7 +71,7 @@ int str2ubigint(void *val, BOOL wide, SQLUBIGINT *out, BOOL strict)
 				errno = ERANGE;
 				return -1;
 			} else {
-				res *= 10;
+				res *= 10ULL;
 			}
 			if (ULLONG_MAX - res < digit) {
 				errno = ERANGE;

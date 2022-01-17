@@ -189,6 +189,66 @@ CborError cbor_container_is_empty(CborValue cont, BOOL *empty)
 	return CborNoError;
 }
 
+CborError cbor_value_get_tagged_uint64(CborValue *it, uint64_t *val)
+{
+	CborError res;
+	CborTag type;
+	cstr_st bstr; /* byte string */
+	size_t val_offt, i;
+
+	assert(cbor_value_is_tag(it));
+	if ((res = cbor_value_get_tag(it, &type)) != CborNoError) {
+		ERR("failed to extract tag.");
+		return res;
+	}
+	if (type != CborPositiveBignumTag) {
+		ERR("tag type `%llu` not a positive bignum.", type);
+		return CborErrorInappropriateTagForType;
+	}
+	if ((res = cbor_value_advance_fixed(it)) != CborNoError) {
+		ERR("failed to advance past tag header.");
+		return res;
+	}
+	if (! cbor_value_is_byte_string(it)) {
+		ERR("tag content type `%d` not byte string.", cbor_value_get_type(it));
+		return CborErrorImproperValue;
+	}
+	/* only expecting/supporting single-chunk bignums */
+	if (! cbor_value_is_length_known(it)) {
+		ERR("byte string length is unknown.");
+		return CborErrorUnknownLength;
+	}
+	res = cbor_value_get_string_chunk(it, &bstr.str, &bstr.cnt);
+	if (res != CborNoError) {
+		ERR("failed to extract byte string chunk reference.");
+		return res;
+	}
+
+	/* Jackson will encode values in range [1<<63, 1<<64-1] on 9 bytes ->
+	 * allow arbitrary number of leading 0s. */
+	i = 0;
+	if (sizeof(*val) < bstr.cnt) {
+		for (; sizeof(*val) < bstr.cnt - i; i ++) {
+			if (bstr.str[i] != 0) {
+				ERR("non-zero byte at offset %zu: 0x%x. bignum value exceeds "
+						"uint64_t range.", i, bstr.str[i]);
+				return CborErrorImproperValue;
+			}
+		}
+		val_offt = 0;
+	} else {
+		val_offt = sizeof(*val) - bstr.cnt;
+	}
+
+	*val = 0LLU;
+	memcpy((uint8_t *)val + val_offt, bstr.str + i, bstr.cnt - i);
+#if REG_DWORD == REG_DWORD_LITTLE_ENDIAN
+	*val = _byteswap_uint64(*val);
+#endif /* LE */
+
+	return cbor_value_advance(it);
+}
+
 static BOOL enlist_utf_buffer(void *old, void *new)
 {
 	void **r;

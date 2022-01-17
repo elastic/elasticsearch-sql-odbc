@@ -69,6 +69,8 @@
 #define TYPE_UNSUPPORTED	"UNSUPPORTED"
 /* 12 */
 #define TYPE_SCALED_FLOAT	"SCALED_FLOAT"
+/* 13 */
+#define TYPE_UNSIGNED_LONG	"UNSIGNED_LONG"
 
 /*
  * intervals
@@ -1503,7 +1505,7 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	INFOH(dbc, "early execution: %s.", dbc->early_exec ? "true" : "false");
 	/* default current catalog */
 	if (attrs->catalog.cnt &&
-			(! SQL_SUCCEEDED(set_current_catalog(dbc, &attrs->catalog)))) {
+		(! SQL_SUCCEEDED(set_current_catalog(dbc, &attrs->catalog)))) {
 		goto err;
 	}
 
@@ -2386,6 +2388,17 @@ static BOOL elastic_name2types(wstr_st *type_name,
 				return TRUE;
 			}
 			break;
+
+		/* 13: UNSIGNED_LONG */
+		case sizeof(TYPE_UNSIGNED_LONG) - 1:
+			if (! wmemncasecmp(type_name->str, MK_WPTR(TYPE_UNSIGNED_LONG),
+					type_name->cnt)) {
+				*c_sql = ES_ULONG_TO_CSQL;
+				*sql = ES_ULONG_TO_SQL;
+				return TRUE;
+			}
+			break;
+
 	}
 
 	return elastic_intervals_name2types(type_name, c_sql, sql);
@@ -2422,7 +2435,7 @@ static void set_display_size(esodbc_estype_st *es_type)
 				es_type->display_size ++;
 			}
 			break;
-		case SQL_BIGINT: /* LONG */
+		case SQL_BIGINT: /* LONG, UNSIGNED_LONG */
 			es_type->display_size = es_type->column_size;
 			if (es_type->unsigned_attribute) {
 				es_type->display_size ++;
@@ -2713,6 +2726,7 @@ static void set_es_types(esodbc_dbc_st *dbc, SQLULEN rows_fetched,
 {
 	SQLULEN i;
 	SQLINTEGER max_float_size, max_varchar_size;
+	size_t lgst_name_len;
 
 	dbc->es_types = types;
 	dbc->no_types = rows_fetched;
@@ -2720,6 +2734,7 @@ static void set_es_types(esodbc_dbc_st *dbc, SQLULEN rows_fetched,
 	assert(dbc->max_float_type == NULL);
 	assert(dbc->max_varchar_type == NULL);
 
+	lgst_name_len = 0;
 	for (i = 0; i < rows_fetched; i ++) {
 		switch (types[i].data_type) {
 			case SQL_DOUBLE:
@@ -2736,11 +2751,20 @@ static void set_es_types(esodbc_dbc_st *dbc, SQLULEN rows_fetched,
 				if (max_varchar_size < types[i].column_size) {
 					dbc->max_varchar_type = &types[i];
 				}
+				break;
+		}
+		if (types[i].c_concise_type == ES_ULONG_TO_CSQL) {
+			dbc->ulong = &types[i];
+		}
+		if (lgst_name_len < types[i].type_name.cnt) {
+			lgst_name_len = types[i].type_name.cnt;
+			dbc->lgst_name = &types[i];
 		}
 	}
 
 	assert(dbc->max_float_type);
 	assert(dbc->max_varchar_type);
+	assert(dbc->lgst_name);
 
 	DBGH(dbc, "%lu ES/SQL types available, maximum sizes supported for: "
 		"floats: %ld, varchar: %ld.", (unsigned long)rows_fetched,
@@ -3478,8 +3502,8 @@ SQLRETURN EsSQLGetConnectAttrW(
 			}
 			if (dbc->catalog.w.cnt) {
 				if (! SQL_SUCCEEDED(write_wstr(dbc, (SQLWCHAR *)ValuePtr,
-								&dbc->catalog.w, (SQLSMALLINT)BufferLength,
-								&used))) {
+							&dbc->catalog.w, (SQLSMALLINT)BufferLength,
+							&used))) {
 					ERRH(dbc, "failed to copy current catalog out.");
 					RET_STATE(dbc->hdr.diag.state);
 				}

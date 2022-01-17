@@ -255,6 +255,72 @@ TEST_F(ConvertSQL2C_Interval, Float2Interval_violation_07006)
 	assertState(L"07006");
 }
 
+TEST_F(ConvertSQL2C_Interval, ULong2Interval_second)
+{
+#	undef SQL_VAL
+#	undef SQL
+#	define SQL_RAW 4294967295
+#	define SQL_VAL STR(SQL_RAW)
+#	define SQL   "SELECT " SQL_VAL
+
+	const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"unsigned_long\"}\
+  ],\
+  \"rows\": [\
+    [" SQL_VAL "]\
+  ]\
+}\
+";
+	prepareStatement(json_answer);
+
+	ret = SQLBindCol(stmt, /*col#*/1, SQL_C_INTERVAL_SECOND, &is,
+			sizeof(is), &ind_len);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	ret = SQLFetch(stmt);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+	ASSERT_EQ(ind_len, sizeof(is));
+
+	SQL_INTERVAL_STRUCT is2 = {0};
+	is2.interval_type = SQL_IS_SECOND;
+	is2.intval.day_second.second = SQL_RAW;
+	is2.interval_sign = SQL_FALSE;
+	ASSERT_TRUE(memcmp(&is, &is2, sizeof(is)) == 0);
+}
+
+TEST_F(ConvertSQL2C_Interval, ULong2Interval_second_violation_22003)
+{
+#	undef SQL_RAW
+#	undef SQL_VAL
+#	undef SQL
+#	define SQL_RAW 4294967296
+#	define SQL_VAL STR(SQL_RAW)
+#	define SQL   "SELECT " SQL_VAL
+
+	const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"unsigned_long\"}\
+  ],\
+  \"rows\": [\
+    [" SQL_VAL "]\
+  ]\
+}\
+";
+	prepareStatement(json_answer);
+
+	ret = SQLBindCol(stmt, /*col#*/1, SQL_C_INTERVAL_SECOND, &is,
+			sizeof(is), &ind_len);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	ret = SQLFetch(stmt);
+	ASSERT_FALSE(SQL_SUCCEEDED(ret));
+	assertState(L"22003");
+}
+
+
 TEST_F(ConvertSQL2C_Interval, Integer2Interval_multi_violation_07006)
 {
 #	undef SQL_VAL

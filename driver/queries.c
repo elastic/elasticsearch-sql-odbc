@@ -1319,6 +1319,7 @@ SQLRETURN copy_one_row_json(esodbc_stmt_st *stmt, SQLULEN pos)
 	SQLRETURN ret;
 	SQLLEN *ind_len;
 	long long ll;
+	unsigned long long ull;
 	double dbl;
 	const wchar_t *wstr;
 	BOOL boolval;
@@ -1395,6 +1396,13 @@ SQLRETURN copy_one_row_json(esodbc_stmt_st *stmt, SQLULEN pos)
 				DBGH(stmt, "value [%zd, %d] is integer: %lld.", rowno, i + 1,
 					ll);
 				ret = sql2c_longlong(arec, irec, pos, ll);
+				break;
+
+			case UJT_UnsignedLongLong:
+				ull = UJNumericUnsignedLongLong(obj);
+				DBGH(stmt, "value [%zd, %d] is unsigned long long: %llu.",
+						rowno, i + 1, ull);
+				ret = sql2c_quadword(arec, irec, pos, ull, /*unsigned*/true);
 				break;
 
 			case UJT_Double:
@@ -1519,6 +1527,7 @@ static SQLRETURN copy_one_row_cbor(esodbc_stmt_st *stmt, SQLULEN pos)
 	bool boolval;
 	double dbl;
 	uint16_t ui16;
+	uint64_t ui64;
 	float flt;
 
 	ard = stmt->ard;
@@ -1558,7 +1567,6 @@ static SQLRETURN copy_one_row_cbor(esodbc_stmt_st *stmt, SQLULEN pos)
 			case CborMapType:
 			case CborSimpleType:
 			case CborUndefinedType:
-			case CborTagType:
 			default: /* + CborInvalidType */
 				ERRH(stmt, "unexpected elem. of type 0x%x in row", elem_type);
 				goto err;
@@ -1581,7 +1589,7 @@ static SQLRETURN copy_one_row_cbor(esodbc_stmt_st *stmt, SQLULEN pos)
 			case CborTextStringType:
 				res = cbor_value_get_utf16_wstr(&obj, &wstr);
 				CHK_RES(stmt, "failed to extract text string");
-				DBGH(stmt, "value [%zd, %d] is string: [%zu] `" LWPDL "`.",
+				DBGH(stmt, "value [%zu, %d] is string: [%zu] `" LWPDL "`.",
 					rowno, i + 1, wstr.cnt, LWSTR(&wstr));
 				/* UTF8/16 conversion terminates the string */
 				assert(wstr.str[wstr.cnt] == '\0');
@@ -1593,10 +1601,21 @@ static SQLRETURN copy_one_row_cbor(esodbc_stmt_st *stmt, SQLULEN pos)
 			case CborIntegerType:
 				res = cbor_value_get_int64_checked(&obj, &i64);
 				CHK_RES(stmt, "failed to extract int64 value");
-				DBGH(stmt, "value [%zd, %d] is integer: %I64d.", rowno,
+				DBGH(stmt, "value [%zu, %d] is integer: %I64d.", rowno,
 					i + 1, i64);
 				assert(sizeof(int64_t) == sizeof(long long));
 				ret = sql2c_longlong(arec, irec, pos, (long long)i64);
+				break;
+
+			case CborTagType:
+				/* Elastic's Java BigInteger is CBOR-encoded as (tagged)
+				 * Bignum. No other tag is expected in the protocol, so it's
+				 * either an unsigned long long, or an error.  */
+				res = cbor_value_get_tagged_uint64(&obj, &ui64);
+				CHK_RES(stmt, "failed to extract tagged uint64 value");
+				DBGH(stmt, "value [%zu, %d] is biginteger: %I64u.", rowno,
+					i + 1, ui64);
+				ret = sql2c_quadword(arec, irec, pos, ui64, /*unsigned*/true);
 				break;
 
 			/*INDENT-OFF*/
@@ -1616,7 +1635,7 @@ static SQLRETURN copy_one_row_cbor(esodbc_stmt_st *stmt, SQLULEN pos)
 			} while (0);
 				CHK_RES(stmt, "failed to extract flt. point type 0x%x",
 						elem_type);
-				DBGH(stmt, "value [%zd, %d] is double: %f.", rowno,
+				DBGH(stmt, "value [%zu, %d] is double: %f.", rowno,
 					i + 1, dbl);
 				ret = sql2c_double(arec, irec, pos, dbl);
 				break;
@@ -1625,7 +1644,7 @@ static SQLRETURN copy_one_row_cbor(esodbc_stmt_st *stmt, SQLULEN pos)
 			case CborBooleanType:
 				res = cbor_value_get_boolean(&obj, &boolval);
 				CHK_RES(stmt, "failed to extract boolean value");
-				DBGH(stmt, "value [%zd, %d] is boolean: %d.", rowno,
+				DBGH(stmt, "value [%zu, %d] is boolean: %d.", rowno,
 					i + 1, boolval);
 				/* 'When bit SQL data is converted to character C data, the
 				 * possible values are "0" and "1".' */
@@ -1697,13 +1716,19 @@ static SQLRETURN unpack_one_row_cbor(esodbc_stmt_st *stmt, SQLULEN pos)
 		if (cbor_value_at_end(&it)) {
 			ERRH(stmt, "current row %zd counts fewer elements: %hd than "
 				"columns: %hd.", rowno, i + 1, ird->count);
+			goto err;
 		}
 		irec = &ird->recs[i];
 		irec->i_val.cbor = it;
-		assert(! cbor_value_is_tag(&it));
 
-		res = cbor_value_advance(&it);
-		if (res != CborNoError) {
+		if (cbor_value_is_tag(&it)) { /* CborPositiveBignumTag (or error) */
+			if ((res = cbor_value_skip_tag(&it)) != CborNoError) {
+				ERRH(stmt, "failed to advance past current tag in row array: "
+					"%s.", cbor_error_string(res));
+				goto err;
+			}
+		}
+		if ((res = cbor_value_advance(&it)) != CborNoError) {
 			ERRH(stmt, "failed to advance past current value in row array: "
 				"%s.", cbor_error_string(res));
 			goto err;
@@ -2798,8 +2823,7 @@ static SQLRETURN convert_param_val(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	SQLULEN pos, char *dest, size_t *len)
 {
 	SQLLEN *ind_ptr;
-	double min, max;
-	BOOL fixed;
+	t_number_st min, max;
 	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
 
 	ind_ptr = deferred_address(SQL_DESC_INDICATOR_PTR, pos, arec);
@@ -2821,41 +2845,35 @@ static SQLRETURN convert_param_val(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 		do {
 		/* JSON long */
-		case SQL_BIGINT: /* LONG */
-			min = (double)LLONG_MIN; /* precision warnings */
-			max = (double)LLONG_MAX;
-			fixed = TRUE;
+		case SQL_BIGINT: /* LONG, UNSIGNED_LONG */
+			min = (t_number_st){.bint = LLONG_MIN, .type = SQL_C_SBIGINT};
+			max = (t_number_st){.ubint = ULLONG_MAX, .type = SQL_C_UBIGINT};
 			break;
 		case SQL_INTEGER: /* INTEGER */
-			min = LONG_MIN;
-			max = LONG_MAX;
-			fixed = TRUE;
+			min = (t_number_st){.bint = LONG_MIN, .type = SQL_C_SBIGINT};
+			max = (t_number_st){.ubint = LONG_MAX, .type = SQL_C_UBIGINT};
 			break;
 		case SQL_SMALLINT: /* SHORT */
-			min = SHRT_MIN;
-			max = SHRT_MAX;
-			fixed = TRUE;
+			min = (t_number_st){.bint = SHRT_MIN, .type = SQL_C_SBIGINT};
+			max = (t_number_st){.ubint = SHRT_MAX, .type = SQL_C_UBIGINT};
 		case SQL_TINYINT: /* BYTE */
-			min = CHAR_MIN;
-			max = CHAR_MAX;
-			fixed = TRUE;
+			min = (t_number_st){.bint = CHAR_MIN, .type = SQL_C_SBIGINT};
+			max = (t_number_st){.ubint = CHAR_MAX, .type = SQL_C_UBIGINT};
 			break;
 
 		/* JSON double */
 			// TODO: check accurate limits for floats in ES/SQL
 		case SQL_REAL: /* FLOAT */
-			min = FLT_MIN;
-			max = FLT_MAX;
-			fixed = FALSE;
+			min = (t_number_st){.dbl = FLT_MIN, .type = SQL_C_DOUBLE};
+			max = (t_number_st){.dbl = FLT_MAX, .type = SQL_C_DOUBLE};
 			break;
 		case SQL_FLOAT: /* HALF_FLOAT */
 		case SQL_DOUBLE: /* DOUBLE, SCALED_FLOAT */
-			min = DBL_MIN;
-			max = DBL_MAX;
-			fixed = FALSE;
+			min = (t_number_st){.dbl = DBL_MIN, .type = SQL_C_DOUBLE};
+			max = (t_number_st){.dbl = DBL_MAX, .type = SQL_C_DOUBLE};
 			break;
 		} while (0);
-			return c2sql_number(arec, irec, pos, &min, &max, fixed, dest, len);
+			return c2sql_number(arec, irec, pos, &min, &max, dest, len);
 
 		/* JSON string */
 		case ES_WVARCHAR_SQL: /* KEYWORD, TEXT */
@@ -2938,6 +2956,8 @@ static SQLRETURN serialize_params_json(esodbc_stmt_st *stmt, char *dest,
 	SQLRETURN ret;
 	SQLSMALLINT i, count;
 	size_t l, pos;
+	esodbc_estype_st *estype;
+	esodbc_dbc_st *dbc = HDRH(stmt)->dbc;
 
 	pos = 0;
 	if (dest) {
@@ -2967,9 +2987,12 @@ static SQLRETURN serialize_params_json(esodbc_stmt_st *stmt, char *dest,
 		pos += 2 * !!i + j_type.cnt;
 
 		/* copy/eval ES/SQL type name */
-		pos += json_escape(irec->es_type->type_name_c.str,
-				irec->es_type->type_name_c.cnt, dest ? dest + pos : NULL,
-				/*"unlimited" output buffer*/(size_t)-1);
+		/* Due to UNSIGNED_LONG type requiring value evaluation, which only
+		 * happens below with convert_param_val(), a max is used for the first
+		 * lenght-evaluation pass. */
+		estype = dest ? irec->es_type : dbc->lgst_name;
+		pos += json_escape(estype->type_name_c.str, estype->type_name_c.cnt,
+				dest ? dest + pos : NULL, /*"unlimited" buffer*/(size_t)-1);
 
 		if (dest) {
 			/* copy 'value' JSON key name */
@@ -3174,6 +3197,7 @@ static SQLRETURN statement_params_len_cbor(esodbc_stmt_st *stmt,
 	size_t len, l, max;
 	esodbc_rec_st *arec, *irec;
 	SQLRETURN ret;
+	esodbc_dbc_st *dbc = HDRH(stmt)->dbc;
 
 	/* Initial all-encompassing array preamble. */
 	/* ~ [] */
@@ -3190,7 +3214,11 @@ static SQLRETURN statement_params_len_cbor(esodbc_stmt_st *stmt,
 
 		/* ~ "type": "..." */
 		len += cbor_str_obj_len(sizeof(REQ_KEY_PARAM_TYPE) - 1);
-		len += cbor_str_obj_len(irec->es_type->type_name.cnt);
+		/* Normally, irec->es_type->type_name.cnt should be used here.
+		 * However, due to UNSIGNED_LONG type requiring value evaluation,
+		 * which only happens below with convert_param_val(), a max is instead
+		 * used for now. */
+		len += cbor_str_obj_len(dbc->lgst_name->type_name.cnt);
 
 		/* ~ "value": "..." */
 		len += cbor_str_obj_len(sizeof(REQ_KEY_PARAM_VAL) - 1);
