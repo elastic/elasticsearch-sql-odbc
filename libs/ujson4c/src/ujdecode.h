@@ -45,6 +45,7 @@ extern "C" {
 		UJT_False,
 		UJT_Long,
 		UJT_LongLong,
+		UJT_UnsignedLongLong,
 		UJT_Double,
 		UJT_String,
 		UJT_Array,
@@ -241,6 +242,7 @@ extern "C" {
 	converting doubles to integers.
 	===============================================================================
 	*/
+	unsigned long long UJNumericUnsignedLongLong(UJObject obj);
 	long long UJNumericLongLong(UJObject obj);
 	int UJNumericInt(UJObject obj);
 
