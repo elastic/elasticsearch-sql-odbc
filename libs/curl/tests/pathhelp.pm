@@ -5,11 +5,11 @@
 #                            | (__| |_| |  _ <| |___
 #                             \___|\___/|_| \_\_____|
 #
-# Copyright (C) 2016, Evgeny Grin (Karlson2k), <k2k@narod.ru>.
+# Copyright (C) 2016 - 2021, Evgeny Grin (Karlson2k), <k2k@narod.ru>.
 #
 # This software is licensed as described in the file COPYING, which
 # you should have received as part of this distribution. The terms
-# are also available at https://curl.haxx.se/docs/copyright.html.
+# are also available at https://curl.se/docs/copyright.html.
 #
 # You may opt to use, copy, modify, merge, publish, distribute and/or sell
 # copies of the Software, and permit persons to whom the Software is
@@ -181,7 +181,7 @@ sub get_win32_current_drive {
 sub do_msys_transform;
 
 # Internal function. Gets two parameters: first parameter must be single
-# drive letter ('c'), second optional parameter is path relative to drive's 
+# drive letter ('c'), second optional parameter is path relative to drive's
 # current working directory. Returns Win32 absolute normalized path.
 sub get_abs_path_on_win32_drive;
 
@@ -372,7 +372,15 @@ sub sys_native_abs_path {
         # Path is in relative form. Resolve relative directories in Unix form
         # *BEFORE* converting to Win32 form otherwise paths like
         # '../../../cygdrive/c/windows' will not be resolved.
-        my $cur_dir = `pwd -L`;
+
+        my $cur_dir;
+        # MSys shell has built-in command.
+        if($^O eq 'msys') {
+            $cur_dir = `bash -c 'pwd -L'`;
+        }
+        else {
+            $cur_dir = `pwd -L`;
+        }
         if($? != 0) {
             warn "Can't determine current working directory.\n";
             return undef;
@@ -440,7 +448,13 @@ sub build_sys_abs_path {
         # Path is empty string. Return current directory.
         # Empty string processed correctly by 'cygpath'.
 
-        chomp($path = `pwd -L`);
+        # MSys shell has built-in command.
+        if($^O eq 'msys') {
+            chomp($path = `bash -c 'pwd -L'`);
+        }
+        else {
+            chomp($path = `pwd -L`);
+        }
         if($? != 0) {
             warn "Can't determine Unix-style current working directory.\n";
             return undef;
@@ -455,7 +469,7 @@ sub build_sys_abs_path {
 
         my $has_final_slash = ($path =~ m{[\\/]$});
 
-        # Resolve relative directories, as they may be not resolved for 
+        # Resolve relative directories, as they may be not resolved for
         # Unix-style paths.
         # Remove duplicated slashes, as they may be not processed.
         $path = normalize_path($path);
@@ -510,7 +524,15 @@ sub build_sys_abs_path {
         # Path in relative form. Resolve relative directories in Unix form
         # *BEFORE* converting to Win32 form otherwise paths like
         # '../../../cygdrive/c/windows' will not be resolved.
-        my $cur_dir = `pwd -L`;
+
+        my $cur_dir;
+        # MSys shell has built-in command.
+        if($^O eq 'msys') {
+            $cur_dir = `bash -c 'pwd -L'`;
+        }
+        else {
+            $cur_dir = `pwd -L`;
+        }
         if($? != 0) {
             warn "Can't determine current working directory.\n";
             return undef;
@@ -624,7 +646,7 @@ sub do_msys_transform {
 }
 
 # Internal function. Gets two parameters: first parameter must be single
-# drive letter ('c'), second optional parameter is path relative to drive's 
+# drive letter ('c'), second optional parameter is path relative to drive's
 # current working directory. Returns Win32 absolute normalized path.
 sub get_abs_path_on_win32_drive {
     my ($drv, $rel_path) = @_;

@@ -8,11 +8,10 @@ Publishing Information
 ----------------------
 
 All known and public curl or libcurl related vulnerabilities are listed on
-[the curl web site security page](https://curl.haxx.se/docs/security.html).
+[the curl website security page](https://curl.se/docs/security.html).
 
-Security vulnerabilities should not be entered in the project's public bug
-tracker unless the necessary configuration is in place to limit access to the
-issue to only the reporter and the project's security team.
+Security vulnerabilities **should not** be entered in the project's public bug
+tracker.
 
 Vulnerability Handling
 ----------------------
@@ -23,20 +22,20 @@ No information should be made public about a vulnerability until it is
 formally announced at the end of this process. That means, for example that a
 bug tracker entry must NOT be created to track the issue since that will make
 the issue public and it should not be discussed on any of the project's public
-mailing lists. Also messages associated with any commits should not make
-any reference to the security nature of the commit if done prior to the public
+mailing lists. Also messages associated with any commits should not make any
+reference to the security nature of the commit if done prior to the public
 announcement.
 
-- The person discovering the issue, the reporter, reports the vulnerability
-  privately to `curl-security@haxx.se`. That's an email alias that reaches a
-  handful of selected and trusted people.
+- The person discovering the issue, the reporter, reports the vulnerability on
+  [https://hackerone.com/curl](https://hackerone.com/curl). Issues filed there
+  reach a handful of selected and trusted people.
 
 - Messages that do not relate to the reporting or managing of an undisclosed
   security vulnerability in curl or libcurl are ignored and no further action
   is required.
 
-- A person in the security team sends an e-mail to the original reporter to
-  acknowledge the report.
+- A person in the security team responds to the original report to acknowledge
+  that a human has seen the report.
 
 - The security team investigates the report and either rejects it or accepts
   it.
@@ -51,9 +50,9 @@ announcement.
   should involve the reporter as much as possible.
 
 - The release of the information should be "as soon as possible" and is most
-  often synced with an upcoming release that contains the fix. If the
-  reporter, or anyone else, thinks the next planned release is too far away
-  then a separate earlier release for security reasons should be considered.
+  often synchronized with an upcoming release that contains the fix. If the
+  reporter, or anyone else involved, thinks the next planned release is too
+  far away, then a separate earlier release should be considered.
 
 - Write a security advisory draft about the problem that explains what the
   problem is, its impact, which versions it affects, solutions or workarounds,
@@ -61,19 +60,22 @@ announcement.
   Figure out the CWE (Common Weakness Enumeration) number for the flaw.
 
 - Request a CVE number from
-  [distros@openwall](http://oss-security.openwall.org/wiki/mailing-lists/distros)
-  when also informing and preparing them for the upcoming public security
-  vulnerability announcement - attach the advisory draft for information. Note
-  that 'distros' won't accept an embargo longer than 14 days and they do not
-  care for Windows-specific flaws. For windows-specific flaws, request CVE
-  directly from MITRE.
+  [HackerOne](https://docs.hackerone.com/programs/cve-requests.html)
 
 - Update the "security advisory" with the CVE number.
 
 - The security team commits the fix in a private branch. The commit message
-  should ideally contain the CVE number. This fix is usually also distributed
-  to the 'distros' mailing list to allow them to use the fix prior to the
-  public announcement.
+  should ideally contain the CVE number.
+
+- The security team also decides on and delivers a monetary reward to the
+  reporter as per the bug-bounty polices.
+
+- No more than 10 days before release, inform
+  [distros@openwall](https://oss-security.openwall.org/wiki/mailing-lists/distros)
+  to prepare them about the upcoming public security vulnerability
+  announcement - attach the advisory draft for information with CVE and
+  current patch. 'distros' does not accept an embargo longer than 14 days and
+  they do not care for Windows-specific flaws.
 
 - No more than 48 hours before the release, the private branch is merged into
   the master branch and pushed. Once pushed, the information is accessible to
@@ -87,30 +89,21 @@ announcement.
   the same manner we always announce releases. It gets sent to the
   curl-announce, curl-library and curl-users mailing lists.
 
-- The security web page on the web site should get the new vulnerability
+- The security web page on the website should get the new vulnerability
   mentioned.
 
-Pre-notification
-----------------
-
-If you think you are or should be eligible for a pre-notification about
-upcoming security announcements for curl, we urge OS distros and similar
-vendors to primarily join the distros@openwall list as that is one of the
-purposes of that list - and not just for curl of course.
-
-If you are not a distro or otherwise not suitable for distros@openwall and yet
-want pre-notifications from us, contact the curl security team with a detailed
-and clear explanation why this is the case.
-
-curl-security (at haxx dot se)
+security (at curl dot se)
 ------------------------------
 
+This is a private mailing list for discussions on and about curl security
+issues.
+
 Who is on this list? There are a couple of criteria you must meet, and then we
-might ask you to join the list or you can ask to join it. It really isn't very
-formal. We basically only require that you have a long-term presence in the
-curl project and you have shown an understanding for the project and its way
-of working. You must've been around for a good while and you should have no
-plans in vanishing in the near future.
+might ask you to join the list or you can ask to join it. It really is not a
+formal process. We basically only require that you have a long-term presence
+in the curl project and you have shown an understanding for the project and
+its way of working. You must have been around for a good while and you should
+have no plans in vanishing in the near future.
 
 We do not make the list of participants public mostly because it tends to vary
 somewhat over time and a list somewhere will only risk getting outdated.
@@ -121,19 +114,28 @@ Publishing Security Advisories
 1. Write up the security advisory, using markdown syntax. Use the same
    subtitles as last time to maintain consistency.
 
-2. Name the advisory file (and ultimately the URL to be used when the flaw
-   gets published), using a randomized component so that third parties that
-   are involved in the process for each individual flaw will not be given
-   insights about possible *other* flaws worked on in parallel.
-   `adv_YEAR_RANDOM.md` has been used before.
+2. Name the advisory file after the allocated CVE id.
 
 3. Add a line on the top of the array in `curl-www/docs/vuln.pm'.
 
 4. Put the new advisory markdown file in the curl-www/docs/ directory. Add it
-   to the git repo.  Update the Makefile in the same directory to build the
-   HTML representation.
+   to the git repo.
 
 5. Run `make` in your local web checkout and verify that things look fine.
 
 6. On security advisory release day, push the changes on the curl-www
    repository's remote master branch.
+
+Hackerone
+---------
+
+Request the issue to be disclosed. If there are sensitive details present in
+the report and discussion, those should be redacted from the disclosure. The
+default policy is to disclose as much as possible as soon as the vulnerability
+has been published.
+
+Bug Bounty
+----------
+
+See [BUG-BOUNTY](https://curl.se/docs/bugbounty.html) for details on the
+bug bounty program.

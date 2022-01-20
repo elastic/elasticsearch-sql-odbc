@@ -5,11 +5,11 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2017, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) 1998 - 2020, Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
- * are also available at https://curl.haxx.se/docs/copyright.html.
+ * are also available at https://curl.se/docs/copyright.html.
  *
  * You may opt to use, copy, modify, merge, publish, distribute and/or sell
  * copies of the Software, and permit persons to whom the Software is
@@ -39,6 +39,8 @@ int test(char *URL)
   int msgs_left; /* how many messages are left */
   int res = CURLE_OK;
 
+  start_test_timing();
+
   global_init(CURL_GLOBAL_ALL);
 
   /* Allocate one CURL handle per transfer */
@@ -58,6 +60,8 @@ int test(char *URL)
 
   /* we start some action by calling perform right away */
   curl_multi_perform(multi_handle, &still_running);
+
+  abort_on_test_timeout();
 
   do {
     struct timeval timeout;
@@ -103,7 +107,7 @@ int test(char *URL)
        curl_multi_fdset() doc. */
 
     if(maxfd == -1) {
-#ifdef _WIN32
+#if defined(WIN32) || defined(_WIN32)
       Sleep(100);
       rc = 0;
 #else
@@ -127,6 +131,8 @@ int test(char *URL)
       curl_multi_perform(multi_handle, &still_running);
       break;
     }
+
+    abort_on_test_timeout();
   } while(still_running);
 
   /* See how the transfers went */
@@ -136,14 +142,16 @@ int test(char *URL)
       printf("HTTP transfer completed with status %d\n", msg->data.result);
       break;
     }
+
+    abort_on_test_timeout();
   } while(msg);
 
+test_cleanup:
   curl_multi_cleanup(multi_handle);
 
   /* Free the CURL handles */
   curl_easy_cleanup(easy);
   curl_global_cleanup();
 
-  return 0;
+  return res;
 }
-

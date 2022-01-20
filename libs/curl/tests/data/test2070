@@ -1,41 +1,60 @@
 <testcase>
 <info>
 <keywords>
-FILE
+HTTPS
+HTTP GET
+PEM certificate
 </keywords>
-</info>
+</info>type
 
+#
+# Server-side
 <reply>
 <data>
-foo
-   bar
-bar
-   foo
-moo
+HTTP/1.1 200 OK
+Date: Tue, 09 Nov 2010 14:49:00 GMT
+Server: test-server/fake
+Content-Length: 7
+
+MooMoo
 </data>
 </reply>
 
+#
 # Client-side
 <client>
+<features>
+SSL
+Schannel
+</features>
 <server>
-file
+https Server-localhost-sv.pem
 </server>
  <name>
-basic file:// file with no authority
+Ignore certificate revocation "best effort" strategy
  </name>
+  <setenv>
+# This test is pointless if we're not using the schannel backend
+CURL_SSL_BACKEND=schannel
+ </setenv>
  <command>
-file:%PWD/log/test2070.txt
+--cacert %SRCDIR/certs/EdelCurlRoot-ca.crt --ssl-revoke-best-effort https://localhost:%HTTPSPORT/%TESTNUMBER
 </command>
-<file name="log/test2070.txt">
-foo
-   bar
-bar
-   foo
-moo
-</file>
+# Ensure that we're running on localhost because we're checking the host name
+<precheck>
+perl -e "print 'Test requires default test server host' if ( '%HOSTIP' ne '127.0.0.1' );"
+</precheck>
 </client>
 
+#
 # Verify data after the test has been "shot"
 <verify>
+<protocol>
+GET /%TESTNUMBER HTTP/1.1
+Host: localhost:%HTTPSPORT
+User-Agent: curl/%VERSION
+Accept: */*
+
+</protocol>
 </verify>
 </testcase>

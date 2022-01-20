@@ -5,11 +5,11 @@
 #                            | (__| |_| |  _ <| |___
 #                             \___|\___/|_| \_\_____|
 #
-# Copyright (C) 1998 - 2017, Daniel Stenberg, <daniel@haxx.se>, et al.
+# Copyright (C) 1998 - 2021, Daniel Stenberg, <daniel@haxx.se>, et al.
 #
 # This software is licensed as described in the file COPYING, which
 # you should have received as part of this distribution. The terms
-# are also available at https://curl.haxx.se/docs/copyright.html.
+# are also available at https://curl.se/docs/copyright.html.
 #
 # You may opt to use, copy, modify, merge, publish, distribute and/or sell
 # copies of the Software, and permit persons to whom the Software is
@@ -24,14 +24,30 @@ AUTOMAKE_OPTIONS = foreign
 
 ACLOCAL_AMFLAGS = -I m4
 
-CMAKE_DIST = CMakeLists.txt CMake/CMakeConfigurableFile.in      \
- CMake/CurlTests.c CMake/FindGSS.cmake CMake/OtherTests.cmake   \
- CMake/Platforms/WindowsCache.cmake CMake/Utilities.cmake       \
- CMake/Macros.cmake              \
- CMake/CurlSymbolHiding.cmake CMake/FindCARES.cmake             \
- CMake/FindLibSSH2.cmake CMake/FindNGHTTP2.cmake                \
- CMake/FindMbedTLS.cmake CMake/cmake_uninstall.cmake.in         \
- CMake/curl-config.cmake
+CMAKE_DIST =                                    \
+ CMake/cmake_uninstall.cmake.in                 \
+ CMake/CMakeConfigurableFile.in                 \
+ CMake/curl-config.cmake.in                     \
+ CMake/CurlSymbolHiding.cmake                   \
+ CMake/CurlTests.c                              \
+ CMake/FindBearSSL.cmake                        \
+ CMake/FindBrotli.cmake                         \
+ CMake/FindCARES.cmake                          \
+ CMake/FindGSS.cmake                            \
+ CMake/FindLibSSH2.cmake                        \
+ CMake/FindMbedTLS.cmake                        \
+ CMake/FindNGHTTP2.cmake                        \
+ CMake/FindNGHTTP3.cmake                        \
+ CMake/FindNGTCP2.cmake                         \
+ CMake/FindNSS.cmake                            \
+ CMake/FindQUICHE.cmake                         \
+ CMake/FindWolfSSL.cmake                        \
+ CMake/FindZstd.cmake                           \
+ CMake/Macros.cmake                             \
+ CMake/OtherTests.cmake                         \
+ CMake/Platforms/WindowsCache.cmake             \
+ CMake/Utilities.cmake                          \
+ CMakeLists.txt
 
 VC6_LIBTMPL = projects/Windows/VC6/lib/libcurl.tmpl
 VC6_LIBDSP = projects/Windows/VC6/lib/libcurl.dsp.dist
@@ -151,18 +167,29 @@ VC_DIST = projects/README                           \
  projects/wolfssl_options.h                         \
  projects/wolfssl_override.props
 
-WINBUILD_DIST = winbuild/BUILD.WINDOWS.txt winbuild/gen_resp_file.bat	\
+WINBUILD_DIST = winbuild/README.md winbuild/gen_resp_file.bat \
  winbuild/MakefileBuild.vc winbuild/Makefile.vc
 
-EXTRA_DIST = CHANGES COPYING maketgz Makefile.dist curl-config.in	\
- RELEASE-NOTES buildconf libcurl.pc.in MacOSX-Framework scripts/zsh.pl	\
- scripts/updatemanpages.pl $(CMAKE_DIST) $(VC_DIST) $(WINBUILD_DIST)	\
- lib/libcurl.vers.in buildconf.bat scripts/coverage.sh
+PLAN9_DIST = plan9/include/mkfile \
+ plan9/include/mkfile             \
+ plan9/mkfile.proto               \
+ plan9/mkfile                     \
+ plan9/README                     \
+ plan9/lib/mkfile.inc             \
+ plan9/lib/mkfile                 \
+ plan9/src/mkfile.inc             \
+ plan9/src/mkfile
 
-CLEANFILES = $(VC6_LIBDSP) $(VC6_SRCDSP) $(VC7_LIBVCPROJ) $(VC7_SRCVCPROJ)	\
- $(VC71_LIBVCPROJ) $(VC71_SRCVCPROJ) $(VC8_LIBVCPROJ) $(VC8_SRCVCPROJ)	\
- $(VC9_LIBVCPROJ) $(VC9_SRCVCPROJ) $(VC10_LIBVCXPROJ) $(VC10_SRCVCXPROJ)	\
- $(VC11_LIBVCXPROJ) $(VC11_SRCVCXPROJ) $(VC12_LIBVCXPROJ) $(VC12_SRCVCXPROJ)	\
+EXTRA_DIST = CHANGES COPYING maketgz Makefile.dist curl-config.in \
+ RELEASE-NOTES buildconf libcurl.pc.in MacOSX-Framework \
+ scripts/updatemanpages.pl $(CMAKE_DIST) \
+ $(VC_DIST) $(WINBUILD_DIST) $(PLAN9_DIST) \
+ lib/libcurl.vers.in buildconf.bat scripts/coverage.sh scripts/completion.pl
+
+CLEANFILES = $(VC6_LIBDSP) $(VC6_SRCDSP) $(VC7_LIBVCPROJ) $(VC7_SRCVCPROJ) \
+ $(VC71_LIBVCPROJ) $(VC71_SRCVCPROJ) $(VC8_LIBVCPROJ) $(VC8_SRCVCPROJ) \
+ $(VC9_LIBVCPROJ) $(VC9_SRCVCPROJ) $(VC10_LIBVCXPROJ) $(VC10_SRCVCXPROJ) \
+ $(VC11_LIBVCXPROJ) $(VC11_SRCVCXPROJ) $(VC12_LIBVCXPROJ) $(VC12_SRCVCXPROJ) \
  $(VC14_LIBVCXPROJ) $(VC14_SRCVCXPROJ) $(VC15_LIBVCXPROJ) $(VC15_SRCVCXPROJ)
 
 bin_SCRIPTS = curl-config
@@ -221,6 +248,9 @@ test-event:
 test-am:
 	@(cd tests; $(MAKE) all am-test)
 
+test-ci:
+	@(cd tests; $(MAKE) all ci-test)
+
 endif
 
 examples:
@@ -278,15 +308,15 @@ cygwinbin:
 
 # We extend the standard install with a custom hook:
 install-data-hook:
-	cd include && $(MAKE) install
-	cd docs && $(MAKE) install
-	cd docs/libcurl && $(MAKE) install
+	(cd include && $(MAKE) install)
+	(cd docs && $(MAKE) install)
+	(cd docs/libcurl && $(MAKE) install)
 
 # We extend the standard uninstall with a custom hook:
 uninstall-hook:
-	cd include && $(MAKE) uninstall
-	cd docs && $(MAKE) uninstall
-	cd docs/libcurl && $(MAKE) uninstall
+	(cd include && $(MAKE) uninstall)
+	(cd docs && $(MAKE) uninstall)
+	(cd docs/libcurl && $(MAKE) uninstall)
 
 ca-bundle: lib/mk-ca-bundle.pl
 	@echo "generating a fresh ca-bundle.crt"
@@ -297,26 +327,31 @@ ca-firefox: lib/firefox-db2pem.sh
 	./lib/firefox-db2pem.sh lib/ca-bundle.crt
 
 checksrc:
-	cd lib && $(MAKE) checksrc
-	cd src && $(MAKE) checksrc
-	cd tests && $(MAKE) checksrc
-	cd include/curl && $(MAKE) checksrc
-	cd docs/examples && $(MAKE) checksrc
+	(cd lib && $(MAKE) checksrc)
+	(cd src && $(MAKE) checksrc)
+	(cd tests && $(MAKE) checksrc)
+	(cd include/curl && $(MAKE) checksrc)
+	(cd docs/examples && $(MAKE) checksrc)
+	(cd packages && $(MAKE) checksrc)
 
 .PHONY: vc-ide
 
-vc-ide: $(VC6_LIBDSP_DEPS) $(VC6_SRCDSP_DEPS) $(VC7_LIBVCPROJ_DEPS)	\
- $(VC7_SRCVCPROJ_DEPS) $(VC71_LIBVCPROJ_DEPS) $(VC71_SRCVCPROJ_DEPS)	\
- $(VC8_LIBVCPROJ_DEPS) $(VC8_SRCVCPROJ_DEPS) $(VC9_LIBVCPROJ_DEPS)	\
- $(VC9_SRCVCPROJ_DEPS) $(VC10_LIBVCXPROJ_DEPS) $(VC10_SRCVCXPROJ_DEPS)	\
- $(VC11_LIBVCXPROJ_DEPS) $(VC11_SRCVCXPROJ_DEPS) $(VC12_LIBVCXPROJ_DEPS)	\
- $(VC12_SRCVCXPROJ_DEPS) $(VC14_LIBVCXPROJ_DEPS) $(VC14_SRCVCXPROJ_DEPS)	\
+vc-ide: $(VC6_LIBDSP_DEPS) $(VC6_SRCDSP_DEPS) $(VC7_LIBVCPROJ_DEPS) \
+ $(VC7_SRCVCPROJ_DEPS) $(VC71_LIBVCPROJ_DEPS) $(VC71_SRCVCPROJ_DEPS) \
+ $(VC8_LIBVCPROJ_DEPS) $(VC8_SRCVCPROJ_DEPS) $(VC9_LIBVCPROJ_DEPS) \
+ $(VC9_SRCVCPROJ_DEPS) $(VC10_LIBVCXPROJ_DEPS) $(VC10_SRCVCXPROJ_DEPS) \
+ $(VC11_LIBVCXPROJ_DEPS) $(VC11_SRCVCXPROJ_DEPS) $(VC12_LIBVCXPROJ_DEPS) \
+ $(VC12_SRCVCXPROJ_DEPS) $(VC14_LIBVCXPROJ_DEPS) $(VC14_SRCVCXPROJ_DEPS) \
  $(VC15_LIBVCXPROJ_DEPS) $(VC15_SRCVCXPROJ_DEPS)
 	@(win32_lib_srcs='$(LIB_CFILES)'; \
 	win32_lib_hdrs='$(LIB_HFILES) config-win32.h'; \
 	win32_lib_rc='$(LIB_RCFILES)'; \
 	win32_lib_vauth_srcs='$(LIB_VAUTH_CFILES)'; \
 	win32_lib_vauth_hdrs='$(LIB_VAUTH_HFILES)'; \
+	win32_lib_vquic_srcs='$(LIB_VQUIC_CFILES)'; \
+	win32_lib_vquic_hdrs='$(LIB_VQUIC_HFILES)'; \
+	win32_lib_vssh_srcs='$(LIB_VSSH_CFILES)'; \
+	win32_lib_vssh_hdrs='$(LIB_VSSH_HFILES)'; \
 	win32_lib_vtls_srcs='$(LIB_VTLS_CFILES)'; \
 	win32_lib_vtls_hdrs='$(LIB_VTLS_HFILES)'; \
 	win32_src_srcs='$(CURL_CFILES)'; \
@@ -329,6 +364,10 @@ vc-ide: $(VC6_LIBDSP_DEPS) $(VC6_SRCDSP_DEPS) $(VC7_LIBVCPROJ_DEPS)	\
 	sorted_lib_hdrs=`for file in $$win32_lib_hdrs; do echo $$file; done | sort`; \
 	sorted_lib_vauth_srcs=`for file in $$win32_lib_vauth_srcs; do echo $$file; done | sort`; \
 	sorted_lib_vauth_hdrs=`for file in $$win32_lib_vauth_hdrs; do echo $$file; done | sort`; \
+	sorted_lib_vquic_srcs=`for file in $$win32_lib_vquic_srcs; do echo $$file; done | sort`; \
+	sorted_lib_vquic_hdrs=`for file in $$win32_lib_vquic_hdrs; do echo $$file; done | sort`; \
+	sorted_lib_vssh_srcs=`for file in $$win32_lib_vssh_srcs; do echo $$file; done | sort`; \
+	sorted_lib_vssh_hdrs=`for file in $$win32_lib_vssh_hdrs; do echo $$file; done | sort`; \
 	sorted_lib_vtls_srcs=`for file in $$win32_lib_vtls_srcs; do echo $$file; done | sort`; \
 	sorted_lib_vtls_hdrs=`for file in $$win32_lib_vtls_hdrs; do echo $$file; done | sort`; \
 	sorted_src_srcs=`for file in $$win32_src_srcs; do echo $$file; done | sort`; \
@@ -340,10 +379,15 @@ vc-ide: $(VC6_LIBDSP_DEPS) $(VC6_SRCDSP_DEPS) $(VC7_LIBVCPROJ_DEPS)	\
 function gen_element(type, dir, file)\
 {\
   sub(/vauth\//, "", file);\
+  sub(/vquic\//, "", file);\
+  sub(/vssh\//, "", file);\
   sub(/vtls\//, "", file);\
 \
   spaces="    ";\
-  if(dir == "lib\\vauth" || dir == "lib\\vtls")\
+  if(dir == "lib\\vauth" ||\
+     dir == "lib\\vquic" ||\
+     dir == "lib\\vssh"  ||\
+     dir == "lib\\vtls")\
     tabs="				";\
   else\
     tabs="			";\
@@ -405,6 +449,22 @@ function gen_element(type, dir, file)\
     split(lib_vauth_hdrs, arr);\
     for(val in arr) gen_element(proj_type, "lib\\vauth", arr[val]);\
   }\
+  else if($$0 == "CURL_LIB_VQUIC_C_FILES") {\
+    split(lib_vquic_srcs, arr);\
+    for(val in arr) gen_element(proj_type, "lib\\vquic", arr[val]);\
+  }\
+  else if($$0 == "CURL_LIB_VQUIC_H_FILES") {\
+    split(lib_vquic_hdrs, arr);\
+    for(val in arr) gen_element(proj_type, "lib\\vquic", arr[val]);\
+  }\
+  else if($$0 == "CURL_LIB_VSSH_C_FILES") {\
+    split(lib_vssh_srcs, arr);\
+    for(val in arr) gen_element(proj_type, "lib\\vssh", arr[val]);\
+  }\
+  else if($$0 == "CURL_LIB_VSSH_H_FILES") {\
+    split(lib_vssh_hdrs, arr);\
+    for(val in arr) gen_element(proj_type, "lib\\vssh", arr[val]);\
+  }\
   else if($$0 == "CURL_LIB_VTLS_C_FILES") {\
     split(lib_vtls_srcs, arr);\
     for(val in arr) gen_element(proj_type, "lib\\vtls", arr[val]);\
@@ -450,6 +510,10 @@ function gen_element(type, dir, file)\
 		-v lib_rc="$$win32_lib_rc" \
 		-v lib_vauth_srcs="$$sorted_lib_vauth_srcs" \
 		-v lib_vauth_hdrs="$$sorted_lib_vauth_hdrs" \
+		-v lib_vquic_srcs="$$sorted_lib_vquic_srcs" \
+		-v lib_vquic_hdrs="$$sorted_lib_vquic_hdrs" \
+		-v lib_vssh_srcs="$$sorted_lib_vssh_srcs" \
+		-v lib_vssh_hdrs="$$sorted_lib_vssh_hdrs" \
 		-v lib_vtls_srcs="$$sorted_lib_vtls_srcs" \
 		-v lib_vtls_hdrs="$$sorted_lib_vtls_hdrs" \
 		"$$awk_code" $(srcdir)/$(VC6_LIBTMPL) > $(VC6_LIBDSP) || { exit 1; }; \
@@ -470,6 +534,10 @@ function gen_element(type, dir, file)\
 		-v lib_rc="$$win32_lib_rc" \
 		-v lib_vauth_srcs="$$sorted_lib_vauth_srcs" \
 		-v lib_vauth_hdrs="$$sorted_lib_vauth_hdrs" \
+		-v lib_vquic_srcs="$$sorted_lib_vquic_srcs" \
+		-v lib_vquic_hdrs="$$sorted_lib_vquic_hdrs" \
+		-v lib_vssh_srcs="$$sorted_lib_vssh_srcs" \
+		-v lib_vssh_hdrs="$$sorted_lib_vssh_hdrs" \
 		-v lib_vtls_srcs="$$sorted_lib_vtls_srcs" \
 		-v lib_vtls_hdrs="$$sorted_lib_vtls_hdrs" \
 		"$$awk_code" $(srcdir)/$(VC7_LIBTMPL) > $(VC7_LIBVCPROJ) || { exit 1; }; \
@@ -490,6 +558,10 @@ function gen_element(type, dir, file)\
 		-v lib_rc="$$win32_lib_rc" \
 		-v lib_vauth_srcs="$$sorted_lib_vauth_srcs" \
 		-v lib_vauth_hdrs="$$sorted_lib_vauth_hdrs" \
+		-v lib_vquic_srcs="$$sorted_lib_vquic_srcs" \
+		-v lib_vquic_hdrs="$$sorted_lib_vquic_hdrs" \
+		-v lib_vssh_srcs="$$sorted_lib_vssh_srcs" \
+		-v lib_vssh_hdrs="$$sorted_lib_vssh_hdrs" \
 		-v lib_vtls_srcs="$$sorted_lib_vtls_srcs" \
 		-v lib_vtls_hdrs="$$sorted_lib_vtls_hdrs" \
 		"$$awk_code" $(srcdir)/$(VC71_LIBTMPL) > $(VC71_LIBVCPROJ) || { exit 1; }; \
@@ -510,6 +582,10 @@ function gen_element(type, dir, file)\
 		-v lib_rc="$$win32_lib_rc" \
 		-v lib_vauth_srcs="$$sorted_lib_vauth_srcs" \
 		-v lib_vauth_hdrs="$$sorted_lib_vauth_hdrs" \
+		-v lib_vquic_srcs="$$sorted_lib_vquic_srcs" \
+		-v lib_vquic_hdrs="$$sorted_lib_vquic_hdrs" \
+		-v lib_vssh_srcs="$$sorted_lib_vssh_srcs" \
+		-v lib_vssh_hdrs="$$sorted_lib_vssh_hdrs" \
 		-v lib_vtls_srcs="$$sorted_lib_vtls_srcs" \
 		-v lib_vtls_hdrs="$$sorted_lib_vtls_hdrs" \
 		"$$awk_code" $(srcdir)/$(VC8_LIBTMPL) > $(VC8_LIBVCPROJ) || { exit 1; }; \
@@ -530,6 +606,10 @@ function gen_element(type, dir, file)\
 		-v lib_rc="$$win32_lib_rc" \
 		-v lib_vauth_srcs="$$sorted_lib_vauth_srcs" \
 		-v lib_vauth_hdrs="$$sorted_lib_vauth_hdrs" \
+		-v lib_vquic_srcs="$$sorted_lib_vquic_srcs" \
+		-v lib_vquic_hdrs="$$sorted_lib_vquic_hdrs" \
+		-v lib_vssh_srcs="$$sorted_lib_vssh_srcs" \
+		-v lib_vssh_hdrs="$$sorted_lib_vssh_hdrs" \
 		-v lib_vtls_srcs="$$sorted_lib_vtls_srcs" \
 		-v lib_vtls_hdrs="$$sorted_lib_vtls_hdrs" \
 		"$$awk_code" $(srcdir)/$(VC9_LIBTMPL) > $(VC9_LIBVCPROJ) || { exit 1; }; \
@@ -550,6 +630,10 @@ function gen_element(type, dir, file)\
 		-v lib_rc="$$win32_lib_rc" \
 		-v lib_vauth_srcs="$$sorted_lib_vauth_srcs" \
 		-v lib_vauth_hdrs="$$sorted_lib_vauth_hdrs" \
+		-v lib_vquic_srcs="$$sorted_lib_vquic_srcs" \
+		-v lib_vquic_hdrs="$$sorted_lib_vquic_hdrs" \
+		-v lib_vssh_srcs="$$sorted_lib_vssh_srcs" \
+		-v lib_vssh_hdrs="$$sorted_lib_vssh_hdrs" \
 		-v lib_vtls_srcs="$$sorted_lib_vtls_srcs" \
 		-v lib_vtls_hdrs="$$sorted_lib_vtls_hdrs" \
 		"$$awk_code" $(srcdir)/$(VC10_LIBTMPL) > $(VC10_LIBVCXPROJ) || { exit 1; }; \
@@ -570,6 +654,10 @@ function gen_element(type, dir, file)\
 		-v lib_rc="$$win32_lib_rc" \
 		-v lib_vauth_srcs="$$sorted_lib_vauth_srcs" \
 		-v lib_vauth_hdrs="$$sorted_lib_vauth_hdrs" \
+		-v lib_vquic_srcs="$$sorted_lib_vquic_srcs" \
+		-v lib_vquic_hdrs="$$sorted_lib_vquic_hdrs" \
+		-v lib_vssh_srcs="$$sorted_lib_vssh_srcs" \
+		-v lib_vssh_hdrs="$$sorted_lib_vssh_hdrs" \
 		-v lib_vtls_srcs="$$sorted_lib_vtls_srcs" \
 		-v lib_vtls_hdrs="$$sorted_lib_vtls_hdrs" \
 		"$$awk_code" $(srcdir)/$(VC11_LIBTMPL) > $(VC11_LIBVCXPROJ) || { exit 1; }; \
@@ -590,6 +678,10 @@ function gen_element(type, dir, file)\
 		-v lib_rc="$$win32_lib_rc" \
 		-v lib_vauth_srcs="$$sorted_lib_vauth_srcs" \
 		-v lib_vauth_hdrs="$$sorted_lib_vauth_hdrs" \
+		-v lib_vquic_srcs="$$sorted_lib_vquic_srcs" \
+		-v lib_vquic_hdrs="$$sorted_lib_vquic_hdrs" \
+		-v lib_vssh_srcs="$$sorted_lib_vssh_srcs" \
+		-v lib_vssh_hdrs="$$sorted_lib_vssh_hdrs" \
 		-v lib_vtls_srcs="$$sorted_lib_vtls_srcs" \
 		-v lib_vtls_hdrs="$$sorted_lib_vtls_hdrs" \
 		"$$awk_code" $(srcdir)/$(VC12_LIBTMPL) > $(VC12_LIBVCXPROJ) || { exit 1; }; \
@@ -610,6 +702,10 @@ function gen_element(type, dir, file)\
 		-v lib_rc="$$win32_lib_rc" \
 		-v lib_vauth_srcs="$$sorted_lib_vauth_srcs" \
 		-v lib_vauth_hdrs="$$sorted_lib_vauth_hdrs" \
+		-v lib_vquic_srcs="$$sorted_lib_vquic_srcs" \
+		-v lib_vquic_hdrs="$$sorted_lib_vquic_hdrs" \
+		-v lib_vssh_srcs="$$sorted_lib_vssh_srcs" \
+		-v lib_vssh_hdrs="$$sorted_lib_vssh_hdrs" \
 		-v lib_vtls_srcs="$$sorted_lib_vtls_srcs" \
 		-v lib_vtls_hdrs="$$sorted_lib_vtls_hdrs" \
 		"$$awk_code" $(srcdir)/$(VC14_LIBTMPL) > $(VC14_LIBVCXPROJ) || { exit 1; }; \
@@ -630,6 +726,10 @@ function gen_element(type, dir, file)\
 		-v lib_rc="$$win32_lib_rc" \
 		-v lib_vauth_srcs="$$sorted_lib_vauth_srcs" \
 		-v lib_vauth_hdrs="$$sorted_lib_vauth_hdrs" \
+		-v lib_vquic_srcs="$$sorted_lib_vquic_srcs" \
+		-v lib_vquic_hdrs="$$sorted_lib_vquic_hdrs" \
+		-v lib_vssh_srcs="$$sorted_lib_vssh_srcs" \
+		-v lib_vssh_hdrs="$$sorted_lib_vssh_hdrs" \
 		-v lib_vtls_srcs="$$sorted_lib_vtls_srcs" \
 		-v lib_vtls_hdrs="$$sorted_lib_vtls_hdrs" \
 		"$$awk_code" $(srcdir)/$(VC15_LIBTMPL) > $(VC15_LIBVCXPROJ) || { exit 1; }; \
@@ -642,3 +742,7 @@ function gen_element(type, dir, file)\
 		-v src_x_srcs="$$sorted_src_x_srcs" \
 		-v src_x_hdrs="$$sorted_src_x_hdrs" \
 		"$$awk_code" $(srcdir)/$(VC15_SRCTMPL) > $(VC15_SRCVCXPROJ) || { exit 1; };)
+
+tidy:
+	(cd src && $(MAKE) tidy)
+	(cd lib && $(MAKE) tidy)

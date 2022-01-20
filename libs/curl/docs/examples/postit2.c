@@ -5,11 +5,11 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2017, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) 1998 - 2021, Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
- * are also available at https://curl.haxx.se/docs/copyright.html.
+ * are also available at https://curl.se/docs/copyright.html.
  *
  * You may opt to use, copy, modify, merge, publish, distribute and/or sell
  * copies of the Software, and permit persons to whom the Software is
@@ -26,7 +26,7 @@
 /* Example code that uploads a file name 'foo' to a remote script that accepts
  * "HTML form based" (as described in RFC1738) uploads using HTTP POST.
  *
- * The imaginary form we'll fill in looks like:
+ * The imaginary form we will fill in looks like:
  *
  * <form method="post" enctype="multipart/form-data" action="examplepost.cgi">
  * Enter file: <input type="file" name="sendfile" size="40">
@@ -34,7 +34,6 @@
  * <input type="submit" value="send" name="submit">
  * </form>
  *
- * This exact source code has not been verified to work.
  */
 
 #include <stdio.h>
@@ -78,7 +77,7 @@ int main(int argc, char *argv[])
        wanted */
     headerlist = curl_slist_append(headerlist, buf);
     /* what URL that receives this POST */
-    curl_easy_setopt(curl, CURLOPT_URL, "http://example.com/examplepost.cgi");
+    curl_easy_setopt(curl, CURLOPT_URL, "https://example.com/examplepost.cgi");
     if((argc == 2) && (!strcmp(argv[1], "noexpectheader")))
       /* only disable 100-continue header if explicitly requested */
       curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headerlist);

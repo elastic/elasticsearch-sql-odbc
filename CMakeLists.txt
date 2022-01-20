@@ -221,7 +221,7 @@ set(LIBCURL_LD_PATH
 	# Curl's win build root directory is not configurable.
 	# The path built below is only constant for the subtree tag and the nmake
 	# options below: ZLIB, IPv6, SSPI, WinSSL, plus IDN, not echoed in name.
-	${LIBCURL_PATH_SRC}/builds/libcurl-vc-${TARCH}-${LIBCURL_BUILD_TYPE}-static-zlib-static-ipv6-sspi-winssl-obj-lib/
+	${LIBCURL_PATH_SRC}/builds/libcurl-vc-${TARCH}-${LIBCURL_BUILD_TYPE}-static-zlib-static-ipv6-sspi-schannel-obj-lib/
 	CACHE PATH "Lib curl load library path")
 set(LIBCURL_INC_PATH ${LIBCURL_PATH_SRC}/include CACHE PATH
 	"Lib curl include path")

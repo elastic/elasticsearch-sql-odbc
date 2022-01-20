@@ -5,11 +5,11 @@
 .\" *                            | (__| |_| |  _ <| |___
 .\" *                             \___|\___/|_| \_\_____|
 .\" *
-.\" * Copyright (C) 1998 - 2016, Daniel Stenberg, <daniel@haxx.se>, et al.
+.\" * Copyright (C) 1998 - 2021, Daniel Stenberg, <daniel@haxx.se>, et al.
 .\" *
 .\" * This software is licensed as described in the file COPYING, which
 .\" * you should have received as part of this distribution. The terms
-.\" * are also available at https://curl.haxx.se/docs/copyright.html.
+.\" * are also available at https://curl.se/docs/copyright.html.
 .\" *
 .\" * You may opt to use, copy, modify, merge, publish, distribute and/or sell
 .\" * copies of the Software, and permit persons to whom the Software is
@@ -22,11 +22,14 @@
 .\"
 .TH CURLOPT_PROXY_SSLVERSION 3 "16 Nov 2016" "libcurl 7.52.0" "curl_easy_setopt options"
 .SH NAME
-CURLOPT_PROXY_SSLVERSION \- set preferred proxy TLS/SSL version
+CURLOPT_PROXY_SSLVERSION \- preferred HTTPS proxy TLS version
 .SH SYNOPSIS
+.nf
 #include <curl/curl.h>
 
-CURLcode curl_easy_setopt(CURL *handle, CURLOPT_PROXY_SSLVERSION, long version);
+CURLcode curl_easy_setopt(CURL *handle, CURLOPT_PROXY_SSLVERSION,
+                          long version);
+.fi
 .SH DESCRIPTION
 Pass a long as parameter to control which version of SSL/TLS to attempt to use
 when connecting to an HTTPS proxy.
@@ -50,7 +53,7 @@ TLSv1.3
 The maximum TLS version can be set by using \fIone\fP of the
 CURL_SSLVERSION_MAX_ macros below. It is also possible to OR \fIone\fP of the
 CURL_SSLVERSION_ macros with \fIone\fP of the CURL_SSLVERSION_MAX_ macros.
-The MAX macros are not supported for SSL backends axTLS or wolfSSL.
+The MAX macros are not supported for WolfSSL.
 .RS
 .IP CURL_SSLVERSION_MAX_DEFAULT
 The flag defines the maximum supported TLS version as TLSv1.2, or the default
@@ -69,6 +72,11 @@ The flag defines maximum supported TLS version as TLSv1.2.
 The flag defines maximum supported TLS version as TLSv1.3.
 (Added in 7.54.0)
 .RE
+
+In versions of curl prior to 7.54 the CURL_SSLVERSION_TLS options were
+documented to allow \fIonly\fP the specified TLS version, but behavior was
+inconsistent depending on the TLS library.
+
 .SH DEFAULT
 CURL_SSLVERSION_DEFAULT
 .SH PROTOCOLS
@@ -93,4 +101,3 @@ Returns CURLE_OK if the option is supported, and CURLE_UNKNOWN_OPTION if not.
 .SH "SEE ALSO"
 .BR CURLOPT_USE_SSL "(3), " CURLOPT_HTTP_VERSION "(3), "
 .BR CURLOPT_IPRESOLVE "(3) " CURLOPT_SSLVERSION "(3), "
-

@@ -5,11 +5,11 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2018, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) 1998 - 2020, Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
- * are also available at https://curl.haxx.se/docs/copyright.html.
+ * are also available at https://curl.se/docs/copyright.html.
  *
  * You may opt to use, copy, modify, merge, publish, distribute and/or sell
  * copies of the Software, and permit persons to whom the Software is
@@ -46,11 +46,15 @@ static char *getflagstr(int flags)
 {
   char *buf = malloc(256);
   if(buf) {
-    snprintf(buf, 256, "%s,%s,%s,%s",
-      ((flags & SANITIZE_ALLOW_COLONS) ? "SANITIZE_ALLOW_COLONS" : ""),
-      ((flags & SANITIZE_ALLOW_PATH) ? "SANITIZE_ALLOW_PATH" : ""),
-      ((flags & SANITIZE_ALLOW_RESERVED) ? "SANITIZE_ALLOW_RESERVED" : ""),
-      ((flags & SANITIZE_ALLOW_TRUNCATE) ? "SANITIZE_ALLOW_TRUNCATE" : ""));
+    msnprintf(buf, 256, "%s,%s,%s,%s",
+              ((flags & SANITIZE_ALLOW_COLONS) ?
+               "SANITIZE_ALLOW_COLONS" : ""),
+              ((flags & SANITIZE_ALLOW_PATH) ?
+               "SANITIZE_ALLOW_PATH" : ""),
+              ((flags & SANITIZE_ALLOW_RESERVED) ?
+               "SANITIZE_ALLOW_RESERVED" : ""),
+              ((flags & SANITIZE_ALLOW_TRUNCATE) ?
+               "SANITIZE_ALLOW_TRUNCATE" : ""));
   }
   return buf;
 }
@@ -59,13 +63,13 @@ static char *getcurlcodestr(int cc)
 {
   char *buf = malloc(256);
   if(buf) {
-    snprintf(buf, 256, "%s (%d)",
-      (cc == SANITIZE_ERR_OK ? "SANITIZE_ERR_OK" :
-       cc == SANITIZE_ERR_BAD_ARGUMENT ? "SANITIZE_ERR_BAD_ARGUMENT" :
-       cc == SANITIZE_ERR_INVALID_PATH ? "SANITIZE_ERR_INVALID_PATH" :
-       cc == SANITIZE_ERR_OUT_OF_MEMORY ? "SANITIZE_ERR_OUT_OF_MEMORY" :
-       "unexpected error code - add name"),
-      cc);
+    msnprintf(buf, 256, "%s (%d)",
+              (cc == SANITIZE_ERR_OK ? "SANITIZE_ERR_OK" :
+               cc == SANITIZE_ERR_BAD_ARGUMENT ? "SANITIZE_ERR_BAD_ARGUMENT" :
+               cc == SANITIZE_ERR_INVALID_PATH ? "SANITIZE_ERR_INVALID_PATH" :
+               cc == SANITIZE_ERR_OUT_OF_MEMORY ? "SANITIZE_ERR_OUT_OF_MEMORY":
+               "unexpected error code - add name"),
+              cc);
   }
   return buf;
 }
@@ -74,11 +78,10 @@ struct data {
   const char *input;
   int flags;
   const char *expected_output;
-  CURLcode expected_result;
+  SANITIZEcode expected_result;
 };
 
 UNITTEST_START
-
 { /* START sanitize_file_name */
   struct data data[] = {
     { "", 0,
@@ -300,8 +303,9 @@ UNITTEST_START
     char *flagstr = NULL;
     char *received_ccstr = NULL;
     char *expected_ccstr = NULL;
+    SANITIZEcode res;
 
-    CURLcode res = sanitize_file_name(&output, data[i].input, data[i].flags);
+    res = sanitize_file_name(&output, data[i].input, data[i].flags);
 
     if(res == data[i].expected_result &&
        ((!output && !data[i].expected_output) ||
@@ -344,7 +348,6 @@ UNITTEST_START
 
 #else
 UNITTEST_START
-
 {
   fprintf(stderr, "Skipped test not for this platform\n");
 }

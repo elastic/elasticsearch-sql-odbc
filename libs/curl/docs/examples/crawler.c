@@ -6,7 +6,7 @@
  *                             \___|\___/|_| \_\_____|
  *
  * Web crawler based on curl and libxml2.
- * Copyright (C) 2018 Jeroen Ooms <jeroenooms@gmail.com>
+ * Copyright (C) 2018 - 2020 Jeroen Ooms <jeroenooms@gmail.com>
  * License: MIT
  *
  * To compile:
@@ -52,7 +52,13 @@ size_t grow_buffer(void *contents, size_t sz, size_t nmemb, void *ctx)
 {
   size_t realsize = sz * nmemb;
   memory *mem = (memory*) ctx;
-  mem->buf = realloc(mem->buf, mem->size + realsize);
+  char *ptr = realloc(mem->buf, mem->size + realsize);
+  if(!ptr) {
+    /* out of memory */
+    printf("not enough memory (realloc returned NULL)\n");
+    return 0;
+  }
+  mem->buf = ptr;
   memcpy(&(mem->buf[mem->size]), contents, realsize);
   mem->size += realsize;
   return realsize;
@@ -75,7 +81,7 @@ CURL *make_handle(char *url)
   curl_easy_setopt(handle, CURLOPT_PRIVATE, mem);
 
   /* For completeness */
-  curl_easy_setopt(handle, CURLOPT_ENCODING, "gzip, deflate");
+  curl_easy_setopt(handle, CURLOPT_ACCEPT_ENCODING, "");
   curl_easy_setopt(handle, CURLOPT_TIMEOUT, 5L);
   curl_easy_setopt(handle, CURLOPT_FOLLOWLOCATION, 1L);
   curl_easy_setopt(handle, CURLOPT_MAXREDIRS, 10L);
@@ -110,7 +116,8 @@ size_t follow_links(CURLM *multi_handle, memory *mem, char *url)
     return 0;
   }
   size_t count = 0;
-  for(int i = 0; i < nodeset->nodeNr; i++) {
+  int i;
+  for(i = 0; i < nodeset->nodeNr; i++) {
     double r = rand();
     int x = r * nodeset->nodeNr / RAND_MAX;
     const xmlNode *node = nodeset->nodeTab[x]->xmlChildrenNode;
@@ -149,9 +156,9 @@ int main(void)
   curl_multi_setopt(multi_handle, CURLMOPT_MAX_HOST_CONNECTIONS, 6L);
 
   /* enables http/2 if available */
-  #ifdef CURLPIPE_MULTIPLEX
-    curl_multi_setopt(multi_handle, CURLMOPT_PIPELINING, CURLPIPE_MULTIPLEX);
-  #endif
+#ifdef CURLPIPE_MULTIPLEX
+  curl_multi_setopt(multi_handle, CURLMOPT_PIPELINING, CURLPIPE_MULTIPLEX);
+#endif
 
   /* sets html start page */
   curl_multi_add_handle(multi_handle, make_handle(start_page));

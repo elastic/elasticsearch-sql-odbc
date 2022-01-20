@@ -5,11 +5,11 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2018, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) 1998 - 2021, Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
- * are also available at https://curl.haxx.se/docs/copyright.html.
+ * are also available at https://curl.se/docs/copyright.html.
  *
  * You may opt to use, copy, modify, merge, publish, distribute and/or sell
  * copies of the Software, and permit persons to whom the Software is
@@ -124,27 +124,40 @@ CURLcode create_dir_hierarchy(const char *outfile, FILE *errors)
   /* !checksrc! disable BANNEDFUNC 2 */
   tempdir = strtok(outdup, PATH_DELIMITERS);
 
-  while(tempdir != NULL) {
+  while(tempdir) {
+    bool skip = false;
     tempdir2 = strtok(NULL, PATH_DELIMITERS);
     /* since strtok returns a token for the last word even
        if not ending with DIR_CHAR, we need to prune it */
-    if(tempdir2 != NULL) {
+    if(tempdir2) {
       size_t dlen = strlen(dirbuildup);
       if(dlen)
-        snprintf(&dirbuildup[dlen], outlen - dlen, "%s%s", DIR_CHAR, tempdir);
+        msnprintf(&dirbuildup[dlen], outlen - dlen, "%s%s", DIR_CHAR, tempdir);
       else {
-        if(outdup == tempdir)
+        if(outdup == tempdir) {
+#if defined(MSDOS) || defined(WIN32)
+          /* Skip creating a drive's current directory.
+             It may seem as though that would harmlessly fail but it could be
+             a corner case if X: did not exist, since we would be creating it
+             erroneously.
+             eg if outfile is X:\foo\bar\filename then don't mkdir X:
+             This logic takes into account unsupported drives !:, 1:, etc. */
+          char *p = strchr(tempdir, ':');
+          if(p && !p[1])
+            skip = true;
+#endif
           /* the output string doesn't start with a separator */
           strcpy(dirbuildup, tempdir);
-        else
-          snprintf(dirbuildup, outlen, "%s%s", DIR_CHAR, tempdir);
-      }
-      if(access(dirbuildup, F_OK) == -1) {
-        if(-1 == mkdir(dirbuildup, (mode_t)0000750)) {
-          show_dir_errno(errors, dirbuildup);
-          result = CURLE_WRITE_ERROR;
-          break; /* get out of loop */
         }
+        else
+          msnprintf(dirbuildup, outlen, "%s%s", DIR_CHAR, tempdir);
+      }
+      /* Create directory. Ignore access denied error to allow traversal. */
+      if(!skip && (-1 == mkdir(dirbuildup, (mode_t)0000750)) &&
+         (errno != EACCES) && (errno != EEXIST)) {
+        show_dir_errno(errors, dirbuildup);
+        result = CURLE_WRITE_ERROR;
+        break; /* get out of loop */
       }
     }
     tempdir = tempdir2;
@@ -155,4 +168,3 @@ CURLcode create_dir_hierarchy(const char *outfile, FILE *errors)
 
   return result;
 }
-

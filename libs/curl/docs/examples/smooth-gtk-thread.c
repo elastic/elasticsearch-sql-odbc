@@ -5,11 +5,11 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2017, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) 1998 - 2021, Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
- * are also available at https://curl.haxx.se/docs/copyright.html.
+ * are also available at https://curl.se/docs/copyright.html.
  *
  * You may opt to use, copy, modify, merge, publish, distribute and/or sell
  * copies of the Software, and permit persons to whom the Software is
@@ -60,57 +60,47 @@ const char * const urls[]= {
 
 size_t write_file(void *ptr, size_t size, size_t nmemb, FILE *stream)
 {
-  /* printf("write_file\n"); */
   return fwrite(ptr, size, nmemb, stream);
 }
 
-/* http://xoap.weather.com/weather/local/46214?cc=*&dayf=5&unit=i */
-void *pull_one_url(void *NaN)
+static void run_one(gchar *http, int j)
 {
+  FILE *outfile = fopen(urls[j], "wb");
   CURL *curl;
-  CURLcode res;
-  gchar *http;
-  FILE *outfile;
 
-  /* Stop threads from entering unless j is incremented */
-  pthread_mutex_lock(&lock);
-  while(j < num_urls) {
+  curl = curl_easy_init();
+  if(curl) {
     printf("j = %d\n", j);
 
-    http =
-      g_strdup_printf("xoap.weather.com/weather/local/%s?cc=*&dayf=5&unit=i\n",
-                      urls[j]);
+    /* Set the URL and transfer type */
+    curl_easy_setopt(curl, CURLOPT_URL, http);
 
-    printf("http %s", http);
+    /* Write to the file */
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, outfile);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_file);
+    curl_easy_perform(curl);
 
-    curl = curl_easy_init();
-    if(curl) {
+    fclose(outfile);
+    curl_easy_cleanup(curl);
+  }
+}
 
-      outfile = fopen(urls[j], "wb");
-
-      /* Set the URL and transfer type */
-      curl_easy_setopt(curl, CURLOPT_URL, http);
-
-      /* Write to the file */
-      curl_easy_setopt(curl, CURLOPT_WRITEDATA, outfile);
-      curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_file);
-
-      j++;  /* critical line */
-      pthread_mutex_unlock(&lock);
-
-      res = curl_easy_perform(curl);
-
-      fclose(outfile);
-      printf("fclose\n");
-
-      curl_easy_cleanup(curl);
+void *pull_one_url(void *NaN)
+{
+  /* protect the reading and increasing of 'j' with a mutex */
+  pthread_mutex_lock(&lock);
+  while(j < num_urls) {
+    int i = j;
+    j++;
+    pthread_mutex_unlock(&lock);
+    http = g_strdup_printf("https://example.com/%s", urls[i]);
+    if(http) {
+      run_one(http, i);
+      g_free(http);
     }
-    g_free(http);
-
-    /* Adds more latency, testing the mutex.*/
-    sleep(1);
-
-  } /* end while */
+    pthread_mutex_lock(&lock);
+  }
+  pthread_mutex_unlock(&lock);
   return NULL;
 }
 
@@ -131,14 +121,13 @@ void *create_thread(void *progress_bar)
 {
   pthread_t tid[NUMT];
   int i;
-  int error;
 
-  /* Make sure I don't create more threads than urls. */
+  /* Make sure I do not create more threads than urls. */
   for(i = 0; i < NUMT && i < num_urls ; i++) {
-    error = pthread_create(&tid[i],
-                           NULL, /* default attributes please */
-                           pull_one_url,
-                           NULL);
+    int error = pthread_create(&tid[i],
+                               NULL, /* default attributes please */
+                               pull_one_url,
+                               NULL);
     if(0 != error)
       fprintf(stderr, "Couldn't run thread number %d, errno %d\n", i, error);
     else
@@ -147,7 +136,7 @@ void *create_thread(void *progress_bar)
 
   /* Wait for all threads to terminate. */
   for(i = 0; i < NUMT && i < num_urls; i++) {
-    error = pthread_join(tid[i], NULL);
+    pthread_join(tid[i], NULL);
     fprintf(stderr, "Thread %d terminated\n", i);
   }
 
@@ -217,7 +206,7 @@ int main(int argc, char **argv)
                    G_CALLBACK(cb_delete), NULL);
 
   if(!g_thread_create(&create_thread, progress_bar, FALSE, NULL) != 0)
-    g_warning("can't create the thread");
+    g_warning("cannot create the thread");
 
   gtk_main();
   gdk_threads_leave();

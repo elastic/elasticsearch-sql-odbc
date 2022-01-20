@@ -1,20 +1,40 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+#
+#  Project                     ___| | | |  _ \| |
+#                             / __| | | | |_) | |
+#                            | (__| |_| |  _ <| |___
+#                             \___|\___/|_| \_\_____|
+#
+# Copyright (C) 2017 - 2021, Daniel Stenberg, <daniel@haxx.se>, et al.
+#
+# This software is licensed as described in the file COPYING, which
+# you should have received as part of this distribution. The terms
+# are also available at https://curl.se/docs/copyright.html.
+#
+# You may opt to use, copy, modify, merge, publish, distribute and/or sell
+# copies of the Software, and permit persons to whom the Software is
+# furnished to do so, under the terms of the COPYING file.
+#
+# This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
+# KIND, either express or implied.
 #
 """ A telnet server which negotiates"""
 
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
+
 import argparse
+import logging
 import os
 import sys
-import logging
-import struct
-try:  # Python 2
-    import SocketServer as socketserver
-except ImportError:  # Python 3
-    import socketserver
 
+from util import ClosingFileHandler
+
+if sys.version_info.major >= 3:
+    import socketserver
+else:
+    import SocketServer as socketserver
 
 log = logging.getLogger(__name__)
 HOST = "localhost"
@@ -22,8 +42,8 @@ IDENT = "NTEL"
 
 
 # The strings that indicate the test framework is checking our aliveness
-VERIFIED_REQ = b"verifiedserver"
-VERIFIED_RSP = b"WE ROOLZ: {pid}"
+VERIFIED_REQ = "verifiedserver"
+VERIFIED_RSP = "WE ROOLZ: {pid}"
 
 
 def telnetserver(options):
@@ -33,8 +53,11 @@ def telnetserver(options):
     """
     if options.pidfile:
         pid = os.getpid()
+        # see tests/server/util.c function write_pidfile
+        if os.name == "nt":
+            pid += 65536
         with open(options.pidfile, "w") as f:
-            f.write(b"{0}".format(pid))
+            f.write(str(pid))
 
     local_bind = (HOST, options.port)
     log.info("Listening on %s", local_bind)
@@ -68,12 +91,17 @@ class NegotiatingTelnetHandler(socketserver.BaseRequestHandler):
             data = neg.recv(1024)
             log.debug("Incoming data: %r", data)
 
-            if VERIFIED_REQ in data:
+            if VERIFIED_REQ.encode('utf-8') in data:
                 log.debug("Received verification request from test framework")
-                response_data = VERIFIED_RSP.format(pid=os.getpid())
+                pid = os.getpid()
+                # see tests/server/util.c function write_pidfile
+                if os.name == "nt":
+                    pid += 65536
+                response = VERIFIED_RSP.format(pid=pid)
+                response_data = response.encode('utf-8')
             else:
                 log.debug("Received normal request - echoing back")
-                response_data = data.strip()
+                response_data = data.decode('utf-8').strip().encode('utf-8')
 
             if response_data:
                 log.debug("Sending %r", response_data)
@@ -113,11 +141,9 @@ class Negotiator(object):
                 # TCP failed to give us any data. Break out.
                 break
 
-            for byte in data:
-                byte_int = self.byte_to_int(byte)
-
+            for byte_int in bytearray(data):
                 if self.state == self.NO_NEG:
-                    self.no_neg(byte, byte_int, buffer)
+                    self.no_neg(byte_int, buffer)
                 elif self.state == self.START_NEG:
                     self.start_neg(byte_int)
                 elif self.state in [self.WILL, self.WONT, self.DO, self.DONT]:
@@ -131,10 +157,7 @@ class Negotiator(object):
 
         return buffer
 
-    def byte_to_int(self, byte):
-        return struct.unpack(b'B', byte)[0]
-
-    def no_neg(self, byte, byte_int, buffer):
+    def no_neg(self, byte_int, buffer):
         # Not negotiating anything thus far. Check to see if we
         # should.
         if byte_int == NegTokens.IAC:
@@ -143,7 +166,7 @@ class Negotiator(object):
             self.state = self.START_NEG
         else:
             # Just append the incoming byte to the buffer
-            buffer.append(byte)
+            buffer.append(byte_int)
 
     def start_neg(self, byte_int):
         # In a negotiation.
@@ -192,12 +215,8 @@ class Negotiator(object):
                       self.state)
             self.state = self.NO_NEG
 
-    def send_message(self, message):
-        packed_message = self.pack(message)
-        self.tcp.sendall(packed_message)
-
-    def pack(self, arr):
-        return struct.pack(b'{0}B'.format(len(arr)), *arr)
+    def send_message(self, message_ints):
+        self.tcp.sendall(bytearray(message_ints))
 
     def send_iac(self, arr):
         message = [NegTokens.IAC]
@@ -298,7 +317,7 @@ def setup_logging(options):
 
     # Write out to a logfile
     if options.logfile:
-        handler = logging.FileHandler(options.logfile, mode="w")
+        handler = ClosingFileHandler(options.logfile)
         handler.setFormatter(formatter)
         handler.setLevel(logging.DEBUG)
         root_logger.addHandler(handler)
@@ -344,6 +363,9 @@ if __name__ == '__main__':
     except Exception as e:
         log.exception(e)
         rc = ScriptRC.EXCEPTION
+
+    if options.pidfile and os.path.isfile(options.pidfile):
+        os.unlink(options.pidfile)
 
     log.info("Returning %d", rc)
     sys.exit(rc)
