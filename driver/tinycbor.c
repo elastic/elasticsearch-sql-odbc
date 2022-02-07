@@ -231,7 +231,7 @@ CborError cbor_value_get_tagged_uint64(CborValue *it, uint64_t *val)
 		for (; sizeof(*val) < bstr.cnt - i; i ++) {
 			if (bstr.str[i] != 0) {
 				ERR("non-zero byte at offset %zu: 0x%x. bignum value exceeds "
-						"uint64_t range.", i, bstr.str[i]);
+					"uint64_t range.", i, bstr.str[i]);
 				return CborErrorImproperValue;
 			}
 		}
@@ -246,7 +246,7 @@ CborError cbor_value_get_tagged_uint64(CborValue *it, uint64_t *val)
 	*val = _byteswap_uint64(*val);
 #endif /* LE */
 
-	return cbor_value_advance(it);
+	return CborNoError;
 }
 
 static BOOL enlist_utf_buffer(void *old, void *new)
