@@ -282,9 +282,32 @@ LIB_TEST_MAPPING =\
 		}
 	}
 
-ES_DATASET_BASE_URL = "https://raw.githubusercontent.com/elastic/elasticsearch/eda31b0ac00c952a52885902be59ac429b0ca81a/x-pack/plugin/sql/qa/src/main/resources/"
+LOGS_UL_MAPPING =\
+	{
+		"mappings": {
+			"properties": {
+				"@timestamp": {
+					"type": "date_nanos"
+				},
+				"bytes_in": {
+					"type": "unsigned_long"
+				},
+				"bytes_out": {
+					"type": "unsigned_long"
+				},
+				"id": {
+					"type": "integer"
+				},
+				"status": {
+					"type": "keyword"
+				}
+			}
+		}
+	}
 
-ES_PROTO_CASE_BASE_URL = "https://raw.githubusercontent.com/elastic/elasticsearch/eda31b0ac00c952a52885902be59ac429b0ca81a/x-pack/plugin/sql/qa/src/main/java/org/elasticsearch/xpack/sql/qa/"
+ES_BASE_URL = "https://raw.githubusercontent.com/elastic/elasticsearch/ad5a3fc81ee76465116cdff7ae3e1acfa22211e7/x-pack/plugin/sql/qa/server/src/main/"
+ES_DATASET_BASE_URL = ES_BASE_URL + "resources/"
+ES_PROTO_CASE_BASE_URL = ES_BASE_URL + "java/org/elasticsearch/xpack/sql/qa/"
 
 KIBANA_SAMPLES_BASE_URL = "https://raw.githubusercontent.com/elastic/kibana/3c3c9b2a154656f25e980ba3fa03d7325561c526/src/legacy/server/sample_data/data_sets"
 KIBANA_INDEX_PREFIX = "kibana_sample_data_"
@@ -346,6 +369,9 @@ class TestData(object):
 	EMPLOYEES_FILE = "employees.csv"
 	EMPLOYEES_INDEX = "employees"
 	EMP_TEST_INDEX = "test_emp"
+	LOGS_UL_FILE = "logs_unsigned_long.csv"
+	LOGS_UL_INDEX = "logs_unsigned_long"
+	LOGS_UL_TEST_INDEX = "test_logs_ul"
 	PROTO_CASE_FILE = "SqlProtocolTestCase.java"
 
 
@@ -539,7 +565,7 @@ class TestData(object):
 		self._post_ndjson(ndjsons, index_name, index_name if pipeline else None)
 		self._wait_for_results(index_name)
 
-	def _load_elastic_sample(self, file_name, index_name):
+	def _load_elastic_index(self, file_name, index_name):
 		ndjson = self._get_csv_as_ndjson(ES_DATASET_BASE_URL, file_name, index_name)
 		if self.MODE_NOINDEX < self._mode:
 			self._delete_if_needed(index_name)
@@ -564,6 +590,11 @@ class TestData(object):
 			if req.status_code != 200:
 				raise Exception("POST reindexing into %s failed with code: %s (content: %s) " % (dst_index,
 					req.status_code, req.text))
+
+	def _load_elastic_sample(self, file_name, src_index, dst_index, mapping_json):
+		self._load_elastic_index(file_name, src_index)
+		self._derive_with_mapping(src_index, dst_index, mapping_json)
+		self._dup_csv_attributes(src_index, dst_index)
 
 	def _get_kibana_file(self, sample_name, is_mapping=True):
 		print("Fetching JS sample data for index '%s'." % sample_name)
@@ -656,10 +687,9 @@ class TestData(object):
 			self._load_tableau_sample(self.STAPLES_FILE, self.STAPLES_INDEX, STAPLES_TEMPLATE)
 			self._load_tableau_sample(self.BATTERS_FILE, self.BATTERS_INDEX, BATTERS_TEMPLATE, BATTERS_PIPELINE)
 
-			self._load_elastic_sample(self.LIBRARY_FILE, self.LIBRARY_INDEX)
-			self._derive_with_mapping(self.LIBRARY_INDEX, self.LIB_TEST_INDEX, LIB_TEST_MAPPING)
-			self._load_elastic_sample(self.EMPLOYEES_FILE, self.EMPLOYEES_INDEX)
-			self._derive_with_mapping(self.EMPLOYEES_INDEX, self.EMP_TEST_INDEX, EMP_TEST_MAPPING)
+			self._load_elastic_sample(self.LIBRARY_FILE, self.LIBRARY_INDEX, self.LIB_TEST_INDEX, LIB_TEST_MAPPING)
+			self._load_elastic_sample(self.EMPLOYEES_FILE, self.EMPLOYEES_INDEX, self.EMP_TEST_INDEX, EMP_TEST_MAPPING)
+			self._load_elastic_sample(self.LOGS_UL_FILE, self.LOGS_UL_INDEX, self.LOGS_UL_TEST_INDEX, LOGS_UL_MAPPING)
 
 			self._load_kibana_sample(self.ECOMMERCE_INDEX)
 			self._load_kibana_sample(self.FLIGHTS_INDEX)
@@ -674,6 +704,11 @@ class TestData(object):
 
 	def has_csv_attributes(self):
 		return 0 < len(self._csv_md5)
+
+	def _dup_csv_attributes(self, src_index, dst_index):
+		self._csv_md5[dst_index] = self._csv_md5[src_index]
+		self._csv_header[dst_index] = self._csv_header[src_index]
+		self._csv_lines[dst_index] = self._csv_lines[src_index]
 
 	def proto_tests(self):
 		return self._proto_tests

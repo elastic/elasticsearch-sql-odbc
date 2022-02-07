@@ -11,6 +11,7 @@ import re
 import struct
 import ctypes
 import urllib3
+import decimal
 
 from elasticsearch import Elasticsearch
 from data import TestData, BATTERS_TEMPLATE
@@ -53,7 +54,7 @@ class Testing(unittest.TestCase):
 		with self._pyodbc.connect(self._dsn, autocommit=True) as cnxn:
 			csv = u""
 			cols = self._data.csv_attributes(index_name)[1]
-			fields = ",".join(cols)
+			fields = '"' + "\",\"".join(cols) + '"'
 			with cnxn.execute("select %s from %s" % (fields, index_name)) as curs:
 				csv += u",".join(cols)
 				csv += u"\n"
@@ -64,6 +65,8 @@ class Testing(unittest.TestCase):
 							val=""
 						elif isinstance(val, datetime.datetime):
 							val = val.isoformat() + "Z"
+						else:
+							val = str(val)
 						vals.append(val)
 					csv += u",".join(vals)
 					csv += u"\n"
@@ -211,6 +214,12 @@ class Testing(unittest.TestCase):
 			instance = int(data_val)
 		elif data_type == "long":
 			instance = int(data_val.strip("lL"))
+		elif data_type == "unsigned_long":
+			# test uses "UNSIGNED_LONG_MAX", a BigInteger instance
+			if data_val == "UNSIGNED_LONG_MAX":
+				data_val = 18446744073709551615
+			# pyodbc will fail to handle large values unless provided as Decimal
+			instance = decimal.Decimal(data_val)
 		elif data_type == "double":
 			instance = float(data_val)
 		elif data_type == "float":
@@ -336,8 +345,9 @@ class Testing(unittest.TestCase):
 			self._catalog_columns(use_catalog = False, use_surrogate = True)
 			self._catalog_columns(use_catalog = True, use_surrogate = True)
 
-			self._as_csv(TestData.LIBRARY_INDEX)
-			self._as_csv(TestData.EMPLOYEES_INDEX)
+			self._as_csv(TestData.LIB_TEST_INDEX)
+			self._as_csv(TestData.EMP_TEST_INDEX)
+			self._as_csv(TestData.LOGS_UL_TEST_INDEX)
 
 			self._count_all(TestData.CALCS_INDEX)
 			self._count_all(TestData.STAPLES_INDEX)
