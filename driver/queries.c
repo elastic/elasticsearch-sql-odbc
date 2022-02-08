@@ -4064,7 +4064,9 @@ SQLRETURN EsSQLColAttributeW(
 		case SQL_DESC_CASE_SENSITIVE:
 			iint = rec->es_type->case_sensitive;
 			break;
-		case SQL_DESC_NUM_PREC_RADIX: iint = rec->num_prec_radix; break;
+		case SQL_DESC_NUM_PREC_RADIX:
+			iint = rec->es_type->num_prec_radix;
+			break;
 		} while (0);
 			*pNumAttr = (SQLLEN)iint;
 			break;
