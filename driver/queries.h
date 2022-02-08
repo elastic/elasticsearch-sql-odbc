@@ -115,11 +115,7 @@ SQLRETURN EsSQLColAttributeW(
 	_Out_opt_
 	SQLSMALLINT     *pcbCharAttr,
 	_Out_opt_
-#ifdef _WIN64
 	SQLLEN          *pNumAttr
-#else /* _WIN64 */
-	SQLPOINTER      pNumAttr
-#endif /* _WIN64 */
 );
 SQLRETURN EsSQLNumParams(
 	SQLHSTMT           StatementHandle,

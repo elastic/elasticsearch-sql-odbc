@@ -1503,7 +1503,7 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 	INFOH(dbc, "early execution: %s.", dbc->early_exec ? "true" : "false");
 	/* default current catalog */
 	if (attrs->catalog.cnt &&
-			(! SQL_SUCCEEDED(set_current_catalog(dbc, &attrs->catalog)))) {
+		(! SQL_SUCCEEDED(set_current_catalog(dbc, &attrs->catalog)))) {
 		goto err;
 	}
 
@@ -3478,8 +3478,8 @@ SQLRETURN EsSQLGetConnectAttrW(
 			}
 			if (dbc->catalog.w.cnt) {
 				if (! SQL_SUCCEEDED(write_wstr(dbc, (SQLWCHAR *)ValuePtr,
-								&dbc->catalog.w, (SQLSMALLINT)BufferLength,
-								&used))) {
+							&dbc->catalog.w, (SQLSMALLINT)BufferLength,
+							&used))) {
 					ERRH(dbc, "failed to copy current catalog out.");
 					RET_STATE(dbc->hdr.diag.state);
 				}

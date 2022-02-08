@@ -837,13 +837,8 @@ SQLRETURN SQL_API SQLColAttributeW
 	ret = EsSQLColAttributeW(hstmt, iCol, iField, pCharAttr,
 			cbDescMax, pcbCharAttr, pNumAttr);
 	HND_UNLOCK(hstmt);
-#ifdef _WIN64
 	TRACE8(_OUT, hstmt, "dpHHphtn", ret, hstmt, iCol, iField, pCharAttr,
 		cbDescMax, pcbCharAttr, pNumAttr);
-#else /* _WIN64 */
-	TRACE8(_OUT, hstmt, "dpddpdtg", ret, hstmt, iCol, iField, pCharAttr,
-		cbDescMax, pcbCharAttr, pNumAttr);
-#endif /* _WIN64 */
 	return ret;
 }
 
