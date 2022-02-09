@@ -23,7 +23,7 @@ class ColAttribute : public ::testing::Test, public ConnectedDBC {
 
 
 TEST_F(ColAttribute, NumericAttributePtr_SQLSMALLINT) {
-	SQLLEN pNumAttr;
+	SQLLEN pNumAttr = -1;
 
 #undef SQL_VAL
 #undef SQL
@@ -45,7 +45,6 @@ TEST_F(ColAttribute, NumericAttributePtr_SQLSMALLINT) {
 	ret = SQLFetch(stmt);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	memset(&pNumAttr, 0xff, sizeof(pNumAttr));
 	ret = SQLColAttribute(stmt, 1, SQL_DESC_CONCISE_TYPE, NULL, 0, NULL,
 			&pNumAttr);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
@@ -53,7 +52,7 @@ TEST_F(ColAttribute, NumericAttributePtr_SQLSMALLINT) {
 }
 
 TEST_F(ColAttribute, NumericAttributePtr_SQLLEN) {
-	SQLLEN pNumAttr;
+	SQLLEN pNumAttr = -1;
 
 #undef SQL_VAL
 #undef SQL
@@ -75,7 +74,6 @@ TEST_F(ColAttribute, NumericAttributePtr_SQLLEN) {
 	ret = SQLFetch(stmt);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	memset(&pNumAttr, 0xff, sizeof(pNumAttr));
 	ret = SQLColAttribute(stmt, 1, SQL_DESC_DISPLAY_SIZE, NULL, 0, NULL,
 			&pNumAttr);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
@@ -86,7 +84,7 @@ TEST_F(ColAttribute, NumericAttributePtr_SQLLEN) {
 }
 
 TEST_F(ColAttribute, NumericAttributePtr_SQLULEN) {
-	SQLLEN pNumAttr;
+	SQLLEN pNumAttr = -1;
 
 #undef SQL_VAL
 #undef SQL
@@ -108,14 +106,13 @@ TEST_F(ColAttribute, NumericAttributePtr_SQLULEN) {
 	ret = SQLFetch(stmt);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	memset(&pNumAttr, 0xff, sizeof(pNumAttr));
 	ret = SQLColAttribute(stmt, 1, SQL_DESC_LENGTH, NULL, 0, NULL, &pNumAttr);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 	ASSERT_EQ(pNumAttr, 0);
 }
 
 TEST_F(ColAttribute, NumericAttributePtr_SQLINTEGER) {
-	SQLLEN pNumAttr;
+	SQLLEN pNumAttr = -1;
 
 #undef SQL_VAL
 #undef SQL
@@ -137,7 +134,6 @@ TEST_F(ColAttribute, NumericAttributePtr_SQLINTEGER) {
 	ret = SQLFetch(stmt);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-	memset(&pNumAttr, 0xff, sizeof(pNumAttr));
 	ret = SQLColAttribute(stmt, 1, SQL_DESC_NUM_PREC_RADIX, NULL, 0, NULL,
 			&pNumAttr);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
