@@ -3957,11 +3957,7 @@ SQLRETURN EsSQLColAttributeW(
 	_Out_opt_
 	SQLSMALLINT     *pcbCharAttr, /* [out] len written in pCharAttr (w/o \0 */
 	_Out_opt_
-#ifdef _WIN64
 	SQLLEN          *pNumAttr /* [out] value, if numeric */
-#else /* _WIN64 */
-	SQLPOINTER      pNumAttr
-#endif /* _WIN64 */
 )
 {
 	esodbc_stmt_st *stmt = STMH(hstmt);
@@ -3971,12 +3967,6 @@ SQLRETURN EsSQLColAttributeW(
 	wstr_st *wstrp;
 	SQLLEN len;
 	SQLINTEGER iint;
-
-#ifdef _WIN64
-#define PNUMATTR_ASSIGN(type, value) *pNumAttr = (SQLLEN)(value)
-#else /* _WIN64 */
-#define PNUMATTR_ASSIGN(type, value) *(type *)pNumAttr = (type)(value)
-#endif /* _WIN64 */
 
 	DBGH(stmt, "IRD@0x%p, column #%d, field: %d.", ird, iCol, iField);
 
@@ -4022,7 +4012,7 @@ SQLRETURN EsSQLColAttributeW(
 			sint = rec->es_type->fixed_prec_scale;
 			break;
 		} while (0);
-			PNUMATTR_ASSIGN(SQLSMALLINT, sint);
+			*pNumAttr = (SQLLEN)sint;
 			break;
 
 		/* SQLWCHAR* */
@@ -4056,14 +4046,14 @@ SQLRETURN EsSQLColAttributeW(
 		case SQL_COLUMN_LENGTH: /* 2.x attrib; no break */
 		case SQL_DESC_OCTET_LENGTH: len = rec->octet_length; break;
 		} while (0);
-			PNUMATTR_ASSIGN(SQLLEN, len);
+			*pNumAttr = len;
 			break;
 
 		/* SQLULEN */
 		case SQL_DESC_LENGTH:
 			/* "This information is returned from the SQL_DESC_LENGTH record
 			 * field of the IRD." */
-			PNUMATTR_ASSIGN(SQLULEN, rec->length);
+			*pNumAttr = (SQLLEN)rec->length;
 			break;
 
 		/* SQLINTEGER */
@@ -4074,14 +4064,16 @@ SQLRETURN EsSQLColAttributeW(
 		case SQL_DESC_CASE_SENSITIVE:
 			iint = rec->es_type->case_sensitive;
 			break;
-		case SQL_DESC_NUM_PREC_RADIX: iint = rec->num_prec_radix; break;
+		case SQL_DESC_NUM_PREC_RADIX:
+			iint = rec->es_type->num_prec_radix;
+			break;
 		} while (0);
-			PNUMATTR_ASSIGN(SQLINTEGER, iint);
+			*pNumAttr = (SQLLEN)iint;
 			break;
 
 
 		case SQL_DESC_COUNT:
-			PNUMATTR_ASSIGN(SQLSMALLINT, ird->count);
+			*pNumAttr = (SQLLEN)ird->count;
 			break;
 
 		default:
@@ -4091,7 +4083,6 @@ SQLRETURN EsSQLColAttributeW(
 	/*INDENT-ON*/
 
 	return SQL_SUCCESS;
-#undef PNUMATTR_ASSIGN
 }
 
 /* very simple counter of non-quoted, not-escaped single question marks.
