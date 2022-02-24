@@ -86,6 +86,7 @@ CborError cbor_map_lookup_keys(CborValue *map, size_t cnt,
 CborError cbor_container_count(CborValue cont, size_t *count);
 CborError cbor_get_array_count(CborValue arr, size_t *count);
 CborError cbor_container_is_empty(CborValue cont, BOOL *empty);
+CborError cbor_value_get_tagged_uint64(CborValue *it, uint64_t *val);
 
 CborError cbor_value_get_utf16_wstr(CborValue *it, wstr_st *utf8);
 void tinycbor_cleanup();

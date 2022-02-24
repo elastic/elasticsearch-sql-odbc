@@ -15,21 +15,21 @@
 
 namespace test {
 
-class ConvertSQL2C_Ints : public ::testing::Test, public ConnectedDBC {
+class ConvertSQL2C_ULong : public ::testing::Test, public ConnectedDBC {
 };
 
 
-TEST_F(ConvertSQL2C_Ints, Byte2Char) {
+TEST_F(ConvertSQL2C_ULong, ULong2Char) {
 
 #undef SQL_VAL
 #undef SQL
-#define SQL_VAL "-128"
+#define SQL_VAL "18446744073709551615"
 #define SQL "CAST(" SQL_VAL " AS TEXT)"
 
   const char json_answer[] = "\
 {\
   \"columns\": [\
-    {\"name\": \"" SQL "\", \"type\": \"byte\"}\
+    {\"name\": \"" SQL "\", \"type\": \"unsigned_long\"}\
   ],\
   \"rows\": [\
     [" SQL_VAL "]\
@@ -49,47 +49,17 @@ TEST_F(ConvertSQL2C_Ints, Byte2Char) {
   EXPECT_STREQ((char/*4gtest*/*)buff, SQL_VAL);
 }
 
-
-TEST_F(ConvertSQL2C_Ints, Byte2Char_null_buff_len) {
-
-#undef SQL_VAL
-#undef SQL
-#define SQL_VAL "-100"
-#define SQL "CAST(" SQL_VAL " AS TEXT)"
-
-  const char json_answer[] = "\
-{\
-  \"columns\": [\
-    {\"name\": \"" SQL "\", \"type\": \"byte\"}\
-  ],\
-  \"rows\": [\
-    [" SQL_VAL "]\
-  ]\
-}\
-";
-  prepareStatement(json_answer);
-
-  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_CHAR, NULL, 0, &ind_len);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-  ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-  EXPECT_EQ(ind_len, sizeof(SQL_VAL) - /*\0*/1);
-}
-
-
-TEST_F(ConvertSQL2C_Ints, Short2WChar) {
+TEST_F(ConvertSQL2C_ULong, ULong2WChar) {
 
 #undef SQL_VAL
 #undef SQL
-#define SQL_VAL "-128"
+#define SQL_VAL "18446744073709551614"
 #define SQL "CAST(" SQL_VAL " AS W-TEXT)"
 
   const char json_answer[] = "\
 {\
   \"columns\": [\
-    {\"name\": \"" SQL "\", \"type\": \"short\"}\
+    {\"name\": \"" SQL "\", \"type\": \"unsigned_long\"}\
   ],\
   \"rows\": [\
     [" SQL_VAL "]\
@@ -110,80 +80,19 @@ TEST_F(ConvertSQL2C_Ints, Short2WChar) {
   EXPECT_STREQ(wbuff, MK_WPTR(SQL_VAL));
 }
 
-TEST_F(ConvertSQL2C_Ints, Long2Char_truncate_22003) {
+
+TEST_F(ConvertSQL2C_ULong, ULong2Byte) {
 
 #undef SQL_VAL
 #undef SQL
-#define SQL_VAL "12345678"
-#define SQL "CAST(" SQL_VAL " AS TEXT)"
-
-  const char json_answer[] = "\
-{\
-  \"columns\": [\
-    {\"name\": \"" SQL "\", \"type\": \"integer\"}\
-  ],\
-  \"rows\": [\
-    [" SQL_VAL "]\
-  ]\
-}\
-";
-  prepareStatement(json_answer);
-
-  SQLCHAR buff[sizeof(SQL_VAL)/2];
-  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_CHAR, &buff, sizeof(buff), &ind_len);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-  ret = SQLFetch(stmt);
-  ASSERT_FALSE(SQL_SUCCEEDED(ret));
-  assertState(L"22003");
-}
-
-
-TEST_F(ConvertSQL2C_Ints, Long2Char_zero_copy) {
-
-#undef SQL_VAL
-#undef SQL
-#define SQL_VAL "12345678"
-#define SQL "CAST(" SQL_VAL " AS TEXT)"
-
-  const char json_answer[] = "\
-{\
-  \"columns\": [\
-    {\"name\": \"" SQL "\", \"type\": \"integer\"}\
-  ],\
-  \"rows\": [\
-    [" SQL_VAL "]\
-  ]\
-}\
-";
-  prepareStatement(json_answer);
-
-  SQLCHAR buff[sizeof(SQL_VAL)] = {0};
-  // test correction: if destionation buffer is non-NULL, truncation
-  // indication is the expected result even with a given len of 0
-  //ret = SQLBindCol(stmt, /*col#*/1, SQL_C_CHAR, &buff, 0, &ind_len);
-  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_CHAR, NULL, 0, &ind_len);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-  ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-  EXPECT_EQ(ind_len, sizeof(SQL_VAL) - 1);
-  //EXPECT_EQ(buff[0], 0); /* nothing copied, since 0 buff size indicated */
-}
-
-
-TEST_F(ConvertSQL2C_Ints, Short2Byte) {
-
-#undef SQL_VAL
-#undef SQL
-#define SQL_RAW -128
+#define SQL_RAW 127
 #define SQL_VAL STR(SQL_RAW)
-#define SQL "CAST(" SQL_VAL " AS SHORT)"
+#define SQL "CAST(" SQL_VAL " AS TINYINT)"
 
   const char json_answer[] = "\
 {\
   \"columns\": [\
-    {\"name\": \"" SQL "\", \"type\": \"short\"}\
+    {\"name\": \"" SQL "\", \"type\": \"unsigned_long\"}\
   ],\
   \"rows\": [\
     [" SQL_VAL "]\
@@ -204,55 +113,19 @@ TEST_F(ConvertSQL2C_Ints, Short2Byte) {
   EXPECT_EQ(schar, SQL_RAW);
 }
 
-
-TEST_F(ConvertSQL2C_Ints, Short2Byte_truncate_22003) {
-
-#undef SQL_RAW
-#undef SQL_VAL
-#undef SQL
-#define SQL_RAW -129
-#define SQL_VAL STR(SQL_RAW)
-#define SQL "CAST(" SQL_VAL " AS SHORT)"
-
-  const char json_answer[] = "\
-{\
-  \"columns\": [\
-    {\"name\": \"" SQL "\", \"type\": \"short\"}\
-  ],\
-  \"rows\": [\
-    [" SQL_VAL "]\
-  ]\
-}\
-";
-  prepareStatement(json_answer);
-
-  SQLSCHAR schar;
-  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_STINYINT, &schar, sizeof(schar),
-      &ind_len);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-  ret = SQLFetch(stmt);
-  ASSERT_FALSE(SQL_SUCCEEDED(ret));
-
-  ret = SQLFetch(stmt);
-  ASSERT_FALSE(SQL_SUCCEEDED(ret));
-  assertState(L"22003");
-}
-
-
-TEST_F(ConvertSQL2C_Ints, Short2UByte) {
+TEST_F(ConvertSQL2C_ULong, ULong2UByte) {
 
 #undef SQL_RAW
 #undef SQL_VAL
 #undef SQL
 #define SQL_RAW 255
 #define SQL_VAL STR(SQL_RAW)
-#define SQL "CAST(" SQL_VAL " AS SHORT)"
+#define SQL "CAST(" SQL_VAL " AS UTINYINT)"
 
   const char json_answer[] = "\
 {\
   \"columns\": [\
-    {\"name\": \"" SQL "\", \"type\": \"short\"}\
+    {\"name\": \"" SQL "\", \"type\": \"unsigned_long\"}\
   ],\
   \"rows\": [\
     [" SQL_VAL "]\
@@ -273,20 +146,19 @@ TEST_F(ConvertSQL2C_Ints, Short2UByte) {
   EXPECT_EQ(uchar, SQL_RAW);
 }
 
-
-TEST_F(ConvertSQL2C_Ints, Byte2UShort) {
+TEST_F(ConvertSQL2C_ULong, ULong2UByte_Fail_Range) {
 
 #undef SQL_RAW
 #undef SQL_VAL
 #undef SQL
-#define SQL_RAW 255
+#define SQL_RAW 256
 #define SQL_VAL STR(SQL_RAW)
-#define SQL "CAST(" SQL_VAL " AS SHORT)"
+#define SQL "CAST(" SQL_VAL " AS UTINYINT)"
 
   const char json_answer[] = "\
 {\
   \"columns\": [\
-    {\"name\": \"" SQL "\", \"type\": \"byte\"}\
+    {\"name\": \"" SQL "\", \"type\": \"unsigned_long\"}\
   ],\
   \"rows\": [\
     [" SQL_VAL "]\
@@ -295,42 +167,8 @@ TEST_F(ConvertSQL2C_Ints, Byte2UShort) {
 ";
   prepareStatement(json_answer);
 
-  SQLUSMALLINT ushort;
-  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_USHORT, &ushort, sizeof(ushort),
-      &ind_len);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-  ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-  EXPECT_EQ(ind_len, sizeof(ushort));
-  EXPECT_EQ(ushort, SQL_RAW);
-}
-
-
-TEST_F(ConvertSQL2C_Ints, Byte2UShort_negative2unsigned) {
-
-#undef SQL_RAW
-#undef SQL_VAL
-#undef SQL
-#define SQL_RAW -1
-#define SQL_VAL STR(SQL_RAW)
-#define SQL "CAST(" SQL_VAL " AS SHORT)"
-
-  const char json_answer[] = "\
-{\
-  \"columns\": [\
-    {\"name\": \"" SQL "\", \"type\": \"short\"}\
-  ],\
-  \"rows\": [\
-    [" SQL_VAL "]\
-  ]\
-}\
-";
-  prepareStatement(json_answer);
-
-  SQLUSMALLINT ushort;
-  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_USHORT, &ushort, sizeof(ushort),
+  SQLCHAR uchar;
+  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_UTINYINT, &uchar, sizeof(uchar),
       &ind_len);
   ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
@@ -339,20 +177,19 @@ TEST_F(ConvertSQL2C_Ints, Byte2UShort_negative2unsigned) {
   assertState(L"22003");
 }
 
-
-TEST_F(ConvertSQL2C_Ints, Integer2Null_fail_HY009) {
+TEST_F(ConvertSQL2C_ULong, ULong2Short) {
 
 #undef SQL_RAW
 #undef SQL_VAL
 #undef SQL
-#define SQL_RAW 256
+#define SQL_RAW 16384
 #define SQL_VAL STR(SQL_RAW)
-#define SQL "CAST(" SQL_VAL " AS INTEGER)"
+#define SQL "CAST(" SQL_VAL " AS SHORT)"
 
   const char json_answer[] = "\
 {\
   \"columns\": [\
-    {\"name\": \"" SQL "\", \"type\": \"integer\"}\
+    {\"name\": \"" SQL "\", \"type\": \"unsigned_long\"}\
   ],\
   \"rows\": [\
     [" SQL_VAL "]\
@@ -361,82 +198,341 @@ TEST_F(ConvertSQL2C_Ints, Integer2Null_fail_HY009) {
 ";
   prepareStatement(json_answer);
 
-  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_ULONG, NULL, 0, &ind_len);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-  ret = SQLFetch(stmt);
-  ASSERT_FALSE(SQL_SUCCEEDED(ret));
-  assertState(L"HY009");
-}
-
-
-TEST_F(ConvertSQL2C_Ints, Long2BigInt_signed_min) {
-
-#undef SQL_RAW
-#undef SQL_VAL
-#undef SQL
-#define SQL_RAW LLONG_MIN
-#define SQL_VAL "-9223372036854775808" // 0x8000000000000000
-#define SQL "CAST(" SQL_VAL " AS INTEGER)"
-
-  const char json_answer[] = "\
-{\
-  \"columns\": [\
-    {\"name\": \"" SQL "\", \"type\": \"integer\"}\
-  ],\
-  \"rows\": [\
-    [" SQL_VAL "]\
-  ]\
-}\
-";
-  prepareStatement(json_answer);
-
-  SQLBIGINT bi;
-  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_SBIGINT, &bi, sizeof(bi), &ind_len);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-  ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-  EXPECT_EQ(ind_len, sizeof(bi));
-  EXPECT_EQ(bi, SQL_RAW);
-}
-
-
-TEST_F(ConvertSQL2C_Ints, Long2UBigInt_signed_max) {
-
-#undef SQL_RAW
-#undef SQL_VAL
-#undef SQL
-#define SQL_RAW LLONG_MAX
-#define SQL_VAL "9223372036854775807" // 0x7fffffffffffffff
-#define SQL "CAST(" SQL_VAL " AS INTEGER)"
-
-  const char json_answer[] = "\
-{\
-  \"columns\": [\
-    {\"name\": \"" SQL "\", \"type\": \"integer\"}\
-  ],\
-  \"rows\": [\
-    [" SQL_VAL "]\
-  ]\
-}\
-";
-  prepareStatement(json_answer);
-
-  SQLUBIGINT ubi;
-  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_UBIGINT, &ubi, sizeof(ubi),
+  SQLSMALLINT sshrt;
+  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_SHORT, &sshrt, sizeof(sshrt),
       &ind_len);
   ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
   ret = SQLFetch(stmt);
   ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
-  EXPECT_EQ(ind_len, sizeof(ubi));
-  EXPECT_EQ(ubi, SQL_RAW);
+  EXPECT_EQ(ind_len, sizeof(sshrt));
+  EXPECT_EQ(sshrt, SQL_RAW);
 }
 
-TEST_F(ConvertSQL2C_Ints, Long2Numeric) {
+TEST_F(ConvertSQL2C_ULong, ULong2UShort) {
+
+#undef SQL_RAW
+#undef SQL_VAL
+#undef SQL
+#define SQL_RAW 32768
+#define SQL_VAL STR(SQL_RAW)
+#define SQL "CAST(" SQL_VAL " AS USHORT)"
+
+  const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"unsigned_long\"}\
+  ],\
+  \"rows\": [\
+    [" SQL_VAL "]\
+  ]\
+}\
+";
+  prepareStatement(json_answer);
+
+  SQLUSMALLINT ushrt;
+  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_USHORT, &ushrt, sizeof(ushrt),
+      &ind_len);
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+  ret = SQLFetch(stmt);
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+  EXPECT_EQ(ind_len, sizeof(ushrt));
+  EXPECT_EQ(ushrt, SQL_RAW);
+}
+
+TEST_F(ConvertSQL2C_ULong, ULong2Short_Fail_Range) {
+
+#undef SQL_RAW
+#undef SQL_VAL
+#undef SQL
+#define SQL_RAW 16385
+#define SQL_VAL STR(SQL_RAW)
+#define SQL "CAST(" SQL_VAL " AS SHORT)"
+
+  const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"unsigned_long\"}\
+  ],\
+  \"rows\": [\
+    [" SQL_VAL "]\
+  ]\
+}\
+";
+  prepareStatement(json_answer);
+
+  SQLSMALLINT sshrt;
+  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_UTINYINT, &sshrt, sizeof(sshrt),
+      &ind_len);
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+  ret = SQLFetch(stmt);
+  ASSERT_FALSE(SQL_SUCCEEDED(ret));
+  assertState(L"22003");
+}
+
+TEST_F(ConvertSQL2C_ULong, ULong2Int) {
+
+#undef SQL_RAW
+#undef SQL_VAL
+#undef SQL
+#define SQL_RAW 2147483647
+#define SQL_VAL STR(SQL_RAW)
+#define SQL "CAST(" SQL_VAL " AS INT)"
+
+  const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"unsigned_long\"}\
+  ],\
+  \"rows\": [\
+    [" SQL_VAL "]\
+  ]\
+}\
+";
+  prepareStatement(json_answer);
+
+  SQLINTEGER sint;
+  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_LONG, &sint, sizeof(sint),
+      &ind_len);
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+  ret = SQLFetch(stmt);
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+  EXPECT_EQ(ind_len, sizeof(sint));
+  EXPECT_EQ(sint, SQL_RAW);
+}
+
+TEST_F(ConvertSQL2C_ULong, ULong2UInt) {
+
+#undef SQL_RAW
+#undef SQL_VAL
+#undef SQL
+#define SQL_RAW 4294967295
+#define SQL_VAL STR(SQL_RAW)
+#define SQL "CAST(" SQL_VAL " AS UINT)"
+
+  const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"unsigned_long\"}\
+  ],\
+  \"rows\": [\
+    [" SQL_VAL "]\
+  ]\
+}\
+";
+  prepareStatement(json_answer);
+
+  SQLUINTEGER uint;
+  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_ULONG, &uint, sizeof(uint),
+      &ind_len);
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+  ret = SQLFetch(stmt);
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+  EXPECT_EQ(ind_len, sizeof(uint));
+  EXPECT_EQ(uint, SQL_RAW);
+}
+
+TEST_F(ConvertSQL2C_ULong, ULong2UInt_Fail_Range) {
+
+#undef SQL_RAW
+#undef SQL_VAL
+#undef SQL
+#define SQL_RAW 4294967296
+#define SQL_VAL STR(SQL_RAW)
+#define SQL "CAST(" SQL_VAL " AS SHORT)"
+
+  const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"unsigned_long\"}\
+  ],\
+  \"rows\": [\
+    [" SQL_VAL "]\
+  ]\
+}\
+";
+  prepareStatement(json_answer);
+
+  SQLUINTEGER uint;
+  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_ULONG, &uint, sizeof(uint),
+      &ind_len);
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+  ret = SQLFetch(stmt);
+  ASSERT_FALSE(SQL_SUCCEEDED(ret));
+  assertState(L"22003");
+}
+
+TEST_F(ConvertSQL2C_ULong, ULong2Long) {
+
+#undef SQL_RAW
+#undef SQL_VAL
+#undef SQL
+#define SQL_RAW 9223372036854775807
+#define SQL_VAL STR(SQL_RAW)
+#define SQL "CAST(" SQL_VAL " AS LONG)"
+
+  const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"unsigned_long\"}\
+  ],\
+  \"rows\": [\
+    [" SQL_VAL "]\
+  ]\
+}\
+";
+  prepareStatement(json_answer);
+
+  SQLBIGINT slong;
+  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_SBIGINT, &slong, sizeof(slong),
+      &ind_len);
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+  ret = SQLFetch(stmt);
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+  EXPECT_EQ(ind_len, sizeof(slong));
+  EXPECT_EQ(slong, SQL_RAW);
+}
+
+TEST_F(ConvertSQL2C_ULong, ULong2ULong) {
+
+#undef SQL_RAW
+#undef SQL_VAL
+#undef SQL
+#define SQL_RAW 18446744073709551615
+#define SQL_VAL STR(SQL_RAW)
+#define SQL "CAST(" SQL_VAL " AS ULONG)"
+
+  const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"unsigned_long\"}\
+  ],\
+  \"rows\": [\
+    [" SQL_VAL "]\
+  ]\
+}\
+";
+  prepareStatement(json_answer);
+
+  SQLUBIGINT ulong;
+  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_UBIGINT, &ulong, sizeof(ulong),
+      &ind_len);
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+  ret = SQLFetch(stmt);
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+  EXPECT_EQ(ind_len, sizeof(ulong));
+  EXPECT_EQ(ulong, SQL_RAW);
+}
+
+TEST_F(ConvertSQL2C_ULong, ULong2Long_Fail_Range) {
+
+#undef SQL_RAW
+#undef SQL_VAL
+#undef SQL
+#define SQL_RAW 9223372036854775808
+#define SQL_VAL STR(SQL_RAW)
+#define SQL "CAST(" SQL_VAL " AS LONG)"
+
+  const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"unsigned_long\"}\
+  ],\
+  \"rows\": [\
+    [" SQL_VAL "]\
+  ]\
+}\
+";
+  prepareStatement(json_answer);
+
+  SQLBIGINT slong;
+  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_SBIGINT, &slong, sizeof(slong),
+      &ind_len);
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+  ret = SQLFetch(stmt);
+  ASSERT_FALSE(SQL_SUCCEEDED(ret));
+  assertState(L"22003");
+}
+
+TEST_F(ConvertSQL2C_ULong, ULong2Bit) {
+
+#undef SQL_RAW
+#undef SQL_VAL
+#undef SQL
+#define SQL_RAW 1
+#define SQL_VAL STR(SQL_RAW)
+#define SQL "CAST(" SQL_VAL " AS BIT)"
+
+  const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"unsigned_long\"}\
+  ],\
+  \"rows\": [\
+    [" SQL_VAL "]\
+  ]\
+}\
+";
+  prepareStatement(json_answer);
+
+  SQLCHAR bit;
+  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_BIT, &bit, sizeof(bit),
+      &ind_len);
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+  ret = SQLFetch(stmt);
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+  EXPECT_EQ(ind_len, sizeof(bit));
+  EXPECT_EQ(bit, SQL_RAW);
+}
+
+TEST_F(ConvertSQL2C_ULong, ULong2Bit_Fail_Range) {
+
+#undef SQL_RAW
+#undef SQL_VAL
+#undef SQL
+#define SQL_RAW 2
+#define SQL_VAL STR(SQL_RAW)
+#define SQL "CAST(" SQL_VAL " AS BIT)"
+
+  const char json_answer[] = "\
+{\
+  \"columns\": [\
+    {\"name\": \"" SQL "\", \"type\": \"unsigned_long\"}\
+  ],\
+  \"rows\": [\
+    [" SQL_VAL "]\
+  ]\
+}\
+";
+  prepareStatement(json_answer);
+
+  SQLCHAR bit;
+  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_BIT, &bit, sizeof(bit),
+      &ind_len);
+  ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+  ret = SQLFetch(stmt);
+  ASSERT_FALSE(SQL_SUCCEEDED(ret));
+  assertState(L"22003");
+}
+
+TEST_F(ConvertSQL2C_ULong, ULong2Numeric) {
 
 #undef SQL_RAW
 #undef SQL_VAL
@@ -448,7 +544,7 @@ TEST_F(ConvertSQL2C_Ints, Long2Numeric) {
   const char json_answer[] = "\
 {\
   \"columns\": [\
-    {\"name\": \"" SQL "\", \"type\": \"long\"}\
+    {\"name\": \"" SQL "\", \"type\": \"unsigned_long\"}\
   ],\
   \"rows\": [\
     [" SQL_VAL "]\
@@ -477,54 +573,19 @@ TEST_F(ConvertSQL2C_Ints, Long2Numeric) {
   EXPECT_EQ(((uint64_t *)ns.val)[1], 0L);
 }
 
-
-TEST_F(ConvertSQL2C_Ints, Long2Bit) {
-
-#undef SQL_RAW
-#undef SQL_VAL
-#undef SQL
-#define SQL_RAW 1
-#define SQL_VAL STR(SQL_RAW)
-#define SQL "CAST(" SQL_VAL " AS INTEGER)"
-
-  const char json_answer[] = "\
-{\
-  \"columns\": [\
-    {\"name\": \"" SQL "\", \"type\": \"integer\"}\
-  ],\
-  \"rows\": [\
-    [" SQL_VAL "]\
-  ]\
-}\
-";
-  prepareStatement(json_answer);
-
-  SQLCHAR bit;
-  ret = SQLBindCol(stmt, /*col#*/1, SQL_C_BIT, &bit, sizeof(bit),
-      &ind_len);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-  ret = SQLFetch(stmt);
-  ASSERT_TRUE(SQL_SUCCEEDED(ret));
-
-  EXPECT_EQ(ind_len, sizeof(bit));
-  EXPECT_EQ(bit, SQL_RAW);
-}
-
-
-TEST_F(ConvertSQL2C_Ints, Long2Float) {
+TEST_F(ConvertSQL2C_ULong, ULong2Float) {
 
 #undef SQL_RAW
 #undef SQL_VAL
 #undef SQL
 #define SQL_RAW 123456
 #define SQL_VAL STR(SQL_RAW)
-#define SQL "CAST(" SQL_VAL " AS INTEGER)"
+#define SQL "CAST(" SQL_VAL " AS FLOAT)"
 
   const char json_answer[] = "\
 {\
   \"columns\": [\
-    {\"name\": \"" SQL "\", \"type\": \"integer\"}\
+    {\"name\": \"" SQL "\", \"type\": \"unsigned_long\"}\
   ],\
   \"rows\": [\
     [" SQL_VAL "]\
@@ -545,20 +606,19 @@ TEST_F(ConvertSQL2C_Ints, Long2Float) {
   EXPECT_EQ(real, SQL_RAW); /* float equality should hold for casts */
 }
 
-
-TEST_F(ConvertSQL2C_Ints, Long2Double) {
+TEST_F(ConvertSQL2C_ULong, ULong2Double) {
 
 #undef SQL_RAW
 #undef SQL_VAL
 #undef SQL
-#define SQL_RAW -9223372036854775807 // 0x7fffffffffffffff
+#define SQL_RAW 18446744073709551615
 #define SQL_VAL STR(SQL_RAW)
-#define SQL "CAST(" SQL_VAL " AS INTEGER)"
+#define SQL "CAST(" SQL_VAL " AS DOUBLE)"
 
   const char json_answer[] = "\
 {\
   \"columns\": [\
-    {\"name\": \"" SQL "\", \"type\": \"long\"}\
+    {\"name\": \"" SQL "\", \"type\": \"unsigned_long\"}\
   ],\
   \"rows\": [\
     [" SQL_VAL "]\
@@ -578,20 +638,19 @@ TEST_F(ConvertSQL2C_Ints, Long2Double) {
   EXPECT_EQ(dbl, SQL_RAW); /* float equality should hold for casts */
 }
 
-
-TEST_F(ConvertSQL2C_Ints, Long2Binary) {
+TEST_F(ConvertSQL2C_ULong, ULong2Binary) {
 
 #undef SQL_RAW
 #undef SQL_VAL
 #undef SQL
 #define SQL_RAW 0xBeefed
 #define SQL_VAL "12513261" // 0xbeefed
-#define SQL "CAST(" SQL_VAL " AS INTEGER)"
+#define SQL "CAST(" SQL_VAL " AS BINARY)"
 
   const char json_answer[] = "\
 {\
   \"columns\": [\
-    {\"name\": \"" SQL "\", \"type\": \"long\"}\
+    {\"name\": \"" SQL "\", \"type\": \"unsigned_long\"}\
   ],\
   \"rows\": [\
     [" SQL_VAL "]\
@@ -615,19 +674,19 @@ TEST_F(ConvertSQL2C_Ints, Long2Binary) {
 }
 
 
-TEST_F(ConvertSQL2C_Ints, Long2Binary_fail_22003) {
+TEST_F(ConvertSQL2C_ULong, ULong2Binary_Fail_Range) {
 
 #undef SQL_RAW
 #undef SQL_VAL
 #undef SQL
 #define SQL_RAW 0xBeefed
 #define SQL_VAL "12513261" // 0xbeefed
-#define SQL "CAST(" SQL_VAL " AS INTEGER)"
+#define SQL "CAST(" SQL_VAL " AS BINARY)"
 
   const char json_answer[] = "\
 {\
   \"columns\": [\
-    {\"name\": \"" SQL "\", \"type\": \"long\"}\
+    {\"name\": \"" SQL "\", \"type\": \"unsigned_long\"}\
   ],\
   \"rows\": [\
     [" SQL_VAL "]\
@@ -644,7 +703,6 @@ TEST_F(ConvertSQL2C_Ints, Long2Binary_fail_22003) {
   ASSERT_FALSE(SQL_SUCCEEDED(ret));
   assertState(L"22003");
 }
-
 
 } // test namespace
 

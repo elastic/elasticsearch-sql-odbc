@@ -40,20 +40,33 @@ BOOL update_crr_date(struct tm *now);
 
 SQLRETURN sql2c_string(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	SQLULEN pos, const wchar_t *wstr, size_t chars_0);
-SQLRETURN sql2c_longlong(esodbc_rec_st *arec, esodbc_rec_st *irec,
-	SQLULEN pos, long long ll);
+SQLRETURN sql2c_quadword(esodbc_rec_st *arec, esodbc_rec_st *irec,
+	SQLULEN pos, uint64_t qword, bool unsignd);
 SQLRETURN sql2c_double(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	SQLULEN pos, double dbl);
+
+static inline SQLRETURN sql2c_longlong(esodbc_rec_st *arec,
+		esodbc_rec_st *irec, SQLULEN pos, long long ll) {
+	return sql2c_quadword(arec, irec, pos, (uint64_t)ll, /*unsigned*/false);
+}
 /*
  * SQL C -> SQL
  */
+typedef struct {
+	SQLSMALLINT type; /* SQL_C_SBIGINT, SQL_C_UBIGINT, SQL_C_DOUBLE */
+	union {
+		SQLDOUBLE dbl;
+		SQLBIGINT bint;
+		SQLUBIGINT ubint;
+	};
+} t_number_st; /* typed number struct type */
+
 SQLRETURN c2sql_null(esodbc_rec_st *arec,
 	esodbc_rec_st *irec, char *dest, size_t *len);
 SQLRETURN c2sql_boolean(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	SQLULEN pos, char *dest, size_t *len);
 SQLRETURN c2sql_number(esodbc_rec_st *arec, esodbc_rec_st *irec,
-	SQLULEN pos, double *min, double *max, BOOL fixed, char *dest,
-	size_t *len);
+	SQLULEN pos, t_number_st *min, t_number_st *max, char *dest, size_t *len);
 SQLRETURN c2sql_varchar(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	SQLULEN pos, char *dest, size_t *len);
 SQLRETURN c2sql_date_time(esodbc_rec_st *arec, esodbc_rec_st *irec,

@@ -28,6 +28,9 @@ clock_t thread_local in_ticks = 0;
 
 static BOOL driver_init()
 {
+	int cnt;
+	wchar_t exe_path[MAX_PATH + 1];
+
 	if (! log_init()) {
 		return FALSE;
 	}
@@ -42,6 +45,15 @@ static BOOL driver_init()
 		_CrtSetReportFile(_CRT_ASSERT, _gf_log->handle);
 	}
 #endif /* !NDEBUG */
+
+	cnt = GetModuleFileName(/*handle*/NULL, exe_path,
+			sizeof(exe_path)/sizeof(exe_path[0]));
+	if (cnt <= 0) {
+		ERRN("failed to read current process name.");
+	} else {
+		INFO("calling application: " LWPDL, cnt, exe_path);
+	}
+
 	INFO("initializing driver.");
 	if (! queries_init()) {
 		return FALSE;

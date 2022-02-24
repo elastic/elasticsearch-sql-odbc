@@ -60,7 +60,6 @@ TEST_F(ConvertC2SQL_Numeric, CStr_Short2Integer_fail_22018)
 	assertState(L"22018");
 }
 
-/* note: test name used in test */
 TEST_F(ConvertC2SQL_Numeric, CStr_LLong2Long)
 {
 	prepareStatement();
@@ -73,6 +72,40 @@ TEST_F(ConvertC2SQL_Numeric, CStr_LLong2Long)
 
 	assertRequest("[{\"type\": \"LONG\", "
 		"\"value\": 9223372036854775807}]");
+}
+
+TEST_F(ConvertC2SQL_Numeric, CStr_ULLong2ULong)
+{
+	prepareStatement();
+
+	SQLCHAR val[] = "18446744073709551615"; /* ULLONG_MAX */
+	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR,
+			SQL_BIGINT, /*size*/0, /*decdigits*/0, val, SQL_NTSL,
+			/*IndLen*/NULL);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	cstr_st buff = {NULL, 0};
+	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	assertRequest("[{\"type\": \"UNSIGNED_LONG\", "
+		"\"value\": 18446744073709551615}]");
+}
+
+TEST_F(ConvertC2SQL_Numeric, CStr_ULLong2ULong_fail_22003)
+{
+	prepareStatement();
+
+	SQLCHAR val[] = "18446744073709561616"; /* ULLONG_MAX + 10000 */
+	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR,
+			SQL_BIGINT, /*size*/0, /*decdigits*/0, val, SQL_NTSL,
+			/*IndLen*/NULL);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	cstr_st buff = {NULL, 0};
+	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
+	ASSERT_FALSE(SQL_SUCCEEDED(ret));
+	assertState(L"22003");
 }
 
 TEST_F(ConvertC2SQL_Numeric, CStr_LLong2Integer_fail_22003)
@@ -92,22 +125,55 @@ TEST_F(ConvertC2SQL_Numeric, CStr_LLong2Integer_fail_22003)
 
 }
 
-/* note: test name used in test */
-TEST_F(ConvertC2SQL_Numeric, CStr_Float2Long)
+TEST_F(ConvertC2SQL_Numeric, CStr_Float2Long_wrap)
 {
 	prepareStatement();
 
-	SQLCHAR val[] = "9223372036854775806.12345"; /* LLONG_MAX.12345 - 1 */
+	SQLCHAR val[] = "9223372036854775808.0"; /* LLONG_MAX.0 + 1 */
 	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR,
 			SQL_BIGINT, /*size*/0, /*decdigits*/0, val, sizeof(val) - /*\0*/1,
 			/*IndLen*/NULL);
 	ASSERT_TRUE(SQL_SUCCEEDED(ret));
 
+	// 9223372036854775808.0 == (double)LLONG_MAX, so the promotion to
+	// UNSIGNED_LONG won't happen ->
+	// (long long)9223372036854775808.0 == LLONG_MIN
 	assertRequest("[{\"type\": \"LONG\", "
-		"\"value\": 9223372036854775806.12345}]");
+		"\"value\": -9223372036854775808}]");
 }
 
-/* note: test name used in test */
+TEST_F(ConvertC2SQL_Numeric, WStr_Float2ULong)
+{
+	prepareStatement();
+
+	SQLWCHAR val[] = L"18446744073709541615.0"; /* ULLONG_MAX.0 - 10000 */
+	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_WCHAR,
+			SQL_BIGINT, /*size*/0, /*decdigits*/0, val,
+			sizeof(val)/sizeof(*val) - /*\0*/1, /*IndLen*/NULL);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	// conversion of the double string to double is approximate, so conversion
+	// back to ULL won't contain same value
+	assertRequest("[{\"type\": \"UNSIGNED_LONG\", "
+		"\"value\": 18446744073709541376}]");
+}
+
+TEST_F(ConvertC2SQL_Numeric, CStr_Float2ULong_fail_22003)
+{
+	prepareStatement();
+
+	SQLCHAR val[] = "-9223372036854785808."; /* LLONG_MIN.0 - 10000 */
+	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_CHAR,
+			SQL_BIGINT, /*size*/0, /*decdigits*/0, val, sizeof(val) - /*\0*/1,
+			/*IndLen*/NULL);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	cstr_st buff = {NULL, 0};
+	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
+	ASSERT_FALSE(SQL_SUCCEEDED(ret));
+	assertState(L"22003");
+}
+
 TEST_F(ConvertC2SQL_Numeric, WStr_Byte2Integer)
 {
 	prepareStatement();
@@ -121,7 +187,6 @@ TEST_F(ConvertC2SQL_Numeric, WStr_Byte2Integer)
 	assertRequest("[{\"type\": \"INTEGER\", \"value\": -128}]");
 }
 
-/* note: test name used in test */
 TEST_F(ConvertC2SQL_Numeric, WStr_Double2HFloat)
 {
 	prepareStatement();
@@ -136,7 +201,6 @@ TEST_F(ConvertC2SQL_Numeric, WStr_Double2HFloat)
 		"\"value\": -12345678901234567890.123456789}]");
 }
 
-/* note: test name used in test */
 TEST_F(ConvertC2SQL_Numeric, WStr_Double2SFloat)
 {
 	prepareStatement();
@@ -167,7 +231,6 @@ TEST_F(ConvertC2SQL_Numeric, WStr_Double2Real_fail_22003)
 	assertState(L"22003");
 }
 
-/* note: test name used in test */
 TEST_F(ConvertC2SQL_Numeric, Short2Integer)
 {
 	prepareStatement();
@@ -181,7 +244,6 @@ TEST_F(ConvertC2SQL_Numeric, Short2Integer)
 	assertRequest("[{\"type\": \"INTEGER\", \"value\": -12345}]");
 }
 
-/* note: test name used in test */
 TEST_F(ConvertC2SQL_Numeric, LLong2Long)
 {
 	prepareStatement();
@@ -194,6 +256,34 @@ TEST_F(ConvertC2SQL_Numeric, LLong2Long)
 
 	assertRequest("[{\"type\": \"LONG\", "
 		"\"value\": 9223372036854775807}]");
+}
+
+TEST_F(ConvertC2SQL_Numeric, ULLong2Long)
+{
+	prepareStatement();
+
+	SQLBIGINT val = 9223372036854775807; /* LLONG_MAX */
+	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_UBIGINT,
+			SQL_BIGINT, /*size*/0, /*decdigits*/0, &val, sizeof(val),
+			/*IndLen*/NULL);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	assertRequest("[{\"type\": \"LONG\", "
+		"\"value\": 9223372036854775807}]");
+}
+
+TEST_F(ConvertC2SQL_Numeric, ULLong2ULong)
+{
+	prepareStatement();
+
+	SQLUBIGINT val = 9223372036854775808; /* LLONG_MAX + 1 */
+	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_UBIGINT,
+			SQL_BIGINT, /*size*/0, /*decdigits*/0, &val, sizeof(val),
+			/*IndLen*/NULL);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	assertRequest("[{\"type\": \"UNSIGNED_LONG\", "
+		"\"value\": 9223372036854775808}]");
 }
 
 TEST_F(ConvertC2SQL_Numeric, LLong2Integer_fail_22003)
@@ -213,7 +303,23 @@ TEST_F(ConvertC2SQL_Numeric, LLong2Integer_fail_22003)
 
 }
 
-/* note: test name used in test */
+TEST_F(ConvertC2SQL_Numeric, ULLong2Integer_fail_22003)
+{
+	prepareStatement();
+
+	SQLUBIGINT val = ULLONG_MAX;
+	ret = SQLBindParameter(stmt, 1, SQL_PARAM_INPUT, SQL_C_UBIGINT,
+			SQL_INTEGER, /*size*/0, /*decdigits*/0, &val, sizeof(val),
+			/*IndLen*/NULL);
+	ASSERT_TRUE(SQL_SUCCEEDED(ret));
+
+	cstr_st buff = {NULL, 0};
+	ret = serialize_statement((esodbc_stmt_st *)stmt, &buff);
+	ASSERT_FALSE(SQL_SUCCEEDED(ret));
+	assertState(L"22003");
+
+}
+
 TEST_F(ConvertC2SQL_Numeric, Float2Long)
 {
 	prepareStatement();
@@ -228,7 +334,6 @@ TEST_F(ConvertC2SQL_Numeric, Float2Long)
 		"\"value\": 9223372036854775808}]"); // == (double)LLONG_MAX: XXX
 }
 
-/* note: test name used in test */
 TEST_F(ConvertC2SQL_Numeric, Byte2Integer)
 {
 	prepareStatement();
@@ -242,7 +347,6 @@ TEST_F(ConvertC2SQL_Numeric, Byte2Integer)
 	assertRequest("[{\"type\": \"INTEGER\", \"value\": -128}]");
 }
 
-/* note: test name used in test */
 TEST_F(ConvertC2SQL_Numeric, Double2HFloat)
 {
 	prepareStatement();
@@ -273,7 +377,6 @@ TEST_F(ConvertC2SQL_Numeric, Double2Real_fail_22003)
 	assertState(L"22003");
 }
 
-/* note: test name used in test */
 TEST_F(ConvertC2SQL_Numeric, Bin_LLong2Long)
 {
 	prepareStatement();
@@ -306,7 +409,6 @@ TEST_F(ConvertC2SQL_Numeric, Bin_Byte2Integer_fail_HY090)
 	assertState(L"HY090");
 }
 
-/* note: test name used in test */
 TEST_F(ConvertC2SQL_Numeric, Bin_Real2HFloat)
 {
 	prepareStatement();
@@ -322,7 +424,6 @@ TEST_F(ConvertC2SQL_Numeric, Bin_Real2HFloat)
 		"\"value\": -123456.789}]");
 }
 
-/* note: test name used in test */
 TEST_F(ConvertC2SQL_Numeric, Numeric2HFloat)
 {
 	prepareStatement();

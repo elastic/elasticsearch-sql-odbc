@@ -187,6 +187,8 @@ typedef struct struct_dbc {
 	/* configuration imposed lengths for the ES/SQL string types */
 	SQLUINTEGER varchar_limit;
 	wstr_st varchar_limit_str; /* convenience w-string of varchar limit */
+	esodbc_estype_st *ulong; /* the UNSIGNED_LONG type in es_types array */
+	esodbc_estype_st *lgst_name; /* type with longest name */
 
 	CURL *curl; /* cURL handle */
 	CURLcode curl_err;

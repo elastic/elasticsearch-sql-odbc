@@ -42,8 +42,8 @@ static thread_local struct tm today;
 #define REJECT_AS_OOR(_stmt, _val, _fix_val, _target) /* Out Of Range */ \
 	do { \
 		if (_fix_val) { \
-			ERRH(_stmt, "can't convert value %llx to %s: out of range.", \
-				_val, STR(_target)); \
+			ERRH(_stmt, "can't convert value 0x%llx to %s: out of range.", \
+				(uint64_t)_val, STR(_target)); \
 		} else { \
 			ERRH(_stmt, "can't convert value %f to %s: out of range.", \
 				_val, STR(_target)); \
@@ -910,12 +910,14 @@ static SQLRETURN llong_to_binary(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	return SQL_SUCCESS;
 }
 
-static SQLRETURN longlong_to_str(esodbc_rec_st *arec, esodbc_rec_st *irec,
-	long long ll, void *data_ptr, SQLLEN *octet_len_ptr, BOOL wide)
+
+static SQLRETURN quadword_to_str(esodbc_rec_st *arec, esodbc_rec_st *irec,
+	uint64_t qword, bool unsignd, void *data_ptr, SQLLEN *octet_len_ptr,
+	BOOL wide)
 {
 	SQLRETURN ret;
 	/* buffer is overprovisioned for !wide, but avoids double declaration */
-	SQLCHAR buff[(ESODBC_PRECISION_INT64 + /*0-term*/1 + /*+/-*/1)
+	SQLCHAR buff[(ESODBC_PRECISION_UINT64 + /*0-term*/1 + /*+/-*/1)
 		* sizeof(SQLWCHAR)];
 	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
 	xstr_st xsrc = (xstr_st) {
@@ -925,14 +927,15 @@ static SQLRETURN longlong_to_str(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		}
 	};
 
-	xsrc.w.cnt = i64tot((int64_t)ll, buff, wide); /*==.c.cnt*/
+	xsrc.w.cnt = unsignd ? ui64tot(qword, buff, wide) :
+		i64tot((int64_t)qword, buff, wide); /* ==.c.cnt */
 
 	if (wide) {
-		DBGH(stmt, "long long %lld convertible to w-string `" LWPD "` on "
-			"%zd octets.", ll, xsrc.w.str, xsrc.w.cnt);
+		DBGH(stmt, "quad word 0x%llx convertible to w-string `" LWPD "` on "
+			"%zd octets.", qword, xsrc.w.str, xsrc.w.cnt);
 	} else {
-		DBGH(stmt, "long long %lld convertible to string `" LCPD "` on "
-			"%zd octets.", ll, xsrc.c.str, xsrc.c.cnt);
+		DBGH(stmt, "quad word 0x%llx convertible to string `" LCPD "` on "
+			"%zd octets.", qword, xsrc.c.str, xsrc.c.cnt);
 	}
 	ret = transfer_xstr0(arec, irec, &xsrc, data_ptr, octet_len_ptr);
 
@@ -943,19 +946,21 @@ static SQLRETURN longlong_to_str(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		if (STMT_GD_CALLING(stmt)) {
 			return ret;
 		} else {
-			REJECT_AS_OOR(stmt, ll, /*fixed?*/TRUE, "[STRING]<[value]");
+			REJECT_AS_OOR(stmt, qword, /*fixed?*/TRUE, "[STRING]<[value]");
 		}
 	}
 	return SQL_SUCCESS;
 }
 
-SQLRETURN sql2c_longlong(esodbc_rec_st *arec, esodbc_rec_st *irec,
-	SQLULEN pos, long long ll)
+SQLRETURN sql2c_quadword(esodbc_rec_st *arec, esodbc_rec_st *irec,
+	SQLULEN pos, uint64_t qword, bool unsignd)
 {
 	esodbc_stmt_st *stmt;
 	void *data_ptr;
 	SQLLEN *octet_len_ptr;
 	esodbc_desc_st *ard, *ird;
+	long long ll;
+	unsigned long long ull;
 	SQLSMALLINT ctype;
 	SQLRETURN ret;
 	SQL_INTERVAL_STRUCT ivl;
@@ -967,71 +972,81 @@ SQLRETURN sql2c_longlong(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	ird = stmt->ird;
 	ard = stmt->ard;
 
+	ull = (unsigned long long)qword;
+	ll = (long long)qword;
+
 	/* pointer where to write how many characters we will/would use */
 	octet_len_ptr = deferred_address(SQL_DESC_OCTET_LENGTH_PTR, pos, arec);
 	/* pointer to app's buffer */
 	data_ptr = deferred_address(SQL_DESC_DATA_PTR, pos, arec);
 
 	/* Assume a C type behind an SQL C type, but check size representation.
-	 * Note: won't work if _min==0 is a legit limit */
-#	define REJECT_IF_OOR(_stmt, _ll, _min, _max, _sqlctype, _ctype) \
+	 * Uses local vars: stmt. */
+#	define REJECT_IF_OOR(_qword, _min, _max, _sqlctype, _ctype) \
 	do { \
 		assert(sizeof(_sqlctype) == sizeof(_ctype)); \
-		if ((_min && _ll < _min) || _max < _ll) { \
-			REJECT_AS_OOR(_stmt, _ll, /*fixed int*/TRUE, _ctype); \
+		if (_qword < _min || _max < _qword) { \
+			REJECT_AS_OOR(stmt, _qword, /*fixed int*/TRUE, _ctype); \
 		} \
 	} while (0)
-	/* Transfer a long long to an SQL integer type.
-	 * Uses local vars: stmt, data_ptr, irec, octet_len_ptr. */
-#	define TRANSFER_LL(_ll, _min, _max, _sqlctype, _ctype) \
+	/* Transfer a quadword to an SQL integer type.
+	 * Uses local vars: ll, ull, stmt, data_ptr, irec, octet_len_ptr. */
+#	define TRANSFER_QW(_min, _max, _sqlctype, _ctype) \
 	do { \
 		REJECT_IF_NULL_DEST_BUFF(stmt, data_ptr); \
-		REJECT_IF_OOR(stmt, _ll, _min, _max, _sqlctype, _ctype); \
-		*(_sqlctype *)data_ptr = (_sqlctype)_ll; \
+		if (unsignd) { \
+			REJECT_IF_OOR(ull, 0, _max, _sqlctype, _ctype); \
+			*(_sqlctype *)data_ptr = (_sqlctype)ull; \
+			DBGH(stmt, "converted unsigned quad word %llu to " STR(_sqlctype) \
+					" 0x%llx.", ull, (uint64_t)*(_sqlctype *)data_ptr); \
+		} else { \
+			REJECT_IF_OOR(ll, _min, _max, _sqlctype, _ctype); \
+			*(_sqlctype *)data_ptr = (_sqlctype)ll; \
+			DBGH(stmt, "converted signed quad word %lld to " STR(_sqlctype) \
+					" 0x%llx.", ll, (uint64_t)*(_sqlctype *)data_ptr); \
+		} \
 		write_out_octets(octet_len_ptr, sizeof(_sqlctype), irec); \
-		DBGH(stmt, "converted long long %lld to " STR(_sqlctype) " 0x%llx.", \
-			_ll, (uint64_t)*(_sqlctype *)data_ptr); \
 	} while (0)
 
 	switch ((ctype = get_rec_c_type(arec, irec))) {
 		case SQL_C_CHAR:
 		case SQL_C_WCHAR:
-			return longlong_to_str(arec, irec, ll, data_ptr, octet_len_ptr,
-					ctype == SQL_C_WCHAR);
+			return quadword_to_str(arec, irec, qword, unsignd, data_ptr,
+					octet_len_ptr, ctype == SQL_C_WCHAR);
 
 		case SQL_C_TINYINT:
 		case SQL_C_STINYINT:
-			TRANSFER_LL(ll, CHAR_MIN, CHAR_MAX, SQLSCHAR, char);
+			TRANSFER_QW(CHAR_MIN, CHAR_MAX, SQLSCHAR, char);
 			break;
 		case SQL_C_UTINYINT:
-			TRANSFER_LL(ll, 0, UCHAR_MAX, SQLCHAR, unsigned char);
+			TRANSFER_QW(0, UCHAR_MAX, SQLCHAR, unsigned char);
 			break;
 		case SQL_C_SHORT:
 		case SQL_C_SSHORT:
-			TRANSFER_LL(ll, SHRT_MIN, SHRT_MAX, SQLSMALLINT, short);
+			TRANSFER_QW(SHRT_MIN, SHRT_MAX, SQLSMALLINT, short);
 			break;
 		case SQL_C_USHORT:
-			TRANSFER_LL(ll, 0, USHRT_MAX, SQLUSMALLINT, unsigned short);
+			TRANSFER_QW(0, USHRT_MAX, SQLUSMALLINT, unsigned short);
 			break;
 		case SQL_C_LONG:
 		case SQL_C_SLONG:
-			TRANSFER_LL(ll, LONG_MIN, LONG_MAX, SQLINTEGER, long);
+			TRANSFER_QW(LONG_MIN, LONG_MAX, SQLINTEGER, long);
 			break;
 		case SQL_C_ULONG:
-			TRANSFER_LL(ll, 0, ULONG_MAX, SQLUINTEGER, unsigned long);
+			TRANSFER_QW(0, ULONG_MAX, SQLUINTEGER, unsigned long);
 			break;
 		case SQL_C_SBIGINT:
-			TRANSFER_LL(ll, LLONG_MIN, LLONG_MAX, SQLBIGINT, long long);
+			TRANSFER_QW(LLONG_MIN, LLONG_MAX, SQLBIGINT, long long);
 			break;
 		case SQL_C_UBIGINT:
-			TRANSFER_LL(ll, 0, ULLONG_MAX, SQLUBIGINT, unsigned long long);
+			TRANSFER_QW(0, ULLONG_MAX, SQLUBIGINT, unsigned long long);
 			break;
 
 		case SQL_C_BIT:
 			REJECT_IF_NULL_DEST_BUFF(stmt, data_ptr);
-			if (ll < 0 || 2 <= ll) {
+			if (ll != 0 && ll != 1) {
 				REJECT_AS_OOR(stmt, ll, /*fixed int*/TRUE, SQL_C_BIT);
-			} else { /* 0 or 1 */
+			} else {
 				*(SQLCHAR *)data_ptr = (SQLCHAR)ll;
 			}
 			write_out_octets(octet_len_ptr, sizeof(SQLSCHAR), irec);
@@ -1039,7 +1054,8 @@ SQLRETURN sql2c_longlong(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 		case SQL_C_NUMERIC:
 			REJECT_IF_NULL_DEST_BUFF(stmt, data_ptr);
-			ret = double_to_numeric(arec, (double)ll, data_ptr);
+			ret = double_to_numeric(arec, unsignd ? (double)ull : (double)ll,
+					data_ptr);
 			if (! SQL_SUCCEEDED(ret)) {
 				return ret;
 			}
@@ -1048,15 +1064,13 @@ SQLRETURN sql2c_longlong(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 		case SQL_C_FLOAT:
 			REJECT_IF_NULL_DEST_BUFF(stmt, data_ptr);
-			REJECT_IF_OOR(stmt, ll, -FLT_MAX, FLT_MAX, SQLREAL, float);
-			*(SQLREAL *)data_ptr = (SQLREAL)ll;
+			*(SQLREAL *)data_ptr = unsignd ? (SQLREAL)ull : (SQLREAL)ll;
 			write_out_octets(octet_len_ptr, sizeof(SQLREAL), irec);
 			break;
 
 		case SQL_C_DOUBLE:
 			REJECT_IF_NULL_DEST_BUFF(stmt, data_ptr);
-			REJECT_IF_OOR(stmt, ll, -DBL_MAX, DBL_MAX, SQLDOUBLE, double);
-			*(SQLDOUBLE *)data_ptr = (SQLDOUBLE)ll;
+			*(SQLDOUBLE *)data_ptr = unsignd ? (SQLDOUBLE)ull : (SQLDOUBLE)ll;
 			write_out_octets(octet_len_ptr, sizeof(SQLDOUBLE), irec);
 			break;
 
@@ -1092,20 +1106,26 @@ SQLRETURN sql2c_longlong(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		} while (0);
 			REJECT_IF_NULL_DEST_BUFF(stmt, data_ptr);
 			memset(&ivl, 0, sizeof(ivl));
-			if (ll < 0) {
-				ivl_val = -ll;
-				ivl.interval_sign = SQL_TRUE;
+			if (unsignd) {
+				REJECT_IF_OOR(ull, 0, ULONG_MAX, SQLUINTEGER, unsigned long);
+				ivl_val = (long long)ull;
 			} else {
-				ivl_val = ll;
+				if (ll < 0) {
+					ivl_val = -ll;
+					ivl.interval_sign = SQL_TRUE;
+				} else {
+					ivl_val = ll;
+				}
+				REJECT_IF_OOR(ivl_val, 0, ULONG_MAX, SQLUINTEGER,
+						unsigned long);
 			}
-			REJECT_IF_OOR(stmt, ivl_val, 0, ULONG_MAX, SQLUINTEGER,
-					unsigned long);
 			ivl.interval_type = ivl_type;
+			/* all interval components are defined as SQLUINTEGER */
 			*ivl_comp = (SQLUINTEGER)ivl_val;
 			*(SQL_INTERVAL_STRUCT *)data_ptr = ivl;
 			write_out_octets(octet_len_ptr, sizeof(ivl), irec);
-			DBGH(stmt, "converted long long %lld to interval type %d.",
-				ll, ivl_type);
+			DBGH(stmt, "converted quad word 0x%llx to interval %lld type %d.",
+				qword, ivl_val, ivl_type);
 			break;
 		/*INDENT-ON*/
 
@@ -1121,7 +1141,7 @@ SQLRETURN sql2c_longlong(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	return SQL_SUCCESS;
 
 #	undef REJECT_IF_OOR
-#	undef TRANSFER_LL
+#	undef TRANSFER_QW
 }
 
 static SQLRETURN double_to_bit(esodbc_rec_st *arec, esodbc_rec_st *irec,
@@ -3602,14 +3622,14 @@ SQLRETURN convertability_check(esodbc_stmt_st *stmt, SQLINTEGER idx,
 	return SQL_SUCCESS;
 }
 
-/* Converts a C/W-string to a u/llong or double (dest_type?); the xstr->wide
- * needs to be set;
- * Returns success of conversion and pointer to trimmed number str
- * representation.  */
+/* Converts a C/W-string to a u/llong or double; the xstr->wide must be set.
+ * Returns success of conversion, converted value, its type and trimmed string
+ * source. */
 static BOOL xstr_to_number(esodbc_stmt_st *stmt, void *data_ptr,
-	SQLLEN *octet_len_ptr, xstr_st *xstr, SQLSMALLINT dest_type, void *dest)
+	SQLLEN *octet_len_ptr, xstr_st *xstr, t_number_st *dest)
 {
 	int res;
+	void *xptr;
 
 	/* "If StrLen_or_IndPtr is a null pointer, the driver assumes that all
 	 * input parameter values are non-NULL and that character and binary data
@@ -3636,60 +3656,43 @@ static BOOL xstr_to_number(esodbc_stmt_st *stmt, void *data_ptr,
 
 	if (xstr->wide) {
 		wtrim_ws(&xstr->w);
+		xptr = &xstr->w;
 		DBGH(stmt, "converting paramter value `" LWPDL "` to number.",
 			LWSTR(&xstr->w));
-		switch (dest_type) {
-			case SQL_C_SBIGINT:
-				res = str2bigint(&xstr->w, /*wide?*/TRUE, (SQLBIGINT *)dest,
-						/*strict?*/TRUE);
-				break;
-			case SQL_C_UBIGINT:
-				res = str2bigint(&xstr->w, /*wide?*/TRUE, (SQLUBIGINT *)dest,
-						/*strict?*/TRUE);
-				break;
-			case SQL_C_DOUBLE:
-				res = str2double(&xstr->w, /*wide?*/TRUE, (SQLDOUBLE *)dest,
-						/*strict?*/TRUE);
-				break;
-			default:
-				BUGH(stmt, "unexpected numerical type %hd.", dest_type);
-				res = -1;
-		}
 	} else {
 		trim_ws(&xstr->c);
+		xptr = &xstr->c;
 		DBGH(stmt, "converting paramter value `" LCPDL "` to number.",
 			LCSTR(&xstr->c));
-		switch (dest_type) {
-			case SQL_C_SBIGINT:
-				res = str2bigint(&xstr->c, /*wide?*/FALSE, (SQLBIGINT *)dest,
-						/*strict?*/TRUE);
-				break;
-			case SQL_C_UBIGINT:
-				res = str2bigint(&xstr->c, /*wide?*/FALSE, (SQLUBIGINT *)dest,
-						/*strict?*/TRUE);
-				break;
-			case SQL_C_DOUBLE:
-				res = str2double(&xstr->c, /*wide?*/FALSE, (SQLDOUBLE *)dest,
-						/*strict?*/TRUE);
-				break;
-			default:
-				BUGH(stmt, "unexpected numerical type %hd.", dest_type);
-				res = -1;
+	}
+
+	/* try to parse the number sequentially as long long, unsigned long long
+	 * and finally double  */
+
+	dest->type = SQL_C_SBIGINT;
+	res = str2bigint(xptr, xstr->wide, &dest->bint, /*strict?*/TRUE);
+	if (res < 0) {
+		dest->type = SQL_C_UBIGINT;
+		res = str2ubigint(xptr, xstr->wide, &dest->ubint, /*strict?*/TRUE);
+		if (res < 0) {
+			dest->type = SQL_C_DOUBLE;
+			res = str2double(xptr, xstr->wide, &dest->dbl, /*strct?*/TRUE);
 		}
 	}
 
 	if (res < 0) {
 		if (xstr->wide) {
-			ERRH(stmt, "can't convert `" LWPDL "` to type %hd number.",
-				LWSTR(&xstr->w), dest_type);
+			ERRH(stmt, "can't convert `" LWPDL "` to a number.",
+					LWSTR(&xstr->w));
 		} else {
-			ERRH(stmt, "can't convert `" LCPDL "` to type %hd number.",
-				LCSTR(&xstr->c), dest_type);
+			ERRH(stmt, "can't convert `" LCPDL "` to a number.",
+				LCSTR(&xstr->c));
 		}
 		return FALSE;
-	} else {
-		return TRUE;
 	}
+
+	DBGH(stmt, "parameter value converted as type: %hd.", dest->type);
+	return TRUE;
 }
 
 
@@ -3731,7 +3734,8 @@ SQLRETURN c2sql_boolean(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	void *data_ptr;
 	SQLLEN *octet_len_ptr;
 	xstr_st xstr;
-	double dbl;
+	SQLDOUBLE dbl;
+	t_number_st xnr;
 	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
 
 	if (! dest) {
@@ -3751,9 +3755,16 @@ SQLRETURN c2sql_boolean(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			octet_len_ptr = deferred_address(SQL_DESC_OCTET_LENGTH_PTR, pos,
 					arec);
 			xstr.wide = ctype == SQL_C_WCHAR;
-			if (! xstr_to_number(stmt, data_ptr, octet_len_ptr, &xstr,
-						SQL_C_DOUBLE, &dbl)) {
+			if (! xstr_to_number(stmt, data_ptr, octet_len_ptr, &xstr, &xnr)) {
 				RET_HDIAGS(stmt, SQL_STATE_22018);
+			}
+			switch (xnr.type) {
+				case SQL_C_SBIGINT: dbl = (double)xnr.bint; break;
+				case SQL_C_UBIGINT: dbl = (double)xnr.ubint; break;
+				case SQL_C_DOUBLE: dbl = xnr.dbl; break;
+				default:
+					BUGH(stmt, "unexpected number type: %hd.", xnr.type);
+					RET_HDIAGS(stmt, SQL_STATE_HY000);
 			}
 			ret = double_to_bool(stmt, dbl, &val);
 			if (! SQL_SUCCEEDED(ret)) {
@@ -3825,23 +3836,65 @@ SQLRETURN c2sql_boolean(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	return SQL_SUCCESS;
 }
 
+/* SQL_BIGINT will be provided for both signed (SQL_C_SBIGINT) and unsigned
+ * (SQL_C_UBIGINT) types. SQLBindParameter()'s size and decimal digits
+ * parameters aren't relevant when parameter type is SQL_BIGINT. Which means
+ * that setting the LONG vs UNSIGNED_LONG ES type can only be value-dependent.
+ * ES will convert whatever value is given according to the provided type, so
+ * this needs to be set right by the driver. */
+void irec_promote_bigint_type(esodbc_rec_st *irec, t_number_st *tnr)
+{
+	esodbc_stmt_st *stmt;
+
+	if (irec->es_type->data_type != SQL_BIGINT) {
+		return;
+	}
+	switch (tnr->type) {
+		default:
+			return;
+		case SQL_C_UBIGINT:
+			if (tnr->ubint <= LLONG_MAX) {
+				return;
+			}
+			break;
+		case SQL_C_DOUBLE:
+			/* only convert doubles that won't fit in a long long, but will in
+			 * an unsigned long long */
+			if (tnr->dbl <= LLONG_MAX || ULLONG_MAX < tnr->dbl) {
+				return;
+			}
+			break;
+	}
+
+	stmt = irec->desc->hdr.stmt;
+	irec->es_type = stmt->hdr.dbc->ulong;
+	DBGH(stmt, "number type %hd promoted to UBIGINT.", tnr->type);
+}
+
 /*
- * Copies a C/W-string representing a number out to send buffer.
+ * Copies a C/W-string representing a number out to the send buffer. So no 
+ * string->number->string conversion is performed, any needed conversion is
+ * delegated to ES (which will for instance accept a float value with interer
+ * type or the other way around). Range and precision checks are performed.
  * wide: type of string;
  * min, max: target SQL numeric type's limits;
- * fixed: target SQL numberic type (integer or floating);
  * dest: buffer's pointer; can be null (when eval'ing) needed space;
  * len: how much of the buffer is needed or has been used.
  */
 static SQLRETURN string_to_number(esodbc_rec_st *arec, esodbc_rec_st *irec,
-	SQLULEN pos, BOOL wide, double *min, double *max, BOOL fixed,
+	SQLULEN pos, BOOL wide, t_number_st *min, t_number_st *max,
 	char *dest, size_t *len)
 {
-	void *data_ptr;
+	void *data_ptr, *src;
+	size_t src_len;
 	SQLLEN *octet_len_ptr;
 	xstr_st xstr;
-	SQLDOUBLE dbl, abs_dbl;
+	t_number_st xnr;
+	SQLDOUBLE abs_dbl;
 	int ret;
+	BOOL fixed;
+	SQLWCHAR wbuff[ESODBC_PRECISION_UINT64 + /*`+`*/1];
+	SQLCHAR buff[ESODBC_PRECISION_UINT64 + /*`+`*/1];
 	esodbc_stmt_st *stmt = arec->desc->hdr.stmt;
 
 	/* pointer to app's buffer */
@@ -3850,59 +3903,102 @@ static SQLRETURN string_to_number(esodbc_rec_st *arec, esodbc_rec_st *irec,
 	octet_len_ptr = deferred_address(SQL_DESC_OCTET_LENGTH_PTR, pos, arec);
 
 	xstr.wide = wide;
-	/* do a conversion check: use double, as a capture all cases
-	 * value: ES/SQL will accept a float for an INTEGER param */
-	if (! xstr_to_number(stmt, data_ptr, octet_len_ptr, &xstr,
-			SQL_C_DOUBLE, dest ? &dbl : NULL)) {
-		ERRH(stmt, "failed to convert param value to a double.");
+	if (! xstr_to_number(stmt, data_ptr, octet_len_ptr, &xstr, &xnr)) {
+		ERRH(stmt, "failed to convert param value to a number.");
 		RET_HDIAGS(stmt, SQL_STATE_22018);
 	}
 
+	irec_promote_bigint_type(irec, &xnr);
+
 	if (! dest) {
-		/* check is superfluous, but safer  */
 		*len = wide ? xstr.w.cnt : xstr.c.cnt;
 		return SQL_SUCCESS;
 	}
 
+	src = data_ptr;
+	src_len = wide ? xstr.w.cnt : xstr.c.cnt;
 	/* check against truncation, limits and any given precision */
-	abs_dbl = dbl < 0 ? -dbl : dbl;
-	if (fixed) {
-		if (0 < abs_dbl - (SQLUBIGINT)abs_dbl) {
-			ERRH(stmt, "conversion of double %.6e to fixed would"
-				" truncate fractional digits", dbl);
-			RET_HDIAGS(stmt, SQL_STATE_22001);
-		}
-		if ((min && dbl < *min) || (max && *max < dbl)) {
-			ERRH(stmt, "converted double %.6e out of bounds "
-				"[%.6e, %.6e]", dbl, min ? *min : 0, max ? *max : 0);
-			/* spec requires 22001 here, but that is wrong? */
-			RET_HDIAGS(stmt, SQL_STATE_22003);
-		}
-	} else {
-		if ((min && abs_dbl < *min) || (max && *max < abs_dbl)) {
-			ERRH(stmt, "converted abs double %.6e out of bounds "
-				"[%.6e, %.6e]", abs_dbl, min ? *min : 0, max ? *max : 0);
-			RET_HDIAGS(stmt, SQL_STATE_22003);
+	if (min && max) {
+		fixed = min->type != SQL_C_DOUBLE;
+		/* TODO: spec requires 22001 instead of 22003 for out of bounds
+		 * conversion, but that seems incorrect? */
+		switch (xnr.type) {
+			case SQL_C_SBIGINT:
+				if (fixed && (xnr.bint < min->bint || (xnr.bint > 0 &&
+							 max->ubint < (SQLUBIGINT)xnr.bint))) {
+					ERRH(stmt, "converted long long %lld out of bounds "
+						"[%ld, %llu].", xnr.bint, min->bint, max->ubint);
+					RET_HDIAGS(stmt, SQL_STATE_22003);
+				}
+				break;
+			case SQL_C_UBIGINT:
+				if (fixed && max->ubint < xnr.ubint) {
+					ERRH(stmt, "converted unsigned long long %llu out of "
+						"bounds [0, %llu].", xnr.ubint, max->ubint);
+					RET_HDIAGS(stmt, SQL_STATE_22003);
+				}
+				break;
+			case SQL_C_DOUBLE:
+				abs_dbl = xnr.dbl < 0 ? -xnr.dbl : xnr.dbl;
+				if (fixed) {
+					if (xnr.dbl < min->bint || max->ubint < xnr.dbl) {
+						ERRH(stmt, "converted double %.6e out of bounds "
+							"[0/%lld, %llu].", xnr.dbl, min->bint,
+							max->ubint);
+						RET_HDIAGS(stmt, SQL_STATE_22003);
+					}
+					if (0 < abs_dbl - (SQLUBIGINT)abs_dbl) {
+						ERRH(stmt, "conversion of double %.6e to fixed would"
+							" truncate fractional digits", xnr.dbl);
+						RET_HDIAGS(stmt, SQL_STATE_22001);
+					}
+					/* xxx_MAX limits will be rounded up when cast to double,
+					 * the comparisons won't be "accurate" -> numbers higher
+					 * than long long could be sent as long and higher than
+					 * unsigned long long as such => cast to fixed point and
+					 * serialize the result. */
+					src = wide ? (void *)wbuff : (void *)buff;
+					src_len = irec->es_type == stmt->hdr.dbc->ulong
+						? ui64tot((SQLUBIGINT)xnr.dbl, src, wide)
+						: i64tot((SQLBIGINT)xnr.dbl, src, wide);
+					if (src_len < 0) {
+						ERRNH(stmt, "failed to convert %.6e to its fixed point"
+								" string representation.", xnr.dbl);
+						RET_HDIAGS(stmt, SQL_STATE_HY000);
+					}
+					assert(0 < src_len);
+				} else { /* string_double -> floating point */
+					if (abs_dbl < min->dbl || max->dbl < abs_dbl) {
+						ERRH(stmt, "converted double double %.6e out of bounds"
+							" [%.6e, %.6e].", abs_dbl, min->dbl, max->dbl);
+						RET_HDIAGS(stmt, SQL_STATE_22003);
+					}
+				}
+				break;
+			default:
+				BUGH(stmt, "unexpected number type: %hd.", xnr.type);
+				RET_HDIAGS(stmt, SQL_STATE_HY000);
 		}
 	}
+
 	//
 	// TODO: check IRD precision against avail value?
 	//
 
-	/* copy values from app's buffer directly */
-	if (wide) { /* need a conversion to ANSI */
-		*len = xstr.w.cnt;
-		ret = ascii_w2c((SQLWCHAR *)data_ptr, dest, *len);
-		assert(0 < ret); /* it converted to a float already */
+	/* copy values directly from app's buffer */
+	if (wide) { /* need a conversion to ascii */
+		ret = ascii_w2c((SQLWCHAR *)src, dest, src_len);
+		assert(0 < ret); /* it converted to a number already */
 	} else {
-		*len = xstr.c.cnt;
-		memcpy(dest, data_ptr, *len);
+		memcpy(dest, src, src_len);
 	}
+	*len = src_len;
 	return SQL_SUCCESS;
 }
 
+/* signed fixed-point number source to (stringified) number destination */
 static SQLRETURN sfixed_to_number(esodbc_stmt_st *stmt, SQLBIGINT src,
-	double *min, double *max, char *dest, size_t *len)
+	t_number_st *min, t_number_st *max, char *dest, size_t *len)
 {
 	if (! dest) {
 		/* largest space it could occupy */
@@ -3912,10 +4008,20 @@ static SQLRETURN sfixed_to_number(esodbc_stmt_st *stmt, SQLBIGINT src,
 
 	DBGH(stmt, "converting paramter value %lld as number.", src);
 
-	if ((min && src < *min) || (max && *max < src)) {
-		ERRH(stmt, "source value %lld out of range [%e, %e] for dest type",
-			src, *min, *max);
-		RET_HDIAGS(stmt, SQL_STATE_22003);
+	if (min && max) {
+		if (min->type != SQL_C_DOUBLE) { /* target number is fixed type */
+			if (src < min->bint || (src > 0 && max->ubint < (SQLUBIGINT)src)) {
+				ERRH(stmt, "source value %lld out of range [%lld, %llu] for "
+						"dest type", src, min->bint, max->ubint);
+				RET_HDIAGS(stmt, SQL_STATE_22003);
+			}
+		} else {
+			if ((SQLDOUBLE)src < min->dbl || max->dbl < (SQLDOUBLE)src) {
+				ERRH(stmt, "source value %lld out of range [%e, %e] for dest "
+						"type", src, min->dbl, max->dbl);
+				RET_HDIAGS(stmt, SQL_STATE_22003);
+			}
+		}
 	}
 
 	assert(sizeof(SQLBIGINT) == sizeof(int64_t));
@@ -3925,9 +4031,15 @@ static SQLRETURN sfixed_to_number(esodbc_stmt_st *stmt, SQLBIGINT src,
 	return SQL_SUCCESS;
 }
 
-static SQLRETURN ufixed_to_number(esodbc_stmt_st *stmt, SQLUBIGINT src,
-	double *max, char *dest, size_t *len)
+/* unsigned fixed-point number source to (stringified) number destination */
+static SQLRETURN ufixed_to_number(esodbc_rec_st *irec, SQLUBIGINT src,
+	t_number_st *max, char *dest, size_t *len)
 {
+	t_number_st tnr = (t_number_st){.ubint = src, .type = SQL_C_UBIGINT};
+	esodbc_stmt_st *stmt = irec->desc->hdr.stmt;
+
+	irec_promote_bigint_type(irec, &tnr);
+
 	if (! dest) {
 		/* largest space it could occupy */
 		*len = ESODBC_PRECISION_UINT64;
@@ -3936,13 +4048,17 @@ static SQLRETURN ufixed_to_number(esodbc_stmt_st *stmt, SQLUBIGINT src,
 
 	DBGH(stmt, "converting paramter value %llu as number.", src);
 
-	if (src < 0 || (max && *max < src)) {
-		ERRH(stmt, "source value %llu out of range [0, %e] for dest type",
-			src, *max);
-		RET_HDIAGS(stmt, SQL_STATE_22003);
+	if (max) {
+		if (max->type != SQL_C_DOUBLE) { /* target number is fixed type */
+			if (max->ubint < src) {
+				ERRH(stmt, "source value %llu out of range [0, %llu] for dest "
+						"type", src, max->ubint);
+				RET_HDIAGS(stmt, SQL_STATE_22003);
+			}
+		}
 	}
 
-	assert(sizeof(SQLBIGINT) == sizeof(int64_t));
+	assert(sizeof(SQLUBIGINT) == sizeof(int64_t));
 	*len = ui64tot(src, dest, /*wide?*/FALSE);
 	assert(*len <= ESODBC_PRECISION_UINT64);
 
@@ -3953,13 +4069,16 @@ static SQLRETURN ufixed_to_number(esodbc_stmt_st *stmt, SQLUBIGINT src,
  * any of the allowed SQL target type - numeric (fixed, floating,
  * decimal/numeric), string, binary - except boolean/bit. */
 static SQLRETURN floating_to_number(esodbc_rec_st *irec, SQLDOUBLE src,
-	double *min, double *max, char *dest, size_t *len)
+	t_number_st *min, t_number_st *max, char *dest, size_t *len)
 {
 	SQLSMALLINT prec;
 	SQLULEN colsize;
 	int cnt;
 	SQLDOUBLE abs_src;
+	t_number_st tnr = (t_number_st){.dbl = src, .type = SQL_C_DOUBLE};
 	esodbc_stmt_st *stmt = irec->desc->hdr.stmt;
+
+	irec_promote_bigint_type(irec, &tnr);
 
 	if (! dest) {
 		/* largest space it could occupy */
@@ -3968,10 +4087,20 @@ static SQLRETURN floating_to_number(esodbc_rec_st *irec, SQLDOUBLE src,
 	}
 
 	abs_src = src < 0 ? -src : src;
-	if ((min && abs_src < *min) || (max && *max < abs_src)) {
-		ERRH(stmt, "source value %e out of range [%e, %e] for dest type",
-			src, *min, *max);
-		RET_HDIAGS(stmt, SQL_STATE_22003);
+	if (min && max) {
+		if (min->type != SQL_C_DOUBLE) { /* target number is fixed type */
+			if (src < min->bint || max->ubint < src) {
+				ERRH(stmt, "source value %e out of range [%lld, %llu] for dest"
+						" type", src, min->bint, max->ubint);
+				RET_HDIAGS(stmt, SQL_STATE_22003);
+			}
+		} else {
+			if (abs_src < min->dbl || max->dbl < abs_src) {
+				ERRH(stmt, "source value %e out of range [%e, %e] for dest "
+						"type", src, min->dbl, max->dbl);
+				RET_HDIAGS(stmt, SQL_STATE_22003);
+			}
+		}
 	}
 
 	switch (irec->es_type->meta_type) {
@@ -4129,8 +4258,9 @@ static SQLRETURN numeric_to_number(esodbc_rec_st *irec, void *data_ptr,
 	return floating_to_number(irec, dbl, NULL, NULL, dest, len);
 }
 
+/* convertion to (stringified) number */
 SQLRETURN c2sql_number(esodbc_rec_st *arec, esodbc_rec_st *irec,
-	SQLULEN pos, double *min, double *max, BOOL fixed, char *dest, size_t *len)
+	SQLULEN pos, t_number_st *min, t_number_st *max, char *dest, size_t *len)
 {
 	void *data_ptr;
 	SQLSMALLINT ctype;
@@ -4147,7 +4277,7 @@ SQLRETURN c2sql_number(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		case SQL_C_WCHAR:
 		case SQL_C_CHAR:
 			return string_to_number(arec, irec, pos, ctype == SQL_C_WCHAR,
-					min, max, fixed, dest, len);
+					min, max, dest, len);
 
 		case SQL_C_BINARY:
 			return binary_to_number(arec, irec, pos, dest, len);
@@ -4170,7 +4300,7 @@ SQLRETURN c2sql_number(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		case SQL_C_ULONG: ullng = (SQLUBIGINT)*(SQLUINTEGER *)data_ptr; break;
 		case SQL_C_UBIGINT: ullng = *(SQLUBIGINT *)data_ptr; break;
 		} while (0);
-			return ufixed_to_number(stmt, ullng, max, dest, len);
+			return ufixed_to_number(irec, ullng, max, dest, len);
 
 		do {
 		case SQL_C_FLOAT: dbl = (SQLDOUBLE)*(SQLREAL *)data_ptr; break;
@@ -4832,7 +4962,7 @@ static SQLRETURN c2sql_wstr2qstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 			ERRH(stmt, "converting to multibyte string failed: 0x%x", err);
 			RET_HDIAGS(stmt, SQL_STATE_HY000);
 		}
-		assert(0 < octets); /* shouldn't not fail and return negative */
+		assert(0 < octets); /* should not fail and return negative */
 	} else {
 		octets = 0;
 	}
@@ -4865,7 +4995,7 @@ static SQLRETURN c2sql_number2qstr(esodbc_rec_st *arec, esodbc_rec_st *irec,
 		*dest = '"';
 	}
 
-	ret = c2sql_number(arec, irec, pos, NULL,NULL, 0, dest + !!dest, len);
+	ret = c2sql_number(arec, irec, pos, NULL, NULL, dest + !!dest, len);
 
 	if (dest) {
 		/* compare lengths only once number has actually been converted */
