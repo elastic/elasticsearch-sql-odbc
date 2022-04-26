@@ -1,2 +1,2 @@
 name,version,revision,url,license,copyright
-curl,7.61.0,,https://curl.haxx.se/,Custom;MIT/X derivate license,"Copyright (c) 1996 - 2018, Daniel Stenberg, <daniel@haxx.se>, and many contributors"
+curl,7.81.0,,https://curl.haxx.se/,Custom;MIT/X derivate license,"Copyright (c) 1996 - 2018, Daniel Stenberg, <daniel@haxx.se>, and many contributors"
