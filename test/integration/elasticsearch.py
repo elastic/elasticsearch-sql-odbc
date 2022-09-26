@@ -152,6 +152,7 @@ class Elasticsearch(object):
 		with open(yaml, mode="a" if append else "w", newline="\n") as f:
 			f.write("#\n# ODBC Integration Test\n#\n")
 			f.write("xpack.security.enabled: True\n")
+			f.write("xpack.watcher.enabled: False\n")
 			f.write("http.port: %s\n" % self._port) # don't bind on next avail port
 			f.write("cluster.routing.allocation.disk.threshold_enabled: False\n")
 

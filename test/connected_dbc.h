@@ -77,6 +77,7 @@ extern "C" {
     [\"IP\", 12, 45, \"'\", \"'\", null, 2, false, 3, true, false, false, null, null, null, 12, 0, null, null],\
     [\"KEYWORD\", 12, 32766, \"'\", \"'\", null, 2, true, 3, true, false, false, null, null, null, 12, 0, null, null],\
     [\"TEXT\", 12, 2147483647, \"'\", \"'\", null, 2, true, 3, true, false, false, null, null, null, 12, 0, null, null],\
+    [\"VERSION\", 12, 2147483647, \"'\", \"'\", null, 2, true, 3, true, false, false, null, null, null, 12, 0, null, null],\
     [\"BOOLEAN\", 16, 1, \"'\", \"'\", null, 2, false, 3, true, false, false, null, null, null, 16, 0, null, null],\
     [\"DATE\", 91, 29, \"'\", \"'\", null, 2, false, 3, true, false, false, null, 3, 3, 91, 0, null, null],\
     [\"TIME\", 92, 18, \"'\", \"'\", null, 2, false, 3, true, false, false, null, null, null, 92, 0, null, null],\
