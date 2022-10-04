@@ -58,6 +58,7 @@
 #define TYPE_BOOLEAN		"BOOLEAN"
 #define TYPE_INTEGER		"INTEGER"
 #define TYPE_KEYWORD		"KEYWORD"
+#define TYPE_VERSION		"VERSION"
 /* 8 */
 #define TYPE_DATETIME		"DATETIME"
 /* 9 */
@@ -2297,7 +2298,7 @@ static BOOL elastic_name2types(wstr_st *type_name,
 			}
 			break;
 
-		/* 7: INTEGER, BOOLEAN, KEYWORD */
+		/* 7: INTEGER, BOOLEAN, KEYWORD, VERSION */
 		case sizeof(TYPE_INTEGER) - 1:
 			switch (tolower(type_name->str[0])) {
 				case (SQLWCHAR)'i': /* integer */
@@ -2321,6 +2322,14 @@ static BOOL elastic_name2types(wstr_st *type_name,
 							type_name->cnt) == 0) {
 						*c_sql = ES_KEYWORD_TO_CSQL;
 						*sql = ES_KEYWORD_TO_SQL;
+						return TRUE;
+					}
+					break;
+				case (SQLWCHAR)'v': /* version */
+					if (wmemncasecmp(type_name->str, MK_WPTR(TYPE_VERSION),
+							type_name->cnt) == 0) {
+						*c_sql = ES_VERSION_TO_CSQL;
+						*sql = ES_VERSION_TO_SQL;
 						return TRUE;
 					}
 					break;

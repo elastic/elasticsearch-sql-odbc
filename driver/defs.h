@@ -417,7 +417,7 @@
 #define ESODBC_SQL_NESTED			2002
 
 /* the SQL type ES/SQL uses for string types (KEYWORD, TEXT),
- * plus IP and GEO */
+ * plus IP, VERSION and GEO */
 #define ESODBC_SQL_VARCHAR		SQL_VARCHAR
 
 /* C SQL and SQL types for ES types that
@@ -474,6 +474,9 @@
 /* 12: IP */
 #define ES_IP_TO_CSQL			ES_VARCHAR_CSQL
 #define ES_IP_TO_SQL			ES_VARCHAR_SQL
+/* 12: VERSION */
+#define ES_VERSION_TO_CSQL		ES_VARCHAR_CSQL
+#define ES_VERSION_TO_SQL		ES_VARCHAR_SQL
 /* 92: TIME */
 #define ES_TIME_TO_CSQL			SQL_C_TYPE_TIME
 #define ES_TIME_TO_SQL			SQL_TYPE_TIME
