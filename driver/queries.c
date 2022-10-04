@@ -2513,8 +2513,9 @@ esodbc_estype_st *lookup_es_type(esodbc_dbc_st *dbc,
 	SQLULEN i;
 	SQLINTEGER sz;
 
-	/* for strings, choose text straight away: some type (IP, GEO) must coform
-	 * to a format and no content inspection is done in the driver */
+	/* for strings, choose text straight away: some types (IP, VERSION, GEO)
+	 * must conform to a format and no content inspection is done in the driver
+	 */
 	if (es_type == ES_VARCHAR_SQL || es_type == ES_WVARCHAR_SQL) {
 		return dbc->max_varchar_type;
 	}
@@ -2554,7 +2555,7 @@ static esodbc_estype_st *match_es_type(esodbc_rec_st *irec)
 					return dbc->max_float_type;
 					break;
 				case ES_WVARCHAR_SQL: /* KEYWORD, TEXT */
-				case ES_VARCHAR_SQL: /* IP, GEO+ */
+				case ES_VARCHAR_SQL: /* IP, VERSION, GEO+ */
 					return dbc->max_varchar_type;
 				default:
 					/* unequivocal match */
@@ -2877,7 +2878,7 @@ static SQLRETURN convert_param_val(esodbc_rec_st *arec, esodbc_rec_st *irec,
 
 		/* JSON string */
 		case ES_WVARCHAR_SQL: /* KEYWORD, TEXT */
-		case ES_VARCHAR_SQL: /* IP, GEO+ */
+		case ES_VARCHAR_SQL: /* IP, VERSION, GEO+ */
 			return c2sql_varchar(arec, irec, pos, dest, len);
 
 		case SQL_TYPE_DATE:
