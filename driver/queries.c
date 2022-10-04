@@ -2513,8 +2513,8 @@ esodbc_estype_st *lookup_es_type(esodbc_dbc_st *dbc,
 	SQLULEN i;
 	SQLINTEGER sz;
 
-	/* for strings, choose text straight away: some typeS (IP, VERSION, GEO)
-	 * must coform to a format and no content inspection is done in the driver
+	/* for strings, choose text straight away: some types (IP, VERSION, GEO)
+	 * must conform to a format and no content inspection is done in the driver
 	 */
 	if (es_type == ES_VARCHAR_SQL || es_type == ES_WVARCHAR_SQL) {
 		return dbc->max_varchar_type;
