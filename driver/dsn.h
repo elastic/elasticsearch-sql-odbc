@@ -20,6 +20,7 @@
 #define ESODBC_DSN_DSN				"DSN"
 #define ESODBC_DSN_PWD				"PWD"
 #define ESODBC_DSN_UID				"UID"
+#define ESODBC_DSN_API_KEY			"APIKey"
 #define ESODBC_DSN_SAVEFILE			"SAVEFILE"
 #define ESODBC_DSN_FILEDSN			"FILEDSN"
 #define ESODBC_DSN_CLOUD_ID			"CloudID"
@@ -71,6 +72,7 @@ typedef struct {
 	wstr_st dsn;
 	wstr_st pwd;
 	wstr_st uid;
+	wstr_st api_key;
 	wstr_st savefile;
 	wstr_st filedsn;
 	wstr_st cloud_id;
@@ -102,7 +104,7 @@ typedef struct {
 	wstr_st trace_enabled;
 	wstr_st trace_file;
 	wstr_st trace_level;
-#define ESODBC_DSN_ATTRS_COUNT	36
+#define ESODBC_DSN_ATTRS_COUNT	37
 
 	SQLWCHAR buff[ESODBC_DSN_ATTRS_COUNT * ESODBC_DSN_MAX_ATTR_LEN];
 	/* DSN reading/writing functions are passed a SQLSMALLINT length param */

@@ -150,7 +150,10 @@ typedef struct struct_dbc {
 	cstr_st ca_path;
 
 	cstr_st uid;
-	cstr_st pwd;
+	union {
+		cstr_st pwd; /* when dbc configuring, pwd is only set if uid is */
+		cstr_st api_key;
+	};
 	SQLUINTEGER timeout;
 	BOOL follow;
 	struct {
@@ -204,6 +207,7 @@ typedef struct struct_dbc {
 	size_t apos; /* current write position in the abuff */
 	size_t amax; /* maximum length (bytes) that abuff can grow to */
 	esodbc_mutex_lt curl_mux; /* mutex for above 'networking' members */
+	struct curl_slist *curl_hdrs; /* HTTP headers list */
 
 	/* window handler */
 	HWND hwin;

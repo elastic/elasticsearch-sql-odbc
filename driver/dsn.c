@@ -33,7 +33,8 @@ void TEST_API init_dsn_attrs(esodbc_dsn_attrs_st *attrs)
 static inline wstr_st *mask_pwd(wstr_st *attr, wstr_st *val)
 {
 	static wstr_st subst = WSTR_INIT(ESODBC_PWD_VAL_SUBST);
-	return EQ_CASE_WSTR(attr, &MK_WSTR(ESODBC_DSN_PWD)) ? &subst : val;
+	return EQ_CASE_WSTR(attr, &MK_WSTR(ESODBC_DSN_PWD)) ||
+		EQ_CASE_WSTR(attr, &MK_WSTR(ESODBC_DSN_API_KEY)) ? &subst : val;
 }
 
 #define DSN_NOT_MATCHED		0
@@ -61,6 +62,7 @@ int assign_dsn_attr(esodbc_dsn_attrs_st *attrs,
 		{&MK_WSTR(ESODBC_DSN_DSN), &attrs->dsn},
 		{&MK_WSTR(ESODBC_DSN_PWD), &attrs->pwd},
 		{&MK_WSTR(ESODBC_DSN_UID), &attrs->uid},
+		{&MK_WSTR(ESODBC_DSN_API_KEY), &attrs->api_key},
 		{&MK_WSTR(ESODBC_DSN_SAVEFILE), &attrs->savefile},
 		{&MK_WSTR(ESODBC_DSN_FILEDSN), &attrs->filedsn},
 		{&MK_WSTR(ESODBC_DSN_CLOUD_ID), &attrs->cloud_id},
@@ -404,6 +406,7 @@ long TEST_API write_00_list(esodbc_dsn_attrs_st *attrs,
 		{&MK_WSTR(ESODBC_DSN_DSN), &attrs->dsn},
 		{&MK_WSTR(ESODBC_DSN_PWD), &attrs->pwd},
 		{&MK_WSTR(ESODBC_DSN_UID), &attrs->uid},
+		{&MK_WSTR(ESODBC_DSN_API_KEY), &attrs->api_key},
 		{&MK_WSTR(ESODBC_DSN_SAVEFILE), &attrs->savefile},
 		{&MK_WSTR(ESODBC_DSN_FILEDSN), &attrs->filedsn},
 		{&MK_WSTR(ESODBC_DSN_CLOUD_ID), &attrs->cloud_id},
@@ -637,6 +640,10 @@ BOOL write_system_dsn(esodbc_dsn_attrs_st *new_attrs,
 			&MK_WSTR(ESODBC_DSN_UID), &new_attrs->uid,
 			old_attrs ? &old_attrs->uid : NULL
 		},
+		{
+			&MK_WSTR(ESODBC_DSN_API_KEY), &new_attrs->api_key,
+			old_attrs ? &old_attrs->api_key : NULL
+		},
 		/* SAVEILE */
 		/* FILEDSN */
 		{
@@ -819,6 +826,7 @@ long TEST_API write_connection_string(esodbc_dsn_attrs_st *attrs,
 		{&attrs->dsn, &MK_WSTR(ESODBC_DSN_DSN)},
 		{&attrs->pwd, &MK_WSTR(ESODBC_DSN_PWD)},
 		{&attrs->uid, &MK_WSTR(ESODBC_DSN_UID)},
+		{&attrs->api_key, &MK_WSTR(ESODBC_DSN_API_KEY)},
 		{&attrs->savefile, &MK_WSTR(ESODBC_DSN_SAVEFILE)},
 		{&attrs->filedsn, &MK_WSTR(ESODBC_DSN_FILEDSN)},
 		{&attrs->cloud_id, &MK_WSTR(ESODBC_DSN_CLOUD_ID)},

@@ -2754,97 +2754,121 @@
 </value>
   </data>
   <metadata name="certificateFileDialog.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>17, 17</value>
+    <value>228, 60</value>
   </metadata>
   <metadata name="folderLogDirectoryDialog.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>239, 17</value>
+    <value>418, 60</value>
   </metadata>
   <metadata name="toolTipName.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>507, 17</value>
+    <value>647, 60</value>
   </metadata>
   <metadata name="toolTipDescription.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>675, 17</value>
+    <value>792, 60</value>
   </metadata>
   <metadata name="toolTipCloudID.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>181, 161</value>
+    <value>1006, 146</value>
   </metadata>
   <metadata name="toolTipHostname.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>887, 17</value>
+    <value>974, 60</value>
   </metadata>
   <metadata name="toolTipPort.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>1090, 17</value>
+    <value>1148, 60</value>
   </metadata>
   <metadata name="toolTipUsername.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>695, 65</value>
+    <value>597, 103</value>
   </metadata>
   <metadata name="toolTipPassword.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>499, 65</value>
+    <value>428, 103</value>
   </metadata>
   <metadata name="toolTipDisabled.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>309, 65</value>
+    <value>265, 103</value>
   </metadata>
   <metadata name="toolTipEnabledNoValidation.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>17, 65</value>
+    <value>17, 103</value>
   </metadata>
   <metadata name="toolTipEnabledNoHostname.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>896, 65</value>
+    <value>770, 103</value>
   </metadata>
   <metadata name="toolTipEnabledHostname.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>17, 113</value>
+    <value>1019, 103</value>
   </metadata>
   <metadata name="toolTipEnabledFull.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>285, 113</value>
+    <value>17, 146</value>
   </metadata>
   <metadata name="toolTipCertificatePath.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>498, 113</value>
+    <value>200, 146</value>
   </metadata>
   <metadata name="toolTipLogDirectoryPath.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>736, 113</value>
+    <value>404, 146</value>
   </metadata>
   <metadata name="toolTipLoggingEnabled.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>997, 113</value>
+    <value>627, 146</value>
   </metadata>
   <metadata name="toolTipLogLevel.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>17, 161</value>
+    <value>842, 146</value>
   </metadata>
   <metadata name="toolTipTimeout.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>341, 161</value>
+    <value>1166, 146</value>
   </metadata>
   <metadata name="toolTipFetchSize.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>454, 161</value>
+    <value>17, 189</value>
   </metadata>
   <metadata name="toolTipBodySize.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>619, 163</value>
+    <value>185, 189</value>
   </metadata>
   <metadata name="toolTipFloatsFormat.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>774, 165</value>
+    <value>351, 189</value>
   </metadata>
   <metadata name="toolTipFollowRedirects.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>960, 162</value>
+    <value>544, 189</value>
   </metadata>
   <metadata name="toolTipApplyTZ.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>31, 212</value>
+    <value>755, 189</value>
   </metadata>
   <metadata name="toolTipAutoEscapePVA.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>187, 214</value>
+    <value>916, 189</value>
   </metadata>
   <metadata name="toolTipMultiFieldLenient.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>399, 213</value>
+    <value>1128, 189</value>
   </metadata>
   <metadata name="toolTipIndexIncludeFrozen.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>617, 213</value>
+    <value>17, 232</value>
   </metadata>
   <metadata name="toolTipDataEncoding.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>854, 213</value>
+    <value>254, 232</value>
   </metadata>
   <metadata name="toolTipDataCompression.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>1046, 215</value>
+    <value>454, 232</value>
   </metadata>
   <metadata name="toolTipEarlyExecution.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>173, 265</value>
+    <value>869, 232</value>
   </metadata>
   <metadata name="toolTipVarcharLimit.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>29, 265</value>
+    <value>679, 232</value>
+  </metadata>
+  <metadata name="toolTipProxyEnabled.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+    <value>1009, 17</value>
+  </metadata>
+  <metadata name="toolTipProxyType.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+    <value>834, 17</value>
+  </metadata>
+  <metadata name="toolTipProxyHostname.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+    <value>622, 17</value>
+  </metadata>
+  <metadata name="toolTipProxyPort.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+    <value>452, 17</value>
+  </metadata>
+  <metadata name="toolTipProxyAuthEnabled.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+    <value>223, 17</value>
+  </metadata>
+  <metadata name="toolTipProxyUsername.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+    <value>17, 60</value>
+  </metadata>
+  <metadata name="toolTipProxyPassword.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+    <value>17, 17</value>
+  </metadata>
+  <metadata name="toolTipApiKey.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+    <value>1071, 232</value>
   </metadata>
   <metadata name="$this.TrayHeight" type="System.Int32, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089">
     <value>354</value>
