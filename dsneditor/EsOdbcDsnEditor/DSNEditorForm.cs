@@ -78,7 +78,7 @@ namespace EsOdbcDsnEditor
 			toolTipPort.SetToolTip(numericUpDownPort, "The port which the Elasticsearch listens on.");
 			toolTipUsername.SetToolTip(textUsername, "If security is enabled, the username configured to access the REST SQL endpoint.");
 			toolTipPassword.SetToolTip(textPassword, "If security is enabled, the password configured to access the REST SQL endpoint.");
-			toolTipApiKey.SetToolTip(textApiKey, "If security is enabled, the API Key configured to access the REST SQL endpoint.");
+			toolTipApiKey.SetToolTip(textApiKey, "If security is enabled, the Base64-encoded API key credentials configured to access the REST SQL endpoint.");
 
 			// Security Panel
 			textCertificatePath.Text = Builder.ContainsKey("capath") ? Builder["capath"].ToString().StripBraces() : string.Empty;

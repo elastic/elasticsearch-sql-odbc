@@ -23,28 +23,37 @@ class Testing(unittest.TestCase):
 	_uid = None
 	_data = None
 	_dsn = None
+	_dsn_api_key = None
 	_pyodbc = None
 	_catalog = None
 
 	def __init__(self, es, test_data, catalog, dsn=None):
 		super().__init__()
 		uid, pwd = es.credentials()
+		api_key = es.api_key()
 		es_url = urllib3.util.parse_url(es.base_url())
 
 		self._uid = uid
 		self._data = test_data
 		self._catalog = catalog
 
-		conn_str = "Driver={%s};UID=%s;PWD=%s;Server=%s;Port=%s;Secure=%s;" % (DRIVER_NAME, uid, pwd, es_url.host,
-				es_url.port, "1" if es_url.scheme.lower() == "https" else "0")
+		conn_str_no_cred = "Driver={%s};Server=%s;Port=%s;Secure=%s;" % (DRIVER_NAME, es_url.host, es_url.port,
+				"1" if es_url.scheme.lower() == "https" else "0")
+		conn_str = conn_str_no_cred + "UID=%s;PWD=%s;" % (uid, pwd)
+		api_key_avp = "APIKey={%s};" % api_key
 		if dsn:
 			if "Driver=" not in dsn:
 				self._dsn = conn_str + dsn
+				self._dsn_api_key = conn_str_no_cred + api_key_avp
 			else:
 				self._dsn = dsn
+				self._dsn_api_key = api_key_avp + dsn
 		else:
 			self._dsn = conn_str
-		print("Using DSN: '%s'." % self._dsn)
+			self._dsn_api_key = api_key_avp + conn_str_no_cred
+
+		print("Using   DSN: '%s'." % self._dsn)
+		print("API-Key-DSN: '%s'." % self._dsn_api_key)
 
 		# only import pyODBC if running tests (vs. for instance only loading test data in ES)
 		import pyodbc
@@ -331,12 +340,18 @@ class Testing(unittest.TestCase):
 			finally:
 				cnxn.clear_output_converters()
 
+	def _api_key_test(self):
+		with self._pyodbc.connect(self._dsn_api_key, autocommit=True) as cnxn:
+			with cnxn.execute("SELECT 1") as curs:
+				self.assertEqual(curs.fetchone()[0], 1)
+
 
 	def perform(self):
 		self._check_info(self._pyodbc.SQL_USER_NAME, self._uid)
 		self._check_info(self._pyodbc.SQL_DATABASE_NAME, self._catalog)
 
 		self._proto_tests()
+		self._api_key_test()
 
 		if self._data.has_csv_attributes():
 			# simulate catalog querying as apps do in ES/GH#40775 do
