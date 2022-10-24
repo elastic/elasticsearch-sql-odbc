@@ -35,6 +35,10 @@
 #define HTTP_CONTENT_TYPE_JSON	"Content-Type: " HTTP_APP_JSON \
 	"; charset=utf-8"
 
+/* HTTP header API Key authentication-specific */
+#define HTTP_AUTH_API_KEY		"Authorization: ApiKey "
+#define APIKEY_BUFF_SIZE		512
+
 /* Elasticsearch/SQL data types */
 /* 2 */
 #define TYPE_IP				"IP"
@@ -382,6 +386,10 @@ static void cleanup_curl(esodbc_dbc_st *dbc)
 		return;
 	}
 	DBGH(dbc, "libcurl: handle 0x%p cleanup.", dbc->curl);
+	if (dbc->curl_hdrs) {
+		curl_slist_free_all(dbc->curl_hdrs);
+		dbc->curl_hdrs = NULL;
+	}
 	dbc->curl_err = CURLE_OK;
 	dbc->curl_err_buff[0] = '\0';
 
@@ -442,11 +450,34 @@ err:
 	return SQL_ERROR;
 }
 
+/* copy of unexported Curl_slist_duplicate() libcurl function */
+static struct curl_slist *curl_slist_duplicate(struct curl_slist *inlist)
+{
+	struct curl_slist *outlist = NULL;
+	struct curl_slist *tmp;
+
+	while(inlist) {
+		tmp = curl_slist_append(outlist, inlist->data);
+
+		if(!tmp) {
+			curl_slist_free_all(outlist);
+			return NULL;
+		}
+
+		outlist = tmp;
+		inlist = inlist->next;
+	}
+	return outlist;
+}
+
 static SQLRETURN dbc_curl_init(esodbc_dbc_st *dbc)
 {
 	CURL *curl;
 	SQLRETURN ret;
 	BOOL compress;
+	char apikey_buff[APIKEY_BUFF_SIZE], *apikey_ptr = NULL;
+	struct curl_slist *curl_hdrs;
+
 
 	assert(! dbc->curl);
 
@@ -464,14 +495,6 @@ static SQLRETURN dbc_curl_init(esodbc_dbc_st *dbc)
 	dbc->curl_err_buff[0] = '\0';
 	if (dbc->curl_err != CURLE_OK) {
 		ERRH(dbc, "libcurl: failed to set error buffer.");
-		goto err;
-	}
-
-	/* set the HTTP headers: Content-Type, Accept */
-	dbc->curl_err = curl_easy_setopt(curl, CURLOPT_HTTPHEADER,
-			dbc->pack_json ? json_headers : cbor_headers);
-	if (dbc->curl_err != CURLE_OK) {
-		ERRH(dbc, "libcurl: failed to set HTTP headers list.");
 		goto err;
 	}
 
@@ -582,8 +605,55 @@ static SQLRETURN dbc_curl_init(esodbc_dbc_st *dbc)
 				goto err;
 			}
 		}
+	} else if (dbc->api_key.cnt) {
+		if (sizeof(HTTP_AUTH_API_KEY) + dbc->api_key.cnt <
+			sizeof(apikey_buff)) {
+			apikey_ptr = apikey_buff;
+		} else {
+			DBGH(dbc, "static buffer size %zuB less than required %zuB, "
+				"allocating.", sizeof(apikey_buff), sizeof(HTTP_AUTH_API_KEY) +
+				dbc->api_key.cnt);
+			apikey_ptr = malloc(sizeof(HTTP_AUTH_API_KEY) + dbc->api_key.cnt);
+			if (! apikey_ptr) {
+				ERRNH(dbc, "OOM for %zuB.", sizeof(HTTP_AUTH_API_KEY) +
+					dbc->api_key.cnt);
+				goto err;
+			}
+		}
+		memcpy(apikey_ptr, HTTP_AUTH_API_KEY, sizeof(HTTP_AUTH_API_KEY) - 1);
+		memcpy(apikey_ptr + sizeof(HTTP_AUTH_API_KEY) - 1, dbc->api_key.str,
+			dbc->api_key.cnt);
+		apikey_ptr[sizeof(HTTP_AUTH_API_KEY) - 1 + dbc->api_key.cnt] = '\0';
+
+		dbc->curl_hdrs = curl_slist_append(NULL, apikey_ptr);
+		if (apikey_ptr != apikey_buff) {
+			free(apikey_ptr);
+			apikey_ptr = NULL;
+		}
+		if (! dbc->curl_hdrs) {
+			ERRH(dbc, "libcurl: failed to init API key Auth header.");
+			goto err;
+		}
 	} else {
-		INFOH(dbc, "no username provided: auth disabled.");
+		INFOH(dbc, "no username or API key provided: auth disabled.");
+	}
+
+	/* set the HTTP headers: Content-Type, Accept, Authorization(?) */
+	curl_hdrs = dbc->pack_json ? json_headers : cbor_headers;
+	/* is there already an Autorization header set? then chain the pack hdrs */
+	if (dbc->curl_hdrs) {
+		if (! (curl_hdrs = curl_slist_duplicate(curl_hdrs))) {
+			ERRNH(dbc, "failed duplicating packing format headers.");
+			goto err;
+		}
+		dbc->curl_hdrs->next = curl_hdrs;
+		/* if there's no Authz header, the pack headers won't be dup'd */
+		curl_hdrs = dbc->curl_hdrs;
+	}
+	dbc->curl_err = curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_hdrs);
+	if (dbc->curl_err != CURLE_OK) {
+		ERRH(dbc, "libcurl: failed to set HTTP headers list.");
+		goto err;
 	}
 
 	/* proxy parameters */
@@ -1321,6 +1391,14 @@ SQLRETURN config_dbc(esodbc_dbc_st *dbc, esodbc_dsn_attrs_st *attrs)
 			}
 			/* indicates the presence of a non-empty password */
 			INFOH(dbc, "connection PWD: " ESODBC_PWD_VAL_SUBST ".");
+		}
+	} else if (attrs->api_key.cnt) {
+		if (! wstr_to_utf8(&attrs->api_key, &dbc->api_key)) {
+			ERRH(dbc, "failed to convert API key [%zu] `" LWPDL "` to UTF8.",
+				attrs->api_key.cnt, LWSTR(&attrs->api_key));
+			SET_HDIAG(dbc, SQL_STATE_HY000, "API key UTF8 conversion failed",
+				0);
+			goto err;
 		}
 	}
 

@@ -66,6 +66,7 @@ namespace EsOdbcDsnEditor
 			textDescription.Text = Builder.ContainsKey("description") ? Builder["description"].ToString().StripBraces() : string.Empty;
 			textUsername.Text = Builder.ContainsKey("uid") ? Builder["uid"].ToString().StripBraces() : string.Empty;
 			textPassword.Text = Builder.ContainsKey("pwd") ? Builder["pwd"].ToString().StripBraces() : string.Empty;
+			textApiKey.Text = Builder.ContainsKey("apikey") ? Builder["apikey"].ToString().StripBraces() : string.Empty;
 			textCloudID.Text = Builder.ContainsKey("cloudid") ? Builder["cloudid"].ToString().StripBraces() : string.Empty;
 			textHostname.Text = Builder.ContainsKey("server") ? Builder["server"].ToString().StripBraces() : string.Empty;
 			numericUpDownPort.Text = Builder.ContainsKey("port") ? Builder["port"].ToString().StripBraces() : string.Empty;
@@ -77,6 +78,7 @@ namespace EsOdbcDsnEditor
 			toolTipPort.SetToolTip(numericUpDownPort, "The port which the Elasticsearch listens on.");
 			toolTipUsername.SetToolTip(textUsername, "If security is enabled, the username configured to access the REST SQL endpoint.");
 			toolTipPassword.SetToolTip(textPassword, "If security is enabled, the password configured to access the REST SQL endpoint.");
+			toolTipApiKey.SetToolTip(textApiKey, "If security is enabled, the Base64-encoded API key credentials configured to access the REST SQL endpoint.");
 
 			// Security Panel
 			textCertificatePath.Text = Builder.ContainsKey("capath") ? Builder["capath"].ToString().StripBraces() : string.Empty;
@@ -286,6 +288,7 @@ namespace EsOdbcDsnEditor
 			// (trailing) white space by mistake than intentionally trying to set it.
 			Builder["uid"] = textUsername.Text.Trim();
 			Builder["pwd"] = textPassword.Text;
+			Builder["apikey"] = textApiKey.Text;
 			Builder["cloudid"] = "{" + textCloudID.Text.StripBraces().Trim() + "}";
 			Builder["server"] = textHostname.Text.Trim();
 			Builder["port"] = numericUpDownPort.Text;
@@ -415,6 +418,12 @@ namespace EsOdbcDsnEditor
 
 		private void TextCloudID_TextChanged(object sender, EventArgs e) => EnableDisableActionButtons();
 
+		private void TextUsername_TextChanged(object sender, EventArgs e) => EnableDisableActionButtons();
+
+		private void TextPassword_TextChanged(object sender, EventArgs e) => EnableDisableActionButtons();
+
+		private void TextApiKey_TextChanged(object sender, EventArgs e) => EnableDisableActionButtons();
+
 		private void NumericUpDownPort_ValueChanged(object sender, EventArgs e) => EnableDisableActionButtons();
 
 		private void CheckLoggingEnabled_CheckedChanged(object sender, EventArgs e) => EnableDisableLoggingControls();
@@ -449,6 +458,16 @@ namespace EsOdbcDsnEditor
 			textHostname.Enabled = numericUpDownPort.Enabled
 				= textCertificatePath.Enabled = certificatePathButton.Enabled
 				= string.IsNullOrEmpty(textCloudID.Text);
+
+			if (string.IsNullOrEmpty(textApiKey.Text) == false) {
+				textUsername.ResetText();
+				Builder.Remove("uid");
+				textPassword.ResetText();
+				Builder.Remove("pwd");
+			}
+
+			textApiKey.Enabled = string.IsNullOrEmpty(textUsername.Text) && string.IsNullOrEmpty(textPassword.Text);
+			textUsername.Enabled = textPassword.Enabled = string.IsNullOrEmpty(textApiKey.Text);
 
 			if (isConnecting) {
 				// If connecting, enable the button if we have a hostname.

@@ -307,4 +307,13 @@ class Elasticsearch(object):
 	def is_listening(self):
 		return self.cluster_name(False) is not None
 
+	def api_key(self):
+		resp = self._req.post("%s/_security/api_key" % self._base_url, auth=self._credentials,
+				timeout=self.REQ_TIMEOUT, json={"name": "test-api-key"})
+		if resp.status_code != 200:
+			raise Exception("API key generation request failed with code: %s" % resp.status_code)
+		if "encoded" not in resp.json():
+			raise Exception("missing 'encoded' key in ES answer: %s" % resp.text)
+		return resp.json().get("encoded")
+
 # vim: set noet fenc=utf-8 ff=dos sts=0 sw=4 ts=4 tw=118 :
