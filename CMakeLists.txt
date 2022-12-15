@@ -11,7 +11,7 @@ set(DRIVER_BASE_NAME elasticodbc CACHE STRING
 	"The base name of the driver")
 
 # driver's version
-set(DRV_VERSION 7.17.8)
+set(DRV_VERSION 7.17.9)
 set(VERSION_QUALIFIER $ENV{VERSION_QUALIFIER} CACHE STRING
 	"Extra string to append to the install directory name")
 
