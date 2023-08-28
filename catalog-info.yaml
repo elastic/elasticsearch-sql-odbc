@@ -76,7 +76,7 @@ apiVersion: backstage.io/v1alpha1
 kind: Resource
 metadata:
   name: buildkite-pipeline-elasticsearch-sql-odbc-dra-workflow-trigger
-  description: Publishes DRA snapshot or staging candidate
+  description: Triggers piplines for DRA workflows for all release branches
   links:
     - title: Pipeline
       url: https://buildkite.com/elastic/elasticsearch-sql-odbc-dra-workflow-trigger
@@ -88,7 +88,7 @@ spec:
     apiVersion: buildkite.elastic.dev/v1
     kind: Pipeline
     metadata:
-      description: "Publishes DRA snapshot or staging candidate"
+      description: Triggers piplines for DRA workflows for all release branches
       name: elasticsearch-sql-odbc / dra-workflow-trigger
     spec:
       repository: elastic/elasticsearch-sql-odbc
