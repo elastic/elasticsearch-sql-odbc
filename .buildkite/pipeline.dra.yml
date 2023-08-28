@@ -1,0 +1,18 @@
+steps:
+  - label: Build artifacts
+    command: powershell .buildkite\dra-build.ps1
+    agents:
+      provider: gcp
+      image: family/elasticsearch-windows-2022
+      machineType: n2-standard-8
+      diskSizeGb: 200
+  - wait
+  - label: Publish artifacts
+    command: .buildkite/dra-release.sh
+    env:
+      USE_DRA_CREDENTIALS: "true"
+    agents:
+      provider: gcp
+      image: family/elasticsearch-ubuntu-2004
+      machineType: n2-standard-4
+      diskSizeGb: 100
