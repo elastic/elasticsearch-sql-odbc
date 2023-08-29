@@ -1,0 +1,8 @@
+steps:
+  - label: Run tests
+    command: cmd /c build.bat ctests
+    agents:
+      provider: gcp
+      image: family/elasticsearch-windows-2022
+      machineType: n2-standard-8
+      diskSizeGb: 200
