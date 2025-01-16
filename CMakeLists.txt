@@ -42,7 +42,7 @@ endif (${WIN32})
 cmake_policy(SET CMP0048 NEW)
 # explicit languages support (Cs are defaults)
 project(${DRIVER_BASE_NAME}
-	VERSION ${DRV_VERSION}
+	VERSION ${DRV_VERSION}${VERSION_QUALIFIER}
 	LANGUAGES CXX C)
 
 if (${IS_UNICODE})

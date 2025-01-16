@@ -36,7 +36,7 @@ EOF
       branch: "$BRANCH"
       env:
         DRA_WORKFLOW: staging
-        VERSION_QUALIFIER: alpha1
+        VERSION_QUALIFIER: "-alpha1"
 EOF
 	fi
 done
