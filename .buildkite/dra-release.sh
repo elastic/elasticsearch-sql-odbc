@@ -4,7 +4,7 @@ set -euo pipefail
 
 DRA_WORKFLOW=${DRA_WORKFLOW:-snapshot}
 
-if [[ ("$BUILDKITE_BRANCH" == "main" || "$BUILDKITE_BRANCH" == *.x) && "$DRA_WORKFLOW" == "staging" ]]; then
+if [[ "$BUILDKITE_BRANCH" == *.x && "$DRA_WORKFLOW" == "staging" ]]; then
 	exit 0
 fi
 
@@ -36,5 +36,6 @@ docker run --rm \
 	--branch "$RM_BRANCH" \
 	--commit "$GIT_COMMIT" \
 	--workflow "$DRA_WORKFLOW" \
+	--qualifier "${VERSION_QUALIFIER:-}" \
 	--version "$DRV_VERSION" \
 	--artifact-set main

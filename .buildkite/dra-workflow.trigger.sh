@@ -16,8 +16,6 @@ for BRANCH in "${BRANCHES[@]}"; do
       env:
         DRA_WORKFLOW: snapshot
 EOF
-
-	# Don't trigger staging workflow for main branch
 	if [[ "$BRANCH" != "main" ]]; then
 		cat <<EOF
   - trigger: elasticsearch-sql-odbc-dra-workflow
@@ -27,6 +25,18 @@ EOF
       branch: "$BRANCH"
       env:
         DRA_WORKFLOW: staging
+EOF
+	else
+		# Pass version qualifier to main builds
+		cat <<EOF
+  - trigger: elasticsearch-sql-odbc-dra-workflow
+    label: Trigger DRA staging workflow for $BRANCH
+    async: true
+    build:
+      branch: "$BRANCH"
+      env:
+        DRA_WORKFLOW: staging
+        VERSION_QUALIFIER: alpha1
 EOF
 	fi
 done
