@@ -7,7 +7,7 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2021, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
@@ -20,11 +20,13 @@
  * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
  * KIND, either express or implied.
  *
+ * SPDX-License-Identifier: curl
+ *
  ***************************************************************************/
 
 #include "curl_setup.h"
 
-#ifndef CURL_DISABLE_MIME
+#ifndef CURL_DISABLE_FORM_API
 
 /* used by FormAdd for temporary storage */
 struct FormInfo {
@@ -36,8 +38,8 @@ struct FormInfo {
   long flags;
   char *buffer;      /* pointer to existing buffer used for file upload */
   size_t bufferlength;
-  char *showfilename; /* The file name to show. If not set, the actual
-                         file name will be used */
+  char *showfilename; /* The filename to show. If not set, the actual
+                         filename will be used */
   char *userp;        /* pointer for the read callback */
   struct curl_slist *contentheader;
   struct FormInfo *more;
@@ -51,10 +53,7 @@ CURLcode Curl_getformdata(struct Curl_easy *data,
                           curl_mimepart *,
                           struct curl_httppost *post,
                           curl_read_callback fread_func);
-#else
-/* disabled */
-#define Curl_getformdata(a,b,c,d) CURLE_NOT_BUILT_IN
-#endif
+#endif /* CURL_DISABLE_FORM_API */
 
 
 #endif /* HEADER_CURL_FORMDATA_H */

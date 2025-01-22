@@ -5,7 +5,7 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2020, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
@@ -18,10 +18,15 @@
  * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
  * KIND, either express or implied.
  *
+ * SPDX-License-Identifier: curl
+ *
  ***************************************************************************/
 #include "tool_setup.h"
 
 #include "strcase.h"
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
 
 #define ENABLE_CURLX_PRINTF
 /* use our own printf() functions */
@@ -33,20 +38,30 @@
 #include "tool_cb_hdr.h"
 #include "tool_cb_wrt.h"
 #include "tool_operate.h"
+#include "tool_libinfo.h"
 
 #include "memdebug.h" /* keep this as LAST include */
 
 static char *parse_filename(const char *ptr, size_t len);
 
-#ifdef WIN32
-#define BOLD
-#define BOLDOFF
+#ifdef _WIN32
+#define BOLD "\x1b[1m"
+#define BOLDOFF "\x1b[22m"
 #else
 #define BOLD "\x1b[1m"
 /* Switch off bold by setting "all attributes off" since the explicit
-   bold-off code (21) isn't supported everywhere - like in the mac
+   bold-off code (21) is not supported everywhere - like in the mac
    Terminal. */
 #define BOLDOFF "\x1b[0m"
+/* OSC 8 hyperlink escape sequence */
+#define LINK "\x1b]8;;"
+#define LINKST "\x1b\\"
+#define LINKOFF LINK LINKST
+#endif
+
+#ifdef LINK
+static void write_linked_location(CURL *curl, const char *location,
+    size_t loclen, FILE *stream);
 #endif
 
 /*
@@ -63,25 +78,22 @@ size_t tool_header_cb(char *ptr, size_t size, size_t nmemb, void *userdata)
   const char *str = ptr;
   const size_t cb = size * nmemb;
   const char *end = (char *)ptr + cb;
-  long protocol = 0;
-
-  /*
-   * Once that libcurl has called back tool_header_cb() the returned value
-   * is checked against the amount that was intended to be written, if
-   * it does not match then it fails with CURLE_WRITE_ERROR. So at this
-   * point returning a value different from sz*nmemb indicates failure.
-   */
-  size_t failure = (size && nmemb) ? 0 : 1;
+  const char *scheme = NULL;
 
   if(!per->config)
-    return failure;
+    return CURL_WRITEFUNC_ERROR;
 
 #ifdef DEBUGBUILD
   if(size * nmemb > (size_t)CURL_MAX_HTTP_HEADER) {
-    warnf(per->config->global, "Header data exceeds single call write "
-          "limit!\n");
-    return failure;
+    warnf(per->config->global, "Header data exceeds single call write limit");
+    return CURL_WRITEFUNC_ERROR;
   }
+#endif
+
+#ifdef _WIN32
+  /* Discard incomplete UTF-8 sequence buffered from body */
+  if(outs->utf8seq[0])
+    memset(outs->utf8seq, 0, sizeof(outs->utf8seq));
 #endif
 
   /*
@@ -93,25 +105,52 @@ size_t tool_header_cb(char *ptr, size_t size, size_t nmemb, void *userdata)
     if(rc != cb)
       return rc;
     /* flush the stream to send off what we got earlier */
-    (void)fflush(heads->stream);
+    if(fflush(heads->stream)) {
+      errorf(per->config->global, "Failed writing headers to %s",
+             per->config->headerfile);
+      return CURL_WRITEFUNC_ERROR;
+    }
   }
 
-  /*
-   * Write etag to file when --etag-save option is given.
-   */
-  if(per->config->etag_save_file && etag_save->stream) {
-    /* match only header that start with etag (case insensitive) */
-    if(curl_strnequal(str, "etag:", 5)) {
+  curl_easy_getinfo(per->curl, CURLINFO_SCHEME, &scheme);
+  scheme = proto_token(scheme);
+  if((scheme == proto_http || scheme == proto_https)) {
+    long response = 0;
+    curl_easy_getinfo(per->curl, CURLINFO_RESPONSE_CODE, &response);
+
+    if((response/100 != 2) && (response/100 != 3))
+      /* only care about etag and content-disposition headers in 2xx and 3xx
+         responses */
+      ;
+    /*
+     * Write etag to file when --etag-save option is given.
+     */
+    else if(per->config->etag_save_file && etag_save->stream &&
+            /* match only header that start with etag (case insensitive) */
+            checkprefix("etag:", str)) {
       const char *etag_h = &str[5];
       const char *eot = end - 1;
       if(*eot == '\n') {
-        while(ISSPACE(*etag_h) && (etag_h < eot))
+        while(ISBLANK(*etag_h) && (etag_h < eot))
           etag_h++;
         while(ISSPACE(*eot))
           eot--;
 
         if(eot >= etag_h) {
           size_t etag_length = eot - etag_h + 1;
+          /*
+           * Truncate the etag save stream, it can have an existing etag value.
+           */
+#ifdef HAVE_FTRUNCATE
+          if(ftruncate(fileno(etag_save->stream), 0)) {
+            return CURL_WRITEFUNC_ERROR;
+          }
+#else
+          if(fseek(etag_save->stream, 0, SEEK_SET)) {
+            return CURL_WRITEFUNC_ERROR;
+          }
+#endif
+
           fwrite(etag_h, size, etag_length, etag_save->stream);
           /* terminate with newline */
           fputc('\n', etag_save->stream);
@@ -119,65 +158,72 @@ size_t tool_header_cb(char *ptr, size_t size, size_t nmemb, void *userdata)
         }
       }
     }
-  }
 
-  /*
-   * This callback sets the filename where output shall be written when
-   * curl options --remote-name (-O) and --remote-header-name (-J) have
-   * been simultaneously given and additionally server returns an HTTP
-   * Content-Disposition header specifying a filename property.
-   */
+    /*
+     * This callback sets the filename where output shall be written when
+     * curl options --remote-name (-O) and --remote-header-name (-J) have
+     * been simultaneously given and additionally server returns an HTTP
+     * Content-Disposition header specifying a filename property.
+     */
 
-  curl_easy_getinfo(per->curl, CURLINFO_PROTOCOL, &protocol);
-  if(hdrcbdata->honor_cd_filename &&
-     (cb > 20) && checkprefix("Content-disposition:", str) &&
-     (protocol & (CURLPROTO_HTTPS|CURLPROTO_HTTP))) {
-    const char *p = str + 20;
+    else if(hdrcbdata->honor_cd_filename &&
+            (cb > 20) && checkprefix("Content-disposition:", str)) {
+      const char *p = str + 20;
 
-    /* look for the 'filename=' parameter
-       (encoded filenames (*=) are not supported) */
-    for(;;) {
-      char *filename;
-      size_t len;
+      /* look for the 'filename=' parameter
+         (encoded filenames (*=) are not supported) */
+      for(;;) {
+        char *filename;
+        size_t len;
 
-      while(*p && (p < end) && !ISALPHA(*p))
-        p++;
-      if(p > end - 9)
-        break;
-
-      if(memcmp(p, "filename=", 9)) {
-        /* no match, find next parameter */
-        while((p < end) && (*p != ';'))
+        while((p < end) && *p && !ISALPHA(*p))
           p++;
-        continue;
-      }
-      p += 9;
+        if(p > end - 9)
+          break;
 
-      /* this expression below typecasts 'cb' only to avoid
-         warning: signed and unsigned type in conditional expression
-      */
-      len = (ssize_t)cb - (p - str);
-      filename = parse_filename(p, len);
-      if(filename) {
-        if(outs->stream) {
-          /* indication of problem, get out! */
-          free(filename);
-          return failure;
+        if(memcmp(p, "filename=", 9)) {
+          /* no match, find next parameter */
+          while((p < end) && *p && (*p != ';'))
+            p++;
+          if((p < end) && *p)
+            continue;
+          else
+            break;
         }
+        p += 9;
 
-        outs->is_cd_filename = TRUE;
-        outs->s_isreg = TRUE;
-        outs->fopened = FALSE;
-        outs->filename = filename;
-        outs->alloc_filename = TRUE;
-        hdrcbdata->honor_cd_filename = FALSE; /* done now! */
-        if(!tool_create_output_file(outs, per->config))
-          return failure;
+        len = cb - (size_t)(p - str);
+        filename = parse_filename(p, len);
+        if(filename) {
+          if(outs->stream) {
+            /* indication of problem, get out! */
+            free(filename);
+            return CURL_WRITEFUNC_ERROR;
+          }
+
+          if(per->config->output_dir) {
+            outs->filename = aprintf("%s/%s", per->config->output_dir,
+                                     filename);
+            free(filename);
+            if(!outs->filename)
+              return CURL_WRITEFUNC_ERROR;
+          }
+          else
+            outs->filename = filename;
+
+          outs->is_cd_filename = TRUE;
+          outs->s_isreg = TRUE;
+          outs->fopened = FALSE;
+          outs->alloc_filename = TRUE;
+          hdrcbdata->honor_cd_filename = FALSE; /* done now! */
+          if(!tool_create_output_file(outs, per->config))
+            return CURL_WRITEFUNC_ERROR;
+        }
+        break;
       }
-      break;
+      if(!outs->stream && !tool_create_output_file(outs, per->config))
+        return CURL_WRITEFUNC_ERROR;
     }
-    if(!outs->stream && !tool_create_output_file(outs, per->config))
-      return failure;
   }
   if(hdrcbdata->config->writeout) {
     char *value = memchr(ptr, ':', cb);
@@ -191,20 +237,33 @@ size_t tool_header_cb(char *ptr, size_t size, size_t nmemb, void *userdata)
       per->was_last_header_empty = TRUE;
   }
   if(hdrcbdata->config->show_headers &&
-    (protocol &
-     (CURLPROTO_HTTP|CURLPROTO_HTTPS|CURLPROTO_RTSP|CURLPROTO_FILE))) {
+    (scheme == proto_http || scheme == proto_https ||
+     scheme == proto_rtsp || scheme == proto_file)) {
     /* bold headers only for selected protocols */
     char *value = NULL;
 
     if(!outs->stream && !tool_create_output_file(outs, per->config))
-      return failure;
+      return CURL_WRITEFUNC_ERROR;
 
-    if(hdrcbdata->global->isatty && hdrcbdata->global->styled_output)
+    if(hdrcbdata->global->isatty &&
+#ifdef _WIN32
+       tool_term_has_bold &&
+#endif
+       hdrcbdata->global->styled_output)
       value = memchr(ptr, ':', cb);
     if(value) {
       size_t namelen = value - ptr;
-      fprintf(outs->stream, BOLD "%.*s" BOLDOFF ":", namelen, ptr);
+      fprintf(outs->stream, BOLD "%.*s" BOLDOFF ":", (int)namelen, ptr);
+#ifndef LINK
       fwrite(&value[1], cb - namelen - 1, 1, outs->stream);
+#else
+      if(curl_strnequal("Location", ptr, namelen)) {
+        write_linked_location(per->curl, &value[1], cb - namelen - 1,
+            outs->stream);
+      }
+      else
+        fwrite(&value[1], cb - namelen - 1, 1, outs->stream);
+#endif
     }
     else
       /* not "handled", just show it */
@@ -214,7 +273,7 @@ size_t tool_header_cb(char *ptr, size_t size, size_t nmemb, void *userdata)
 }
 
 /*
- * Copies a file name part and returns an ALLOCATED data buffer.
+ * Copies a filename part and returns an ALLOCATED data buffer.
  */
 static char *parse_filename(const char *ptr, size_t len)
 {
@@ -255,7 +314,7 @@ static char *parse_filename(const char *ptr, size_t len)
   }
 
   /* If the filename contains a backslash, only use filename portion. The idea
-     is that even systems that don't handle backslashes as path separators
+     is that even systems that do not handle backslashes as path separators
      probably want the path removed for convenience. */
   q = strrchr(p, '\\');
   if(q) {
@@ -266,7 +325,7 @@ static char *parse_filename(const char *ptr, size_t len)
     }
   }
 
-  /* make sure the file name doesn't end in \r or \n */
+  /* make sure the filename does not end in \r or \n */
   q = strchr(p, '\r');
   if(q)
     *q = '\0';
@@ -278,7 +337,7 @@ static char *parse_filename(const char *ptr, size_t len)
   if(copy != p)
     memmove(copy, p, strlen(p) + 1);
 
-#if defined(MSDOS) || defined(WIN32)
+#if defined(_WIN32) || defined(MSDOS)
   {
     char *sanitized;
     SANITIZEcode sc = sanitize_file_name(&sanitized, copy, 0);
@@ -287,20 +346,20 @@ static char *parse_filename(const char *ptr, size_t len)
       return NULL;
     copy = sanitized;
   }
-#endif /* MSDOS || WIN32 */
+#endif /* _WIN32 || MSDOS */
 
   /* in case we built debug enabled, we allow an environment variable
-   * named CURL_TESTDIR to prefix the given file name to put it into a
+   * named CURL_TESTDIR to prefix the given filename to put it into a
    * specific directory
    */
 #ifdef DEBUGBUILD
   {
-    char *tdir = curlx_getenv("CURL_TESTDIR");
+    char *tdir = curl_getenv("CURL_TESTDIR");
     if(tdir) {
       char buffer[512]; /* suitably large */
       msnprintf(buffer, sizeof(buffer), "%s/%s", tdir, copy);
       Curl_safefree(copy);
-      copy = strdup(buffer); /* clone the buffer, we don't use the libcurl
+      copy = strdup(buffer); /* clone the buffer, we do not use the libcurl
                                 aprintf() or similar since we want to use the
                                 same memory code as the "real" parse_filename
                                 function */
@@ -311,3 +370,98 @@ static char *parse_filename(const char *ptr, size_t len)
 
   return copy;
 }
+
+#ifdef LINK
+/*
+ * Treat the Location: header specially, by writing a special escape
+ * sequence that adds a hyperlink to the displayed text. This makes
+ * the absolute URL of the redirect clickable in supported terminals,
+ * which could not happen otherwise for relative URLs. The Location:
+ * header is supposed to always be absolute so this theoretically
+ * should not be needed but the real world returns plenty of relative
+ * URLs here.
+ */
+static
+void write_linked_location(CURL *curl, const char *location, size_t loclen,
+                           FILE *stream) {
+  /* This would so simple if CURLINFO_REDIRECT_URL were available here */
+  CURLU *u = NULL;
+  char *copyloc = NULL, *locurl = NULL, *scheme = NULL, *finalurl = NULL;
+  const char *loc = location;
+  size_t llen = loclen;
+  int space_skipped = 0;
+  char *vver = getenv("VTE_VERSION");
+
+  if(vver) {
+    long vvn = strtol(vver, NULL, 10);
+    /* Skip formatting for old versions of VTE <= 0.48.1 (Mar 2017) since some
+       of those versions have formatting bugs. (#10428) */
+    if(0 < vvn && vvn <= 4801)
+      goto locout;
+  }
+
+  /* Strip leading whitespace of the redirect URL */
+  while(llen && (*loc == ' ' || *loc == '\t')) {
+    ++loc;
+    --llen;
+    ++space_skipped;
+  }
+
+  /* Strip the trailing end-of-line characters, normally "\r\n" */
+  while(llen && (loc[llen-1] == '\n' || loc[llen-1] == '\r'))
+    --llen;
+
+  /* CURLU makes it easy to handle the relative URL case */
+  u = curl_url();
+  if(!u)
+    goto locout;
+
+  /* Create a NUL-terminated and whitespace-stripped copy of Location: */
+  copyloc = malloc(llen + 1);
+  if(!copyloc)
+    goto locout;
+  memcpy(copyloc, loc, llen);
+  copyloc[llen] = 0;
+
+  /* The original URL to use as a base for a relative redirect URL */
+  if(curl_easy_getinfo(curl, CURLINFO_EFFECTIVE_URL, &locurl))
+    goto locout;
+  if(curl_url_set(u, CURLUPART_URL, locurl, 0))
+    goto locout;
+
+  /* Redirected location. This can be either absolute or relative. */
+  if(curl_url_set(u, CURLUPART_URL, copyloc, 0))
+    goto locout;
+
+  if(curl_url_get(u, CURLUPART_URL, &finalurl, CURLU_NO_DEFAULT_PORT))
+    goto locout;
+
+  if(curl_url_get(u, CURLUPART_SCHEME, &scheme, 0))
+    goto locout;
+
+  if(!strcmp("http", scheme) ||
+     !strcmp("https", scheme) ||
+     !strcmp("ftp", scheme) ||
+     !strcmp("ftps", scheme)) {
+    fprintf(stream, "%.*s" LINK "%s" LINKST "%.*s" LINKOFF,
+            space_skipped, location,
+            finalurl,
+            (int)loclen - space_skipped, loc);
+    goto locdone;
+  }
+
+  /* Not a "safe" URL: do not linkify it */
+
+locout:
+  /* Write the normal output in case of error or unsafe */
+  fwrite(location, loclen, 1, stream);
+
+locdone:
+  if(u) {
+    curl_free(finalurl);
+    curl_free(scheme);
+    curl_url_cleanup(u);
+    free(copyloc);
+  }
+}
+#endif

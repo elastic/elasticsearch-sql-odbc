@@ -3,7 +3,7 @@
 <keywords>
 HTTP
 HTTP GET
-unix sockets
+UnixSockets
 </keywords>
 </info>
 
@@ -33,15 +33,15 @@ Third
 
 <client>
 <features>
-unix-sockets
+UnixSockets
 </features>
 <server>
 http-unix
 </server>
- <name>
+<name>
 HTTP requests with multiple connections over Unix socket
- </name>
- <command>
+</name>
+<command>
 --unix-socket %HTTPUNIXPATH http://one.example.com/%TESTNUMBER0001 http://two.example.com/%TESTNUMBER0002 http://one.example.com/%TESTNUMBER0003
 </command>
 </client>

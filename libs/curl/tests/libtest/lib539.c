@@ -5,7 +5,7 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2021, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
@@ -18,12 +18,14 @@
  * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
  * KIND, either express or implied.
  *
+ * SPDX-License-Identifier: curl
+ *
  ***************************************************************************/
 #include "test.h"
 
 #include "memdebug.h"
 
-int test(char *URL)
+CURLcode test(char *URL)
 {
    CURLcode res;
    CURL *curl;
@@ -53,28 +55,21 @@ int test(char *URL)
 
    /*
     * Change the FTP_FILEMETHOD option to use full paths rather than a CWD
-    * command.  Alter the URL's path a bit, appending a "./".  Use an innocuous
-    * QUOTE command, after which curl will CWD to ftp_conn->entrypath and then
-    * (on the next call to ftp_statemach_act) find a non-zero ftpconn->dirdepth
-    * even though no directories are stored in the ftpconn->dirs array (after a
-    * call to freedirs).
+    * command. Use an innocuous QUOTE command, after which curl will CWD to
+    * ftp_conn->entrypath and then (on the next call to ftp_statemach_act)
+    * find a non-zero ftpconn->dirdepth even though no directories are stored
+    * in the ftpconn->dirs array (after a call to freedirs).
     */
-   newURL = aprintf("%s./", URL);
-   if(!newURL) {
-     curl_easy_cleanup(curl);
-     curl_global_cleanup();
-     return TEST_ERR_MAJOR_BAD;
-   }
 
    slist = curl_slist_append(NULL, "SYST");
    if(!slist) {
-     free(newURL);
+     curl_free(newURL);
      curl_easy_cleanup(curl);
      curl_global_cleanup();
      return TEST_ERR_MAJOR_BAD;
    }
 
-   test_setopt(curl, CURLOPT_URL, newURL);
+   test_setopt(curl, CURLOPT_URL, libtest_arg2);
    test_setopt(curl, CURLOPT_FTP_FILEMETHOD, (long) CURLFTPMETHOD_NOCWD);
    test_setopt(curl, CURLOPT_QUOTE, slist);
 
@@ -83,9 +78,9 @@ int test(char *URL)
 test_cleanup:
 
    curl_slist_free_all(slist);
-   free(newURL);
+   curl_free(newURL);
    curl_easy_cleanup(curl);
    curl_global_cleanup();
 
-   return (int)res;
+   return res;
 }

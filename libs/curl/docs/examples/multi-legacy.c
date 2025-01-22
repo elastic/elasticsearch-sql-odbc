@@ -5,7 +5,7 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2021, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
@@ -18,6 +18,8 @@
  * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
  * KIND, either express or implied.
  *
+ * SPDX-License-Identifier: curl
+ *
  ***************************************************************************/
 /* <DESC>
  * A basic application source code using the multi interface doing two
@@ -29,14 +31,16 @@
 #include <string.h>
 
 /* somewhat unix-specific */
+#ifndef _WIN32
 #include <sys/time.h>
 #include <unistd.h>
+#endif
 
 /* curl stuff */
 #include <curl/curl.h>
 
 /*
- * Download a HTTP file and upload an FTP file simultaneously.
+ * Download an HTTP file and upload an FTP file simultaneously.
  */
 
 #define HANDLECOUNT 2   /* Number of simultaneous transfers */
@@ -58,7 +62,7 @@ int main(void)
   for(i = 0; i<HANDLECOUNT; i++)
     handles[i] = curl_easy_init();
 
-  /* set the options (I left out a few, you will get the point anyway) */
+  /* set the options (I left out a few, you get the point anyway) */
   curl_easy_setopt(handles[HTTP_HANDLE], CURLOPT_URL, "https://example.com");
 
   curl_easy_setopt(handles[FTP_HANDLE], CURLOPT_URL, "ftp://example.com");
@@ -100,7 +104,7 @@ int main(void)
       if(timeout.tv_sec > 1)
         timeout.tv_sec = 1;
       else
-        timeout.tv_usec = (curl_timeo % 1000) * 1000;
+        timeout.tv_usec = (int)(curl_timeo % 1000) * 1000;
     }
 
     /* get file descriptors from the transfers */
@@ -145,7 +149,8 @@ int main(void)
   }
 
   /* See how the transfers went */
-  while((msg = curl_multi_info_read(multi_handle, &msgs_left))) {
+  /* !checksrc! disable EQUALSNULL 1 */
+  while((msg = curl_multi_info_read(multi_handle, &msgs_left)) != NULL) {
     if(msg->msg == CURLMSG_DONE) {
       int idx;
 

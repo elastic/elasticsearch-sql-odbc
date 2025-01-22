@@ -37,10 +37,10 @@ hoo
 <server>
 http
 </server>
- <name>
+<name>
 multiple requests using {} in URL
- </name>
- <command>
+</name>
+<command>
 "%HOSTIP:%HTTPPORT/{%TESTNUMBER,%TESTNUMBER0002,%TESTNUMBER0003}"
 </command>
 </client>
@@ -65,19 +65,16 @@ Accept: */*
 
 </protocol>
 <stdout>
---_curl_--%HOSTIP:%HTTPPORT/%TESTNUMBER
 HTTP/1.1 200 OK
 Funny-head: yesyes
 Content-Length: 4
 
 moo
---_curl_--%HOSTIP:%HTTPPORT/%TESTNUMBER0002
 HTTP/1.1 200 OK
 Funny-head: yesyes
 Content-Length: 4
 
 foo
---_curl_--%HOSTIP:%HTTPPORT/%TESTNUMBER0003
 HTTP/1.1 200 OK
 Funny-head: yesyes
 Content-Length: 4

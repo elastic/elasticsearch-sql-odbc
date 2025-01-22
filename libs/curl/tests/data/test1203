@@ -20,15 +20,15 @@ iMenu results		error.host	1
 # Client-side
 <client>
 <features>
-ipv6
+IPv6
 </features>
 <server>
 gopher-ipv6
 </server>
- <name>
+<name>
 Gopher IPv6 index
- </name>
- <command>
+</name>
+<command>
 -g gopher://%HOST6IP:%GOPHER6PORT/1/moo/%TESTNUMBER
 </command>
 </client>

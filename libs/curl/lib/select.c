@@ -5,7 +5,7 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2021, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
@@ -17,6 +17,8 @@
  *
  * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
  * KIND, either express or implied.
+ *
+ * SPDX-License-Identifier: curl
  *
  ***************************************************************************/
 
@@ -31,20 +33,11 @@
 #endif
 
 #if !defined(HAVE_SELECT) && !defined(HAVE_POLL_FINE)
-#error "We can't compile without select() or poll() support."
-#endif
-
-#if defined(__BEOS__) && !defined(__HAIKU__)
-/* BeOS has FD_SET defined in socket.h */
-#include <socket.h>
+#error "We cannot compile without select() or poll() support."
 #endif
 
 #ifdef MSDOS
 #include <dos.h>  /* delay() */
-#endif
-
-#ifdef __VXWORKS__
-#include <strings.h>  /* bzero() in FD_SET */
 #endif
 
 #include <curl/curl.h>
@@ -52,8 +45,12 @@
 #include "urldata.h"
 #include "connect.h"
 #include "select.h"
-#include "timeval.h"
+#include "timediff.h"
 #include "warnless.h"
+/* The last 3 #include files should be in this order */
+#include "curl_printf.h"
+#include "curl_memory.h"
+#include "memdebug.h"
 
 /*
  * Internal function used for waiting a specific amount of ms
@@ -68,8 +65,8 @@
  * for the intended use of this function in the library.
  *
  * Return values:
- *   -1 = system call error, invalid timeout value, or interrupted
- *    0 = specified timeout has elapsed
+ *   -1 = system call error, or invalid timeout value
+ *    0 = specified timeout has elapsed, or interrupted
  */
 int Curl_wait_ms(timediff_t timeout_ms)
 {
@@ -83,12 +80,12 @@ int Curl_wait_ms(timediff_t timeout_ms)
   }
 #if defined(MSDOS)
   delay(timeout_ms);
-#elif defined(WIN32)
+#elif defined(_WIN32)
   /* prevent overflow, timeout_ms is typecast to ULONG/DWORD. */
 #if TIMEDIFF_T_MAX >= ULONG_MAX
   if(timeout_ms >= ULONG_MAX)
     timeout_ms = ULONG_MAX-1;
-    /* don't use ULONG_MAX, because that is equal to INFINITE */
+    /* do not use ULONG_MAX, because that is equal to INFINITE */
 #endif
   Sleep((ULONG)timeout_ms);
 #else
@@ -102,31 +99,17 @@ int Curl_wait_ms(timediff_t timeout_ms)
 #else
   {
     struct timeval pending_tv;
-    timediff_t tv_sec = timeout_ms / 1000;
-    timediff_t tv_usec = (timeout_ms % 1000) * 1000; /* max=999999 */
-#ifdef HAVE_SUSECONDS_T
-#if TIMEDIFF_T_MAX > TIME_T_MAX
-    /* tv_sec overflow check in case time_t is signed */
-    if(tv_sec > TIME_T_MAX)
-      tv_sec = TIME_T_MAX;
-#endif
-    pending_tv.tv_sec = (time_t)tv_sec;
-    pending_tv.tv_usec = (suseconds_t)tv_usec;
-#else
-#if TIMEDIFF_T_MAX > INT_MAX
-    /* tv_sec overflow check in case time_t is signed */
-    if(tv_sec > INT_MAX)
-      tv_sec = INT_MAX;
-#endif
-    pending_tv.tv_sec = (int)tv_sec;
-    pending_tv.tv_usec = (int)tv_usec;
-#endif
-    r = select(0, NULL, NULL, NULL, &pending_tv);
+    r = select(0, NULL, NULL, NULL, curlx_mstotv(&pending_tv, timeout_ms));
   }
 #endif /* HAVE_POLL_FINE */
 #endif /* USE_WINSOCK */
-  if(r)
-    r = -1;
+  if(r) {
+    if((r == -1) && (SOCKERRNO == EINTR))
+      /* make EINTR from select or poll not a "lethal" error */
+      r = 0;
+    else
+      r = -1;
+  }
   return r;
 }
 
@@ -152,7 +135,7 @@ static int our_select(curl_socket_t maxfd,   /* highest socket number */
   struct timeval *ptimeout;
 
 #ifdef USE_WINSOCK
-  /* WinSock select() can't handle zero events.  See the comment below. */
+  /* WinSock select() cannot handle zero events. See the comment below. */
   if((!fds_read || fds_read->fd_count == 0) &&
      (!fds_write || fds_write->fd_count == 0) &&
      (!fds_err || fds_err->fd_count == 0)) {
@@ -161,54 +144,18 @@ static int our_select(curl_socket_t maxfd,   /* highest socket number */
   }
 #endif
 
-  ptimeout = &pending_tv;
-  if(timeout_ms < 0) {
-    ptimeout = NULL;
-  }
-  else if(timeout_ms > 0) {
-    timediff_t tv_sec = timeout_ms / 1000;
-    timediff_t tv_usec = (timeout_ms % 1000) * 1000; /* max=999999 */
-#ifdef HAVE_SUSECONDS_T
-#if TIMEDIFF_T_MAX > TIME_T_MAX
-    /* tv_sec overflow check in case time_t is signed */
-    if(tv_sec > TIME_T_MAX)
-      tv_sec = TIME_T_MAX;
-#endif
-    pending_tv.tv_sec = (time_t)tv_sec;
-    pending_tv.tv_usec = (suseconds_t)tv_usec;
-#elif defined(WIN32) /* maybe also others in the future */
-#if TIMEDIFF_T_MAX > LONG_MAX
-    /* tv_sec overflow check on Windows there we know it is long */
-    if(tv_sec > LONG_MAX)
-      tv_sec = LONG_MAX;
-#endif
-    pending_tv.tv_sec = (long)tv_sec;
-    pending_tv.tv_usec = (long)tv_usec;
-#else
-#if TIMEDIFF_T_MAX > INT_MAX
-    /* tv_sec overflow check in case time_t is signed */
-    if(tv_sec > INT_MAX)
-      tv_sec = INT_MAX;
-#endif
-    pending_tv.tv_sec = (int)tv_sec;
-    pending_tv.tv_usec = (int)tv_usec;
-#endif
-  }
-  else {
-    pending_tv.tv_sec = 0;
-    pending_tv.tv_usec = 0;
-  }
+  ptimeout = curlx_mstotv(&pending_tv, timeout_ms);
 
 #ifdef USE_WINSOCK
   /* WinSock select() must not be called with an fd_set that contains zero
-    fd flags, or it will return WSAEINVAL.  But, it also can't be called
+    fd flags, or it will return WSAEINVAL. But, it also cannot be called
     with no fd_sets at all!  From the documentation:
 
     Any two of the parameters, readfds, writefds, or exceptfds, can be
     given as null. At least one must be non-null, and any non-null
     descriptor set must contain at least one handle to a socket.
 
-    It is unclear why WinSock doesn't just handle this for us instead of
+    It is unclear why WinSock does not just handle this for us instead of
     calling this an error. Luckily, with WinSock, we can _also_ ask how
     many bits are set on an fd_set. So, let's just check it beforehand.
   */
@@ -226,7 +173,7 @@ static int our_select(curl_socket_t maxfd,   /* highest socket number */
 /*
  * Wait for read or write events on a set of file descriptors. It uses poll()
  * when a fine poll() is available, in order to avoid limits with FD_SETSIZE,
- * otherwise select() is used.  An error is returned if select() is being used
+ * otherwise select() is used. An error is returned if select() is being used
  * and a file descriptor is too large for FD_SETSIZE.
  *
  * A negative timeout value makes this function wait indefinitely,
@@ -283,7 +230,7 @@ int Curl_socket_check(curl_socket_t readfd0, /* two sockets to read from */
     num++;
   }
 
-  r = Curl_poll(pfd, num, timeout_ms);
+  r = Curl_poll(pfd, (unsigned int)num, timeout_ms);
   if(r <= 0)
     return r;
 
@@ -292,14 +239,14 @@ int Curl_socket_check(curl_socket_t readfd0, /* two sockets to read from */
   if(readfd0 != CURL_SOCKET_BAD) {
     if(pfd[num].revents & (POLLRDNORM|POLLIN|POLLERR|POLLHUP))
       r |= CURL_CSELECT_IN;
-    if(pfd[num].revents & (POLLRDBAND|POLLPRI|POLLNVAL))
+    if(pfd[num].revents & (POLLPRI|POLLNVAL))
       r |= CURL_CSELECT_ERR;
     num++;
   }
   if(readfd1 != CURL_SOCKET_BAD) {
     if(pfd[num].revents & (POLLRDNORM|POLLIN|POLLERR|POLLHUP))
       r |= CURL_CSELECT_IN2;
-    if(pfd[num].revents & (POLLRDBAND|POLLPRI|POLLNVAL))
+    if(pfd[num].revents & (POLLPRI|POLLNVAL))
       r |= CURL_CSELECT_ERR;
     num++;
   }
@@ -314,8 +261,8 @@ int Curl_socket_check(curl_socket_t readfd0, /* two sockets to read from */
 }
 
 /*
- * This is a wrapper around poll().  If poll() does not exist, then
- * select() is used instead.  An error is returned if select() is
+ * This is a wrapper around poll(). If poll() does not exist, then
+ * select() is used instead. An error is returned if select() is
  * being used and a file descriptor is too large for FD_SETSIZE.
  * A negative timeout value makes this function wait indefinitely,
  * unless no valid file descriptor is given, when this happens the
@@ -372,8 +319,12 @@ int Curl_poll(struct pollfd ufds[], unsigned int nfds, timediff_t timeout_ms)
   else
     pending_ms = 0;
   r = poll(ufds, nfds, pending_ms);
-  if(r <= 0)
+  if(r <= 0) {
+    if((r == -1) && (SOCKERRNO == EINTR))
+      /* make EINTR from select or poll not a "lethal" error */
+      r = 0;
     return r;
+  }
 
   for(i = 0; i < nfds; i++) {
     if(ufds[i].fd == CURL_SOCKET_BAD)
@@ -410,14 +361,18 @@ int Curl_poll(struct pollfd ufds[], unsigned int nfds, timediff_t timeout_ms)
   }
 
   /*
-     Note also that WinSock ignores the first argument, so we don't worry
+     Note also that WinSock ignores the first argument, so we do not worry
      about the fact that maxfd is computed incorrectly with WinSock (since
      curl_socket_t is unsigned in such cases and thus -1 is the largest
      value).
   */
   r = our_select(maxfd, &fds_read, &fds_write, &fds_err, timeout_ms);
-  if(r <= 0)
+  if(r <= 0) {
+    if((r == -1) && (SOCKERRNO == EINTR))
+      /* make EINTR from select or poll not a "lethal" error */
+      r = 0;
     return r;
+  }
 
   r = 0;
   for(i = 0; i < nfds; i++) {
@@ -451,22 +406,146 @@ int Curl_poll(struct pollfd ufds[], unsigned int nfds, timediff_t timeout_ms)
   return r;
 }
 
-#ifdef TPF
-/*
- * This is a replacement for select() on the TPF platform.
- * It is used whenever libcurl calls select().
- * The call below to tpf_process_signals() is required because
- * TPF's select calls are not signal interruptible.
- *
- * Return values are the same as select's.
- */
-int tpf_select_libcurl(int maxfds, fd_set *reads, fd_set *writes,
-                       fd_set *excepts, struct timeval *tv)
+void Curl_pollfds_init(struct curl_pollfds *cpfds,
+                       struct pollfd *static_pfds,
+                       unsigned int static_count)
 {
-   int rc;
-
-   rc = tpf_select_bsd(maxfds, reads, writes, excepts, tv);
-   tpf_process_signals();
-   return rc;
+  DEBUGASSERT(cpfds);
+  memset(cpfds, 0, sizeof(*cpfds));
+  if(static_pfds && static_count) {
+    cpfds->pfds = static_pfds;
+    cpfds->count = static_count;
+  }
 }
-#endif /* TPF */
+
+void Curl_pollfds_cleanup(struct curl_pollfds *cpfds)
+{
+  DEBUGASSERT(cpfds);
+  if(cpfds->allocated_pfds) {
+    free(cpfds->pfds);
+  }
+  memset(cpfds, 0, sizeof(*cpfds));
+}
+
+static CURLcode cpfds_increase(struct curl_pollfds *cpfds, unsigned int inc)
+{
+  struct pollfd *new_fds;
+  unsigned int new_count = cpfds->count + inc;
+
+  new_fds = calloc(new_count, sizeof(struct pollfd));
+  if(!new_fds)
+    return CURLE_OUT_OF_MEMORY;
+
+  memcpy(new_fds, cpfds->pfds, cpfds->count * sizeof(struct pollfd));
+  if(cpfds->allocated_pfds)
+    free(cpfds->pfds);
+  cpfds->pfds = new_fds;
+  cpfds->count = new_count;
+  cpfds->allocated_pfds = TRUE;
+  return CURLE_OK;
+}
+
+static CURLcode cpfds_add_sock(struct curl_pollfds *cpfds,
+                               curl_socket_t sock, short events, bool fold)
+{
+  int i;
+
+  if(fold && cpfds->n <= INT_MAX) {
+    for(i = (int)cpfds->n - 1; i >= 0; --i) {
+      if(sock == cpfds->pfds[i].fd) {
+        cpfds->pfds[i].events |= events;
+        return CURLE_OK;
+      }
+    }
+  }
+  /* not folded, add new entry */
+  if(cpfds->n >= cpfds->count) {
+    if(cpfds_increase(cpfds, 100))
+      return CURLE_OUT_OF_MEMORY;
+  }
+  cpfds->pfds[cpfds->n].fd = sock;
+  cpfds->pfds[cpfds->n].events = events;
+  ++cpfds->n;
+  return CURLE_OK;
+}
+
+CURLcode Curl_pollfds_add_sock(struct curl_pollfds *cpfds,
+                               curl_socket_t sock, short events)
+{
+  return cpfds_add_sock(cpfds, sock, events, FALSE);
+}
+
+CURLcode Curl_pollfds_add_ps(struct curl_pollfds *cpfds,
+                             struct easy_pollset *ps)
+{
+  size_t i;
+
+  DEBUGASSERT(cpfds);
+  DEBUGASSERT(ps);
+  for(i = 0; i < ps->num; i++) {
+    short events = 0;
+    if(ps->actions[i] & CURL_POLL_IN)
+      events |= POLLIN;
+    if(ps->actions[i] & CURL_POLL_OUT)
+      events |= POLLOUT;
+    if(events) {
+      if(cpfds_add_sock(cpfds, ps->sockets[i], events, TRUE))
+        return CURLE_OUT_OF_MEMORY;
+    }
+  }
+  return CURLE_OK;
+}
+
+void Curl_waitfds_init(struct curl_waitfds *cwfds,
+                       struct curl_waitfd *static_wfds,
+                       unsigned int static_count)
+{
+  DEBUGASSERT(cwfds);
+  DEBUGASSERT(static_wfds);
+  memset(cwfds, 0, sizeof(*cwfds));
+  cwfds->wfds = static_wfds;
+  cwfds->count = static_count;
+}
+
+static CURLcode cwfds_add_sock(struct curl_waitfds *cwfds,
+                               curl_socket_t sock, short events)
+{
+  int i;
+
+  if(cwfds->n <= INT_MAX) {
+    for(i = (int)cwfds->n - 1; i >= 0; --i) {
+      if(sock == cwfds->wfds[i].fd) {
+        cwfds->wfds[i].events |= events;
+        return CURLE_OK;
+      }
+    }
+  }
+  /* not folded, add new entry */
+  if(cwfds->n >= cwfds->count)
+    return CURLE_OUT_OF_MEMORY;
+  cwfds->wfds[cwfds->n].fd = sock;
+  cwfds->wfds[cwfds->n].events = events;
+  ++cwfds->n;
+  return CURLE_OK;
+}
+
+CURLcode Curl_waitfds_add_ps(struct curl_waitfds *cwfds,
+                             struct easy_pollset *ps)
+{
+  size_t i;
+
+  DEBUGASSERT(cwfds);
+  DEBUGASSERT(ps);
+  for(i = 0; i < ps->num; i++) {
+    short events = 0;
+    if(ps->actions[i] & CURL_POLL_IN)
+      events |= CURL_WAIT_POLLIN;
+    if(ps->actions[i] & CURL_POLL_OUT)
+      events |= CURL_WAIT_POLLOUT;
+    if(events) {
+      if(cwfds_add_sock(cwfds, ps->sockets[i], events))
+        return CURLE_OUT_OF_MEMORY;
+    }
+  }
+  return CURLE_OK;
+}

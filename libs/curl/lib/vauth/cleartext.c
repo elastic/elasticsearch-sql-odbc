@@ -5,7 +5,7 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2021, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
@@ -18,6 +18,8 @@
  * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
  * KIND, either express or implied.
  *
+ * SPDX-License-Identifier: curl
+ *
  * RFC4616 PLAIN authentication
  * Draft   LOGIN SASL Mechanism <draft-murchison-sasl-login-00.txt>
  *
@@ -26,13 +28,13 @@
 #include "curl_setup.h"
 
 #if !defined(CURL_DISABLE_IMAP) || !defined(CURL_DISABLE_SMTP) ||       \
-  !defined(CURL_DISABLE_POP3)
+  !defined(CURL_DISABLE_POP3) || \
+  (!defined(CURL_DISABLE_LDAP) && defined(USE_OPENLDAP))
 
 #include <curl/curl.h>
 #include "urldata.h"
 
 #include "vauth/vauth.h"
-#include "curl_md5.h"
 #include "warnless.h"
 #include "strtok.h"
 #include "sendf.h"
@@ -98,39 +100,38 @@ CURLcode Curl_auth_create_plain_message(const char *authzid,
  * Curl_auth_create_login_message()
  *
  * This is used to generate an already encoded LOGIN message containing the
- * user name or password ready for sending to the recipient.
+ * username or password ready for sending to the recipient.
  *
  * Parameters:
  *
- * valuep  [in]     - The user name or user's password.
+ * valuep  [in]     - The username or user's password.
  * out     [out]    - The result storage.
  *
- * Returns CURLE_OK on success.
+ * Returns void.
  */
-CURLcode Curl_auth_create_login_message(const char *valuep, struct bufref *out)
+void Curl_auth_create_login_message(const char *valuep, struct bufref *out)
 {
   Curl_bufref_set(out, valuep, strlen(valuep), NULL);
-  return CURLE_OK;
 }
 
 /*
  * Curl_auth_create_external_message()
  *
  * This is used to generate an already encoded EXTERNAL message containing
- * the user name ready for sending to the recipient.
+ * the username ready for sending to the recipient.
  *
  * Parameters:
  *
- * user    [in]     - The user name.
+ * user    [in]     - The username.
  * out     [out]    - The result storage.
  *
- * Returns CURLE_OK on success.
+ * Returns void.
  */
-CURLcode Curl_auth_create_external_message(const char *user,
+void Curl_auth_create_external_message(const char *user,
                                            struct bufref *out)
 {
   /* This is the same formatting as the login message */
-  return Curl_auth_create_login_message(user, out);
+  Curl_auth_create_login_message(user, out);
 }
 
 #endif /* if no users */

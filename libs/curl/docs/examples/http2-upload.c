@@ -5,7 +5,7 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2021, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
@@ -17,6 +17,8 @@
  *
  * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
  * KIND, either express or implied.
+ *
+ * SPDX-License-Identifier: curl
  *
  ***************************************************************************/
 /* <DESC>
@@ -31,21 +33,43 @@
 #include <errno.h>
 
 /* somewhat unix-specific */
+#ifndef _MSC_VER
 #include <sys/time.h>
 #include <unistd.h>
+#endif
 
 /* curl stuff */
 #include <curl/curl.h>
 #include <curl/mprintf.h>
 
 #ifndef CURLPIPE_MULTIPLEX
-/* This little trick will just make sure that we do not enable pipelining for
-   libcurls old enough to not have this symbol. It is _not_ defined to zero in
-   a recent libcurl header. */
+/* This little trick makes sure that we do not enable pipelining for libcurls
+   old enough to not have this symbol. It is _not_ defined to zero in a recent
+   libcurl header. */
 #define CURLPIPE_MULTIPLEX 0
 #endif
 
 #define NUM_HANDLES 1000
+
+#ifdef _MSC_VER
+#define gettimeofday(a, b) my_gettimeofday((a), (b))
+int my_gettimeofday(struct timeval *tp, void *tzp)
+{
+  (void)tzp;
+  if(tp) {
+    /* Offset between 1601-01-01 and 1970-01-01 in 100 nanosec units */
+    #define _WIN32_FT_OFFSET (116444736000000000)
+    union {
+      CURL_TYPEOF_CURL_OFF_T ns100; /* time since 1 Jan 1601 in 100ns units */
+      FILETIME ft;
+    } _now;
+    GetSystemTimeAsFileTime(&_now.ft);
+    tp->tv_usec = (long)((_now.ns100 / 10) % 1000000);
+    tp->tv_sec = (long)((_now.ns100 - _WIN32_FT_OFFSET) / 10000000);
+  }
+  return 0;
+}
+#endif
 
 struct input {
   FILE *in;
@@ -131,10 +155,7 @@ int my_trace(CURL *handle, curl_infotype type,
   switch(type) {
   case CURLINFO_TEXT:
     fprintf(stderr, "%s [%d] Info: %s", timebuf, num, data);
-    /* FALLTHROUGH */
-  default: /* in case a new one is introduced to shock us */
     return 0;
-
   case CURLINFO_HEADER_OUT:
     text = "=> Send header";
     break;
@@ -153,6 +174,8 @@ int my_trace(CURL *handle, curl_infotype type,
   case CURLINFO_SSL_DATA_IN:
     text = "<= Recv SSL data";
     break;
+  default: /* in case a new one is introduced to shock us */
+    return 0;
   }
 
   dump(text, num, (unsigned char *)data, size, 1);

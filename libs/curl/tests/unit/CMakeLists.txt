@@ -5,7 +5,7 @@
 #                            | (__| |_| |  _ <| |___
 #                             \___|\___/|_| \_\_____|
 #
-# Copyright (C) 1998 - 2021, Daniel Stenberg, <daniel@haxx.se>, et al.
+# Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
 #
 # This software is licensed as described in the file COPYING, which
 # you should have received as part of this distribution. The terms
@@ -18,52 +18,23 @@
 # This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
 # KIND, either express or implied.
 #
+# SPDX-License-Identifier: curl
+#
 ###########################################################################
 
-# TODO build a special libcurlu library for unittests.
-return()
+transform_makefile_inc("Makefile.inc" "${CMAKE_CURRENT_BINARY_DIR}/Makefile.inc.cmake")
+include(${CMAKE_CURRENT_BINARY_DIR}/Makefile.inc.cmake)
 
-set(UT_SRC
-  unit1300.c
-  unit1301.c
-  unit1302.c
-  unit1303.c
-  unit1304.c
-  unit1305.c
-  unit1307.c
-  unit1308.c
-  unit1309.c
-  unit1330.c
-# Broken link on Linux
-#  unit1394.c
-  unit1395.c
-  unit1396.c
-  unit1397.c
-  unit1398.c
-  unit1600.c
-  unit1601.c
-  unit1603.c
-# Broken link on Linux
-#  unit1604.c
-  unit1620.c
-  unit1655.c
-  )
-
-set(UT_COMMON_FILES ../libtest/first.c ../libtest/test.h curlcheck.h)
 include_directories(
-  ${CURL_SOURCE_DIR}/lib          # To be able to reach "curl_setup_once.h"
+  ${CURL_SOURCE_DIR}/lib          # for "curl_setup_once.h"
   ${CURL_SOURCE_DIR}/tests/libtest
   ${CURL_SOURCE_DIR}/src
-  ${CURL_BINARY_DIR}/lib          # To be able to reach "curl_config.h"
-  ${CURL_BINARY_DIR}/include      # To be able to reach "curl/curl.h"
+  ${CURL_BINARY_DIR}/lib          # for "curl_config.h"
+  ${CURL_BINARY_DIR}/include      # for "curl/curl.h"
 )
 
-foreach(_testfile ${UT_SRC})
-
-  get_filename_component(_testname ${_testfile} NAME_WE)
-  add_executable(${_testname} EXCLUDE_FROM_ALL ${_testfile} ${UT_COMMON_FILES})
-  #add_dependencies(testdeps ${_testname})
-  target_link_libraries(${_testname} libcurl ${CURL_LIBS})
-  set_target_properties(${_testname}
-      PROPERTIES COMPILE_DEFINITIONS "UNITTESTS")
+foreach(_testfile ${UNITPROGS})
+  add_executable(${_testfile} EXCLUDE_FROM_ALL ${_testfile}.c ${UNITFILES})
+  add_dependencies(testdeps ${_testfile})
+  target_link_libraries(${_testfile} curltool curlu)
 endforeach()
