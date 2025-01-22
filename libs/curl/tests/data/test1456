@@ -31,15 +31,15 @@ These data aren't actually sent to the client
 # Client-side
 <client>
 <features>
-ipv6
+IPv6
 </features>
 <server>
 http-ipv6
 </server>
- <name>
+<name>
 HTTP-IPv6 GET with PROXY protocol
- </name>
- <command>
+</name>
+<command>
 -g "http://%HOST6IP:%HTTP6PORT/%TESTNUMBER" --haproxy-protocol
 </command>
 <features>

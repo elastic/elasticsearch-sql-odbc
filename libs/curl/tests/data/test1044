@@ -23,15 +23,15 @@ Largefile
 # Client-side
 <client>
 <features>
-large_file
+Largefile
 </features>
 <server>
 ftp
 </server>
- <name>
+<name>
 FTP download large file info with -I
- </name>
- <command>
+</name>
+<command>
 ftp://%HOSTIP:%FTPPORT/blalbla/%TESTNUMBER -I
 </command>
 </client>

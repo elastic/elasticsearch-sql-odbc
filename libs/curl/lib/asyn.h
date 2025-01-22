@@ -7,7 +7,7 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2021, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
@@ -19,6 +19,8 @@
  *
  * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
  * KIND, either express or implied.
+ *
+ * SPDX-License-Identifier: curl
  *
  ***************************************************************************/
 
@@ -56,7 +58,7 @@ void Curl_resolver_global_cleanup(void);
  * Curl_resolver_init()
  * Called from curl_easy_init() -> Curl_open() to initialize resolver
  * URL-state specific environment ('resolver' member of the UrlState
- * structure).  Should fill the passed pointer by the initialized handler.
+ * structure). Should fill the passed pointer by the initialized handler.
  * Returning anything else than CURLE_OK fails curl_easy_init() with the
  * correspondent code.
  */
@@ -66,7 +68,7 @@ CURLcode Curl_resolver_init(struct Curl_easy *easy, void **resolver);
  * Curl_resolver_cleanup()
  * Called from curl_easy_cleanup() -> Curl_close() to cleanup resolver
  * URL-state specific environment ('resolver' member of the UrlState
- * structure).  Should destroy the handler and free all resources connected to
+ * structure). Should destroy the handler and free all resources connected to
  * it.
  */
 void Curl_resolver_cleanup(void *resolver);
@@ -74,9 +76,9 @@ void Curl_resolver_cleanup(void *resolver);
 /*
  * Curl_resolver_duphandle()
  * Called from curl_easy_duphandle() to duplicate resolver URL-state specific
- * environment ('resolver' member of the UrlState structure).  Should
+ * environment ('resolver' member of the UrlState structure). Should
  * duplicate the 'from' handle and pass the resulting handle to the 'to'
- * pointer.  Returning anything else than CURLE_OK causes failed
+ * pointer. Returning anything else than CURLE_OK causes failed
  * curl_easy_duphandle() call.
  */
 CURLcode Curl_resolver_duphandle(struct Curl_easy *easy, void **to,
@@ -87,7 +89,7 @@ CURLcode Curl_resolver_duphandle(struct Curl_easy *easy, void **to,
  *
  * It is called from inside other functions to cancel currently performing
  * resolver request. Should also free any temporary resources allocated to
- * perform a request.  This never waits for resolver threads to complete.
+ * perform a request. This never waits for resolver threads to complete.
  *
  * It is safe to call this when conn is in any state.
  */
@@ -97,8 +99,8 @@ void Curl_resolver_cancel(struct Curl_easy *data);
  * Curl_resolver_kill().
  *
  * This acts like Curl_resolver_cancel() except it will block until any threads
- * associated with the resolver are complete.  This never blocks for resolvers
- * that do not use threads.  This is intended to be the "last chance" function
+ * associated with the resolver are complete. This never blocks for resolvers
+ * that do not use threads. This is intended to be the "last chance" function
  * that cleans up an in-progress resolver completely (before its owner is about
  * to die).
  *
@@ -146,7 +148,7 @@ CURLcode Curl_resolver_wait_resolv(struct Curl_easy *data,
  * Curl_resolver_getaddrinfo() - when using this resolver
  *
  * Returns name information about the given hostname and port number. If
- * successful, the 'hostent' is returned and the forth argument will point to
+ * successful, the 'hostent' is returned and the fourth argument will point to
  * memory we need to free after use. That memory *MUST* be freed with
  * Curl_freeaddrinfo(), nothing else.
  *
@@ -159,7 +161,7 @@ struct Curl_addrinfo *Curl_resolver_getaddrinfo(struct Curl_easy *data,
                                                 int *waitp);
 
 #ifndef CURLRES_ASYNCH
-/* convert these functions if an asynch resolver isn't used */
+/* convert these functions if an asynch resolver is not used */
 #define Curl_resolver_cancel(x) Curl_nop_stmt
 #define Curl_resolver_kill(x) Curl_nop_stmt
 #define Curl_resolver_is_resolved(x,y) CURLE_COULDNT_RESOLVE_HOST

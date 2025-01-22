@@ -3,7 +3,7 @@
 <keywords>
 HTTP
 HTTP GET
-unix sockets
+UnixSockets
 </keywords>
 </info>
 
@@ -19,15 +19,15 @@ Based on test300
 
 <client>
 <features>
-unix-sockets
+UnixSockets
 </features>
 <server>
 http-unix
 </server>
- <name>
+<name>
 simple HTTP GET over Unix socket
- </name>
- <command>
+</name>
+<command>
 --unix-socket %HTTPUNIXPATH http://server-interpreted.example.com/%TESTNUMBER
 </command>
 </client>

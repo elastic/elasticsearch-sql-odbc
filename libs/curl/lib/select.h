@@ -7,7 +7,7 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2021, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
@@ -19,6 +19,8 @@
  *
  * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
  * KIND, either express or implied.
+ *
+ * SPDX-License-Identifier: curl
  *
  ***************************************************************************/
 
@@ -34,8 +36,7 @@
  * Definition of pollfd struct and constants for platforms lacking them.
  */
 
-#if !defined(HAVE_STRUCT_POLLFD) && \
-    !defined(HAVE_SYS_POLL_H) && \
+#if !defined(HAVE_SYS_POLL_H) && \
     !defined(HAVE_POLL_H) && \
     !defined(POLLIN)
 
@@ -83,22 +84,11 @@ int Curl_socket_check(curl_socket_t readfd, curl_socket_t readfd2,
 int Curl_poll(struct pollfd ufds[], unsigned int nfds, timediff_t timeout_ms);
 int Curl_wait_ms(timediff_t timeout_ms);
 
-#ifdef TPF
-int tpf_select_libcurl(int maxfds, fd_set* reads, fd_set* writes,
-                       fd_set* excepts, struct timeval *tv);
-#endif
-
-/* TPF sockets are not in range [0..FD_SETSIZE-1], which
-   unfortunately makes it impossible for us to easily check if they're valid
-
+/*
    With Winsock the valid range is [0..INVALID_SOCKET-1] according to
    https://docs.microsoft.com/en-us/windows/win32/winsock/socket-data-type-2
 */
-#if defined(TPF)
-#define VALID_SOCK(x) 1
-#define VERIFY_SOCK(x) Curl_nop_stmt
-#define FDSET_SOCK(x) 1
-#elif defined(USE_WINSOCK)
+#ifdef USE_WINSOCK
 #define VALID_SOCK(s) ((s) < INVALID_SOCKET)
 #define FDSET_SOCK(x) 1
 #define VERIFY_SOCK(x) do { \
@@ -120,5 +110,38 @@ int tpf_select_libcurl(int maxfds, fd_set* reads, fd_set* writes,
     }                                           \
   } while(0)
 #endif
+
+struct curl_pollfds {
+  struct pollfd *pfds;
+  unsigned int n;
+  unsigned int count;
+  BIT(allocated_pfds);
+};
+
+void Curl_pollfds_init(struct curl_pollfds *cpfds,
+                       struct pollfd *static_pfds,
+                       unsigned int static_count);
+
+void Curl_pollfds_cleanup(struct curl_pollfds *cpfds);
+
+CURLcode Curl_pollfds_add_ps(struct curl_pollfds *cpfds,
+                             struct easy_pollset *ps);
+
+CURLcode Curl_pollfds_add_sock(struct curl_pollfds *cpfds,
+                               curl_socket_t sock, short events);
+
+struct curl_waitfds {
+  struct curl_waitfd *wfds;
+  unsigned int n;
+  unsigned int count;
+};
+
+void Curl_waitfds_init(struct curl_waitfds *cwfds,
+                       struct curl_waitfd *static_wfds,
+                       unsigned int static_count);
+
+CURLcode Curl_waitfds_add_ps(struct curl_waitfds *cwfds,
+                             struct easy_pollset *ps);
+
 
 #endif /* HEADER_CURL_SELECT_H */

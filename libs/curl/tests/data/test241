@@ -24,15 +24,15 @@ hello
 # Client-side
 <client>
 <features>
-ipv6
+IPv6
 </features>
 <server>
 http-ipv6
 </server>
- <name>
+<name>
 HTTP-IPv6 GET (using ip6-localhost)
- </name>
- <command>
+</name>
+<command>
 -g "http://ip6-localhost:%HTTP6PORT/%TESTNUMBER"
 </command>
 <precheck>
