@@ -5,7 +5,7 @@
 #                            | (__| |_| |  _ <| |___
 #                             \___|\___/|_| \_\_____|
 #
-# Copyright (C) 1998 - 2020, Daniel Stenberg, <daniel@haxx.se>, et al.
+# Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
 #
 # This software is licensed as described in the file COPYING, which
 # you should have received as part of this distribution. The terms
@@ -17,6 +17,8 @@
 #
 # This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
 # KIND, either express or implied.
+#
+# SPDX-License-Identifier: curl
 #
 ###########################################################################
 # - Try to find the GSS Kerberos library
@@ -43,8 +45,8 @@ include(CheckIncludeFiles)
 include(CheckTypeSize)
 
 set(_GSS_ROOT_HINTS
-    "${GSS_ROOT_DIR}"
-    "$ENV{GSS_ROOT_DIR}"
+  "${GSS_ROOT_DIR}"
+  "$ENV{GSS_ROOT_DIR}"
 )
 
 # try to find library using system pkg-config if user didn't specify root dir
@@ -60,30 +62,30 @@ endif()
 
 if(NOT _GSS_FOUND) #not found by pkg-config. Let's take more traditional approach.
   find_file(_GSS_CONFIGURE_SCRIPT
-      NAMES
-          "krb5-config"
-      HINTS
-          ${_GSS_ROOT_HINTS}
-      PATH_SUFFIXES
-          bin
-      NO_CMAKE_PATH
-      NO_CMAKE_ENVIRONMENT_PATH
+    NAMES
+      "krb5-config"
+    HINTS
+      ${_GSS_ROOT_HINTS}
+    PATH_SUFFIXES
+      bin
+    NO_CMAKE_PATH
+    NO_CMAKE_ENVIRONMENT_PATH
   )
 
   # if not found in user-supplied directories, maybe system knows better
   find_file(_GSS_CONFIGURE_SCRIPT
-      NAMES
-          "krb5-config"
-      PATH_SUFFIXES
-          bin
+    NAMES
+      "krb5-config"
+    PATH_SUFFIXES
+      bin
   )
 
   if(_GSS_CONFIGURE_SCRIPT)
     execute_process(
-          COMMAND ${_GSS_CONFIGURE_SCRIPT} "--cflags" "gssapi"
-          OUTPUT_VARIABLE _GSS_CFLAGS
-          RESULT_VARIABLE _GSS_CONFIGURE_FAILED
-          OUTPUT_STRIP_TRAILING_WHITESPACE
+      COMMAND ${_GSS_CONFIGURE_SCRIPT} "--cflags" "gssapi"
+      OUTPUT_VARIABLE _GSS_CFLAGS
+      RESULT_VARIABLE _GSS_CONFIGURE_FAILED
+      OUTPUT_STRIP_TRAILING_WHITESPACE
       )
     message(STATUS "CFLAGS: ${_GSS_CFLAGS}")
     if(NOT _GSS_CONFIGURE_FAILED) # 0 means success
@@ -103,10 +105,10 @@ if(NOT _GSS_FOUND) #not found by pkg-config. Let's take more traditional approac
     endif()
 
     execute_process(
-        COMMAND ${_GSS_CONFIGURE_SCRIPT} "--libs" "gssapi"
-        OUTPUT_VARIABLE _GSS_LIB_FLAGS
-        RESULT_VARIABLE _GSS_CONFIGURE_FAILED
-        OUTPUT_STRIP_TRAILING_WHITESPACE
+      COMMAND ${_GSS_CONFIGURE_SCRIPT} "--libs" "gssapi"
+      OUTPUT_VARIABLE _GSS_LIB_FLAGS
+      RESULT_VARIABLE _GSS_CONFIGURE_FAILED
+      OUTPUT_STRIP_TRAILING_WHITESPACE
     )
     message(STATUS "LDFLAGS: ${_GSS_LIB_FLAGS}")
 
@@ -130,10 +132,10 @@ if(NOT _GSS_FOUND) #not found by pkg-config. Let's take more traditional approac
     endif()
 
     execute_process(
-        COMMAND ${_GSS_CONFIGURE_SCRIPT} "--version"
-        OUTPUT_VARIABLE _GSS_VERSION
-        RESULT_VARIABLE _GSS_CONFIGURE_FAILED
-        OUTPUT_STRIP_TRAILING_WHITESPACE
+      COMMAND ${_GSS_CONFIGURE_SCRIPT} "--version"
+      OUTPUT_VARIABLE _GSS_VERSION
+      RESULT_VARIABLE _GSS_CONFIGURE_FAILED
+      OUTPUT_STRIP_TRAILING_WHITESPACE
     )
 
     # older versions may not have the "--version" parameter. In this case we just don't care.
@@ -142,10 +144,10 @@ if(NOT _GSS_FOUND) #not found by pkg-config. Let's take more traditional approac
     endif()
 
     execute_process(
-        COMMAND ${_GSS_CONFIGURE_SCRIPT} "--vendor"
-        OUTPUT_VARIABLE _GSS_VENDOR
-        RESULT_VARIABLE _GSS_CONFIGURE_FAILED
-        OUTPUT_STRIP_TRAILING_WHITESPACE
+      COMMAND ${_GSS_CONFIGURE_SCRIPT} "--vendor"
+      OUTPUT_VARIABLE _GSS_VENDOR
+      RESULT_VARIABLE _GSS_CONFIGURE_FAILED
+      OUTPUT_STRIP_TRAILING_WHITESPACE
     )
 
     # older versions may not have the "--vendor" parameter. In this case we just don't care.
@@ -162,13 +164,13 @@ if(NOT _GSS_FOUND) #not found by pkg-config. Let's take more traditional approac
   else() # either there is no config script or we are on a platform that doesn't provide one (Windows?)
 
     find_path(_GSS_INCLUDE_DIR
-        NAMES
-            "gssapi/gssapi.h"
-        HINTS
-            ${_GSS_ROOT_HINTS}
-        PATH_SUFFIXES
-            include
-            inc
+      NAMES
+        "gssapi/gssapi.h"
+      HINTS
+        ${_GSS_ROOT_HINTS}
+      PATH_SUFFIXES
+        include
+        inc
     )
 
     if(_GSS_INCLUDE_DIR) #jay, we've found something
@@ -179,25 +181,25 @@ if(NOT _GSS_FOUND) #not found by pkg-config. Let's take more traditional approac
         set(GSS_FLAVOUR "MIT")
       else()
         # prevent compiling the header - just check if we can include it
-        set(CMAKE_REQUIRED_DEFINITIONS "${CMAKE_REQUIRED_DEFINITIONS} -D__ROKEN_H__")
+        list(APPEND CMAKE_REQUIRED_DEFINITIONS -D__ROKEN_H__)
         check_include_file( "roken.h" _GSS_HAVE_ROKEN_H)
 
         check_include_file( "heimdal/roken.h" _GSS_HAVE_HEIMDAL_ROKEN_H)
         if(_GSS_HAVE_ROKEN_H OR _GSS_HAVE_HEIMDAL_ROKEN_H)
           set(GSS_FLAVOUR "Heimdal")
         endif()
-        set(CMAKE_REQUIRED_DEFINITIONS "")
+        list(REMOVE_ITEM CMAKE_REQUIRED_DEFINITIONS -D__ROKEN_H__)
       endif()
     else()
       # I'm not convinced if this is the right way but this is what autotools do at the moment
       find_path(_GSS_INCLUDE_DIR
-          NAMES
-              "gssapi.h"
-          HINTS
-              ${_GSS_ROOT_HINTS}
-          PATH_SUFFIXES
-              include
-              inc
+        NAMES
+          "gssapi.h"
+        HINTS
+          ${_GSS_ROOT_HINTS}
+        PATH_SUFFIXES
+          include
+          inc
       )
 
       if(_GSS_INCLUDE_DIR)
@@ -238,12 +240,12 @@ if(NOT _GSS_FOUND) #not found by pkg-config. Let's take more traditional approac
       endif()
 
       find_library(_GSS_LIBRARIES
-          NAMES
-              ${_GSS_LIBNAME}
-          HINTS
-              ${_GSS_LIBDIR_HINTS}
-          PATH_SUFFIXES
-              ${_GSS_LIBDIR_SUFFIXES}
+        NAMES
+          ${_GSS_LIBNAME}
+        HINTS
+          ${_GSS_LIBDIR_HINTS}
+        PATH_SUFFIXES
+          ${_GSS_LIBDIR_SUFFIXES}
       )
 
     endif()
@@ -299,12 +301,12 @@ include(FindPackageHandleStandardArgs)
 set(_GSS_REQUIRED_VARS GSS_LIBRARIES GSS_FLAVOUR)
 
 find_package_handle_standard_args(GSS
-    REQUIRED_VARS
-        ${_GSS_REQUIRED_VARS}
-    VERSION_VAR
-        GSS_VERSION
-    FAIL_MESSAGE
-        "Could NOT find GSS, try to set the path to GSS root folder in the system variable GSS_ROOT_DIR"
+  REQUIRED_VARS
+    ${_GSS_REQUIRED_VARS}
+  VERSION_VAR
+    GSS_VERSION
+  FAIL_MESSAGE
+    "Could NOT find GSS, try to set the path to GSS root folder in the system variable GSS_ROOT_DIR"
 )
 
 mark_as_advanced(GSS_INCLUDE_DIR GSS_LIBRARIES)

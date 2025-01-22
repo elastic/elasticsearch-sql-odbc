@@ -28,7 +28,7 @@ Content-Disposition: inline; filename="name%TESTNUMBER;weird"
 # this relies on the debug feature to allow us to set directory to store the
 # -J output in
 <features>
-debug
+Debug
 </features>
 <server>
 http
@@ -37,7 +37,7 @@ http
 HTTP GET with -J, Content-Disposition and ; in filename
 </name>
 <setenv>
-CURL_TESTDIR=%PWD/log
+CURL_TESTDIR=%LOGDIR
 </setenv>
 <command option="no-output,no-include">
 %HOSTIP:%HTTPPORT/%TESTNUMBER -J -O
@@ -54,7 +54,7 @@ User-Agent: curl/%VERSION
 Accept: */*
 
 </protocol>
-<file name="log/name%TESTNUMBER;weird">
+<file name="%LOGDIR/name%TESTNUMBER;weird">
 12345
 </file>
 

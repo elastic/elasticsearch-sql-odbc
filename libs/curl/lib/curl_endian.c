@@ -5,7 +5,7 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2021, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
@@ -18,6 +18,8 @@
  * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
  * KIND, either express or implied.
  *
+ * SPDX-License-Identifier: curl
+ *
  ***************************************************************************/
 
 #include "curl_setup.h"
@@ -28,7 +30,7 @@
  * Curl_read16_le()
  *
  * This function converts a 16-bit integer from the little endian format, as
- * used in the incoming package to whatever endian format we're using
+ * used in the incoming package to whatever endian format we are using
  * natively.
  *
  * Parameters:
@@ -47,7 +49,7 @@ unsigned short Curl_read16_le(const unsigned char *buf)
  * Curl_read32_le()
  *
  * This function converts a 32-bit integer from the little endian format, as
- * used in the incoming package to whatever endian format we're using
+ * used in the incoming package to whatever endian format we are using
  * natively.
  *
  * Parameters:
@@ -66,7 +68,7 @@ unsigned int Curl_read32_le(const unsigned char *buf)
  * Curl_read16_be()
  *
  * This function converts a 16-bit integer from the big endian format, as
- * used in the incoming package to whatever endian format we're using
+ * used in the incoming package to whatever endian format we are using
  * natively.
  *
  * Parameters:

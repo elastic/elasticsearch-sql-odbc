@@ -5,7 +5,7 @@
 #                            | (__| |_| |  _ <| |___
 #                             \___|\___/|_| \_\_____|
 #
-# Copyright (C) 1998 - 2020, Daniel Stenberg, <daniel@haxx.se>, et al.
+# Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
 #
 # This software is licensed as described in the file COPYING, which
 # you should have received as part of this distribution. The terms
@@ -17,6 +17,8 @@
 #
 # This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
 # KIND, either express or implied.
+#
+# SPDX-License-Identifier: curl
 #
 ###########################################################################
 # - Try to find the libssh2 library
@@ -37,7 +39,7 @@ endif()
 
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(LibSSH2
-    REQUIRED_VARS LIBSSH2_LIBRARY LIBSSH2_INCLUDE_DIR
-    VERSION_VAR LIBSSH2_VERSION)
+  REQUIRED_VARS LIBSSH2_LIBRARY LIBSSH2_INCLUDE_DIR
+  VERSION_VAR LIBSSH2_VERSION)
 
 mark_as_advanced(LIBSSH2_INCLUDE_DIR LIBSSH2_LIBRARY)

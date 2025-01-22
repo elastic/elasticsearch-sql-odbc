@@ -24,15 +24,15 @@ hello
 # Client-side
 <client>
 <features>
-ipv6
+IPv6
 </features>
 <server>
 http-ipv6
 </server>
- <name>
+<name>
 HTTP-IPv6 GET with username+password in URL
- </name>
- <command>
+</name>
+<command>
 -g "http://foobar:barfoo@%HOST6IP:%HTTP6PORT/%TESTNUMBER"
 </command>
 </client>

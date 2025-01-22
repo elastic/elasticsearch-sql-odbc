@@ -5,7 +5,7 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2020, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
@@ -18,6 +18,8 @@
  * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
  * KIND, either express or implied.
  *
+ * SPDX-License-Identifier: curl
+ *
  ***************************************************************************/
 
 #include "curl_setup.h"
@@ -26,14 +28,14 @@
 
 /*
  * Curl_gethostname() is a wrapper around gethostname() which allows
- * overriding the host name that the function would normally return.
+ * overriding the hostname that the function would normally return.
  * This capability is used by the test suite to verify exact matching
  * of NTLM authentication, which exercises libcurl's MD4 and DES code
  * as well as by the SMTP module when a hostname is not provided.
  *
- * For libcurl debug enabled builds host name overriding takes place
+ * For libcurl debug enabled builds hostname overriding takes place
  * when environment variable CURL_GETHOSTNAME is set, using the value
- * held by the variable to override returned host name.
+ * held by the variable to override returned hostname.
  *
  * Note: The function always returns the un-qualified hostname rather
  * than being provider dependent.
@@ -43,7 +45,7 @@
  * mechanism which intercepts, and might override, the gethostname()
  * function call. In this case a given platform must support the
  * LD_PRELOAD mechanism and additionally have environment variable
- * CURL_GETHOSTNAME set in order to override the returned host name.
+ * CURL_GETHOSTNAME set in order to override the returned hostname.
  *
  * For libcurl static library release builds no overriding takes place.
  */
@@ -63,10 +65,10 @@ int Curl_gethostname(char * const name, GETHOSTNAME_TYPE_ARG2 namelen)
 
 #ifdef DEBUGBUILD
 
-  /* Override host name when environment variable CURL_GETHOSTNAME is set */
+  /* Override hostname when environment variable CURL_GETHOSTNAME is set */
   const char *force_hostname = getenv("CURL_GETHOSTNAME");
   if(force_hostname) {
-    strncpy(name, force_hostname, namelen);
+    strncpy(name, force_hostname, namelen - 1);
     err = 0;
   }
   else {

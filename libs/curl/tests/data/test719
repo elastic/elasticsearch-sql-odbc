@@ -31,18 +31,18 @@ Funny-head: yesyes
 # Client-side
 <client>
 <features>
-ipv6
+IPv6
 proxy
 </features>
 <server>
 http
 socks5
 </server>
- <name>
+<name>
 HTTP GET with IPv6 numerical via SOCKS5h
- </name>
- <command>
-http://[2200::33]:%HTTPPORT/%TESTNUMBER --proxy socks5h://%HOSTIP:%SOCKSPORT 
+</name>
+<command>
+http://[2200::33]:%HTTPPORT/%TESTNUMBER --proxy socks5h://%HOSTIP:%SOCKSPORT
 </command>
 </client>
 

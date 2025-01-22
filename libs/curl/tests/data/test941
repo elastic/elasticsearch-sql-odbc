@@ -17,10 +17,10 @@ SMTP
 <server>
 smtp
 </server>
- <name>
+<name>
 SMTP with --crlf
- </name>
-<file name="log/upload%TESTNUMBER">
+</name>
+<file name="%LOGDIR/upload%TESTNUMBER">
 From: different
 To: another
 
@@ -32,9 +32,10 @@ converted
 with
 the
 --crlf option
+%repeat[650 x 0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789%0a]%
 </file>
- <command>
-smtp://%HOSTIP:%SMTPPORT/%TESTNUMBER --mail-rcpt recipient@example.com --mail-from sender@example.com -T log/upload%TESTNUMBER --crlf
+<command>
+smtp://%HOSTIP:%SMTPPORT/%TESTNUMBER --mail-rcpt recipient@example.com --mail-from sender@example.com -T %LOGDIR/upload%TESTNUMBER --crlf
 </command>
 </client>
 
@@ -60,6 +61,7 @@ converted
 with
 the
 --crlf option
+%repeat[650 x 0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789%0a]%
 .
 </upload>
 </verify>

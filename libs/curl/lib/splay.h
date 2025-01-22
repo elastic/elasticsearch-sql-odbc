@@ -7,7 +7,7 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1997 - 2020, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
@@ -20,6 +20,8 @@
  * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
  * KIND, either express or implied.
  *
+ * SPDX-License-Identifier: curl
+ *
  ***************************************************************************/
 #include "curl_setup.h"
 #include "timeval.h"
@@ -30,7 +32,7 @@ struct Curl_tree {
   struct Curl_tree *samen;   /* points to the next node with identical key */
   struct Curl_tree *samep;   /* points to the prev node with identical key */
   struct curltime key;        /* this node's "sort" key */
-  void *payload;             /* data the splay code doesn't care about */
+  void *payload;             /* data the splay code does not care about */
 };
 
 struct Curl_tree *Curl_splay(struct curltime i,

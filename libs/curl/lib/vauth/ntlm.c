@@ -5,7 +5,7 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2021, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
@@ -18,6 +18,8 @@
  * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
  * KIND, either express or implied.
  *
+ * SPDX-License-Identifier: curl
+ *
  ***************************************************************************/
 
 #include "curl_setup.h"
@@ -27,14 +29,13 @@
 /*
  * NTLM details:
  *
- * https://davenport.sourceforge.io/ntlm.html
+ * https://davenport.sourceforge.net/ntlm.html
  * https://www.innovation.ch/java/ntlm.html
  */
 
 #define DEBUG_ME 0
 
 #include "urldata.h"
-#include "non-ascii.h"
 #include "sendf.h"
 #include "curl_ntlm_core.h"
 #include "curl_gethostname.h"
@@ -43,12 +44,7 @@
 #include "warnless.h"
 #include "rand.h"
 #include "vtls/vtls.h"
-
-/* SSL backend-specific #if branches in this file must be kept in the order
-   documented in curl_ntlm_core. */
-#if defined(NTLM_NEEDS_NSS_INIT)
-#include "vtls/nssg.h" /* for Curl_nss_force_init() */
-#endif
+#include "strdup.h"
 
 #define BUILDING_CURL_NTLM_MSGS_C
 #include "vauth/vauth.h"
@@ -62,6 +58,10 @@
 
 /* "NTLMSSP" signature is always in ASCII regardless of the platform */
 #define NTLMSSP_SIGNATURE "\x4e\x54\x4c\x4d\x53\x53\x50"
+
+/* The fixed hostname we provide, in order to not leak our real local host
+   name. Copy the name used by Firefox. */
+#define NTLM_HOSTNAME "WORKSTATION"
 
 #if DEBUG_ME
 # define DEBUG_OUT(x) x
@@ -83,8 +83,6 @@ static void ntlm_print_flags(FILE *handle, unsigned long flags)
     fprintf(handle, "NTLMFLAG_NEGOTIATE_DATAGRAM_STYLE ");
   if(flags & NTLMFLAG_NEGOTIATE_LM_KEY)
     fprintf(handle, "NTLMFLAG_NEGOTIATE_LM_KEY ");
-  if(flags & NTLMFLAG_NEGOTIATE_NETWARE)
-    fprintf(handle, "NTLMFLAG_NEGOTIATE_NETWARE ");
   if(flags & NTLMFLAG_NEGOTIATE_NTLM_KEY)
     fprintf(handle, "NTLMFLAG_NEGOTIATE_NTLM_KEY ");
   if(flags & (1<<10))
@@ -187,11 +185,10 @@ static CURLcode ntlm_decode_type2_target(struct Curl_easy *data,
       }
 
       free(ntlm->target_info); /* replace any previous data */
-      ntlm->target_info = malloc(target_info_len);
+      ntlm->target_info = Curl_memdup(&type2[target_info_offset],
+                                      target_info_len);
       if(!ntlm->target_info)
         return CURLE_OUT_OF_MEMORY;
-
-      memcpy(ntlm->target_info, &type2[target_info_offset], target_info_len);
     }
   }
 
@@ -271,12 +268,7 @@ CURLcode Curl_auth_decode_ntlm_type2_message(struct Curl_easy *data,
   const unsigned char *type2 = Curl_bufref_ptr(type2ref);
   size_t type2len = Curl_bufref_len(type2ref);
 
-#if defined(NTLM_NEEDS_NSS_INIT)
-  /* Make sure the crypto backend is initialized */
-  result = Curl_nss_force_init(data);
-  if(result)
-    return result;
-#elif defined(CURL_DISABLE_VERBOSE_STRINGS)
+#if defined(CURL_DISABLE_VERBOSE_STRINGS)
   (void)data;
 #endif
 
@@ -333,10 +325,10 @@ static void unicodecpy(unsigned char *dest, const char *src, size_t length)
  * Parameters:
  *
  * data    [in]     - The session handle.
- * userp   [in]     - The user name in the format User or Domain\User.
+ * userp   [in]     - The username in the format User or Domain\User.
  * passwdp [in]     - The user's password.
  * service [in]     - The service type such as http, smtp, pop or imap.
- * host    [in]     - The host name.
+ * host    [in]     - The hostname.
  * ntlm    [in/out] - The NTLM data struct being used and modified.
  * out     [out]    - The result storage.
  *
@@ -377,18 +369,12 @@ CURLcode Curl_auth_create_ntlm_type1_message(struct Curl_easy *data,
   (void)data;
   (void)userp;
   (void)passwdp;
-  (void)service,
-  (void)hostname,
+  (void)service;
+  (void)hostname;
 
   /* Clean up any former leftovers and initialise to defaults */
   Curl_auth_cleanup_ntlm(ntlm);
 
-#if defined(USE_NTRESPONSES) && \
-    (defined(USE_NTLM2SESSION) || defined(USE_NTLM_V2))
-#define NTLM2FLAG NTLMFLAG_NEGOTIATE_NTLM2_KEY
-#else
-#define NTLM2FLAG 0
-#endif
   ntlmbuf = aprintf(NTLMSSP_SIGNATURE "%c"
                     "\x01%c%c%c" /* 32-bit type = 1 */
                     "%c%c%c%c"   /* 32-bit NTLM flag field */
@@ -398,9 +384,9 @@ CURLcode Curl_auth_create_ntlm_type1_message(struct Curl_easy *data,
                     "%c%c"       /* 2 zeroes */
                     "%c%c"       /* host length */
                     "%c%c"       /* host allocated space */
-                    "%c%c"       /* host name offset */
+                    "%c%c"       /* hostname offset */
                     "%c%c"       /* 2 zeroes */
-                    "%s"         /* host name */
+                    "%s"         /* hostname */
                     "%s",        /* domain string */
                     0,           /* trailing zero */
                     0, 0, 0,     /* part of type-1 long */
@@ -408,7 +394,7 @@ CURLcode Curl_auth_create_ntlm_type1_message(struct Curl_easy *data,
                     LONGQUARTET(NTLMFLAG_NEGOTIATE_OEM |
                                 NTLMFLAG_REQUEST_TARGET |
                                 NTLMFLAG_NEGOTIATE_NTLM_KEY |
-                                NTLM2FLAG |
+                                NTLMFLAG_NEGOTIATE_NTLM2_KEY |
                                 NTLMFLAG_NEGOTIATE_ALWAYS_SIGN),
                     SHORTPAIR(domlen),
                     SHORTPAIR(domlen),
@@ -433,18 +419,18 @@ CURLcode Curl_auth_create_ntlm_type1_message(struct Curl_easy *data,
             LONGQUARTET(NTLMFLAG_NEGOTIATE_OEM |
                         NTLMFLAG_REQUEST_TARGET |
                         NTLMFLAG_NEGOTIATE_NTLM_KEY |
-                        NTLM2FLAG |
+                        NTLMFLAG_NEGOTIATE_NTLM2_KEY |
                         NTLMFLAG_NEGOTIATE_ALWAYS_SIGN),
             NTLMFLAG_NEGOTIATE_OEM |
             NTLMFLAG_REQUEST_TARGET |
             NTLMFLAG_NEGOTIATE_NTLM_KEY |
-            NTLM2FLAG |
+            NTLMFLAG_NEGOTIATE_NTLM2_KEY |
             NTLMFLAG_NEGOTIATE_ALWAYS_SIGN);
     ntlm_print_flags(stderr,
                      NTLMFLAG_NEGOTIATE_OEM |
                      NTLMFLAG_REQUEST_TARGET |
                      NTLMFLAG_NEGOTIATE_NTLM_KEY |
-                     NTLM2FLAG |
+                     NTLMFLAG_NEGOTIATE_NTLM2_KEY |
                      NTLMFLAG_NEGOTIATE_ALWAYS_SIGN);
     fprintf(stderr, "\n****\n");
   });
@@ -462,7 +448,7 @@ CURLcode Curl_auth_create_ntlm_type1_message(struct Curl_easy *data,
  * Parameters:
  *
  * data    [in]     - The session handle.
- * userp   [in]     - The user name in the format User or Domain\User.
+ * userp   [in]     - The username in the format User or Domain\User.
  * passwdp [in]     - The user's password.
  * ntlm    [in/out] - The NTLM data struct being used and modified.
  * out     [out]    - The result storage.
@@ -484,7 +470,7 @@ CURLcode Curl_auth_create_ntlm_type3_message(struct Curl_easy *data,
            12    LM/LMv2 Response       security buffer
            20    NTLM/NTLMv2 Response   security buffer
            28    Target Name            security buffer
-           36    User Name              security buffer
+           36    username              security buffer
            44    Workstation Name       security buffer
           (52)   Session Key            security buffer (*)
           (60)   Flags                  long (*)
@@ -496,15 +482,13 @@ CURLcode Curl_auth_create_ntlm_type3_message(struct Curl_easy *data,
   CURLcode result = CURLE_OK;
   size_t size;
   unsigned char ntlmbuf[NTLM_BUFSIZE];
-  int lmrespoff;
+  unsigned int lmrespoff;
   unsigned char lmresp[24]; /* fixed-size */
-#ifdef USE_NTRESPONSES
-  int ntrespoff;
+  unsigned int ntrespoff;
   unsigned int ntresplen = 24;
   unsigned char ntresp[24]; /* fixed-size */
   unsigned char *ptr_ntresp = &ntresp[0];
   unsigned char *ntlmv2resp = NULL;
-#endif
   bool unicode = (ntlm->flags & NTLMFLAG_NEGOTIATE_UNICODE) ? TRUE : FALSE;
   char host[HOSTNAME_MAX + 1] = "";
   const char *user;
@@ -516,6 +500,8 @@ CURLcode Curl_auth_create_ntlm_type3_message(struct Curl_easy *data,
   size_t userlen = 0;
   size_t domlen = 0;
 
+  memset(lmresp, 0, sizeof(lmresp));
+  memset(ntresp, 0, sizeof(ntresp));
   user = strchr(userp, '\\');
   if(!user)
     user = strchr(userp, '/');
@@ -530,22 +516,22 @@ CURLcode Curl_auth_create_ntlm_type3_message(struct Curl_easy *data,
 
   userlen = strlen(user);
 
-  /* Get the machine's un-qualified host name as NTLM doesn't like the fully
+#ifndef NTLM_HOSTNAME
+  /* Get the machine's un-qualified hostname as NTLM does not like the fully
      qualified domain name */
   if(Curl_gethostname(host, sizeof(host))) {
-    infof(data, "gethostname() failed, continuing without!");
+    infof(data, "gethostname() failed, continuing without");
     hostlen = 0;
   }
   else {
     hostlen = strlen(host);
   }
+#else
+  (void)msnprintf(host, sizeof(host), "%s", NTLM_HOSTNAME);
+  hostlen = sizeof(NTLM_HOSTNAME)-1;
+#endif
 
-#if defined(USE_NTRESPONSES) && \
-    (defined(USE_NTLM2SESSION) || defined(USE_NTLM_V2))
-  /* We don't support NTLM2 or extended security if we don't have
-     USE_NTRESPONSES */
   if(ntlm->flags & NTLMFLAG_NEGOTIATE_NTLM2_KEY) {
-# if defined(USE_NTLM_V2)
     unsigned char ntbuffer[0x18];
     unsigned char entropy[8];
     unsigned char ntlmv2hash[0x18];
@@ -558,7 +544,7 @@ CURLcode Curl_auth_create_ntlm_type3_message(struct Curl_easy *data,
     if(result)
       return result;
 
-    result = Curl_ntlm_core_mk_nt_hash(data, passwdp, ntbuffer);
+    result = Curl_ntlm_core_mk_nt_hash(passwdp, ntbuffer);
     if(result)
       return result;
 
@@ -580,76 +566,30 @@ CURLcode Curl_auth_create_ntlm_type3_message(struct Curl_easy *data,
       return result;
 
     ptr_ntresp = ntlmv2resp;
-# else /* defined(USE_NTLM_V2) */
-    unsigned char ntbuffer[0x18];
-    unsigned char tmp[0x18];
-    unsigned char md5sum[MD5_DIGEST_LEN];
-    unsigned char entropy[8];
-
-    /* NTLM version 1 with extended security. */
-
-    /* Need to create 8 bytes random data */
-    result = Curl_rand(data, entropy, 8);
-    if(result)
-      return result;
-
-    /* 8 bytes random data as challenge in lmresp */
-    memcpy(lmresp, entropy, 8);
-
-    /* Pad with zeros */
-    memset(lmresp + 8, 0, 0x10);
-
-    /* Fill tmp with challenge(nonce?) + entropy */
-    memcpy(tmp, &ntlm->nonce[0], 8);
-    memcpy(tmp + 8, entropy, 8);
-
-    result = Curl_md5it(md5sum, tmp, 16);
-    if(result)
-      return result;
-
-    /* We shall only use the first 8 bytes of md5sum, but the des code in
-       Curl_ntlm_core_lm_resp only encrypt the first 8 bytes */
-    result = Curl_ntlm_core_mk_nt_hash(data, passwdp, ntbuffer);
-    if(result)
-      return result;
-
-    Curl_ntlm_core_lm_resp(ntbuffer, md5sum, ntresp);
-
-    /* End of NTLM2 Session code */
-    /* NTLM v2 session security is a misnomer because it is not NTLM v2.
-       It is NTLM v1 using the extended session security that is also
-       in NTLM v2 */
-# endif /* defined(USE_NTLM_V2) */
   }
-  else
-#endif
-  {
+  else {
 
-#ifdef USE_NTRESPONSES
     unsigned char ntbuffer[0x18];
-#endif
     unsigned char lmbuffer[0x18];
 
     /* NTLM version 1 */
 
-#ifdef USE_NTRESPONSES
-    result = Curl_ntlm_core_mk_nt_hash(data, passwdp, ntbuffer);
+    result = Curl_ntlm_core_mk_nt_hash(passwdp, ntbuffer);
     if(result)
       return result;
 
     Curl_ntlm_core_lm_resp(ntbuffer, &ntlm->nonce[0], ntresp);
-#endif
 
-    result = Curl_ntlm_core_mk_lm_hash(data, passwdp, lmbuffer);
+    result = Curl_ntlm_core_mk_lm_hash(passwdp, lmbuffer);
     if(result)
       return result;
 
     Curl_ntlm_core_lm_resp(lmbuffer, &ntlm->nonce[0], lmresp);
-    ntlm->flags &= ~NTLMFLAG_NEGOTIATE_NTLM2_KEY;
+    ntlm->flags &= ~(unsigned int)NTLMFLAG_NEGOTIATE_NTLM2_KEY;
 
     /* A safer but less compatible alternative is:
      *   Curl_ntlm_core_lm_resp(ntbuffer, &ntlm->nonce[0], lmresp);
-     * See https://davenport.sourceforge.io/ntlm.html#ntlmVersion2 */
+     * See https://davenport.sourceforge.net/ntlm.html#ntlmVersion2 */
   }
 
   if(unicode) {
@@ -659,12 +599,8 @@ CURLcode Curl_auth_create_ntlm_type3_message(struct Curl_easy *data,
   }
 
   lmrespoff = 64; /* size of the message header */
-#ifdef USE_NTRESPONSES
   ntrespoff = lmrespoff + 0x18;
   domoff = ntrespoff + ntresplen;
-#else
-  domoff = lmrespoff + 0x18;
-#endif
   useroff = domoff + domlen;
   hostoff = useroff + userlen;
 
@@ -711,7 +647,7 @@ CURLcode Curl_auth_create_ntlm_type3_message(struct Curl_easy *data,
                    /* LanManager response */
                    /* NT response */
 
-                   0,                /* zero termination */
+                   0,                /* null-termination */
                    0, 0, 0,          /* type-3 long, the 24 upper bits */
 
                    SHORTPAIR(0x18),  /* LanManager response length, twice */
@@ -719,17 +655,11 @@ CURLcode Curl_auth_create_ntlm_type3_message(struct Curl_easy *data,
                    SHORTPAIR(lmrespoff),
                    0x0, 0x0,
 
-#ifdef USE_NTRESPONSES
                    SHORTPAIR(ntresplen),  /* NT-response length, twice */
                    SHORTPAIR(ntresplen),
                    SHORTPAIR(ntrespoff),
                    0x0, 0x0,
-#else
-                   0x0, 0x0,
-                   0x0, 0x0,
-                   0x0, 0x0,
-                   0x0, 0x0,
-#endif
+
                    SHORTPAIR(domlen),
                    SHORTPAIR(domlen),
                    SHORTPAIR(domoff),
@@ -766,7 +696,6 @@ CURLcode Curl_auth_create_ntlm_type3_message(struct Curl_easy *data,
     ntlm_print_hex(stderr, (char *)&ntlmbuf[lmrespoff], 0x18);
   });
 
-#ifdef USE_NTRESPONSES
   /* ntresplen + size should not be risking an integer overflow here */
   if(ntresplen + size > sizeof(ntlmbuf)) {
     failf(data, "incoming NTLM message too big");
@@ -783,8 +712,6 @@ CURLcode Curl_auth_create_ntlm_type3_message(struct Curl_easy *data,
 
   free(ntlmv2resp);/* Free the dynamic buffer allocated for NTLMv2 */
 
-#endif
-
   DEBUG_OUT({
     fprintf(stderr, "\n   flags=0x%02.2x%02.2x%02.2x%02.2x 0x%08.8x ",
             LONGQUARTET(ntlm->flags), ntlm->flags);
@@ -795,7 +722,7 @@ CURLcode Curl_auth_create_ntlm_type3_message(struct Curl_easy *data,
   /* Make sure that the domain, user and host strings fit in the
      buffer before we copy them there. */
   if(size + userlen + domlen + hostlen >= NTLM_BUFSIZE) {
-    failf(data, "user + domain + host name too big");
+    failf(data, "user + domain + hostname too big");
     return CURLE_OUT_OF_MEMORY;
   }
 
@@ -822,12 +749,6 @@ CURLcode Curl_auth_create_ntlm_type3_message(struct Curl_easy *data,
     memcpy(&ntlmbuf[size], host, hostlen);
 
   size += hostlen;
-
-  /* Convert domain, user, and host to ASCII but leave the rest as-is */
-  result = Curl_convert_to_network(data, (char *)&ntlmbuf[domoff],
-                                   size - domoff);
-  if(result)
-    return CURLE_CONV_FAILED;
 
   /* Return the binary blob. */
   result = Curl_bufref_memdup(out, ntlmbuf, size);

@@ -5,7 +5,7 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2020, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
@@ -18,18 +18,15 @@
  * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
  * KIND, either express or implied.
  *
+ * SPDX-License-Identifier: curl
+ *
  ***************************************************************************/
 #include "test.h"
 
 #include "memdebug.h"
 
 static char data[]=
-#ifdef CURL_DOES_CONVERSIONS
-  /* ASCII representation with escape sequences for non-ASCII platforms */
-  "\x64\x75\x6d\x6d\x79\x0a";
-#else
   "dummy\n";
-#endif
 
 struct WriteThis {
   char *readptr;
@@ -38,23 +35,6 @@ struct WriteThis {
 
 static size_t read_callback(char *ptr, size_t size, size_t nmemb, void *userp)
 {
-#ifdef LIB644
-  static int count = 0;
-  (void)ptr;
-  (void)size;
-  (void)nmemb;
-  (void)userp;
-  switch(count++) {
-  case 0: /* Return a single byte. */
-    *ptr = '\n';
-    return 1;
-  case 1: /* Request abort. */
-    return CURL_READFUNC_ABORT;
-  }
-  printf("Wrongly called >2 times\n");
-  exit(1); /* trigger major failure */
-#else
-
   struct WriteThis *pooh = (struct WriteThis *)userp;
   int eof = !*pooh->readptr;
 
@@ -74,10 +54,9 @@ static size_t read_callback(char *ptr, size_t size, size_t nmemb, void *userp)
   }
 
   return 0;                         /* no more data left to deliver */
-#endif
 }
 
-static int once(char *URL, bool oldstyle)
+static CURLcode once(char *URL, bool oldstyle)
 {
   CURL *curl;
   CURLcode res = CURLE_OK;
@@ -178,15 +157,8 @@ static int once(char *URL, bool oldstyle)
   /* Fill in the filename field */
   res = curl_mime_name(part, "filename");
   if(!res)
-    res = curl_mime_data(part,
-#ifdef CURL_DOES_CONVERSIONS
-                         /* ASCII representation with escape
-                            sequences for non-ASCII platforms */
-                         "\x70\x6f\x73\x74\x69\x74\x32\x2e\x63",
-#else
-                          "postit2.c",
-#endif
-                          CURL_ZERO_TERMINATED);
+    res = curl_mime_data(part, "postit2.c",
+                         CURL_ZERO_TERMINATED);
 
   if(res)
     printf("curl_mime_xxx(3) = %s\n", curl_easy_strerror(res));
@@ -202,15 +174,8 @@ static int once(char *URL, bool oldstyle)
   }
   res = curl_mime_name(part, "submit");
   if(!res)
-    res = curl_mime_data(part,
-#ifdef CURL_DOES_CONVERSIONS
-                         /* ASCII representation with escape
-                            sequences for non-ASCII platforms */
-                         "\x73\x65\x6e\x64",
-#else
-                          "send",
-#endif
-                          CURL_ZERO_TERMINATED);
+    res = curl_mime_data(part, "send",
+                         CURL_ZERO_TERMINATED);
 
   if(res)
     printf("curl_mime_xxx(4) = %s\n", curl_easy_strerror(res));
@@ -258,7 +223,7 @@ test_cleanup:
   return res;
 }
 
-static int cyclic_add(void)
+static CURLcode cyclic_add(void)
 {
   CURL *easy = curl_easy_init();
   curl_mime *mime = curl_mime_init(easy);
@@ -277,14 +242,14 @@ static int cyclic_add(void)
   curl_easy_cleanup(easy);
   if(a1 != CURLE_BAD_FUNCTION_ARGUMENT)
     /* that should have failed */
-    return 1;
+    return (CURLcode)1;
 
-  return 0;
+  return CURLE_OK;
 }
 
-int test(char *URL)
+CURLcode test(char *URL)
 {
-  int res;
+  CURLcode res;
 
   if(curl_global_init(CURL_GLOBAL_ALL) != CURLE_OK) {
     fprintf(stderr, "curl_global_init() failed\n");

@@ -5,7 +5,7 @@
 #                            | (__| |_| |  _ <| |___
 #                             \___|\___/|_| \_\_____|
 #
-# Copyright (C) 1998 - 2021, Daniel Stenberg, <daniel@haxx.se>, et al.
+# Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
 #
 # This software is licensed as described in the file COPYING, which
 # you should have received as part of this distribution. The terms
@@ -18,288 +18,12 @@
 # This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
 # KIND, either express or implied.
 #
+# SPDX-License-Identifier: curl
+#
 #***************************************************************************
 
 # File version for 'aclocal' use. Keep it a single number.
 # serial 5
-
-
-dnl CURL_CHECK_OPENSSL_API_HEADERS
-dnl -------------------------------------------------
-dnl Find out OpenSSL headers API version, as reported
-dnl by OPENSSL_VERSION_NUMBER. No runtime checks
-dnl allowed here for cross-compilation support.
-dnl HAVE_OPENSSL_API_HEADERS is defined as appropriate
-dnl only for systems which actually run the configure
-dnl script. Config files generated manually or in any
-dnl other way shall not define this.
-
-AC_DEFUN([CURL_CHECK_OPENSSL_API_HEADERS], [
-  #
-  tst_api="unknown"
-  #
-  AC_MSG_CHECKING([for OpenSSL headers version])
-  CURL_CHECK_DEF([OPENSSL_VERSION_NUMBER], [
-#   ifdef USE_OPENSSL
-#     include <openssl/crypto.h>
-#   else
-#     include <crypto.h>
-#   endif
-    ], [silent])
-  CURL_CHECK_DEF([OPENSSL_VERSION_STR], [
-#     include <openssl/crypto.h>
-    ], [silent])
-  if test "$curl_cv_have_def_OPENSSL_VERSION_NUMBER" = "yes"; then
-    tst_verlen=`expr "$curl_cv_def_OPENSSL_VERSION_NUMBER" : '.*'`
-    case "x$tst_verlen" in
-      x6)
-        tst_vermaj=`echo $curl_cv_def_OPENSSL_VERSION_NUMBER | cut -c 3`
-        tst_vermin=`echo $curl_cv_def_OPENSSL_VERSION_NUMBER | cut -c 4`
-        tst_verfix=`echo $curl_cv_def_OPENSSL_VERSION_NUMBER | cut -c 5`
-        tst_api=0x$tst_vermaj$tst_vermin$tst_verfix
-        ;;
-      x11|x10)
-        tst_vermaj=`echo $curl_cv_def_OPENSSL_VERSION_NUMBER | cut -c 3`
-        tst_vermin=`echo $curl_cv_def_OPENSSL_VERSION_NUMBER | cut -c 5`
-        tst_verfix=`echo $curl_cv_def_OPENSSL_VERSION_NUMBER | cut -c 7`
-        tst_api=0x$tst_vermaj$tst_vermin$tst_verfix
-        ;;
-      *)
-        if test "$curl_cv_have_def_OPENSSL_VERSION_STR" = "yes"; then
-          ver=`echo $curl_cv_def_OPENSSL_VERSION_STR | sed 's/"//g'`;
-          tst_vermaj=`echo $ver | cut -d. -f1`
-          tst_vermin=`echo $ver | cut -d. -f2`
-          tst_verfix=`echo $ver | cut -d. -f3`
-          tst_show="$ver"
-          tst_api=0x$tst_vermaj$tst_vermin$tst_verfix
-        else
-          tst_api="unknown"
-        fi
-        ;;
-    esac
-    case $tst_api in
-      0x111) tst_show="1.1.1" ;;
-      0x110) tst_show="1.1.0" ;;
-      0x102) tst_show="1.0.2" ;;
-      0x101) tst_show="1.0.1" ;;
-      0x100) tst_show="1.0.0" ;;
-      0x099) tst_show="0.9.9" ;;
-      0x098) tst_show="0.9.8" ;;
-      0x097) tst_show="0.9.7" ;;
-      0x096) tst_show="0.9.6" ;;
-      0x095) tst_show="0.9.5" ;;
-      0x094) tst_show="0.9.4" ;;
-      0x093) tst_show="0.9.3" ;;
-      0x092) tst_show="0.9.2" ;;
-      0x091) tst_show="0.9.1" ;;
-      *)
-      if test -z "$tst_show"; then
-        tst_show="unknown"
-      fi
-      ;;
-    esac
-    tst_show="$tst_show - $tst_api"
-  else
-    tst_show="unknown"
-  fi
-  AC_MSG_RESULT([$tst_show])
-  #
-dnl if test "$tst_api" != "unknown"; then
-dnl AC_DEFINE_UNQUOTED(HAVE_OPENSSL_API_HEADERS, $tst_api,
-dnl   [OpenSSL headers configure time API. Defined only by configure script.
-dnl    No matter what, do not ever define this manually or by any other means.])
-dnl fi
-  curl_openssl_api_headers=$tst_api
-])
-
-
-dnl CURL_CHECK_OPENSSL_API_LIBRARY
-dnl -------------------------------------------------
-dnl Find out OpenSSL library API version, performing
-dnl only link tests in order to avoid getting fooled
-dnl by mismatched OpenSSL headers. No runtime checks
-dnl allowed here for cross-compilation support.
-dnl HAVE_OPENSSL_API_LIBRARY is defined as appropriate
-dnl only for systems which actually run the configure
-dnl script. Config files generated manually or in any
-dnl other way shall not define this.
-dnl
-dnl Most probably we should not bother attempting to
-dnl detect OpenSSL library development API versions
-dnl 0.9.9 and 1.1.0. For our intended use, detecting
-dnl released versions should be good enough.
-dnl
-dnl Given that currently we are not using the result
-dnl of this check, except for informative purposes,
-dnl lets try to figure out everything.
-
-AC_DEFUN([CURL_CHECK_OPENSSL_API_LIBRARY], [
-  #
-  tst_api="unknown"
-  #
-  AC_MSG_CHECKING([for OpenSSL library version])
-  if test "$tst_api" = "unknown"; then
-    AC_LINK_IFELSE([
-      AC_LANG_FUNC_LINK_TRY([SSL_CTX_load_verify_dir])
-    ],[
-      tst_api="0x300"
-    ])
-  fi
-  if test "$tst_api" = "unknown"; then
-    AC_LINK_IFELSE([
-      AC_LANG_FUNC_LINK_TRY([ERR_clear_last_mark])
-    ],[
-      tst_api="0x111"
-    ])
-  fi
-  if test "$tst_api" = "unknown"; then
-    case $host in
-      *-*-vms*)
-        AC_LINK_IFELSE([
-          AC_LANG_FUNC_LINK_TRY([SSL_CTX_set_not_resumbl_sess_cb])
-        ],[
-          tst_api="0x110"
-        ])
-        ;;
-      *)
-        AC_LINK_IFELSE([
-          AC_LANG_FUNC_LINK_TRY([SSL_CTX_set_not_resumable_session_callback])
-        ],[
-          tst_api="0x110"
-        ])
-        ;;
-    esac
-  fi
-  if test "$tst_api" = "unknown"; then
-    AC_LINK_IFELSE([
-      AC_LANG_FUNC_LINK_TRY([SSL_CONF_CTX_new])
-    ],[
-      tst_api="0x102"
-    ])
-  fi
-  if test "$tst_api" = "unknown"; then
-    AC_LINK_IFELSE([
-      AC_LANG_FUNC_LINK_TRY([SSL_renegotiate_abbreviated])
-    ],[
-      tst_api="0x101"
-    ])
-  fi
-  if test "$tst_api" = "unknown"; then
-    AC_LINK_IFELSE([
-      AC_LANG_FUNC_LINK_TRY([OBJ_add_sigid])
-    ],[
-      tst_api="0x100"
-    ])
-  fi
-  if test "$tst_api" = "unknown"; then
-    AC_LINK_IFELSE([
-      AC_LANG_FUNC_LINK_TRY([ERR_set_mark])
-    ],[
-      tst_api="0x098"
-    ])
-  fi
-  if test "$tst_api" = "unknown"; then
-    AC_LINK_IFELSE([
-      AC_LANG_FUNC_LINK_TRY([ERR_peek_last_error])
-    ],[
-      tst_api="0x097"
-    ])
-  fi
-  if test "$tst_api" = "unknown"; then
-    AC_LINK_IFELSE([
-      AC_LANG_FUNC_LINK_TRY([c2i_ASN1_OBJECT])
-    ],[
-      tst_api="0x096"
-    ])
-  fi
-  if test "$tst_api" = "unknown"; then
-    AC_LINK_IFELSE([
-      AC_LANG_FUNC_LINK_TRY([SSL_CTX_set_purpose])
-    ],[
-      tst_api="0x095"
-    ])
-  fi
-  if test "$tst_api" = "unknown"; then
-    AC_LINK_IFELSE([
-      AC_LANG_FUNC_LINK_TRY([OBJ_obj2txt])
-    ],[
-      tst_api="0x094"
-    ])
-  fi
-  if test "$tst_api" = "unknown"; then
-    AC_LINK_IFELSE([
-      AC_LANG_FUNC_LINK_TRY([SSL_get_verify_depth])
-    ],[
-      tst_api="0x093"
-    ])
-  fi
-  if test "$tst_api" = "unknown"; then
-    AC_LINK_IFELSE([
-      AC_LANG_FUNC_LINK_TRY([SSL_library_init])
-    ],[
-      tst_api="0x092"
-    ])
-  fi
-  if test "$tst_api" = "unknown"; then
-    AC_LINK_IFELSE([
-      AC_LANG_FUNC_LINK_TRY([SSL_CTX_set_cipher_list])
-    ],[
-      tst_api="0x091"
-    ])
-  fi
-  case $tst_api in
-    0x300) tst_show="3.0.0" ;;
-    0x111) tst_show="1.1.1" ;;
-    0x110) tst_show="1.1.0" ;;
-    0x102) tst_show="1.0.2" ;;
-    0x101) tst_show="1.0.1" ;;
-    0x100) tst_show="1.0.0" ;;
-    0x099) tst_show="0.9.9" ;;
-    0x098) tst_show="0.9.8" ;;
-    0x097) tst_show="0.9.7" ;;
-    0x096) tst_show="0.9.6" ;;
-    0x095) tst_show="0.9.5" ;;
-    0x094) tst_show="0.9.4" ;;
-    0x093) tst_show="0.9.3" ;;
-    0x092) tst_show="0.9.2" ;;
-    0x091) tst_show="0.9.1" ;;
-    *)     tst_show="unknown" ;;
-  esac
-  AC_MSG_RESULT([$tst_show])
-  #
-dnl if test "$tst_api" != "unknown"; then
-dnl AC_DEFINE_UNQUOTED(HAVE_OPENSSL_API_LIBRARY, $tst_api,
-dnl   [OpenSSL library link time API. Defined only by configure script.
-dnl    No matter what, do not ever define this manually or by any other means.])
-dnl fi
-  curl_openssl_api_library=$tst_api
-])
-
-
-dnl CURL_CHECK_OPENSSL_API
-dnl -------------------------------------------------
-
-AC_DEFUN([CURL_CHECK_OPENSSL_API], [
-  #
-  CURL_CHECK_OPENSSL_API_HEADERS
-  CURL_CHECK_OPENSSL_API_LIBRARY
-  #
-  tst_match="yes"
-  #
-  AC_MSG_CHECKING([for OpenSSL headers and library versions matching])
-  if test "$curl_openssl_api_headers" = "unknown" ||
-    test "$curl_openssl_api_library" = "unknown"; then
-    tst_match="fail"
-    tst_warns="Can not compare OpenSSL headers and library versions."
-  elif test "$curl_openssl_api_headers" != "$curl_openssl_api_library"; then
-    tst_match="no"
-    tst_warns="OpenSSL headers and library versions do not match."
-  fi
-  AC_MSG_RESULT([$tst_match])
-  if test "$tst_match" != "yes"; then
-    AC_MSG_WARN([$tst_warns])
-  fi
-])
 
 dnl **********************************************************************
 dnl Check for OpenSSL libraries and headers
@@ -378,7 +102,6 @@ if test "x$OPT_OPENSSL" != xno; then
       SSL_LDFLAGS="-L$LIB_OPENSSL"
       SSL_CPPFLAGS="-I$PREFIX_OPENSSL/include"
     fi
-    SSL_CPPFLAGS="$SSL_CPPFLAGS -I$PREFIX_OPENSSL/include/openssl"
     ;;
   esac
 
@@ -426,7 +149,7 @@ if test "x$OPT_OPENSSL" != xno; then
      fi
      if test "$PKGCONFIG" = "no" -a -n "$PREFIX_OPENSSL" ; then
        # only set this if pkg-config wasn't used
-       CPPFLAGS="$CLEANCPPFLAGS -I$PREFIX_OPENSSL/include/openssl -I$PREFIX_OPENSSL/include"
+       CPPFLAGS="$CLEANCPPFLAGS -I$PREFIX_OPENSSL/include"
      fi
      # Linking previously failed, try extra paths from --with-openssl or
      # pkg-config.  Use a different function name to avoid reusing the earlier
@@ -503,7 +226,7 @@ if test "x$OPT_OPENSSL" != xno; then
       AC_CHECK_HEADERS(openssl/x509.h openssl/rsa.h openssl/crypto.h \
                        openssl/pem.h openssl/ssl.h openssl/err.h,
         ssl_msg="OpenSSL"
-	test openssl != "$DEFAULT_SSL_BACKEND" || VALID_DEFAULT_SSL_BACKEND=yes
+        test openssl != "$DEFAULT_SSL_BACKEND" || VALID_DEFAULT_SSL_BACKEND=yes
         OPENSSL_ENABLED=1
         AC_DEFINE(USE_OPENSSL, 1, [if OpenSSL is in use]))
 
@@ -536,8 +259,6 @@ if test "x$OPT_OPENSSL" != xno; then
   if test X"$OPENSSL_ENABLED" = X"1"; then
     dnl These can only exist if OpenSSL exists
 
-    AC_CHECK_FUNCS( RAND_egd )
-
     AC_MSG_CHECKING([for BoringSSL])
     AC_COMPILE_IFELSE([
         AC_LANG_PROGRAM([[
@@ -549,14 +270,30 @@ if test "x$OPT_OPENSSL" != xno; then
        ]])
     ],[
         AC_MSG_RESULT([yes])
-        AC_DEFINE_UNQUOTED(HAVE_BORINGSSL, 1,
-                           [Define to 1 if using BoringSSL.])
         ssl_msg="BoringSSL"
+        OPENSSL_IS_BORINGSSL=1
     ],[
         AC_MSG_RESULT([no])
     ])
 
-    AC_MSG_CHECKING([for libressl])
+    AC_MSG_CHECKING([for AWS-LC])
+    AC_COMPILE_IFELSE([
+        AC_LANG_PROGRAM([[
+                #include <openssl/base.h>
+                ]],[[
+                #ifndef OPENSSL_IS_AWSLC
+                #error not AWS-LC
+                #endif
+       ]])
+    ],[
+        AC_MSG_RESULT([yes])
+        ssl_msg="AWS-LC"
+        OPENSSL_IS_BORINGSSL=1
+    ],[
+        AC_MSG_RESULT([no])
+    ])
+
+    AC_MSG_CHECKING([for LibreSSL])
     AC_COMPILE_IFELSE([
       AC_LANG_PROGRAM([[
 #include <openssl/opensslv.h>
@@ -566,8 +303,8 @@ if test "x$OPT_OPENSSL" != xno; then
     ],[
       AC_MSG_RESULT([yes])
       AC_DEFINE_UNQUOTED(HAVE_LIBRESSL, 1,
-        [Define to 1 if using libressl.])
-      ssl_msg="libressl"
+        [Define to 1 if using LibreSSL.])
+      ssl_msg="LibreSSL"
     ],[
       AC_MSG_RESULT([no])
     ])
@@ -577,7 +314,7 @@ if test "x$OPT_OPENSSL" != xno; then
       AC_LANG_PROGRAM([[
 #include <openssl/opensslv.h>
       ]],[[
-        #if defined(OPENSSL_VERSION_MAJOR) && (OPENSSL_VERSION_MAJOR >= 3)
+        #if (OPENSSL_VERSION_NUMBER >= 0x30000000L)
         return 0;
         #else
         #error older than 3
@@ -587,15 +324,19 @@ if test "x$OPT_OPENSSL" != xno; then
       AC_MSG_RESULT([yes])
       AC_DEFINE_UNQUOTED(HAVE_OPENSSL3, 1,
         [Define to 1 if using OpenSSL 3 or later.])
-      dnl OpenSSLv3 marks the DES functions deprecated but we have no
-      dnl replacements (yet) so tell the compiler to not warn for them
-      dnl
-      dnl Ask OpenSSL to suppress the warnings.
-      CPPFLAGS="$CPPFLAGS -DOPENSSL_SUPPRESS_DEPRECATED"
       ssl_msg="OpenSSL v3+"
     ],[
       AC_MSG_RESULT([no])
     ])
+  fi
+
+  dnl is this OpenSSL (fork) providing the original QUIC API?
+  AC_CHECK_FUNCS([SSL_set_quic_use_legacy_codepoint],
+                 [QUIC_ENABLED=yes])
+  if test "$QUIC_ENABLED" = "yes"; then
+    AC_MSG_NOTICE([OpenSSL fork speaks QUIC API])
+  else
+    AC_MSG_NOTICE([OpenSSL version does not speak QUIC API])
   fi
 
   if test "$OPENSSL_ENABLED" = "1"; then
@@ -609,8 +350,8 @@ if test "x$OPT_OPENSSL" != xno; then
          AC_MSG_NOTICE([Added $LIB_OPENSSL to CURL_LIBRARY_PATH])
        fi
     fi
-    CURL_CHECK_OPENSSL_API
     check_for_ca_bundle=1
+    LIBCURL_PC_REQUIRES_PRIVATE="$LIBCURL_PC_REQUIRES_PRIVATE openssl"
   fi
 
   test -z "$ssl_msg" || ssl_backends="${ssl_backends:+$ssl_backends, }$ssl_msg"
@@ -628,16 +369,6 @@ dnl Check for the random seed preferences
 dnl **********************************************************************
 
 if test X"$OPENSSL_ENABLED" = X"1"; then
-  AC_ARG_WITH(egd-socket,
-  AS_HELP_STRING([--with-egd-socket=FILE],
-                 [Entropy Gathering Daemon socket pathname]),
-      [ EGD_SOCKET="$withval" ]
-  )
-  if test -n "$EGD_SOCKET" ; then
-          AC_DEFINE_UNQUOTED(EGD_SOCKET, "$EGD_SOCKET",
-          [your Entropy Gathering Daemon socket pathname] )
-  fi
-
   dnl Check for user-specified random device
   AC_ARG_WITH(random,
   AS_HELP_STRING([--with-random=FILE],
@@ -663,11 +394,21 @@ dnl ---
 dnl We require OpenSSL with SRP support.
 dnl ---
 if test "$OPENSSL_ENABLED" = "1"; then
-  AC_CHECK_LIB(crypto, SRP_Calc_client_key,
-   [
-     AC_DEFINE(HAVE_OPENSSL_SRP, 1, [if you have the function SRP_Calc_client_key])
-     AC_SUBST(HAVE_OPENSSL_SRP, [1])
-   ])
+  AC_MSG_CHECKING([for SRP support in OpenSSL])
+  AC_LINK_IFELSE([
+    AC_LANG_PROGRAM([[
+#include <openssl/ssl.h>
+    ]],[[
+      SSL_CTX_set_srp_username(NULL, "");
+      SSL_CTX_set_srp_password(NULL, "");
+    ]])
+  ],[
+    AC_MSG_RESULT([yes])
+    AC_DEFINE(HAVE_OPENSSL_SRP, 1, [if you have the functions SSL_CTX_set_srp_username and SSL_CTX_set_srp_password])
+    AC_SUBST(HAVE_OPENSSL_SRP, [1])
+  ],[
+    AC_MSG_RESULT([no])
+  ])
 fi
 
 dnl ---
@@ -684,4 +425,26 @@ AS_HELP_STRING([--disable-openssl-auto-load-config],[Disable automatic loading o
 ])
 fi
 
+dnl ---
+dnl We may use OpenSSL QUIC.
+dnl ---
+if test "$OPENSSL_ENABLED" = "1"; then
+  AC_MSG_CHECKING([for QUIC support and OpenSSL >= 3.3])
+  AC_LINK_IFELSE([
+    AC_LANG_PROGRAM([[
+#include <openssl/ssl.h>
+    ]],[[
+      #if (OPENSSL_VERSION_NUMBER < 0x30300000L)
+      #error need at least version 3.3.0
+      #endif
+      OSSL_QUIC_client_method();
+    ]])
+  ],[
+    AC_MSG_RESULT([yes])
+    AC_DEFINE(HAVE_OPENSSL_QUIC, 1, [if you have the functions OSSL_QUIC_client_method])
+    AC_SUBST(HAVE_OPENSSL_QUIC, [1])
+  ],[
+    AC_MSG_RESULT([no])
+  ])
+fi
 ])

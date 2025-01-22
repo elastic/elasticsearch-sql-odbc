@@ -7,7 +7,7 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2020, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
@@ -19,6 +19,8 @@
  *
  * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
  * KIND, either express or implied.
+ *
+ * SPDX-License-Identifier: curl
  *
  ***************************************************************************/
 
@@ -42,9 +44,9 @@
 
 /*
  * Curl_addrinfo is our internal struct definition that we use to allow
- * consistent internal handling of this data. We use this even when the
- * system provides an addrinfo structure definition. And we use this for
- * all sorts of IPv4 and IPV6 builds.
+ * consistent internal handling of this data. We use this even when the system
+ * provides an addrinfo structure definition. We use this for all sorts of
+ * IPv4 and IPV6 builds.
  */
 
 struct Curl_addrinfo {
