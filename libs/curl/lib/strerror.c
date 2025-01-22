@@ -5,7 +5,7 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 2004 - 2021, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
@@ -18,18 +18,17 @@
  * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
  * KIND, either express or implied.
  *
+ * SPDX-License-Identifier: curl
+ *
  ***************************************************************************/
 
 #include "curl_setup.h"
 
 #ifdef HAVE_STRERROR_R
 #  if (!defined(HAVE_POSIX_STRERROR_R) && \
-       !defined(HAVE_GLIBC_STRERROR_R) && \
-       !defined(HAVE_VXWORKS_STRERROR_R)) || \
-      (defined(HAVE_POSIX_STRERROR_R) && defined(HAVE_VXWORKS_STRERROR_R)) || \
-      (defined(HAVE_GLIBC_STRERROR_R) && defined(HAVE_VXWORKS_STRERROR_R)) || \
+       !defined(HAVE_GLIBC_STRERROR_R)) || \
       (defined(HAVE_POSIX_STRERROR_R) && defined(HAVE_GLIBC_STRERROR_R))
-#    error "strerror_r MUST be either POSIX, glibc or vxworks-style"
+#    error "strerror_r MUST be either POSIX, glibc style"
 #  endif
 #endif
 
@@ -49,7 +48,7 @@
 #include "curl_memory.h"
 #include "memdebug.h"
 
-#if defined(WIN32) || defined(_WIN32_WCE)
+#if defined(_WIN32) || defined(_WIN32_WCE)
 #define PRESERVE_WINDOWS_ERROR_CODE
 #endif
 
@@ -75,13 +74,13 @@ curl_easy_strerror(CURLcode error)
       " this libcurl due to a build-time decision.";
 
   case CURLE_COULDNT_RESOLVE_PROXY:
-    return "Couldn't resolve proxy name";
+    return "Could not resolve proxy name";
 
   case CURLE_COULDNT_RESOLVE_HOST:
-    return "Couldn't resolve host name";
+    return "Could not resolve hostname";
 
   case CURLE_COULDNT_CONNECT:
-    return "Couldn't connect to server";
+    return "Could not connect to server";
 
   case CURLE_WEIRD_SERVER_REPLY:
     return "Weird server reply";
@@ -108,19 +107,19 @@ curl_easy_strerror(CURLcode error)
     return "FTP: unknown 227 response format";
 
   case CURLE_FTP_CANT_GET_HOST:
-    return "FTP: can't figure out the host in the PASV response";
+    return "FTP: cannot figure out the host in the PASV response";
 
   case CURLE_HTTP2:
     return "Error in the HTTP2 framing layer";
 
   case CURLE_FTP_COULDNT_SET_TYPE:
-    return "FTP: couldn't set file type";
+    return "FTP: could not set file type";
 
   case CURLE_PARTIAL_FILE:
     return "Transferred a partial file";
 
   case CURLE_FTP_COULDNT_RETR_FILE:
-    return "FTP: couldn't retrieve (RETR failed) the specified file";
+    return "FTP: could not retrieve (RETR failed) the specified file";
 
   case CURLE_QUOTE_ERROR:
     return "Quote command returned error";
@@ -159,10 +158,10 @@ curl_easy_strerror(CURLcode error)
     return "SSL connect error";
 
   case CURLE_BAD_DOWNLOAD_RESUME:
-    return "Couldn't resume download";
+    return "Could not resume download";
 
   case CURLE_FILE_COULDNT_READ_FILE:
-    return "Couldn't read a file:// file";
+    return "Could not read a file:// file";
 
   case CURLE_LDAP_CANNOT_BIND:
     return "LDAP: cannot bind";
@@ -182,13 +181,13 @@ curl_easy_strerror(CURLcode error)
   case CURLE_INTERFACE_FAILED:
     return "Failed binding local connection end";
 
-  case CURLE_TOO_MANY_REDIRECTS :
+  case CURLE_TOO_MANY_REDIRECTS:
     return "Number of redirects hit maximum amount";
 
   case CURLE_UNKNOWN_OPTION:
     return "An unknown option was passed in to libcurl";
 
-  case CURLE_SETOPT_OPTION_SYNTAX :
+  case CURLE_SETOPT_OPTION_SYNTAX:
     return "Malformed option provided in a setopt";
 
   case CURLE_GOT_NOTHING:
@@ -213,7 +212,7 @@ curl_easy_strerror(CURLcode error)
     return "Problem with the local SSL certificate";
 
   case CURLE_SSL_CIPHER:
-    return "Couldn't use specified SSL cipher";
+    return "Could not use specified SSL cipher";
 
   case CURLE_PEER_FAILED_VERIFICATION:
     return "SSL peer certificate or SSH remote key was not OK";
@@ -223,9 +222,6 @@ curl_easy_strerror(CURLcode error)
 
   case CURLE_BAD_CONTENT_ENCODING:
     return "Unrecognized or bad HTTP Content or Transfer-Encoding";
-
-  case CURLE_LDAP_INVALID_URL:
-    return "Invalid LDAP URL";
 
   case CURLE_FILESIZE_EXCEEDED:
     return "Maximum file size exceeded";
@@ -268,12 +264,6 @@ curl_easy_strerror(CURLcode error)
 
   case CURLE_TFTP_NOSUCHUSER:
     return "TFTP: No such user";
-
-  case CURLE_CONV_FAILED:
-    return "Conversion failed";
-
-  case CURLE_CONV_REQD:
-    return "Caller must register CURLOPT_CONV_ callback options";
 
   case CURLE_REMOTE_FILE_NOT_FOUND:
     return "Remote file not found";
@@ -326,6 +316,15 @@ curl_easy_strerror(CURLcode error)
   case CURLE_SSL_CLIENTCERT:
     return "SSL Client Certificate required";
 
+  case CURLE_UNRECOVERABLE_POLL:
+    return "Unrecoverable error in select/poll";
+
+  case CURLE_TOO_LARGE:
+    return "A value or data field grew larger than allowed";
+
+  case CURLE_ECH_REQUIRED:
+    return "ECH attempted but failed";
+
     /* error codes not used by current libcurl */
   case CURLE_OBSOLETE20:
   case CURLE_OBSOLETE24:
@@ -337,22 +336,24 @@ curl_easy_strerror(CURLcode error)
   case CURLE_OBSOLETE50:
   case CURLE_OBSOLETE51:
   case CURLE_OBSOLETE57:
+  case CURLE_OBSOLETE62:
+  case CURLE_OBSOLETE75:
+  case CURLE_OBSOLETE76:
   case CURL_LAST:
     break;
   }
   /*
    * By using a switch, gcc -Wall will complain about enum values
    * which do not appear, helping keep this function up-to-date.
-   * By using gcc -Wall -Werror, you can't forget.
+   * By using gcc -Wall -Werror, you cannot forget.
    *
-   * A table would not have the same benefit.  Most compilers will
-   * generate code very similar to a table in any case, so there
-   * is little performance gain from a table.  And something is broken
-   * for the user's application, anyways, so does it matter how fast
-   * it _doesn't_ work?
+   * A table would not have the same benefit. Most compilers will generate
+   * code very similar to a table in any case, so there is little performance
+   * gain from a table. Something is broken for the user's application,
+   * anyways, so does it matter how fast it _does not_ work?
    *
-   * The line number for the error will be near this comment, which
-   * is why it is here, and not at the start of the switch.
+   * The line number for the error will be near this comment, which is why it
+   * is here, and not at the start of the switch.
    */
   return "Unknown error";
 #else
@@ -406,6 +407,9 @@ curl_multi_strerror(CURLMcode error)
 
   case CURLM_ABORTED_BY_CALLBACK:
     return "Operation was aborted by an application callback";
+
+  case CURLM_UNRECOVERABLE_POLL:
+    return "Unrecoverable error in select/poll";
 
   case CURLM_LAST:
     break;
@@ -477,7 +481,7 @@ curl_url_strerror(CURLUcode error)
     return "Port number was not a decimal number between 0 and 65535";
 
   case CURLUE_UNSUPPORTED_SCHEME:
-    return "This libcurl build doesn't support the given URL scheme";
+    return "Unsupported URL scheme";
 
   case CURLUE_URLDECODE:
     return "URL decode error, most likely because of rubbish in the input";
@@ -531,7 +535,7 @@ curl_url_strerror(CURLUcode error)
     return "Bad file:// URL";
 
   case CURLUE_BAD_SLASHES:
-    return "Unsupported number of slashes";
+    return "Unsupported number of slashes following scheme";
 
   case CURLUE_BAD_SCHEME:
     return "Bad scheme";
@@ -550,6 +554,12 @@ curl_url_strerror(CURLUcode error)
 
   case CURLUE_BAD_USER:
     return "Bad user";
+
+  case CURLUE_LACKS_IDN:
+    return "libcurl lacks IDN support";
+
+  case CURLUE_TOO_LARGE:
+    return "A value or data field is larger than allowed";
 
   case CURLUE_LAST:
     break;
@@ -570,10 +580,11 @@ curl_url_strerror(CURLUcode error)
  * Returns NULL if no error message was found for error code.
  */
 static const char *
-get_winsock_error (int err, char *buf, size_t len)
+get_winsock_error(int err, char *buf, size_t len)
 {
 #ifndef CURL_DISABLE_VERBOSE_STRINGS
   const char *p;
+  size_t alen;
 #endif
 
   if(!len)
@@ -753,14 +764,15 @@ get_winsock_error (int err, char *buf, size_t len)
   default:
     return NULL;
   }
-  strncpy(buf, p, len);
-  buf [len-1] = '\0';
+  alen = strlen(p);
+  if(alen < len)
+    strcpy(buf, p);
   return buf;
 #endif
 }
 #endif   /* USE_WINSOCK */
 
-#if defined(WIN32) || defined(_WIN32_WCE)
+#if defined(_WIN32) || defined(_WIN32_WCE)
 /* This is a helper function for Curl_strerror that converts Windows API error
  * codes (GetLastError) to error messages.
  * Returns NULL if no error message was found for error code.
@@ -782,7 +794,7 @@ get_winapi_error(int err, char *buf, size_t buflen)
      expect the local codepage (eg fprintf, failf, infof).
      FormatMessageW -> wcstombs is used for Windows CE compatibility. */
   if(FormatMessageW((FORMAT_MESSAGE_FROM_SYSTEM |
-                     FORMAT_MESSAGE_IGNORE_INSERTS), NULL, err,
+                     FORMAT_MESSAGE_IGNORE_INSERTS), NULL, (DWORD)err,
                     LANG_NEUTRAL, wbuf, sizeof(wbuf)/sizeof(wchar_t), NULL)) {
     size_t written = wcstombs(buf, wbuf, buflen - 1);
     if(written != (size_t)-1)
@@ -802,7 +814,7 @@ get_winapi_error(int err, char *buf, size_t buflen)
 
   return (*buf ? buf : NULL);
 }
-#endif /* WIN32 || _WIN32_WCE */
+#endif /* _WIN32 || _WIN32_WCE */
 
 /*
  * Our thread-safe and smart strerror() replacement.
@@ -810,9 +822,9 @@ get_winapi_error(int err, char *buf, size_t buflen)
  * The 'err' argument passed in to this function MUST be a true errno number
  * as reported on this system. We do no range checking on the number before
  * we pass it to the "number-to-message" conversion function and there might
- * be systems that don't do proper range checking in there themselves.
+ * be systems that do not do proper range checking in there themselves.
  *
- * We don't do range checking (on systems other than Windows) since there is
+ * We do not do range checking (on systems other than Windows) since there is
  * no good reliable and portable way to do it.
  *
  * On Windows different types of error codes overlap. This function has an
@@ -830,32 +842,30 @@ const char *Curl_strerror(int err, char *buf, size_t buflen)
 #endif
   int old_errno = errno;
   char *p;
-  size_t max;
 
   if(!buflen)
     return NULL;
 
-#ifndef WIN32
+#ifndef _WIN32
   DEBUGASSERT(err >= 0);
 #endif
 
-  max = buflen - 1;
   *buf = '\0';
 
-#if defined(WIN32) || defined(_WIN32_WCE)
-#if defined(WIN32)
+#if defined(_WIN32) || defined(_WIN32_WCE)
+#if defined(_WIN32)
   /* 'sys_nerr' is the maximum errno number, it is not widely portable */
   if(err >= 0 && err < sys_nerr)
-    strncpy(buf, sys_errlist[err], max);
+    msnprintf(buf, buflen, "%s", sys_errlist[err]);
   else
 #endif
   {
     if(
 #ifdef USE_WINSOCK
-       !get_winsock_error(err, buf, max) &&
+       !get_winsock_error(err, buf, buflen) &&
 #endif
-       !get_winapi_error((DWORD)err, buf, max))
-      msnprintf(buf, max, "Unknown error %d (%#x)", err, err);
+       !get_winapi_error(err, buf, buflen))
+      msnprintf(buf, buflen, "Unknown error %d (%#x)", err, err);
   }
 #else /* not Windows coming up */
 
@@ -865,9 +875,9 @@ const char *Curl_strerror(int err, char *buf, size_t buflen)
   * storage is supplied via 'strerrbuf' and 'buflen' to hold the generated
   * message string, or EINVAL if 'errnum' is not a valid error number.
   */
-  if(0 != strerror_r(err, buf, max)) {
+  if(0 != strerror_r(err, buf, buflen)) {
     if('\0' == buf[0])
-      msnprintf(buf, max, "Unknown error %d", err);
+      msnprintf(buf, buflen, "Unknown error %d", err);
   }
 #elif defined(HAVE_STRERROR_R) && defined(HAVE_GLIBC_STRERROR_R)
  /*
@@ -879,36 +889,22 @@ const char *Curl_strerror(int err, char *buf, size_t buflen)
     char buffer[256];
     char *msg = strerror_r(err, buffer, sizeof(buffer));
     if(msg)
-      strncpy(buf, msg, max);
+      msnprintf(buf, buflen, "%s", msg);
     else
-      msnprintf(buf, max, "Unknown error %d", err);
-  }
-#elif defined(HAVE_STRERROR_R) && defined(HAVE_VXWORKS_STRERROR_R)
- /*
-  * The vxworks-style strerror_r() does use the buffer we pass to the function.
-  * The buffer size should be at least NAME_MAX (256)
-  */
-  {
-    char buffer[256];
-    if(OK == strerror_r(err, buffer))
-      strncpy(buf, buffer, max);
-    else
-      msnprintf(buf, max, "Unknown error %d", err);
+      msnprintf(buf, buflen, "Unknown error %d", err);
   }
 #else
   {
     /* !checksrc! disable STRERROR 1 */
     const char *msg = strerror(err);
     if(msg)
-      strncpy(buf, msg, max);
+      msnprintf(buf, buflen, "%s", msg);
     else
-      msnprintf(buf, max, "Unknown error %d", err);
+      msnprintf(buf, buflen, "Unknown error %d", err);
   }
 #endif
 
 #endif /* end of not Windows */
-
-  buf[max] = '\0'; /* make sure the string is null-terminated */
 
   /* strip trailing '\r\n' or '\n'. */
   p = strrchr(buf, '\n');
@@ -933,7 +929,7 @@ const char *Curl_strerror(int err, char *buf, size_t buflen)
  * Curl_winapi_strerror:
  * Variant of Curl_strerror if the error code is definitely Windows API.
  */
-#if defined(WIN32) || defined(_WIN32_WCE)
+#if defined(_WIN32) || defined(_WIN32_WCE)
 const char *Curl_winapi_strerror(DWORD err, char *buf, size_t buflen)
 {
 #ifdef PRESERVE_WINDOWS_ERROR_CODE
@@ -947,14 +943,14 @@ const char *Curl_winapi_strerror(DWORD err, char *buf, size_t buflen)
   *buf = '\0';
 
 #ifndef CURL_DISABLE_VERBOSE_STRINGS
-  if(!get_winapi_error(err, buf, buflen)) {
-    msnprintf(buf, buflen, "Unknown error %u (0x%08X)", err, err);
+  if(!get_winapi_error((int)err, buf, buflen)) {
+    msnprintf(buf, buflen, "Unknown error %lu (0x%08lX)", err, err);
   }
 #else
   {
     const char *txt = (err == ERROR_SUCCESS) ? "No error" : "Error";
-    strncpy(buf, txt, buflen);
-    buf[buflen - 1] = '\0';
+    if(strlen(txt) < buflen)
+      strcpy(buf, txt);
   }
 #endif
 
@@ -968,7 +964,7 @@ const char *Curl_winapi_strerror(DWORD err, char *buf, size_t buflen)
 
   return buf;
 }
-#endif /* WIN32 || _WIN32_WCE */
+#endif /* _WIN32 || _WIN32_WCE */
 
 #ifdef USE_WINDOWS_SSPI
 /*
@@ -996,6 +992,10 @@ const char *Curl_sspi_strerror(int err, char *buf, size_t buflen)
       break;
 #define SEC2TXT(sec) case sec: txt = #sec; break
     SEC2TXT(CRYPT_E_REVOKED);
+    SEC2TXT(CRYPT_E_NO_REVOCATION_DLL);
+    SEC2TXT(CRYPT_E_NO_REVOCATION_CHECK);
+    SEC2TXT(CRYPT_E_REVOCATION_OFFLINE);
+    SEC2TXT(CRYPT_E_NOT_IN_REVOCATION_DATABASE);
     SEC2TXT(SEC_E_ALGORITHM_MISMATCH);
     SEC2TXT(SEC_E_BAD_BINDINGS);
     SEC2TXT(SEC_E_BAD_PKGID);
@@ -1087,17 +1087,11 @@ const char *Curl_sspi_strerror(int err, char *buf, size_t buflen)
               err);
   }
   else {
-    char txtbuf[80];
     char msgbuf[256];
-
-    msnprintf(txtbuf, sizeof(txtbuf), "%s (0x%08X)", txt, err);
-
     if(get_winapi_error(err, msgbuf, sizeof(msgbuf)))
-      msnprintf(buf, buflen, "%s - %s", txtbuf, msgbuf);
-    else {
-      strncpy(buf, txtbuf, buflen);
-      buf[buflen - 1] = '\0';
-    }
+      msnprintf(buf, buflen, "%s (0x%08X) - %s", txt, err, msgbuf);
+    else
+      msnprintf(buf, buflen, "%s (0x%08X)", txt, err);
   }
 
 #else
@@ -1105,8 +1099,8 @@ const char *Curl_sspi_strerror(int err, char *buf, size_t buflen)
     txt = "No error";
   else
     txt = "Error";
-  strncpy(buf, txt, buflen);
-  buf[buflen - 1] = '\0';
+  if(buflen > strlen(txt))
+    strcpy(buf, txt);
 #endif
 
   if(errno != old_errno)

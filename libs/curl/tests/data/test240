@@ -29,15 +29,15 @@ Funny-head: yesyes
 # Client-side
 <client>
 <features>
-ipv6
+IPv6
 </features>
 <server>
 http-ipv6
 </server>
- <name>
+<name>
 HTTP-IPv6 GET
- </name>
- <command>
+</name>
+<command>
 -g "http://%HOST6IP:%HTTP6PORT/%TESTNUMBER"
 </command>
 </client>

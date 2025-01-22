@@ -1,14 +1,10 @@
-![curl logo](https://curl.se/logo/curl-logo.svg)
+<!--
+Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
 
-[![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/63/badge)](https://bestpractices.coreinfrastructure.org/projects/63)
-[![Coverity passed](https://scan.coverity.com/projects/curl/badge.svg)](https://scan.coverity.com/projects/curl)
-[![AppVeyor Build Status](https://ci.appveyor.com/api/projects/status/l1vv31029huhf4g4?svg=true)](https://ci.appveyor.com/project/curlorg/curl)
-[![Azure DevOps Build Status](https://dev.azure.com/daniel0244/curl/_apis/build/status/curl.curl?branchName=master)](https://dev.azure.com/daniel0244/curl/_build/latest?definitionId=1&branchName=master)
-[![Cirrus Build Status](https://api.cirrus-ci.com/github/curl/curl.svg?branch=master)](https://cirrus-ci.com/github/curl/curl)
-[![Backers on Open Collective](https://opencollective.com/curl/backers/badge.svg)](#backers)
-[![Sponsors on Open Collective](https://opencollective.com/curl/sponsors/badge.svg)](#sponsors)
-[![Language Grade: C/C++](https://img.shields.io/lgtm/grade/cpp/g/curl/curl.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/curl/curl/context:cpp)
-[![Fuzzing Status](https://oss-fuzz-build-logs.storage.googleapis.com/badges/curl.svg)](https://bugs.chromium.org/p/oss-fuzz/issues/list?sort=-opened&can=1&q=proj:curl)
+SPDX-License-Identifier: curl
+-->
+
+# [![curl logo](https://curl.se/logo/curl-logo.svg)](https://curl.se/)
 
 Curl is a command-line tool for transferring data specified with URL
 syntax. Find out how to use curl by reading [the curl.1 man
@@ -46,7 +42,7 @@ downloads.
 
 ## Git
 
-To download the latest source from the Git server do this:
+To download the latest source from the Git server, do this:
 
     git clone https://github.com/curl/curl.git
 
@@ -55,7 +51,7 @@ To download the latest source from the Git server do this:
 ## Security problems
 
 Report suspected security problems via [our HackerOne
-page](https://hackerone.com/curl) and not in public!
+page](https://hackerone.com/curl) and not in public.
 
 ## Notice
 
@@ -65,23 +61,8 @@ distribution terms.
 
 ## Backers
 
-Thank you to all our backers! 🙏 [[Become a backer](https://opencollective.com/curl#backer)]
-
-<a href="https://opencollective.com/curl#backers" target="_blank"><img src="https://opencollective.com/curl/backers.svg?width=890"></a>
+Thank you to all our backers! 🙏 [Become a backer](https://opencollective.com/curl#section-contribute).
 
 ## Sponsors
 
-Support this project by becoming a sponsor. Your logo will show up here with a
-link to your website. [[Become a
-sponsor](https://opencollective.com/curl#sponsor)]
-
-<a href="https://opencollective.com/curl/sponsor/0/website" target="_blank"><img src="https://opencollective.com/curl/sponsor/0/avatar.svg"></a>
-<a href="https://opencollective.com/curl/sponsor/1/website" target="_blank"><img src="https://opencollective.com/curl/sponsor/1/avatar.svg"></a>
-<a href="https://opencollective.com/curl/sponsor/2/website" target="_blank"><img src="https://opencollective.com/curl/sponsor/2/avatar.svg"></a>
-<a href="https://opencollective.com/curl/sponsor/3/website" target="_blank"><img src="https://opencollective.com/curl/sponsor/3/avatar.svg"></a>
-<a href="https://opencollective.com/curl/sponsor/4/website" target="_blank"><img src="https://opencollective.com/curl/sponsor/4/avatar.svg"></a>
-<a href="https://opencollective.com/curl/sponsor/5/website" target="_blank"><img src="https://opencollective.com/curl/sponsor/5/avatar.svg"></a>
-<a href="https://opencollective.com/curl/sponsor/6/website" target="_blank"><img src="https://opencollective.com/curl/sponsor/6/avatar.svg"></a>
-<a href="https://opencollective.com/curl/sponsor/7/website" target="_blank"><img src="https://opencollective.com/curl/sponsor/7/avatar.svg"></a>
-<a href="https://opencollective.com/curl/sponsor/8/website" target="_blank"><img src="https://opencollective.com/curl/sponsor/8/avatar.svg"></a>
-<a href="https://opencollective.com/curl/sponsor/9/website" target="_blank"><img src="https://opencollective.com/curl/sponsor/9/avatar.svg"></a>
+Support this project by becoming a [sponsor](https://curl.se/sponsors.html).

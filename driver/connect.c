@@ -23,7 +23,9 @@
 #ifndef CURL_STATICLIB
 #error "dynamically linked cURL library is not supported"
 #else
-#include "../lib/curl_base64.h"
+/* "../lib/curl_base64.h" redefines the function(s) since 8.3.0 */
+extern CURLcode Curl_base64_decode(const char *src,
+                            unsigned char **outptr, size_t *outlen);
 #endif /*! CURL_STATICLIB*/
 
 /* HTTP headers default for every request */

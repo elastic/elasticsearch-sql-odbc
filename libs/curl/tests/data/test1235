@@ -30,10 +30,10 @@ two is nice too
 <server>
 http
 </server>
- <name>
+<name>
 multiple requests using {}{} in the URL
- </name>
- <command>
+</name>
+<command>
 "%HOSTIP:%HTTPPORT/{%TESTNUMBER,%TESTNUMBER}{0001,0002}"
 </command>
 </client>
@@ -63,25 +63,21 @@ Accept: */*
 
 </protocol>
 <stdout>
---_curl_--%HOSTIP:%HTTPPORT/%TESTNUMBER0001
 HTTP/1.1 200 OK
 Funny-head: yesyes
 Content-Length: 15
 
 the number one
---_curl_--%HOSTIP:%HTTPPORT/%TESTNUMBER0002
 HTTP/1.1 200 OK
 Funny-head: yesyes
 Content-Length: 16
 
 two is nice too
---_curl_--%HOSTIP:%HTTPPORT/%TESTNUMBER0001
 HTTP/1.1 200 OK
 Funny-head: yesyes
 Content-Length: 15
 
 the number one
---_curl_--%HOSTIP:%HTTPPORT/%TESTNUMBER0002
 HTTP/1.1 200 OK
 Funny-head: yesyes
 Content-Length: 16

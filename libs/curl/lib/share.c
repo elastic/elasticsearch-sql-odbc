@@ -5,7 +5,7 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2021, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
@@ -18,18 +18,23 @@
  * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
  * KIND, either express or implied.
  *
+ * SPDX-License-Identifier: curl
+ *
  ***************************************************************************/
 
 #include "curl_setup.h"
 
 #include <curl/curl.h>
 #include "urldata.h"
+#include "connect.h"
 #include "share.h"
 #include "psl.h"
 #include "vtls/vtls.h"
-#include "curl_memory.h"
+#include "hsts.h"
 
-/* The last #include file should be: */
+/* The last 3 #include files should be in this order */
+#include "curl_printf.h"
+#include "curl_memory.h"
 #include "memdebug.h"
 
 struct Curl_share *
@@ -39,7 +44,7 @@ curl_share_init(void)
   if(share) {
     share->magic = CURL_GOOD_SHARE;
     share->specifier |= (1<<CURL_LOCK_DATA_SHARE);
-    Curl_init_dnscache(&share->hostcache);
+    Curl_init_dnscache(&share->hostcache, 23);
   }
 
   return share;
@@ -60,7 +65,7 @@ curl_share_setopt(struct Curl_share *share, CURLSHoption option, ...)
     return CURLSHE_INVALID;
 
   if(share->dirty)
-    /* don't allow setting options while one or more handles are already
+    /* do not allow setting options while one or more handles are already
        using this share */
     return CURLSHE_IN_USE;
 
@@ -87,6 +92,18 @@ curl_share_setopt(struct Curl_share *share, CURLSHoption option, ...)
 #endif
       break;
 
+    case CURL_LOCK_DATA_HSTS:
+#ifndef CURL_DISABLE_HSTS
+      if(!share->hsts) {
+        share->hsts = Curl_hsts_init();
+        if(!share->hsts)
+          res = CURLSHE_NOMEM;
+      }
+#else   /* CURL_DISABLE_HSTS */
+      res = CURLSHE_NOT_BUILT_IN;
+#endif
+      break;
+
     case CURL_LOCK_DATA_SSL_SESSION:
 #ifdef USE_SSL
       if(!share->sslsession) {
@@ -103,7 +120,7 @@ curl_share_setopt(struct Curl_share *share, CURLSHoption option, ...)
       break;
 
     case CURL_LOCK_DATA_CONNECT:
-      if(Curl_conncache_init(&share->conn_cache, 103))
+      if(Curl_conncache_init(&share->conn_cache, NULL, 103))
         res = CURLSHE_NOMEM;
       break;
 
@@ -117,13 +134,13 @@ curl_share_setopt(struct Curl_share *share, CURLSHoption option, ...)
       res = CURLSHE_BAD_OPTION;
     }
     if(!res)
-      share->specifier |= (1<<type);
+      share->specifier |= (unsigned int)(1<<type);
     break;
 
   case CURLSHOPT_UNSHARE:
     /* this is a type this share will no longer share */
     type = va_arg(param, int);
-    share->specifier &= ~(1<<type);
+    share->specifier &= ~(unsigned int)(1<<type);
     switch(type) {
     case CURL_LOCK_DATA_DNS:
       break;
@@ -135,6 +152,16 @@ curl_share_setopt(struct Curl_share *share, CURLSHoption option, ...)
         share->cookies = NULL;
       }
 #else   /* CURL_DISABLE_HTTP */
+      res = CURLSHE_NOT_BUILT_IN;
+#endif
+      break;
+
+    case CURL_LOCK_DATA_HSTS:
+#ifndef CURL_DISABLE_HSTS
+      if(share->hsts) {
+        Curl_hsts_cleanup(&share->hsts);
+      }
+#else   /* CURL_DISABLE_HSTS */
       res = CURLSHE_NOT_BUILT_IN;
 #endif
       break;
@@ -205,6 +232,10 @@ curl_share_cleanup(struct Curl_share *share)
   Curl_cookie_cleanup(share->cookies);
 #endif
 
+#ifndef CURL_DISABLE_HSTS
+  Curl_hsts_cleanup(&share->hsts);
+#endif
+
 #ifdef USE_SSL
   if(share->sslsession) {
     size_t i;
@@ -234,11 +265,11 @@ Curl_share_lock(struct Curl_easy *data, curl_lock_data type,
   if(!share)
     return CURLSHE_INVALID;
 
-  if(share->specifier & (1<<type)) {
+  if(share->specifier & (unsigned int)(1<<type)) {
     if(share->lockfunc) /* only call this if set! */
       share->lockfunc(data, type, accesstype, share->clientdata);
   }
-  /* else if we don't share this, pretend successful lock */
+  /* else if we do not share this, pretend successful lock */
 
   return CURLSHE_OK;
 }
@@ -251,7 +282,7 @@ Curl_share_unlock(struct Curl_easy *data, curl_lock_data type)
   if(!share)
     return CURLSHE_INVALID;
 
-  if(share->specifier & (1<<type)) {
+  if(share->specifier & (unsigned int)(1<<type)) {
     if(share->unlockfunc) /* only call this if set! */
       share->unlockfunc (data, type, share->clientdata);
   }
