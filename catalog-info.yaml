@@ -21,7 +21,7 @@ spec:
       repository: elastic/elasticsearch-sql-odbc
       pipeline_file: .buildkite/pipeline.yml
       default_branch: main
-      branch_configuration: "main 8.* 7.17"
+      branch_configuration: "main 9.* 8.* 7.17"
       provider_settings:
         trigger_mode: code
         build_pull_requests: false
@@ -59,7 +59,7 @@ spec:
       env:
         ENABLE_DRA_WORKFLOW: "true"
       default_branch: main
-      branch_configuration: "main 8.* 7.17"
+      branch_configuration: "main 9.* 8.* 7.17"
       cancel_intermediate_builds: false
       skip_intermediate_builds: false
       teams:
