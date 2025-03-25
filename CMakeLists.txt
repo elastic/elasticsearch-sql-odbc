@@ -12,8 +12,13 @@ set(DRIVER_BASE_NAME elasticodbc CACHE STRING
 
 # driver's version
 set(DRV_VERSION 9.0.0)
-set(VERSION_QUALIFIER -$ENV{VERSION_QUALIFIER} CACHE STRING
-	"Extra string to append to the install directory name")
+if(DEFINED ENV{VERSION_QUALIFIER})
+	set(VERSION_QUALIFIER -$ENV{VERSION_QUALIFIER} CACHE STRING
+		"Extra string to append to the install directory name")
+else()
+	set(VERSION_QUALIFIER "" CACHE STRING
+		"Extra string to append to the install directory name")
+endif()
 
 # build a UNICODE driver? (the only supported way currently)
 set(IS_UNICODE 1)
