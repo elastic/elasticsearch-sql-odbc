@@ -135,8 +135,6 @@ spec:
     spec:
       pipeline_file: ".buildkite/pipeline.version.bump.yml"
       provider_settings:
-        build_branches: false
-        build_pull_requests: false
         trigger_mode: none
       repository: elastic/elasticsearch-sql-odbc
       teams:
