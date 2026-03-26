@@ -134,6 +134,7 @@ spec:
       name: elasticsearch-sql-odbc-version-bump
     spec:
       pipeline_file: ".buildkite/pipeline.version.bump.yml"
+      skip_intermediate_builds: false
       provider_settings:
         trigger_mode: none
       repository: elastic/elasticsearch-sql-odbc
