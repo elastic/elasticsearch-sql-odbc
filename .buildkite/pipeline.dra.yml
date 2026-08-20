@@ -1,18 +1,35 @@
+env:
+  DRA_WORKFLOW: "${DRA_WORKFLOW:-snapshot}"
+
 steps:
-  - label: Build artifacts
+  - label: ":hammer: Build artifacts"
     command: powershell .buildkite\dra-build.ps1
     agents:
       provider: gcp
       image: family/elasticsearch-windows-2022
       machineType: n2-standard-8
       diskSizeGb: 200
-  - wait
-  - label: Publish artifacts
-    command: .buildkite/dra-release.sh
-    env:
-      USE_DRA_CREDENTIALS: "true"
+
+  - wait: ~
+
+  - label: ":package: DRA Prep"
+    key: dra-prep
+    command: ".buildkite/scripts/stage_artifacts.sh"
+    if: 'build.env("DRA_WORKFLOW") != "staging" || !(build.branch == "main" || build.branch =~ /\.x$/)'
     agents:
-      provider: gcp
-      image: family/elasticsearch-ubuntu-2404
-      machineType: n2-standard-4
-      diskSizeGb: 100
+      provider: "gcp"
+    plugins:
+      - elastic/dra-prep#v0.1.5:
+          product_id: "elasticsearch-sql-odbc"
+          stack_version: "${STACK_VERSION}"
+          workflow: "${DRA_WORKFLOW:-snapshot}"
+
+  - label: ":pipeline: Trigger DRA processing"
+    trigger: "unified-release-dra-processing"
+    async: true
+    depends_on: "dra-prep"
+    build:
+      env:
+        DRA_PRODUCT_ID: "elasticsearch-sql-odbc"
+        DRA_STACK_VERSION: "${STACK_VERSION}"
+        DRA_WORKFLOW: "${DRA_WORKFLOW:-snapshot}"
