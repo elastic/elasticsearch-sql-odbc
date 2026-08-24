@@ -24,7 +24,7 @@ steps:
           stack_version: "${STACK_VERSION}"
           workflow: "${DRA_WORKFLOW:-snapshot}"
 
-  - label: ":pipeline: Trigger DRA processing"
+  - label: ":pipeline: DRA processing for elasticsearch-sql-odbc"
     trigger: "unified-release-dra-processing"
     async: true
     depends_on: "dra-prep"
