@@ -19,7 +19,7 @@ steps:
     agents:
       provider: "gcp"
     plugins:
-      - elastic/dra-prep#v0.1.5:
+      - elastic/dra-prep#v0.1.6:
           product_id: "elasticsearch-sql-odbc"
           stack_version: "${STACK_VERSION}"
           workflow: "${DRA_WORKFLOW:-snapshot}"
