@@ -55,7 +55,7 @@ spec:
       name: elasticsearch-sql-odbc / dra-workflow
     spec:
       repository: elastic/elasticsearch-sql-odbc
-      pipeline_file: .buildkite/pipeline.dra.yml
+      pipeline_file: .buildkite/pipeline.dra.sh
       env:
         ENABLE_DRA_WORKFLOW: "true"
       default_branch: main
