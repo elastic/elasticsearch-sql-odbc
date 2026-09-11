@@ -29,6 +29,7 @@ steps:
     async: true
     depends_on: "dra-prep"
     build:
+      branch: "issue-3102-odbc-windows-sign"
       env:
         DRA_PRODUCT_ID: "elasticsearch-sql-odbc"
         DRA_STACK_VERSION: "${STACK_VERSION}"
