@@ -15,7 +15,8 @@ steps:
   - label: ":package: DRA Prep"
     key: dra-prep
     command: ".buildkite/scripts/stage_artifacts.sh"
-    if: 'build.env("DRA_WORKFLOW") != "staging" || !(build.branch == "main" || build.branch =~ /\.x$/)'
+    # Run for snapshot on any branch; for staging only on release branches (main / *.x).
+    if: &dra_gate 'build.env("DRA_WORKFLOW") != "staging" || (build.branch == "main" || build.branch =~ /\.x$/)'
     agents:
       provider: "gcp"
     plugins:
@@ -28,6 +29,9 @@ steps:
     trigger: "unified-release-dra-processing"
     async: true
     depends_on: "dra-prep"
+    # Same gate as dra-prep. A dependency skipped by `if` is treated as satisfied,
+    # so without this the trigger would fire even when DRA Prep was skipped.
+    if: *dra_gate
     build:
       env:
         DRA_PRODUCT_ID: "elasticsearch-sql-odbc"
