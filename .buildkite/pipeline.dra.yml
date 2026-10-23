@@ -15,8 +15,8 @@ steps:
   - label: ":package: DRA Prep"
     key: dra-prep
     command: ".buildkite/scripts/stage_artifacts.sh"
-    # Run for snapshot on any branch; for staging only on release branches (*.x).
-    if: &dra_gate 'build.env("DRA_WORKFLOW") != "staging" || build.branch =~ /\.x$/'
+    # Run for snapshot on any branch; for staging only on release branches (e.g. 8.19, 9.0).
+    if: &dra_gate 'build.env("DRA_WORKFLOW") != "staging" || build.branch =~ /^[0-9]+\.[0-9]+$/'
     agents:
       provider: "gcp"
     plugins:
